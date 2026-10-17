@@ -19,7 +19,7 @@ const {
   WHATSAPP_TOKEN,
   PHONE_NUMBER_ID,
   VERIFY_TOKEN,
-  DEFAULT_AGENT_NAME = 'مكتب العقارات المميزة',
+  DEFAULT_AGENT_NAME = 'Aspire real estate agency',
   AGENTS_JSON = '{}', // e.g. {"201001234567":"أحمد للعقارات"}
   ALLOWED_NUMBERS = '', // e.g. 201001234567,201112345678 (empty = allow all)
   DEBOUNCE_MS = '8000', // Configurable delay to group photos and voice notes
@@ -33,7 +33,7 @@ const ALLOWED = ALLOWED_NUMBERS.split(',').map((s) => s.trim()).filter(Boolean);
 const DEBOUNCE_TIME = Number(DEBOUNCE_MS) || 8000;
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-const MAX_IMAGES = 8; // Allow up to 8 photos for the dynamic long gallery
+const MAX_IMAGES = 8; // Allow up to 8 photos for the dynamic gallery
 const PENDING_MS = 2 * 60 * 1000; // keep text-only submissions waiting for photos
 const JOB_TIMEOUT_MS = 120000;
 const HTTP_TIMEOUT_MS = 15000;
@@ -98,7 +98,7 @@ app.post('/webhook', (req, res) => {
       return;
     }
 
-    const buf = (buffers[phone] ||= { images: [], audios: [], text: '', timer: null });
+    const buf = (buffers[phone] ||= { images: [], audios: [], text: '', location: null, timer: null });
 
     if (message.type === 'text' && message.text?.body) {
       buf.text += ' ' + message.text.body;
@@ -113,6 +113,13 @@ app.post('/webhook', (req, res) => {
         mime: (message.audio.mime_type || 'audio/ogg').split(';')[0],
       });
     }
+    if (message.type === 'location' && message.location) {
+      buf.location = {
+        lat: message.location.latitude,
+        lng: message.location.longitude,
+        name: message.location.name || message.location.address || 'موقع العقار على الخريطة'
+      };
+    }
 
     clearTimeout(buf.timer);
     buf.timer = setTimeout(() => {
@@ -126,21 +133,21 @@ app.post('/webhook', (req, res) => {
 });
 
 function onBatchReady(phone, data) {
-  // Merge details that arrived earlier without photos
   const p = pending[phone];
   if (p) {
     clearTimeout(p.timer);
     delete pending[phone];
     data.text = `${p.text} ${data.text}`.trim();
     data.audios = [...p.audios, ...data.audios];
+    if (!data.location && p.location) data.location = p.location;
   }
 
-  // Details but no photos yet: hold them and ask for photos
   if (!data.images.length) {
-    if (data.text.trim() || data.audios.length) {
+    if (data.text.trim() || data.audios.length || data.location) {
       pending[phone] = {
         text: data.text,
         audios: data.audios,
+        location: data.location,
         timer: setTimeout(() => delete pending[phone], PENDING_MS),
       };
       sendText(phone, '📥 استلمت التفاصيل. ابعت الصور دلوقتي وهجهز الكاتالوج.');
@@ -187,12 +194,18 @@ async function sendText(to, body) {
   }
 }
 
-async function sendImage(to, pngBuffer, caption) {
+async function sendImage(to, pngBuffer, listingTitle, agentPhone, agentName, location) {
   try {
+    const safeTitle = (listingTitle || 'real_estate_brochure')
+      .replace(/[\/\\?%*:|"<>]/g, '')
+      .trim()
+      .replace(/\s+/g, '_');
+    const filename = `${safeTitle}.png`;
+
     const form = new FormData();
     form.append('messaging_product', 'whatsapp');
     form.append('type', 'image/png');
-    form.append('file', new Blob([pngBuffer], { type: 'image/png' }), 'brochure.png');
+    form.append('file', new Blob([pngBuffer], { type: 'image/png' }), filename);
 
     const upload = await fetch(`${GRAPH}/${PHONE_NUMBER_ID}/media`, {
       method: 'POST',
@@ -205,9 +218,34 @@ async function sendImage(to, pngBuffer, caption) {
     const id = uploadRes?.id;
     if (!id) throw new Error(`Media upload failed: ${JSON.stringify(uploadRes)}`);
 
+    const cleanPhone = (agentPhone || to).replace('+', '');
+    const whatsAppWaMe = `https://wa.me/${cleanPhone}`;
+
+    const isEnglish = /^[A-Za-z0-9\s.,!?-]+$/.test(listingTitle);
+
+    let locationText = '';
+    if (location) {
+      const googleMapsUrl = `https://maps.google.com/?q=${location.lat},${location.lng}`;
+      locationText = isEnglish
+        ? `📍 *Location:* ${location.name}\n🗺️ *Map:* ${googleMapsUrl}\n\n`
+        : `📍 *موقع العقار:* ${location.name}\n🗺️ *رابط الخريطة:* ${googleMapsUrl}\n\n`;
+    }
+
+    const fullCaption = isEnglish
+      ? `🏠 *${listingTitle}*\n\n` +
+        locationText +
+        `📌 For inquiries & communication with (${agentName || DEFAULT_AGENT_NAME}):\n` +
+        `💬 Chat with us directly on WhatsApp:\n${whatsAppWaMe}\n\n` +
+        `✨ Generated automatically via Smart Real Estate Bot.`
+      : `🏠 *${listingTitle}*\n\n` +
+        locationText +
+        `📌 للتواصل والاستعلام مع (${agentName || DEFAULT_AGENT_NAME}):\n` +
+        `💬 راسلنا مباشرة عبر واتساب:\n${whatsAppWaMe}\n\n` +
+        `✨ تم إنشاء هذا الكاتالوج تلقائياً عبر نظام العقارات الذكي.`;
+
     await axios.post(
       `${GRAPH}/${PHONE_NUMBER_ID}/messages`,
-      { messaging_product: 'whatsapp', to, type: 'image', image: { id, caption } },
+      { messaging_product: 'whatsapp', to, type: 'image', image: { id, caption: fullCaption } },
       { headers: AUTH, timeout: HTTP_TIMEOUT_MS }
     );
   } catch (err) {
@@ -234,9 +272,9 @@ async function parseDetails(text, audioBuffers) {
   const parts = [
     {
       text:
-        'Extract real estate listing details from the Arabic text and/or audio below. ' +
+        'Extract real estate listing details from the text and/or audio below. ' +
         'Return a JSON object with string values for keys: title, price, area, rooms, floor, location. ' +
-        'Write values in Arabic, keep numbers with units (e.g. "185 م²", "6 مليون جنيه"). ' +
+        'CRITICAL LANGUAGE RULE: Match the language of the incoming message. If the message/audio is in English, extract and write the values in English. If it is in Arabic, write them in Arabic. Keep numbers with units (e.g. "185 m²", "6M EGP" or "185 م²", "6 مليون جنيه"). ' +
         'Use an empty string for anything not mentioned.' +
         (text.trim() ? `\n\nText: "${text.trim()}"` : ''),
     },
@@ -272,7 +310,6 @@ async function parseDetails(text, audioBuffers) {
 }
 
 // ---------- Image processing ----------
-const LOGO_PATH = path.join(__dirname, 'logo.png');
 const toDataUri = (buf) => `data:image/jpeg;base64,${buf.toString('base64')}`;
 
 async function buildHero(imageBuffer, width, height) {
@@ -281,17 +318,13 @@ async function buildHero(imageBuffer, width, height) {
     .resize(width, height, { fit: 'cover', position: 'center' })
     .modulate({ brightness: 1.08 });
 
-  if (fs.existsSync(LOGO_PATH)) {
-    const logo = await sharp(LOGO_PATH).resize({ width: 220 }).png().toBuffer();
-    img = img.composite([{ input: logo, gravity: 'northeast' }]);
-  }
   return toDataUri(await img.jpeg({ quality: 88 }).toBuffer());
 }
 
 async function buildThumb(imageBuffer) {
   const out = await sharp(imageBuffer)
     .rotate()
-    .resize(500, 350, { fit: 'cover', position: 'center' })
+    .resize(500, 320, { fit: 'cover', position: 'center' })
     .modulate({ brightness: 1.05 })
     .jpeg({ quality: 80 })
     .toBuffer();
@@ -344,7 +377,6 @@ async function renderPng(html) {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'load' });
     await page.evaluate(() => document.fonts.ready);
-    // Capture full vertical page height dynamically for multi-photo galleries
     return Buffer.from(await page.screenshot({ type: 'png', fullPage: true }));
   } finally {
     await browser.close();
@@ -371,7 +403,7 @@ async function processSubmission(phone, data) {
     const multi = imageBuffers.length > 1;
 
     const parsePromise = parseDetails(data.text, audioBufs);
-    const heroDataUri = await buildHero(imageBuffers[0], 1080, 800);
+    const heroDataUri = await buildHero(imageBuffers[0], 1080, 780);
 
     const thumbBuffers = [];
     for (const b of imageBuffers.slice(1)) {
@@ -382,6 +414,8 @@ async function processSubmission(phone, data) {
       : '';
 
     const { details, failed } = await parsePromise;
+    const agentName = AGENTS[phone] || DEFAULT_AGENT_NAME;
+    const agentPhone = `+${phone}`;
 
     const html = renderHtml(multi ? TEMPLATE_MULTI : TEMPLATE_SINGLE, {
       IMAGE_URL: heroDataUri,
@@ -392,12 +426,12 @@ async function processSubmission(phone, data) {
       ROOMS: clip(details.rooms, 20),
       FLOOR: clip(details.floor, 20),
       LOCATION: clip(details.location, 40),
-      AGENT_NAME: AGENTS[phone] || DEFAULT_AGENT_NAME,
-      AGENT_PHONE: `+${phone}`,
+      AGENT_NAME: agentName,
+      AGENT_PHONE: agentPhone,
     });
 
     const png = await renderPng(html);
-    await sendImage(phone, png, clip(details.title, 70));
+    await sendImage(phone, png, details.title, agentPhone, agentName, data.location);
     console.log('Brochure generated and sent.');
 
     if (failed) {
