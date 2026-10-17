@@ -253,7 +253,7 @@ async function parseDetails(text, audioBuffers) {
         contents: [{ role: 'user', parts }],
         config: { responseMimeType: 'application/json' },
       }),
-      30000,
+      Number(process.env.GEMINI_TIMEOUT_MS) || 6000000,
       'gemini'
     );
     let parsed = JSON.parse(response.text);
