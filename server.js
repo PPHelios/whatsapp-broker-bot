@@ -29,7 +29,7 @@ app.use(express.json());
 
 // ---------- Health + webhook verification ----------
 app.get('/health', (_req, res) => res.send('ok'));
-// 1. Meta Webhook Verification Route (GET)
+
 app.get('/webhook', (req, res) => {
   if (
     req.query['hub.mode'] === 'subscribe' &&
@@ -47,7 +47,7 @@ const DEBOUNCE_MS = 4000;
 
 app.post('/webhook', (req, res) => {
   res.sendStatus(200); // ack fast so Meta doesn't retry
-console.log('POST /webhook', JSON.stringify(req.body).slice(0, 300));
+
   try {
     const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
     if (!message || seen.has(message.id)) return;
@@ -57,12 +57,14 @@ console.log('POST /webhook', JSON.stringify(req.body).slice(0, 300));
     const phone = message.from;
     const buf = (buffers[phone] ||= { images: [], audios: [], text: '', timer: null });
 
-    if (message.type === 'text') buf.text += ' ' + message.text.body;
-    if (message.type === 'image') {
+    if (message.type === 'text' && message.text?.body) {
+      buf.text += ' ' + message.text.body;
+    }
+    if (message.type === 'image' && message.image?.id) {
       buf.images.push(message.image.id);
       if (message.image.caption) buf.text += ' ' + message.image.caption;
     }
-    if (message.type === 'audio') {
+    if (message.type === 'audio' && message.audio?.id) {
       buf.audios.push({
         id: message.audio.id,
         mime: (message.audio.mime_type || 'audio/ogg').split(';')[0],
@@ -76,7 +78,7 @@ console.log('POST /webhook', JSON.stringify(req.body).slice(0, 300));
       enqueue(() => processSubmission(phone, data));
     }, DEBOUNCE_MS);
   } catch (err) {
-    console.error('Webhook error:', err);
+    console.error('Webhook payload parse error:', err);
   }
 });
 
@@ -88,43 +90,58 @@ function enqueue(job) {
 
 // ---------- WhatsApp helpers ----------
 async function downloadMedia(mediaId) {
-  const { data } = await axios.get(`${GRAPH}/${mediaId}`, { headers: AUTH });
-  const file = await axios.get(data.url, { headers: AUTH, responseType: 'arraybuffer' });
-  return Buffer.from(file.data);
+  try {
+    const { data } = await axios.get(`${GRAPH}/${mediaId}`, { headers: AUTH });
+    const file = await axios.get(data.url, { headers: AUTH, responseType: 'arraybuffer' });
+    return Buffer.from(file.data);
+  } catch (err) {
+    console.error(`Failed to download media ID ${mediaId}:`, err.message);
+    throw new Error('MEDIA_DOWNLOAD_FAILED');
+  }
 }
 
 async function sendText(to, body) {
-  await axios.post(
-    `${GRAPH}/${PHONE_NUMBER_ID}/messages`,
-    { messaging_product: 'whatsapp', to, type: 'text', text: { body } },
-    { headers: AUTH }
-  );
+  try {
+    await axios.post(
+      `${GRAPH}/${PHONE_NUMBER_ID}/messages`,
+      { messaging_product: 'whatsapp', to, type: 'text', text: { body } },
+      { headers: AUTH }
+    );
+  } catch (err) {
+    console.error('Failed to send WhatsApp text reply:', err.response?.data || err.message);
+  }
 }
 
 async function sendImage(to, pngBuffer, caption) {
-  const form = new FormData();
-  form.append('messaging_product', 'whatsapp');
-  form.append('type', 'image/png');
-  form.append('file', new Blob([pngBuffer], { type: 'image/png' }), 'brochure.png');
+  try {
+    const form = new FormData();
+    form.append('messaging_product', 'whatsapp');
+    form.append('type', 'image/png');
+    form.append('file', new Blob([pngBuffer], { type: 'image/png' }), 'brochure.png');
 
-  const upload = await fetch(`${GRAPH}/${PHONE_NUMBER_ID}/media`, {
-    method: 'POST',
-    headers: AUTH,
-    body: form,
-  });
-  const { id } = await upload.json();
-  if (!id) throw new Error('Media upload failed');
+    const upload = await fetch(`${GRAPH}/${PHONE_NUMBER_ID}/media`, {
+      method: 'POST',
+      headers: AUTH,
+      body: form,
+    });
+    const uploadRes = await upload.json();
+    const id = uploadRes?.id;
+    if (!id) throw new Error('Media upload ID missing from Meta response');
 
-  await axios.post(
-    `${GRAPH}/${PHONE_NUMBER_ID}/messages`,
-    {
-      messaging_product: 'whatsapp',
-      to,
-      type: 'image',
-      image: { id, caption },
-    },
-    { headers: AUTH }
-  );
+    await axios.post(
+      `${GRAPH}/${PHONE_NUMBER_ID}/messages`,
+      {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'image',
+        image: { id, caption },
+      },
+      { headers: AUTH }
+    );
+  } catch (err) {
+    console.error('Failed to send WhatsApp image brochure:', err.response?.data || err.message);
+    throw new Error('WHATSAPP_SEND_FAILED');
+  }
 }
 
 // ---------- Gemini parsing (text + voice notes) ----------
@@ -154,7 +171,7 @@ async function parseDetails(text, audioBuffers) {
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.0-flash',
       contents: [{ role: 'user', parts }],
       config: { responseMimeType: 'application/json' },
     });
@@ -172,7 +189,7 @@ async function parseDetails(text, audioBuffers) {
 }
 
 // ---------- Image processing ----------
-const LOGO_PATH = path.join(__dirname, 'logo.png'); // optional watermark
+const LOGO_PATH = path.join(__dirname, 'logo.png');
 
 async function buildHero(imageBuffer) {
   let img = sharp(imageBuffer)
@@ -189,7 +206,13 @@ async function buildHero(imageBuffer) {
 }
 
 // ---------- HTML rendering ----------
-const TEMPLATE = fs.readFileSync(path.join(__dirname, 'template.html'), 'utf8');
+const templatePath = path.join(__dirname, 'template.html');
+if (!fs.existsSync(templatePath)) {
+  console.error('CRITICAL WARNING: template.html is missing from the project root!');
+}
+const TEMPLATE = fs.existsSync(templatePath)
+  ? fs.readFileSync(templatePath, 'utf8')
+  : '<html><body><h1>Template Missing</h1></body></html>';
 
 const escapeHtml = (s) =>
   String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -203,7 +226,6 @@ function fontCss() {
 const FONT_CSS = fontCss();
 
 function renderHtml(values) {
-  // Function replacer: no $-pattern surprises, replaces ALL occurrences
   const html = TEMPLATE.replace(/\{\{(\w+)\}\}/g, (_m, key) =>
     key === 'IMAGE_URL' ? values[key] : escapeHtml(values[key] ?? '')
   );
@@ -213,30 +235,34 @@ function renderHtml(values) {
 async function renderPng(html) {
   if (!FONT_CSS && FONT_URL) await chromium.font(FONT_URL);
 
+  const executablePath = await chromium.executablePath();
   const browser = await puppeteer.launch({
     args: chromium.args,
     defaultViewport: { width: 1080, height: 1920 },
-    executablePath: await chromium.executablePath(),
-    headless: 'shell',
+    executablePath: executablePath,
+    headless: chromium.headless,
   });
   try {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'load' });
     await page.evaluate(() => document.fonts.ready);
-    return Buffer.from(await page.screenshot({ type: 'png' })); // buffer, no disk file
+    return Buffer.from(await page.screenshot({ type: 'png' }));
   } finally {
     await browser.close();
   }
 }
 
-// ---------- Main pipeline ----------
+// ---------- Main pipeline with Error Handling & User Feedback ----------
 async function processSubmission(phone, data) {
   console.log(`Processing ${data.images.length} image(s), ${data.audios.length} voice note(s) for ${phone}`);
 
   if (!data.images.length) {
-    await sendText(phone, 'ابعت صورة واحدة على الأقل مع التفاصيل (نص أو رسالة صوتية).');
+    await sendText(phone, '⚠️ أهلاً بك! يرجى إرسال صورة واحدة على الأقل مع التفاصيل (نص أو رسالة صوتية) لإنشاء الكاتالوج.');
     return;
   }
+
+  // Send a quick processing acknowledgment
+  await sendText(phone, '⏳ جاري تصميم الكاتالوج العقاري الخاص بك، لحظات...');
 
   try {
     const [heroSource, ...audioBufs] = await Promise.all([
@@ -263,11 +289,11 @@ async function processSubmission(phone, data) {
 
     const png = await renderPng(html);
     await sendImage(phone, png, details.title);
-    console.log('Brochure sent.');
+    console.log('Brochure successfully generated and sent.');
   } catch (err) {
-    console.error('Error processing submission:', err);
-    await sendText(phone, 'حصلت مشكلة في تجهيز الصورة، جرّب تبعت تاني.').catch(() => {});
+    console.error('Error processing broker submission pipeline:', err.message);
+    await sendText(phone, '❌ عذراً، حصلت مشكلة أثناء تجهيز الصورة. تأكد من جودة الصورة المرفقة وجرّب إرسال الطلب مرة أخرى.');
   }
 }
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Broker bot server running on port ${PORT}`));
