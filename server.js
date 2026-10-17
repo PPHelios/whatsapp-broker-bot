@@ -29,15 +29,29 @@ app.use(express.json());
 
 // ---------- Health + webhook verification ----------
 app.get('/health', (_req, res) => res.send('ok'));
-
+// 1. Meta Webhook Verification Route (GET)
 app.get('/webhook', (req, res) => {
-  if (
-    req.query['hub.mode'] === 'subscribe' &&
-    req.query['hub.verify_token'] === VERIFY_TOKEN
-  ) {
-    return res.status(200).send(req.query['hub.challenge']);
-  }
-  res.sendStatus(403);
+    const VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN; // e.g., 'my_secret_token_123'
+
+    // Parse the query params from Meta's verification request
+    const mode = req.query['hub.mode'];
+    const token = req.query['hub.verify_token'];
+    const challenge = req.query['hub.challenge'];
+
+    // Check if a token and mode were sent
+    if (mode && token) {
+        // Check if the mode and token sent are correct
+        if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+            console.log('WEBHOOK_VERIFIED');
+            // Respond with the challenge token from the request
+            res.status(200).send(challenge);
+        } else {
+            // Responds with '403 Forbidden' if verify tokens do not match
+            res.sendStatus(403);
+        }
+    } else {
+        res.sendStatus(400);
+    }
 });
 
 // ---------- Incoming messages ----------
