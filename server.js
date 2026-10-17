@@ -31,12 +31,10 @@ app.use(express.json());
 app.get('/health', (_req, res) => res.send('ok'));
 // 1. Meta Webhook Verification Route (GET)
 app.get('/webhook', (req, res) => {
-  const sent = req.query['hub.verify_token'];
-  console.log('mode:', req.query['hub.mode'],
-              '| sent length:', sent?.length,
-              '| server token set:', !!VERIFY_TOKEN,
-              '| server length:', VERIFY_TOKEN?.length);
-  if (req.query['hub.mode'] === 'subscribe' && sent === VERIFY_TOKEN) {
+  if (
+    req.query['hub.mode'] === 'subscribe' &&
+    req.query['hub.verify_token'] === VERIFY_TOKEN
+  ) {
     return res.status(200).send(req.query['hub.challenge']);
   }
   res.sendStatus(403);
