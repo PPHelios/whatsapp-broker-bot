@@ -5,27 +5,59 @@ const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
 const puppeteer = require('puppeteer-core');
-const chromium = require('@sparticuz/chromium');
 const { GoogleGenAI } = require('@google/genai');
+
+// @sparticuz/chromium is ESM-only in recent versions -> dynamic import
+let chromiumPromise;
+const getChromium = () =>
+  (chromiumPromise ||= import('@sparticuz/chromium').then((m) => m.default ?? m));
 
 const {
   PORT = 3000,
   GEMINI_API_KEY,
+  GEMINI_MODEL = 'gemini-3.8-flash',
   WHATSAPP_TOKEN,
   PHONE_NUMBER_ID,
   VERIFY_TOKEN,
   DEFAULT_AGENT_NAME = 'مكتب العقارات المميزة',
   AGENTS_JSON = '{}', // e.g. {"201001234567":"أحمد للعقارات"}
+  ALLOWED_NUMBERS = '', // e.g. 201001234567,201112345678 (empty = allow all)
   FONT_URL, // optional fallback if fonts/Cairo.ttf is missing
 } = process.env;
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
 const AUTH = { Authorization: `Bearer ${WHATSAPP_TOKEN}` };
 const AGENTS = JSON.parse(AGENTS_JSON);
+const ALLOWED = ALLOWED_NUMBERS.split(',').map((s) => s.trim()).filter(Boolean);
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+
+const MAX_IMAGES = 4; // 1 hero + up to 3 gallery thumbnails
+const DEBOUNCE_MS = 4000;
+const PENDING_MS = 2 * 60 * 1000; // keep text-only submissions waiting for photos
+const JOB_TIMEOUT_MS = 120000;
+const HTTP_TIMEOUT_MS = 15000;
+
+process.on('unhandledRejection', (e) => console.error('Unhandled rejection:', e));
+process.on('uncaughtException', (e) => console.error('Uncaught exception:', e));
 
 const app = express();
 app.use(express.json());
+
+// ---------- Helpers ----------
+const withTimeout = (p, ms, label) =>
+  Promise.race([
+    p,
+    new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timeout`)), ms)),
+  ]);
+
+function logApiError(label, err) {
+  if (err.response?.status === 401) {
+    console.error(`${label}: WHATSAPP_TOKEN EXPIRED or invalid (401)`);
+  }
+  console.error(`${label}:`, err.response?.data || err.message);
+}
+
+const clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 
 // ---------- Health + webhook verification ----------
 app.get('/health', (_req, res) => res.send('ok'));
@@ -43,7 +75,7 @@ app.get('/webhook', (req, res) => {
 // ---------- Incoming messages ----------
 const seen = new Set(); // dedupe Meta retries
 const buffers = {}; // per-sender debounce buffer
-const DEBOUNCE_MS = 4000;
+const pending = {}; // text/voice that arrived before any photo
 
 app.post('/webhook', (req, res) => {
   res.sendStatus(200); // ack fast so Meta doesn't retry
@@ -55,6 +87,16 @@ app.post('/webhook', (req, res) => {
     if (seen.size > 1000) seen.delete(seen.values().next().value);
 
     const phone = message.from;
+    if (ALLOWED.length && !ALLOWED.includes(phone)) {
+      console.log(`Ignored message from non-allowed number ${phone}`);
+      return;
+    }
+
+    if (['video', 'sticker', 'document'].includes(message.type)) {
+      sendText(phone, '⚠️ بقبل بس الصور والنصوص والرسائل الصوتية. ابعت الصورة كصورة عادية (مش ملف).');
+      return;
+    }
+
     const buf = (buffers[phone] ||= { images: [], audios: [], text: '', timer: null });
 
     if (message.type === 'text' && message.text?.body) {
@@ -75,27 +117,59 @@ app.post('/webhook', (req, res) => {
     buf.timer = setTimeout(() => {
       const data = buffers[phone];
       delete buffers[phone];
-      enqueue(() => processSubmission(phone, data));
+      onBatchReady(phone, data);
     }, DEBOUNCE_MS);
   } catch (err) {
     console.error('Webhook payload parse error:', err);
   }
 });
 
-// ---------- Job queue (one Chromium at a time: free-tier RAM) ----------
+function onBatchReady(phone, data) {
+  // Merge details that arrived earlier without photos
+  const p = pending[phone];
+  if (p) {
+    clearTimeout(p.timer);
+    delete pending[phone];
+    data.text = `${p.text} ${data.text}`.trim();
+    data.audios = [...p.audios, ...data.audios];
+  }
+
+  // Details but no photos yet: hold them and ask for photos
+  if (!data.images.length) {
+    if (data.text.trim() || data.audios.length) {
+      pending[phone] = {
+        text: data.text,
+        audios: data.audios,
+        timer: setTimeout(() => delete pending[phone], PENDING_MS),
+      };
+      sendText(phone, '📥 استلمت التفاصيل. ابعت الصور دلوقتي وهجهز الكاتالوج.');
+    }
+    return;
+  }
+
+  enqueue(() => processSubmission(phone, data));
+}
+
+// ---------- Job queue (one Chromium at a time; a stuck job can't block forever) ----------
 let queue = Promise.resolve();
 function enqueue(job) {
-  queue = queue.then(job).catch((e) => console.error('Job error:', e));
+  queue = queue
+    .then(() => withTimeout(job(), JOB_TIMEOUT_MS, 'job'))
+    .catch((e) => console.error('Job error:', e.message));
 }
 
 // ---------- WhatsApp helpers ----------
 async function downloadMedia(mediaId) {
   try {
-    const { data } = await axios.get(`${GRAPH}/${mediaId}`, { headers: AUTH });
-    const file = await axios.get(data.url, { headers: AUTH, responseType: 'arraybuffer' });
+    const { data } = await axios.get(`${GRAPH}/${mediaId}`, { headers: AUTH, timeout: HTTP_TIMEOUT_MS });
+    const file = await axios.get(data.url, {
+      headers: AUTH,
+      responseType: 'arraybuffer',
+      timeout: HTTP_TIMEOUT_MS,
+    });
     return Buffer.from(file.data);
   } catch (err) {
-    console.error(`Failed to download media ID ${mediaId}:`, err.message);
+    logApiError(`Failed to download media ${mediaId}`, err);
     throw new Error('MEDIA_DOWNLOAD_FAILED');
   }
 }
@@ -105,10 +179,10 @@ async function sendText(to, body) {
     await axios.post(
       `${GRAPH}/${PHONE_NUMBER_ID}/messages`,
       { messaging_product: 'whatsapp', to, type: 'text', text: { body } },
-      { headers: AUTH }
+      { headers: AUTH, timeout: HTTP_TIMEOUT_MS }
     );
   } catch (err) {
-    console.error('Failed to send WhatsApp text reply:', err.response?.data || err.message);
+    logApiError('Failed to send text', err);
   }
 }
 
@@ -123,23 +197,20 @@ async function sendImage(to, pngBuffer, caption) {
       method: 'POST',
       headers: AUTH,
       body: form,
+      signal: AbortSignal.timeout(20000),
     });
     const uploadRes = await upload.json();
+    if (upload.status === 401) console.error('WHATSAPP_TOKEN EXPIRED or invalid (401)');
     const id = uploadRes?.id;
-    if (!id) throw new Error('Media upload ID missing from Meta response');
+    if (!id) throw new Error(`Media upload failed: ${JSON.stringify(uploadRes)}`);
 
     await axios.post(
       `${GRAPH}/${PHONE_NUMBER_ID}/messages`,
-      {
-        messaging_product: 'whatsapp',
-        to,
-        type: 'image',
-        image: { id, caption },
-      },
-      { headers: AUTH }
+      { messaging_product: 'whatsapp', to, type: 'image', image: { id, caption } },
+      { headers: AUTH, timeout: HTTP_TIMEOUT_MS }
     );
   } catch (err) {
-    console.error('Failed to send WhatsApp image brochure:', err.response?.data || err.message);
+    logApiError('Failed to send brochure image', err);
     throw new Error('WHATSAPP_SEND_FAILED');
   }
 }
@@ -154,7 +225,13 @@ const DEFAULTS = {
   location: 'غير محدد',
 };
 
+// Returns { details, failed }
 async function parseDetails(text, audioBuffers) {
+  // Nothing to parse: skip the API call
+  if (!text.trim() && !audioBuffers.length) {
+    return { details: { ...DEFAULTS }, failed: true };
+  }
+
   const parts = [
     {
       text:
@@ -170,49 +247,66 @@ async function parseDetails(text, audioBuffers) {
   ];
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
-      contents: [{ role: 'user', parts }],
-      config: { responseMimeType: 'application/json' },
-    });
+    const response = await withTimeout(
+      ai.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: [{ role: 'user', parts }],
+        config: { responseMimeType: 'application/json' },
+      }),
+      30000,
+      'gemini'
+    );
     let parsed = JSON.parse(response.text);
     if (Array.isArray(parsed)) parsed = parsed[0];
-    const out = { ...DEFAULTS };
+    const details = { ...DEFAULTS };
     for (const k of Object.keys(DEFAULTS)) {
-      if (parsed?.[k] && String(parsed[k]).trim()) out[k] = String(parsed[k]);
+      if (parsed?.[k] && String(parsed[k]).trim()) details[k] = String(parsed[k]);
     }
-    return out;
+    return { details, failed: false };
   } catch (e) {
     console.error('Gemini parse failed, using defaults:', e.message);
-    return { ...DEFAULTS };
+    return { details: { ...DEFAULTS }, failed: true };
   }
 }
 
 // ---------- Image processing ----------
 const LOGO_PATH = path.join(__dirname, 'logo.png');
+const toDataUri = (buf) => `data:image/jpeg;base64,${buf.toString('base64')}`;
 
-async function buildHero(imageBuffer) {
+async function buildHero(imageBuffer, width, height) {
   let img = sharp(imageBuffer)
     .rotate() // respect EXIF orientation
-    .resize(1080, 1050, { fit: 'cover' })
+    .resize(width, height, { fit: 'cover' })
     .modulate({ brightness: 1.08 });
 
   if (fs.existsSync(LOGO_PATH)) {
     const logo = await sharp(LOGO_PATH).resize({ width: 220 }).png().toBuffer();
     img = img.composite([{ input: logo, gravity: 'northeast' }]);
   }
-  const out = await img.jpeg({ quality: 88 }).toBuffer();
-  return `data:image/jpeg;base64,${out.toString('base64')}`;
+  return toDataUri(await img.jpeg({ quality: 88 }).toBuffer());
+}
+
+async function buildThumb(imageBuffer) {
+  const out = await sharp(imageBuffer)
+    .rotate()
+    .resize(600, 470, { fit: 'cover' })
+    .modulate({ brightness: 1.05 })
+    .jpeg({ quality: 80 })
+    .toBuffer();
+  return toDataUri(out);
 }
 
 // ---------- HTML rendering ----------
-const templatePath = path.join(__dirname, 'template.html');
-if (!fs.existsSync(templatePath)) {
-  console.error('CRITICAL WARNING: template.html is missing from the project root!');
+function readTemplate(file) {
+  const p = path.join(__dirname, file);
+  if (!fs.existsSync(p)) {
+    console.error(`WARNING: ${file} is missing from the project root`);
+    return null;
+  }
+  return fs.readFileSync(p, 'utf8');
 }
-const TEMPLATE = fs.existsSync(templatePath)
-  ? fs.readFileSync(templatePath, 'utf8')
-  : '<html><body><h1>Template Missing</h1></body></html>';
+const TEMPLATE_SINGLE = readTemplate('template.html') || '<html><body><h1>Template Missing</h1></body></html>';
+const TEMPLATE_MULTI = readTemplate('template-multi.html') || TEMPLATE_SINGLE;
 
 const escapeHtml = (s) =>
   String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -225,22 +319,24 @@ function fontCss() {
 }
 const FONT_CSS = fontCss();
 
-function renderHtml(values) {
-  const html = TEMPLATE.replace(/\{\{(\w+)\}\}/g, (_m, key) =>
-    key === 'IMAGE_URL' ? values[key] : escapeHtml(values[key] ?? '')
+const RAW_KEYS = new Set(['IMAGE_URL', 'GALLERY']); // trusted HTML, not escaped
+
+function renderHtml(template, values) {
+  const html = template.replace(/\{\{(\w+)\}\}/g, (_m, key) =>
+    RAW_KEYS.has(key) ? values[key] ?? '' : escapeHtml(values[key] ?? '')
   );
   return html.replace('</head>', `${FONT_CSS}</head>`);
 }
 
 async function renderPng(html) {
+  const chromium = await getChromium();
   if (!FONT_CSS && FONT_URL) await chromium.font(FONT_URL);
 
-  const executablePath = await chromium.executablePath();
   const browser = await puppeteer.launch({
     args: chromium.args,
     defaultViewport: { width: 1080, height: 1920 },
-    executablePath: executablePath,
-    headless: chromium.headless,
+    executablePath: await chromium.executablePath(),
+    headless: 'shell',
   });
   try {
     const page = await browser.newPage();
@@ -252,47 +348,60 @@ async function renderPng(html) {
   }
 }
 
-// ---------- Main pipeline with Error Handling & User Feedback ----------
+// ---------- Main pipeline ----------
 async function processSubmission(phone, data) {
-  console.log(`Processing ${data.images.length} image(s), ${data.audios.length} voice note(s) for ${phone}`);
+  const imageIds = data.images.slice(0, MAX_IMAGES);
+  console.log(
+    `Processing ${imageIds.length} image(s), ${data.audios.length} voice note(s) for ${phone}`
+  );
 
-  if (!data.images.length) {
-    await sendText(phone, '⚠️ أهلاً بك! يرجى إرسال صورة واحدة على الأقل مع التفاصيل (نص أو رسالة صوتية) لإنشاء الكاتالوج.');
-    return;
-  }
-
-  // Send a quick processing acknowledgment
   await sendText(phone, '⏳ جاري تصميم الكاتالوج العقاري الخاص بك، لحظات...');
 
   try {
-    const [heroSource, ...audioBufs] = await Promise.all([
-      downloadMedia(data.images[0]),
-      ...data.audios.map(async (a) => ({ mime: a.mime, buffer: await downloadMedia(a.id) })),
+    const [imageBuffers, audioBufs] = await Promise.all([
+      Promise.all(imageIds.map(downloadMedia)),
+      Promise.all(
+        data.audios.map(async (a) => ({ mime: a.mime, buffer: await downloadMedia(a.id) }))
+      ),
     ]);
 
-    const [details, heroDataUri] = await Promise.all([
-      parseDetails(data.text, audioBufs),
-      buildHero(heroSource),
-    ]);
+    const multi = imageBuffers.length > 1;
 
-    const html = renderHtml({
+    const parsePromise = parseDetails(data.text, audioBufs);
+    const heroDataUri = await buildHero(imageBuffers[0], 1080, multi ? 820 : 1050);
+
+    // Thumbnails one by one to keep RAM low on the free tier
+    const thumbs = [];
+    for (const b of imageBuffers.slice(1)) thumbs.push(await buildThumb(b));
+    const gallery = thumbs.length
+      ? `<div class="gallery g${thumbs.length}">${thumbs.map((u) => `<img src="${u}" />`).join('')}</div>`
+      : '';
+
+    const { details, failed } = await parsePromise;
+
+    const html = renderHtml(multi ? TEMPLATE_MULTI : TEMPLATE_SINGLE, {
       IMAGE_URL: heroDataUri,
-      PRICE: details.price,
-      TITLE: details.title,
-      AREA: details.area,
-      ROOMS: details.rooms,
-      FLOOR: details.floor,
-      LOCATION: details.location,
+      GALLERY: gallery,
+      PRICE: clip(details.price, 40),
+      TITLE: clip(details.title, 70),
+      AREA: clip(details.area, 25),
+      ROOMS: clip(details.rooms, 20),
+      FLOOR: clip(details.floor, 20),
+      LOCATION: clip(details.location, 40),
       AGENT_NAME: AGENTS[phone] || DEFAULT_AGENT_NAME,
       AGENT_PHONE: `+${phone}`,
     });
 
     const png = await renderPng(html);
-    await sendImage(phone, png, details.title);
-    console.log('Brochure successfully generated and sent.');
+    await sendImage(phone, png, clip(details.title, 70));
+    console.log('Brochure generated and sent.');
+
+    if (failed) {
+      await sendText(phone, '⚠️ معرفتش أقرا التفاصيل كويس. ابعتها تاني (نص أو صوت) مع الصور وهعدّل الكاتالوج.');
+    }
   } catch (err) {
-    console.error('Error processing broker submission pipeline:', err.message);
-    await sendText(phone, '❌ عذراً، حصلت مشكلة أثناء تجهيز الصورة. تأكد من جودة الصورة المرفقة وجرّب إرسال الطلب مرة أخرى.');
+    console.error('Error in submission pipeline:', err.message);
+    await sendText(phone, '❌ عذراً، حصلت مشكلة أثناء تجهيز الصورة. جرّب إرسال الطلب مرة أخرى.');
   }
 }
 
