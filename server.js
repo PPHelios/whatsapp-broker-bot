@@ -23,6 +23,7 @@ const {
   AGENTS_JSON = '{}', // e.g. {"201001234567":"أحمد للعقارات"}
   ALLOWED_NUMBERS = '', // e.g. 201001234567,201112345678 (empty = allow all)
   FONT_URL, // optional fallback if fonts/Cairo.ttf is missing
+  DEBOUNCE_MS = '8000'
 } = process.env;
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
@@ -32,7 +33,6 @@ const ALLOWED = ALLOWED_NUMBERS.split(',').map((s) => s.trim()).filter(Boolean);
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
 const MAX_IMAGES = 4; // 1 hero + up to 3 gallery thumbnails
-const DEBOUNCE_MS = 4000;
 const PENDING_MS = 2 * 60 * 1000; // keep text-only submissions waiting for photos
 const JOB_TIMEOUT_MS = 120000;
 const HTTP_TIMEOUT_MS = 15000;
