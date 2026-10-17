@@ -47,7 +47,7 @@ const DEBOUNCE_MS = 4000;
 
 app.post('/webhook', (req, res) => {
   res.sendStatus(200); // ack fast so Meta doesn't retry
-
+console.log('POST /webhook', JSON.stringify(req.body).slice(0, 300));
   try {
     const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
     if (!message || seen.has(message.id)) return;
