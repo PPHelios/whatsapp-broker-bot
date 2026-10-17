@@ -22,17 +22,18 @@ const {
   DEFAULT_AGENT_NAME = 'مكتب العقارات المميزة',
   AGENTS_JSON = '{}', // e.g. {"201001234567":"أحمد للعقارات"}
   ALLOWED_NUMBERS = '', // e.g. 201001234567,201112345678 (empty = allow all)
+  DEBOUNCE_MS = '8000', // Configurable delay to group photos and voice notes
   FONT_URL, // optional fallback if fonts/Cairo.ttf is missing
-  DEBOUNCE_MS = '8000'
 } = process.env;
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
 const AUTH = { Authorization: `Bearer ${WHATSAPP_TOKEN}` };
 const AGENTS = JSON.parse(AGENTS_JSON);
 const ALLOWED = ALLOWED_NUMBERS.split(',').map((s) => s.trim()).filter(Boolean);
+const DEBOUNCE_TIME = Number(DEBOUNCE_MS) || 8000;
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-const MAX_IMAGES = 4; // 1 hero + up to 3 gallery thumbnails
+const MAX_IMAGES = 8; // Allow up to 8 photos for the dynamic long gallery
 const PENDING_MS = 2 * 60 * 1000; // keep text-only submissions waiting for photos
 const JOB_TIMEOUT_MS = 120000;
 const HTTP_TIMEOUT_MS = 15000;
@@ -118,7 +119,7 @@ app.post('/webhook', (req, res) => {
       const data = buffers[phone];
       delete buffers[phone];
       onBatchReady(phone, data);
-    }, DEBOUNCE_MS);
+    }, DEBOUNCE_TIME);
   } catch (err) {
     console.error('Webhook payload parse error:', err);
   }
@@ -150,7 +151,7 @@ function onBatchReady(phone, data) {
   enqueue(() => processSubmission(phone, data));
 }
 
-// ---------- Job queue (one Chromium at a time; a stuck job can't block forever) ----------
+// ---------- Job queue (one Chromium at a time) ----------
 let queue = Promise.resolve();
 function enqueue(job) {
   queue = queue
@@ -225,9 +226,7 @@ const DEFAULTS = {
   location: 'غير محدد',
 };
 
-// Returns { details, failed }
 async function parseDetails(text, audioBuffers) {
-  // Nothing to parse: skip the API call
   if (!text.trim() && !audioBuffers.length) {
     return { details: { ...DEFAULTS }, failed: true };
   }
@@ -247,15 +246,18 @@ async function parseDetails(text, audioBuffers) {
   ];
 
   try {
+    console.log(`[Gemini Request] Sending text length: ${text.length}, Audio count: ${audioBuffers.length} to model: ${GEMINI_MODEL}`);
     const response = await withTimeout(
       ai.models.generateContent({
         model: GEMINI_MODEL,
         contents: [{ role: 'user', parts }],
         config: { responseMimeType: 'application/json' },
       }),
-      Number(process.env.GEMINI_TIMEOUT_MS) || 6000000,
+      Number(process.env.GEMINI_TIMEOUT_MS) || 60000,
       'gemini'
     );
+
+    console.log(`[Gemini Response Raw]:`, response.text);
     let parsed = JSON.parse(response.text);
     if (Array.isArray(parsed)) parsed = parsed[0];
     const details = { ...DEFAULTS };
@@ -275,8 +277,8 @@ const toDataUri = (buf) => `data:image/jpeg;base64,${buf.toString('base64')}`;
 
 async function buildHero(imageBuffer, width, height) {
   let img = sharp(imageBuffer)
-    .rotate() // respect EXIF orientation
-    .resize(width, height, { fit: 'cover' })
+    .rotate()
+    .resize(width, height, { fit: 'cover', position: 'center' })
     .modulate({ brightness: 1.08 });
 
   if (fs.existsSync(LOGO_PATH)) {
@@ -289,7 +291,7 @@ async function buildHero(imageBuffer, width, height) {
 async function buildThumb(imageBuffer) {
   const out = await sharp(imageBuffer)
     .rotate()
-    .resize(600, 470, { fit: 'cover' })
+    .resize(500, 350, { fit: 'cover', position: 'center' })
     .modulate({ brightness: 1.05 })
     .jpeg({ quality: 80 })
     .toBuffer();
@@ -319,7 +321,7 @@ function fontCss() {
 }
 const FONT_CSS = fontCss();
 
-const RAW_KEYS = new Set(['IMAGE_URL', 'GALLERY']); // trusted HTML, not escaped
+const RAW_KEYS = new Set(['IMAGE_URL', 'GALLERY']);
 
 function renderHtml(template, values) {
   const html = template.replace(/\{\{(\w+)\}\}/g, (_m, key) =>
@@ -334,7 +336,7 @@ async function renderPng(html) {
 
   const browser = await puppeteer.launch({
     args: chromium.args,
-    defaultViewport: { width: 1080, height: 1920 },
+    defaultViewport: { width: 1080, height: 1000 },
     executablePath: await chromium.executablePath(),
     headless: 'shell',
   });
@@ -342,7 +344,8 @@ async function renderPng(html) {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'load' });
     await page.evaluate(() => document.fonts.ready);
-    return Buffer.from(await page.screenshot({ type: 'png' }));
+    // Capture full vertical page height dynamically for multi-photo galleries
+    return Buffer.from(await page.screenshot({ type: 'png', fullPage: true }));
   } finally {
     await browser.close();
   }
@@ -368,13 +371,14 @@ async function processSubmission(phone, data) {
     const multi = imageBuffers.length > 1;
 
     const parsePromise = parseDetails(data.text, audioBufs);
-    const heroDataUri = await buildHero(imageBuffers[0], 1080, multi ? 820 : 1050);
+    const heroDataUri = await buildHero(imageBuffers[0], 1080, 800);
 
-    // Thumbnails one by one to keep RAM low on the free tier
-    const thumbs = [];
-    for (const b of imageBuffers.slice(1)) thumbs.push(await buildThumb(b));
-    const gallery = thumbs.length
-      ? `<div class="gallery g${thumbs.length}">${thumbs.map((u) => `<img src="${u}" />`).join('')}</div>`
+    const thumbBuffers = [];
+    for (const b of imageBuffers.slice(1)) {
+      thumbBuffers.push(await buildThumb(b));
+    }
+    const gallery = thumbBuffers.length
+      ? `<div class="gallery-grid">${thumbBuffers.map((u) => `<img src="${u}" />`).join('')}</div>`
       : '';
 
     const { details, failed } = await parsePromise;
