@@ -151,7 +151,7 @@ async function generateAndStoreBrochure({ listing, agency, brokerPhone }) {
     agencyName: agency.name || agency.agency_name,
     brandColor: agency.brand_color,
     accentColor: agency.accent_color,
-    logoUrl: agency.logo_url,
+    logoUrl: agency.logo_url || null,
     code: listing.code,
     title:
       listing.title ||
@@ -512,7 +512,7 @@ async function processBatchedListing(from, items, broker) {
           name: broker.agency_name,
           brand_color: broker.brand_color,
           accent_color: broker.accent_color,
-          logoUrl: broker.logo_url
+          logoUrl: broker.logo_url || null
         },
         brokerPhone: broker.contact_phone || broker.phone
       });
