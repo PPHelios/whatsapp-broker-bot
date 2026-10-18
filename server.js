@@ -343,46 +343,7 @@ async function processBatchedListing(from, items, broker) {
   }
 
   // Step 3: Insert Listing to PostgreSQL
-  let listingId;
-  try {
-    const propertyTitle = `${extractedData.property_type || "عقار"} في ${
-      extractedData.location || "مصر"
-    }`;
-    const ins = await pool.query(
-      `insert into listings (
-        agency_id, broker_id, code, title, property_type, listing_type,
-        price_value, price_display, area_value, bedrooms, location,
-        features, details, status
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'active')
-      returning id`,
-      [
-        broker.agency_id,
-        broker.id,
-        listingCode,
-        propertyTitle,
-        extractedData.property_type || "apartment",
-        extractedData.listing_type || "sale",
-        extractedData.price_value || null,
-        extractedData.price_display || null,
-        extractedData.area_value || null,
-        extractedData.bedrooms || null,
-        extractedData.location || null,
-        JSON.stringify(extractedData.features || []),
-        JSON.stringify(extractedData)
-      ]
-    );
-    listingId = ins.rows[0].id;
-    console.log(
-      `💾 [DATABASE] Inserted listing UUID: ${listingId} (Code: #${listingCode})`
-    );
-  } catch (err) {
-    console.error("❌ [DATABASE] Insertion failed:", err.message);
-    await sendWhatsAppText(
-      from,
-      `⚠️ فشل حفظ العقار في قاعدة البيانات: ${err.message}`
-    );
-    return;
-  }
+  v;
 
   // Step 4: Satori Rendering and Storage Upload
   let flyerPublicUrl = null;
