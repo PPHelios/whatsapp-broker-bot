@@ -255,11 +255,12 @@ function enqueueIncomingMessage(from, msg, broker) {
 // -----------------------------------------------------------------------------
 // AI Extraction & Satori Generation
 // -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// AI Extraction & Satori Generation
+// -----------------------------------------------------------------------------
 async function processBatchedListing(from, items, broker) {
-  console.log(
-    `\n=================== START BATCH PROCESSING ===================`
-  );
-  console.log(`Broker: ${broker.name} | Total items:${items.length}`);
+  console.log(`\n=================== START BATCH PROCESSING ===================`);
+  console.log(`Broker: ${broker.name} | Total items: ${items.length}`);
 
   let collectedText = [];
   let images = [];
@@ -280,14 +281,10 @@ async function processBatchedListing(from, items, broker) {
   }
 
   console.log(
-    `📦 [PIPELINE] Extracted items: ${images.length} images, ${audioIds.length} audio notes,${collectedText.length} text lines`
+    `📦 [PIPELINE] Extracted items: ${images.length} images, ${audioIds.length} audio notes, ${collectedText.length} text lines`
   );
 
-  if (
-    images.length === 0 &&
-    collectedText.length === 0 &&
-    audioIds.length === 0
-  ) {
+  if (images.length === 0 && collectedText.length === 0 && audioIds.length === 0) {
     console.warn("⚠️ [PIPELINE] Empty submission batch. Exiting.");
     return;
   }
@@ -343,7 +340,41 @@ async function processBatchedListing(from, items, broker) {
   }
 
   // Step 3: Insert Listing to PostgreSQL
-  v;
+  let listingId;
+  try {
+    const propertyTitle = `${extractedData.property_type || "عقار"} في ${
+      extractedData.location || "مصر"
+    }`;
+    const ins = await pool.query(
+      `insert into listings (
+        agency_id, broker_id, code, title, property_type, listing_type,
+        price_value, price_display, area_value, bedrooms, location,
+        features, details, status
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'active')
+      returning id`,
+      [
+        broker.agency_id,
+        broker.id,
+        listingCode,
+        propertyTitle,
+        extractedData.property_type || "apartment",
+        extractedData.listing_type || "sale",
+        extractedData.price_value || null,
+        extractedData.price_display || null,
+        extractedData.area_value || null,
+        extractedData.bedrooms || null,
+        extractedData.location || null,
+        Array.isArray(extractedData.features) ? extractedData.features : [],
+        JSON.stringify(extractedData)
+      ]
+    );
+    listingId = ins.rows[0].id;
+    console.log(`💾 [DATABASE] Inserted listing UUID: ${listingId} (Code: #${listingCode})`);
+  } catch (err) {
+    console.error("❌ [DATABASE] Insertion failed:", err.message);
+    await sendWhatsAppText(from, `⚠️ فشل حفظ العقار في قاعدة البيانات: ${err.message}`);
+    return;
+  }
 
   // Step 4: Satori Rendering and Storage Upload
   let flyerPublicUrl = null;
@@ -355,9 +386,7 @@ async function processBatchedListing(from, items, broker) {
       accentColor: broker.accent_color,
       logoUrl: broker.logo_url,
       code: listingCode,
-      title: `${extractedData.property_type || "وحدة"} - ${
-        extractedData.location || ""
-      }`,
+      title: `${extractedData.property_type || "وحدة"} - ${extractedData.location || ""}`,
       priceDisplay:
         extractedData.price_display ||
         (extractedData.price_value
@@ -371,9 +400,7 @@ async function processBatchedListing(from, items, broker) {
     });
 
     const storagePath = `${broker.agency_id}/${listingId}/flyer.png`;
-    console.log(
-      `☁️ [SUPABASE STORAGE] Uploading to bucket "${process.env.STORAGE_BUCKET}": ${storagePath}`
-    );
+    console.log(`☁️ [SUPABASE STORAGE] Uploading to bucket "${process.env.STORAGE_BUCKET}": ${storagePath}`);
 
     const { error: uploadError } = await supabase.storage
       .from(process.env.STORAGE_BUCKET || "media")
