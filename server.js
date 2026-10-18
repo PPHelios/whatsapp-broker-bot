@@ -49,6 +49,30 @@ const ai = new GoogleGenAI({
 const pendingQueues = new Map();
 
 // -----------------------------------------------------------------------------
+// Out-of-Band Admin Alert (Telegram / External Webhook)
+// -----------------------------------------------------------------------------
+async function alertAdmin(errorMessage) {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
+
+  if (botToken && chatId) {
+    try {
+      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: `🚨 *WhatsApp Bot System Alert*\n\n${errorMessage}`,
+          parse_mode: "Markdown"
+        })
+      });
+    } catch (err) {
+      console.error("❌ [ADMIN ALERT] Telegram push failed:", err.message);
+    }
+  }
+}
+
+// -----------------------------------------------------------------------------
 // WhatsApp Media Downloader
 // -----------------------------------------------------------------------------
 async function downloadWhatsAppMedia(mediaId) {
@@ -56,15 +80,33 @@ async function downloadWhatsAppMedia(mediaId) {
     const metaRes = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {
       headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` }
     });
+
     if (!metaRes.ok) {
-      console.error(`❌ [MEDIA] Failed to get URL for media ${mediaId}`);
+      const errBody = await metaRes.json().catch(() => ({}));
+      const errorCode = errBody?.error?.code;
+
+      if (metaRes.status === 401 || errorCode === 190) {
+        console.error(
+          "🚨 [CRITICAL_AUTH_FAILURE] WHATSAPP_TOKEN expired or invalid while downloading media!"
+        );
+        alertAdmin(
+          "⚠️ *Meta Token Expired (Code 190)!* Cannot download media files."
+        );
+      } else {
+        console.error(
+          `❌ [MEDIA] Failed to get URL for media ${mediaId}:`,
+          errBody
+        );
+      }
       return null;
     }
+
     const { url, mime_type } = await metaRes.json();
 
     const mediaRes = await fetch(url, {
       headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` }
     });
+
     if (!mediaRes.ok) {
       console.error(
         `❌ [MEDIA] Failed to download payload for media ${mediaId}`
@@ -104,12 +146,30 @@ async function sendWhatsAppText(to, text) {
         })
       }
     );
+
     if (!res.ok) {
-      const errBody = await res.text();
-      console.error(`❌ [WHATSAPP OUTBOUND] Failed (${res.status}):`, errBody);
+      const errBody = await res.json().catch(() => ({}));
+      const errorCode = errBody?.error?.code;
+
+      if (res.status === 401 || errorCode === 190) {
+        console.error(
+          "🚨 [CRITICAL_AUTH_FAILURE] WHATSAPP_TOKEN expired or invalid! Update token immediately."
+        );
+        alertAdmin(
+          "⚠️ *Meta Token Expired (Code 190)!* Outbound messages are failing."
+        );
+      } else {
+        console.error(
+          `❌ [WHATSAPP OUTBOUND] Failed (${res.status}):`,
+          JSON.stringify(errBody)
+        );
+      }
+      return false;
     }
+    return true;
   } catch (err) {
     console.error("❌ [WHATSAPP OUTBOUND] Network error:", err.message);
+    return false;
   }
 }
 
@@ -134,24 +194,47 @@ async function sendWhatsAppImage(to, imageUrl, caption) {
         })
       }
     );
+
     if (!res.ok) {
-      const errBody = await res.text();
-      console.error(`❌ [WHATSAPP IMAGE] Failed (${res.status}):`, errBody);
+      const errBody = await res.json().catch(() => ({}));
+      const errorCode = errBody?.error?.code;
+
+      if (res.status === 401 || errorCode === 190) {
+        console.error(
+          "🚨 [CRITICAL_AUTH_FAILURE] WHATSAPP_TOKEN expired or invalid! Update token immediately."
+        );
+        alertAdmin(
+          "⚠️ *Meta Token Expired (Code 190)!* Image deliveries are failing."
+        );
+      } else {
+        console.error(
+          `❌ [WHATSAPP IMAGE] Failed (${res.status}):`,
+          JSON.stringify(errBody)
+        );
+      }
+      return false;
     }
+    return true;
   } catch (err) {
     console.error("❌ [WHATSAPP IMAGE] Network error:", err.message);
+    return false;
   }
 }
 
 // -----------------------------------------------------------------------------
-// Helper: Shared Satori Brochure Generator & Storage Uploader
+// Shared Satori Brochure Generator & Storage Uploader
 // -----------------------------------------------------------------------------
 async function generateAndStoreBrochure({ listing, agency, brokerPhone }) {
+  const brandColor = agency.brand_color || agency.brandColor || "#0f172a";
+  const accentColor = agency.accent_color || agency.accentColor || "#38bdf8";
+  const logoUrl = agency.logo_url || agency.logoUrl || null;
+  const agencyName = agency.name || agency.agency_name || "الوكالة العقارية";
+
   const pngBuffer = await R.renderFlyerSatori({
-    agencyName: agency.name || agency.agency_name,
-    brandColor: agency.brand_color,
-    accentColor: agency.accent_color,
-    logoUrl: agency.logo_url || null,
+    agencyName: agencyName,
+    brandColor: brandColor,
+    accentColor: accentColor,
+    logoUrl: logoUrl,
     code: listing.code,
     title:
       listing.title ||
@@ -512,7 +595,7 @@ async function processBatchedListing(from, items, broker) {
           name: broker.agency_name,
           brand_color: broker.brand_color,
           accent_color: broker.accent_color,
-          logoUrl: broker.logo_url || null
+          logo_url: broker.logo_url
         },
         brokerPhone: broker.contact_phone || broker.phone
       });
