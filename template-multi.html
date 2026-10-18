@@ -1,162 +1,190 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <style>
-        * { box-sizing: border-box; }
-        body {
-            width: 1080px;
-            margin: 0;
-            padding: 0;
-            background-color: #0b1329;
-            font-family: 'Cairo', sans-serif, Arial;
-            color: #ffffff;
-            display: flex;
-            flex-direction: column;
-        }
-        /* Hero Section with smooth curved bottom corners */
-        .hero-section {
-            position: relative;
-            width: 1080px;
-            height: 780px;
-            overflow: hidden;
-            border-bottom-left-radius: 36px;
-            border-bottom-right-radius: 36px;
-            box-shadow: 0 15px 35px rgba(0,0,0,0.4);
-        }
-        .hero-img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-        }
-        .hero-gradient {
-            position: absolute;
-            bottom: 0;
-            width: 100%;
-            height: 250px;
-            background: linear-gradient(to top, rgba(11,19,41,0.9), transparent);
-        }
-        /* Floating Price Tag on Hero */
-        .floating-price {
-            position: absolute;
-            bottom: 30px;
-            right: 40px;
-            background: linear-gradient(135deg, #0284c7, #38bdf8);
-            color: #ffffff;
-            padding: 14px 32px;
-            border-radius: 50px;
-            font-size: 48px;
-            font-weight: 800;
-            box-shadow: 0 10px 25px rgba(2, 132, 199, 0.4);
-        }
+<meta charset="UTF-8">
+<style>
+/* Agency colors: the server overrides --brand / --accent / --on-brand / --on-accent per agency */
+:root {
+  --brand: #0f172a;
+  --accent: #38bdf8;
+  --on-brand: #ffffff;
+  --on-accent: #0b1329;
+  --surface: color-mix(in srgb, var(--on-brand) 7%, var(--brand));
+  --surface-2: color-mix(in srgb, var(--on-brand) 13%, var(--brand));
+  --line: color-mix(in srgb, var(--on-brand) 16%, transparent);
+  --muted: color-mix(in srgb, var(--on-brand) 70%, transparent);
+  --glass: color-mix(in srgb, var(--brand) 62%, transparent);
+}
+* { box-sizing: border-box; }
+body {
+  width: 1080px;
+  margin: 0;
+  padding: 0;
+  background-color: var(--brand);
+  background-image: radial-gradient(900px 520px at 0% 58%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%);
+  color: var(--on-brand);
+  font-family: 'Cairo', sans-serif, Arial;
+  display: flex;
+  flex-direction: column;
+}
 
-        /* Modern Grid for Additional Photos */
-        .gallery-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 16px;
-            padding: 35px 40px 10px 40px;
-        }
-        .gallery-grid img {
-            width: 100%;
-            height: 320px;
-            object-fit: cover;
-            border-radius: 20px;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-            display: block;
-            border: 2px solid rgba(255, 255, 255, 0.08);
-        }
+/* ---------- Hero ---------- */
+.hero { position: relative; width: 1080px; height: 780px; }
+.hero-media { position: absolute; inset: 0; overflow: hidden; border-radius: 0 0 56px 56px; }
+.hero-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.hero-shade {
+  position: absolute; inset: 0;
+  background: linear-gradient(to bottom,
+    color-mix(in srgb, var(--brand) 72%, transparent) 0%, transparent 26%,
+    transparent 58%, color-mix(in srgb, var(--brand) 80%, transparent) 100%);
+}
+.topbar {
+  position: absolute; top: 36px; left: 40px; right: 40px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.brand-chip {
+  display: flex; align-items: center; gap: 18px;
+  padding: 12px 18px 12px 30px;
+  border-radius: 60px;
+  background: var(--glass);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--line);
+}
+.logo-wrap { background: #ffffff; border-radius: 18px; padding: 8px 16px; display: flex; align-items: center; }
+.logo-wrap:empty { display: none; }
+.agency-logo { height: 64px; width: auto; max-width: 220px; display: block; }
+.agency-name { font-size: 32px; font-weight: 700; }
+.agency-name:empty { display: none; }
 
-        /* Content & Specs Section */
-        .content-box {
-            padding: 20px 40px 40px 40px;
-            display: flex;
-            flex-direction: column;
-            gap: 25px;
-        }
-        .title {
-            font-size: 40px;
-            font-weight: 700;
-            color: #f8fafc;
-            line-height: 1.3;
-        }
+.tags { display: flex; gap: 14px; align-items: center; }
+.tag {
+  padding: 8px 28px; border-radius: 50px;
+  font-size: 30px; font-weight: 700; line-height: 1.4;
+  border: 1px solid transparent;
+}
+.tag.accent { background: var(--accent); color: var(--on-accent); }
+.tag.glass { background: var(--glass); backdrop-filter: blur(14px); border-color: var(--line); }
+.tag:empty { display: none; }
 
-        /* Modern Pill Grid for Specs */
-        .specs-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 18px;
-        }
-        .spec-item {
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 22px 28px;
-            border-radius: 18px;
-            font-size: 26px;
-            color: #cbd5e1;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        .spec-item span {
-            color: #38bdf8;
-            font-weight: bold;
-        }
+.hero-type { position: absolute; left: 40px; bottom: 30px; }
+.price {
+  position: absolute; right: 40px; bottom: -46px; max-width: 1000px;
+  background: var(--accent); color: var(--on-accent);
+  font-size: 70px; font-weight: 900; line-height: 1.1;
+  padding: 18px 46px 26px;
+  border-radius: 32px;
+  box-shadow: 0 20px 44px color-mix(in srgb, var(--accent) 38%, transparent);
+}
 
-        /* Sleek Footer Card */
-        .footer-card {
-            background: #141e38;
-            margin: 0 40px 40px 40px;
-            padding: 30px 40px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-radius: 24px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-        }
-        .agent-info h3 { margin: 0; font-size: 32px; color: #ffffff; font-weight: 700; }
-        .agent-info p { margin: 8px 0 0 0; font-size: 24px; color: #94a3b8; direction: ltr; text-align: right; }
-        .badge {
-            background: #0284c7;
-            color: white;
-            padding: 14px 28px;
-            border-radius: 16px;
-            font-size: 22px;
-            font-weight: bold;
-            box-shadow: 0 4px 15px rgba(2, 132, 199,.4);
-        }
-    </style>
+/* ---------- Title ---------- */
+.head { padding: 92px 52px 0; }
+.title { font-size: 58px; font-weight: 800; line-height: 1.25; }
+.where { margin-top: 16px; font-size: 38px; font-weight: 600; display: flex; align-items: center; gap: 14px; }
+.where .pin { color: var(--accent); }
+.where:has(.loc:empty) { display: none; }
+
+/* ---------- Gallery (injected by the server) ---------- */
+.gallery-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; padding: 42px 52px 0; }
+.gallery-grid img {
+  width: 100%; height: 340px; object-fit: cover; display: block;
+  border-radius: 28px; border: 1px solid var(--line);
+}
+.gallery-grid img:last-child:nth-child(odd) { grid-column: 1 / -1; height: 400px; }
+
+/* ---------- Specs: one connected block ---------- */
+.specs {
+  margin: 42px 52px 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 38px;
+  overflow: hidden;
+}
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); }
+.stat { padding: 36px 16px 32px; text-align: center; }
+.stat + .stat { border-inline-start: 1px solid var(--line); }
+.ico { font-size: 48px; line-height: 1; }
+.stat .v { font-size: 46px; font-weight: 800; line-height: 1.2; margin-top: 14px; overflow-wrap: anywhere; }
+.stat .k { font-size: 28px; font-weight: 600; color: var(--muted); margin-top: 6px; }
+.fin {
+  display: flex; align-items: center; gap: 18px;
+  padding: 26px 40px; border-top: 1px solid var(--line);
+  font-size: 36px;
+}
+.fin .k { color: var(--muted); font-weight: 600; }
+.fin .fv { font-weight: 800; }
+.fin:has(.fv:empty) { display: none; }
+
+/* ---------- Features ---------- */
+.chips { display: flex; flex-wrap: wrap; gap: 16px; padding: 38px 52px 0; }
+.chips:empty { display: none; }
+.chip {
+  font-size: 32px; font-weight: 600;
+  padding: 12px 30px; border-radius: 50px;
+  background: var(--surface-2); border: 1px solid var(--line);
+}
+.chip::before { content: '✓'; color: var(--accent); font-weight: 900; margin-inline-end: 12px; }
+
+/* ---------- Footer ---------- */
+.footer {
+  margin-top: 60px;
+  padding: 50px 52px 58px;
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 66%, var(--brand)));
+  color: var(--on-accent);
+  border-radius: 56px 56px 0 0;
+  display: flex; justify-content: space-between; align-items: center; gap: 30px;
+}
+.agent h3 { margin: 0; font-size: 48px; font-weight: 800; line-height: 1.2; }
+.agent .ag { font-size: 30px; font-weight: 600; opacity: 0.85; margin-top: 2px; }
+.agent .ag:empty { display: none; }
+.agent .ph { font-size: 44px; font-weight: 800; direction: ltr; text-align: right; margin-top: 12px; }
+.cta {
+  background: var(--brand); color: var(--on-brand);
+  padding: 22px 36px; border-radius: 26px;
+  font-size: 32px; font-weight: 800; text-align: center; line-height: 1.3;
+}
+.cta small { display: block; font-size: 26px; font-weight: 600; opacity: 0.7; margin-top: 6px; }
+.cta small:empty { display: none; }
+</style>
 </head>
 <body>
-    <div class="hero-section">
-        <img src="{{IMAGE_URL}}" class="hero-img" />
-        <div class="hero-gradient"></div>
-        <div class="floating-price">{{PRICE}}</div>
+  <div class="hero">
+    <div class="hero-media">
+      <img src="{{IMAGE_URL}}" class="hero-img" />
+      <div class="hero-shade"></div>
     </div>
-
-    <!-- Gallery grid for extra photos -->
-    {{GALLERY}}
-
-    <div class="content-box">
-        <div class="title">{{TITLE}}</div>
-
-        <div class="specs-grid">
-            <div class="spec-item">📐 المساحة: <span>{{AREA}}</span></div>
-            <div class="spec-item">🛏️ الغرف: <span>{{ROOMS}}</span></div>
-            <div class="spec-item">🏢 الدور: <span>{{FLOOR}}</span></div>
-            <div class="spec-item">📍 المنطقة: <span>{{LOCATION}}</span></div>
-        </div>
+    <div class="topbar">
+      <div class="brand-chip"><div class="logo-wrap">{{LOGO}}</div><div class="agency-name">{{AGENCY_NAME}}</div></div>
+      <div class="tags"><span class="tag accent">{{LISTING_TYPE}}</span><span class="tag glass">{{CODE}}</span></div>
     </div>
+    <div class="hero-type"><span class="tag glass">{{PROPERTY_TYPE}}</span></div>
+    <div class="price">{{PRICE}}</div>
+  </div>
 
-    <div class="footer-card">
-        <div class="agent-info">
-            <h3>{{AGENT_NAME}}</h3>
-            <p>{{AGENT_PHONE}}</p>
-        </div>
-        <div class="badge">للإستعلام والتواصل</div>
+  <div class="head">
+    <div class="title">{{TITLE}}</div>
+    <div class="where"><span class="pin">📍</span><span class="loc">{{LOCATION}}</span></div>
+  </div>
+
+  {{GALLERY}}
+
+  <div class="specs">
+    <div class="stats">
+      <div class="stat"><div class="ico">📐</div><div class="v">{{AREA}}</div><div class="k">المساحة</div></div>
+      <div class="stat"><div class="ico">🛏️</div><div class="v">{{ROOMS}}</div><div class="k">الغرف</div></div>
+      <div class="stat"><div class="ico">🏢</div><div class="v">{{FLOOR}}</div><div class="k">الدور</div></div>
     </div>
+    <div class="fin"><span>🎨</span><span class="k">التشطيب:</span><span class="fv">{{FINISHING}}</span></div>
+  </div>
+
+  <div class="chips">{{FEATURES_HTML}}</div>
+
+  <div class="footer">
+    <div class="agent">
+      <h3>{{AGENT_NAME}}</h3>
+      <div class="ag">{{AGENCY_NAME}}</div>
+      <div class="ph">{{AGENT_PHONE}}</div>
+    </div>
+    <div class="cta">💬 للإستعلام والتواصل<small>{{CODE}}</small></div>
+  </div>
 </body>
 </html>

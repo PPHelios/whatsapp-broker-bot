@@ -1,17 +1,24 @@
 {
+  "name": "AqarChat",
+  "version": "2.1.0",
+  "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node test/text.test.js"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
-    "@google/genai": "^2.30.0",
-    "@sparticuz/chromium": "^153.0.0",
-    "axios": "^1.20.0",
-    "dotenv": "^18.0.8",
-    "express": "^5.3.0",
-    "puppeteer-core": "^25.14.0",
-    "sharp": "^0.35.5"
+    "@google/genai": "*",
+    "@resvg/resvg-js": "^2.6.2",
+    "@supabase/supabase-js": "^2.45.0",
+    "axios": "*",
+    "dotenv": "*",
+    "express": "*",
+    "html-react-parser": "^5.1.18",
+    "pg": "^8.12.0",
+    "satori": "^0.10.14",
+    "sharp": "*"
   }
 }
