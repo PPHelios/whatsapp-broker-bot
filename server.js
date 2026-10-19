@@ -1,7 +1,8 @@
-﻿require("dotenv").config();
+﻿// server.js
+require("dotenv").config();
 const express = require("express");
 const sharp = require("sharp");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenAI } = require("@google/genai");
 
 const { pool } = require("./lib/db");
 const { uploadListingImage, uploadFlyerImage } = require("./lib/supabase");
@@ -23,7 +24,7 @@ const app = express();
 app.use(express.json({ limit: "20mb" }));
 
 // ---------------------------------------------------------------------------
-// ARCHITECTURAL SAFEGUARDS & NATIVE CONCURRENCY LIMITER (Zero ESM Issues)
+// ARCHITECTURAL SAFEGUARDS & NATIVE CONCURRENCY LIMITER
 // ---------------------------------------------------------------------------
 sharp.concurrency(1);
 
@@ -65,6 +66,7 @@ function createLimiter(concurrency) {
 const listingLimiter = createLimiter(2);
 
 // Operational Constants
+const GEMINI_MODEL_ID = "gemini-3.8-flash";
 const MAX_VISION_EVAL_IMAGES = 15;
 const MAX_FLYER_IMAGES = 9;
 const MAX_SEARCH_AUDIO_SEC = 45;
@@ -77,48 +79,41 @@ const incomingBatches = new Map();
 const lastSearchState = new Map();
 
 // ---------------------------------------------------------------------------
-// GEMINI 3.8 FLASH TIER INITIALIZATIONS
+// UNIFIED @google/genai CLIENT & CONFIGURATIONS
 // ---------------------------------------------------------------------------
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-
-// 1. Multimodal & Reasoning Tier (Ingestion & 15-to-9 Photo Curation)
-const listingVisionModel = genAI.getGenerativeModel({
-  model: "gemini-3.8-flash",
-  generationConfig: {
-    temperature: 0.1,
-    maxOutputTokens: 2048,
-    responseMimeType: "application/json",
-    thinkingConfig: {
-      thinkingBudget: 768
-    }
-  }
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY || ""
 });
 
-// 2. Voice Search & Intent Parser Tier (Egyptian Spoken Reasoning)
-const voiceSearchModel = genAI.getGenerativeModel({
-  model: "gemini-3.8-flash",
-  generationConfig: {
-    temperature: 0.1,
-    maxOutputTokens: 500,
-    responseMimeType: "application/json",
-    thinkingConfig: {
-      thinkingBudget: 256
-    }
+// Tier 1: Multimodal Ingestion & Photo Curation (Thinking Budget: 768)
+const LISTING_CONFIG = {
+  temperature: 0.1,
+  maxOutputTokens: 2048,
+  responseMimeType: "application/json",
+  thinkingConfig: {
+    thinkingBudget: 768
   }
-});
+};
 
-// 3. Fast Text Search & Intent Parser Tier (Zero-Thinking Lean Search)
-const textSearchModel = genAI.getGenerativeModel({
-  model: "gemini-3.8-flash",
-  generationConfig: {
-    temperature: 0.0,
-    maxOutputTokens: 350,
-    responseMimeType: "application/json",
-    thinkingConfig: {
-      thinkingBudget: 0
-    }
+// Tier 2: Voice Search Parser (Thinking Budget: 256)
+const VOICE_SEARCH_CONFIG = {
+  temperature: 0.1,
+  maxOutputTokens: 500,
+  responseMimeType: "application/json",
+  thinkingConfig: {
+    thinkingBudget: 256
   }
-});
+};
+
+// Tier 3: Lean Text Search Parser (Thinking Budget: 0)
+const TEXT_SEARCH_CONFIG = {
+  temperature: 0.0,
+  maxOutputTokens: 350,
+  responseMimeType: "application/json",
+  thinkingConfig: {
+    thinkingBudget: 0
+  }
+};
 
 // ---------------------------------------------------------------------------
 // CANONICAL RULES & PROMPTS
@@ -266,7 +261,6 @@ async function processBatchedListing(broker, batch) {
   const audios = batch.audios || [];
   const textBody = (batch.texts || []).join("\n").trim();
 
-  // Validate Audio Duration Ceiling (120 seconds max for listing creation)
   for (let i = 0; i < audios.length; i++) {
     const audio = audios[i];
     if (audio.duration && audio.duration > MAX_LISTING_AUDIO_SEC) {
@@ -279,9 +273,7 @@ async function processBatchedListing(broker, batch) {
     }
   }
 
-  // -------------------------------------------------------------------------
   // Scenario A: Late photos attached to an explicit #CODE or within 5 minutes
-  // -------------------------------------------------------------------------
   const explicitCodeMatch = textBody.match(/^#?([A-Z]{2}-[A-Z]-[A-Z0-9]{5})$/i);
   if (
     audios.length === 0 &&
@@ -377,9 +369,7 @@ async function processBatchedListing(broker, batch) {
     );
   }
 
-  // -------------------------------------------------------------------------
   // Scenario B: Text / Audio Only (Zero Photos)
-  // -------------------------------------------------------------------------
   if (images.length === 0 && (textBody || audios.length > 0)) {
     await sendWhatsAppText(from, "⏳ جاري استخراج وحفظ بيانات العقار...");
 
@@ -426,9 +416,13 @@ async function processBatchedListing(broker, batch) {
     let draftData = {};
     let usage = {};
     try {
-      const result = await listingVisionModel.generateContent(parts);
-      const resText = cleanJsonResponse(result.response.text());
-      usage = result.response.usageMetadata || {};
+      const response = await ai.models.generateContent({
+        model: GEMINI_MODEL_ID,
+        contents: parts,
+        config: LISTING_CONFIG
+      });
+      const resText = cleanJsonResponse(response.text);
+      usage = response.usageMetadata || {};
       draftData = JSON.parse(resText);
     } catch (err) {
       console.error("[EXTRACTION ERROR TEXT/AUDIO]:", err.message);
@@ -520,9 +514,7 @@ async function processBatchedListing(broker, batch) {
     );
   }
 
-  // -------------------------------------------------------------------------
   // Scenario C: Complete Pipeline (Text/Audio + Candidate Images)
-  // -------------------------------------------------------------------------
   let preWaitNotice =
     "⏳ *جاري فحص البيانات وتصميم الكتالوج...*\n⏱️ يستغرق التجهيز دقيقة واحدة تقريباً.\n\n⚠️ *تنبيه:* يرجى الانتظار حتى استلام الكتالوج قبل إرسال عقار جديد لتجنب تداخل البيانات.";
   if (images.length > MAX_VISION_EVAL_IMAGES) {
@@ -534,13 +526,11 @@ async function processBatchedListing(broker, batch) {
   }
   await sendWhatsAppText(from, preWaitNotice);
 
-  // 1. Parallel Sharp Pre-Compression
   const candidateCompressed = await prepareImagesForGemini(
     images,
     MAX_VISION_EVAL_IMAGES
   );
 
-  // 2. Multimodal Extraction & Curation via Gemini 3.8 Flash
   const prompt = [
     "You are an expert Egyptian real estate data extractor and architectural photo art director.",
     "Extract all specs and evaluate candidate images into strict JSON:",
@@ -602,9 +592,13 @@ async function processBatchedListing(broker, batch) {
   let draftData = {};
   let usage = {};
   try {
-    const result = await listingVisionModel.generateContent(parts);
-    const resText = cleanJsonResponse(result.response.text());
-    usage = result.response.usageMetadata || {};
+    const response = await ai.models.generateContent({
+      model: GEMINI_MODEL_ID,
+      contents: parts,
+      config: LISTING_CONFIG
+    });
+    const resText = cleanJsonResponse(response.text);
+    usage = response.usageMetadata || {};
     draftData = JSON.parse(resText);
   } catch (err) {
     console.error("[MULTIMODAL EXTRACTION ERROR]:", err.message);
@@ -614,7 +608,6 @@ async function processBatchedListing(broker, batch) {
     );
   }
 
-  // 3. Resolve Curated 9 Images
   let selectedBuffers = [];
   if (
     Array.isArray(draftData.selected_image_indices) &&
@@ -639,7 +632,6 @@ async function processBatchedListing(broker, batch) {
     selectedBuffers = candidateCompressed.slice(0, MAX_FLYER_IMAGES);
   }
 
-  // 4. Upload Curated Images to Supabase Storage
   const uploadedUrls = [];
   let totalBytesStored = 0;
   for (let i = 0; i < selectedBuffers.length; i++) {
@@ -649,7 +641,6 @@ async function processBatchedListing(broker, batch) {
     if (url) uploadedUrls.push(url);
   }
 
-  // 5. Insert Record into PostgreSQL
   const listingCode =
     draftData.code && String(draftData.code).trim().length > 2
       ? String(draftData.code).trim().toUpperCase()
@@ -696,7 +687,6 @@ async function processBatchedListing(broker, batch) {
     );
   }
 
-  // 6. Flyer Generation via Satori
   const agencyRes = await pool.query(
     "SELECT name, logo_url, primary_color, secondary_color FROM agencies WHERE id = $1",
     [broker.agency_id]
@@ -725,7 +715,6 @@ async function processBatchedListing(broker, batch) {
     console.error("[FLYER RENDER ERROR]:", renderErr.message);
   }
 
-  // 7. Usage & Token Analytics Logging
   await pool.query(
     "INSERT INTO usage_events (agency_id, broker_id, phone, event_type, listing_id, duration_ms, meta) VALUES ($1, $2, $3, $4, $5, $6, $7)",
     [
@@ -749,7 +738,6 @@ async function processBatchedListing(broker, batch) {
     ]
   );
 
-  // 8. Deliver Response via WhatsApp
   let photoCountSummary =
     "📸 تم تصميم الكتالوج بـ (" + uploadedUrls.length + ") صور.";
   if (images.length > MAX_VISION_EVAL_IMAGES) {
@@ -808,7 +796,6 @@ async function handleSearchMessage(broker, options) {
   const startMs = Date.now();
   const isVoice = Boolean(audio && audio.buffer && audio.buffer.length > 0);
 
-  // Validate Voice Search Length Ceiling (45 seconds max)
   if (isVoice && audio.duration && audio.duration > MAX_SEARCH_AUDIO_SEC) {
     return sendWhatsAppText(
       from,
@@ -818,8 +805,7 @@ async function handleSearchMessage(broker, options) {
     );
   }
 
-  // Dual-Tier Model Routing: Voice uses reasoning; Text uses lean tier
-  const activeModel = isVoice ? voiceSearchModel : textSearchModel;
+  const activeConfig = isVoice ? VOICE_SEARCH_CONFIG : TEXT_SEARCH_CONFIG;
   const modelLabel = isVoice
     ? "gemini-3.8-flash-voice-reasoning"
     : "gemini-3.8-flash-lean";
@@ -863,9 +849,13 @@ async function handleSearchMessage(broker, options) {
   let parsed = { intent: "search", filters: {}, location_terms: [] };
   let usage = {};
   try {
-    const result = await activeModel.generateContent(parts);
-    const resText = cleanJsonResponse(result.response.text());
-    usage = result.response.usageMetadata || {};
+    const response = await ai.models.generateContent({
+      model: GEMINI_MODEL_ID,
+      contents: parts,
+      config: activeConfig
+    });
+    const resText = cleanJsonResponse(response.text);
+    usage = response.usageMetadata || {};
     parsed = JSON.parse(resText);
   } catch (parseErr) {
     console.error("[SEARCH PARSE ERROR]:", parseErr.message);
@@ -875,7 +865,6 @@ async function handleSearchMessage(broker, options) {
     );
   }
 
-  // If broker sent a standalone text/voice describing a new unit to save, route to ingestion
   if (parsed.intent === "create_listing" && offset === 0) {
     return listingLimiter(function () {
       return processBatchedListing(broker, {
@@ -887,7 +876,6 @@ async function handleSearchMessage(broker, options) {
     });
   }
 
-  // Save search state for pagination (المزيد)
   lastSearchState.set(from, { text: text, audio: audio, offset: offset });
 
   const where = ["l.agency_id = $1", "l.status = 'active'"];
@@ -1086,7 +1074,7 @@ async function handleSingleMessage(broker, message) {
   const from = broker.phone;
   const msgType = message.type;
 
-  // 1. Image Uploads (Enqueue into 8-second debounce batcher)
+  // 1. Image Uploads
   if (msgType === "image") {
     const mediaId = message.image && message.image.id;
     const caption =
@@ -1247,7 +1235,7 @@ async function handleSingleMessage(broker, message) {
     );
   }
 
-  // 8. Client Brochure Forwarding: كتالوج عميل [كود] / بروشور عميل [كود]
+  // 8. Client Brochure Forwarding: كتالوج عميل [كود]
   const clientBrochureMatch = rawText.match(
     /^(?:كتالوج\s+عميل|بروشور\s+عميل)\s+#?([A-Z0-9-]+)$/i
   );
