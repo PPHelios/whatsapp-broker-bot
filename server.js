@@ -1380,15 +1380,19 @@ async function handleSingleMessage(broker, message) {
 // 4. WEBHOOK ENDPOINTS
 // ---------------------------------------------------------------------------
 app.post("/webhook", function (req, res) {
+  // 1. Immediately acknowledge Meta to prevent duplicate delivery retries
   res.status(200).send("EVENT_RECEIVED");
 
+  // 2. Process message payloads asynchronously
   setImmediate(async function () {
     try {
       const entry = req.body && req.body.entry && req.body.entry[0];
       const change =
         entry && entry.changes && entry.changes[0] && entry.changes[0].value;
-      const messages = change && change.messages ? change.messages : [];
 
+      // Ignore delivery receipts, read receipts, and empty webhook events
+      const messages =
+        change && Array.isArray(change.messages) ? change.messages : [];
       if (messages.length === 0) return;
 
       for (let i = 0; i < messages.length; i++) {
@@ -1396,8 +1400,9 @@ app.post("/webhook", function (req, res) {
         const from = message.from;
         if (!from) continue;
 
+        // Fetch broker profile including role, contact_phone, and is_active flag
         const brokerRes = await pool.query(
-          "SELECT id, agency_id, name, phone, role FROM brokers WHERE phone = $1",
+          "SELECT id, agency_id, name, phone, contact_phone, role, is_active FROM brokers WHERE phone = $1 LIMIT 1",
           [from]
         );
 
@@ -1410,10 +1415,23 @@ app.post("/webhook", function (req, res) {
         }
 
         const broker = brokerRes.rows[0];
+
+        // Guard: Prevent suspended or inactive brokers from triggering requests
+        if (broker.is_active === false) {
+          await sendWhatsAppText(
+            from,
+            "⛔ تم تعطيل هذا الحساب مؤقتاً. يرجى مراجعة إدارة الوكالة للتفعيل."
+          );
+          continue;
+        }
+
+        // Update active timestamp
         await pool.query(
           "UPDATE brokers SET last_active_at = NOW() WHERE id = $1",
           [broker.id]
         );
+
+        // Dispatch message to command and search handler
         await handleSingleMessage(broker, message);
       }
     } catch (err) {
@@ -1432,7 +1450,31 @@ app.get("/webhook", function (req, res) {
   }
   return res.sendStatus(403);
 });
+// ---------------------------------------------------------------------------
+// 5. HEALTH CHECK & SYSTEM STATUS ENDPOINTS
+// ---------------------------------------------------------------------------
+app.get("/health", async function (req, res) {
+  try {
+    // Ping PostgreSQL to confirm database connectivity
+    await pool.query("SELECT 1");
+    res.status(200).json({
+      status: "ok",
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+      database: "connected"
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: "error",
+      database: "disconnected",
+      error: err.message
+    });
+  }
+});
 
+app.get("/", function (req, res) {
+  res.status(200).send("Real Estate WhatsApp Engine is active.");
+});
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, function () {
   console.log("🚀 Real Estate WhatsApp Engine online on port " + PORT);
