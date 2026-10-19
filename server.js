@@ -314,8 +314,8 @@ async function processBatchedListing(broker, batch) {
         );
         if (url) {
           await pool.query(
-            "INSERT INTO listing_images (listing_id, url, position) VALUES ($1, $2, (SELECT COALESCE(MAX(position), -1) + 1 FROM listing_images WHERE listing_id = $1))",
-            [recent.id, url]
+            "INSERT INTO listing_images (listing_id, agency_id, url, position) VALUES ($1, $2, $3, (SELECT COALESCE(MAX(position), -1) + 1 FROM listing_images WHERE listing_id = $1))",
+            [recent.id, broker.agency_id, url]
           );
         }
       }
@@ -682,8 +682,8 @@ async function processBatchedListing(broker, batch) {
 
   for (let pos = 0; pos < uploadedUrls.length; pos++) {
     await pool.query(
-      "INSERT INTO listing_images (listing_id, url, position) VALUES ($1, $2, $3)",
-      [listing.id, uploadedUrls[pos], pos]
+      "INSERT INTO listing_images (listing_id, agency_id, url, position) VALUES ($1, $2, $3, $4)",
+      [listing.id, broker.agency_id, uploadedUrls[pos], pos]
     );
   }
 
