@@ -308,536 +308,314 @@ async function generateContentWithRetry({
 // ---------------------------------------------------------------------------
 async function processBatchedListing(broker, batch) {
   const from = batch.from;
-  const startMs = Date.now();
-  const images = batch.images || [];
-  const audios = batch.audios || [];
-  const textBody = (batch.texts || []).join("\n").trim();
+  const startTime = Date.now();
 
-  for (let i = 0; i < audios.length; i++) {
-    const audio = audios[i];
-    if (audio.duration && audio.duration > MAX_LISTING_AUDIO_SEC) {
-      return sendWhatsAppText(
-        from,
-        "⚠️ *التسجيل الصوتي طويل جداً (" +
-          audio.duration +
-          " ثانية).*\n\nالحد الأقصى للتسجيل الصوتي لإضافة عقار هو *دقيقتان (120 ثانية)*.\nيرجى إرسال تسجيل صوتي مختصر بمواصفات الوحدة."
-      );
-    }
-  }
+  // 1. Send preliminary processing acknowledgement to the broker
+  await sendWhatsAppText(
+    from,
+    "⏳ جاري فحص البيانات والمواصفات وتصميم الكتالوج الاحترافي..."
+  );
 
-  // Scenario A: Late photos attached to an explicit #CODE or within 5 minutes
-  const explicitCodeMatch = textBody.match(/^#?([A-Z]{2}-[A-Z]-[A-Z0-9]{5})$/i);
-  if (
-    audios.length === 0 &&
-    images.length > 0 &&
-    (!textBody || explicitCodeMatch)
-  ) {
-    let recentRes;
-    if (explicitCodeMatch) {
-      recentRes = await pool.query(
-        "SELECT id, code, flyer_url, title, price_display, area_value, bedrooms, location, details FROM listings WHERE agency_id = $1 AND code = $2 LIMIT 1",
-        [broker.agency_id, explicitCodeMatch[1].toUpperCase()]
-      );
-    } else {
-      recentRes = await pool.query(
-        "SELECT id, code, flyer_url, title, price_display, area_value, bedrooms, location, details FROM listings WHERE broker_id = $1 AND created_at > NOW() - INTERVAL '5 minutes' ORDER BY created_at DESC LIMIT 1",
-        [broker.id]
-      );
-    }
+  try {
+    // -------------------------------------------------------------------------
+    // STEP 1: PREPARE MULTIMODAL PAYLOAD (Images + Text + Transcribed Voice)
+    // -------------------------------------------------------------------------
+    const parts = [];
 
-    if (recentRes.rowCount > 0) {
-      const recent = recentRes.rows[0];
-      await sendWhatsAppText(
-        from,
-        "📸 جاري معالجة وإلحاق الصور الجديدة بالعقار رقم *#" +
-          recent.code +
-          "*..."
-      );
+    // System instruction and structural schema enforcement prompt
+    parts.push({
+      text: `أنت خبير ومساعد عقاري ذكي لمنصة وساطة عقارية. مهمتك استخراج كافة تفاصيل العقار بدقة متناهية من النصوص والصور والملاحظات الصوتية المرفقة بصيغة JSON محددة حصراً.
+استخرج الحقول التالية:
+- title: عنوان مختصر جذاب للوحدة.
+- property_type: نوع العقار (شقة, فيلا, دوبلكس, مكتب, محل, شاليه, إلخ).
+- listing_type: نوع العرض ("sale" أو "rent").
+- price_value: القيمة الرقمية للسعر الإجمالي فقط (بدون فواصل أو نصوص).
+- price_display: السعر كنص واضح (مثال: "5,500,000 ج.م").
+- area_value: المساحة كرقم فقط بالمتر المربع.
+- bedrooms: عدد الغرف كرقم.
+- location: الحي أو المدينة أو التجمع (مثال: "التجمع الخامس - القاهرة الجديدة").
+- compound: اسم الكمبوند إن وجد، أو فارغ "".
+- district: المنطقة أو الحي بالتفصيل.
+- city: المدينة الرئيسية (مثال: "القاهرة", "الجيزة", "الساحل الشمالي").
+- location_keywords: مصفوفة كلمات مفتاحية للموقع.
+- details: كائن يحتوي على:
+    - clean_summary: وصف تنفيذي منسق ومختصر للوحدة.
+    - features: مصفوفة نصوص لأبرز 3-5 مميزات (تشطيب, بحري, فيو, أسانسير, إلخ).
+    - installment_years: عدد سنوات التقسيط إن وجد (رقم).
+    - down_payment_value: قيمة المقدم إن وجد (رقم).
+    - image_order: مصفوفة أرقام ترتيب أفضل الصور من حيث الجودة لتظهر بالبروشور بدءاً من 0.`
+    });
 
-      const compressedLate = await prepareImagesForGemini(
-        images,
-        MAX_FLYER_IMAGES
-      );
-      for (let i = 0; i < compressedLate.length; i++) {
-        const url = await uploadListingImage(
-          broker.agency_id,
-          recent.id,
-          compressedLate[i].buffer
-        );
-        if (url) {
-          await pool.query(
-            "INSERT INTO listing_images (listing_id, agency_id, url, position) VALUES ($1, $2, $3, (SELECT COALESCE(MAX(position), -1) + 1 FROM listing_images WHERE listing_id = $1))",
-            [recent.id, broker.agency_id, url]
-          );
-        }
-      }
-
-      const allImgsRes = await pool.query(
-        "SELECT url FROM listing_images WHERE listing_id = $1 ORDER BY position ASC LIMIT 9",
-        [recent.id]
-      );
-      const allImageUrls = allImgsRes.rows.map(function (r) {
-        return r.url;
+    // Append text descriptions from the broker
+    if (batch.texts && batch.texts.length > 0) {
+      parts.push({
+        text: `تفاصيل العقار المرسلة نصياً:\n${batch.texts.join("\n\n")}`
       });
-
-      const agencyRes = await pool.query(
-        "SELECT name, logo_url, primary_color, secondary_color FROM agencies WHERE id = $1",
-        [broker.agency_id]
-      );
-      const agency = agencyRes.rows[0] || {};
-
-      const flyerBuffer = await generateFlyerBuffer({
-        listing: recent,
-        agency: agency,
-        images: allImageUrls
-      });
-      const updatedFlyerUrl = await uploadFlyerImage(
-        broker.agency_id,
-        recent.code,
-        flyerBuffer
-      );
-
-      if (updatedFlyerUrl) {
-        await pool.query(
-          "UPDATE listings SET flyer_url = $1, updated_at = NOW() WHERE id = $2",
-          [updatedFlyerUrl, recent.id]
-        );
-
-        return sendWhatsAppImage(
-          from,
-          updatedFlyerUrl + "?t=" + Date.now(),
-          "✅ تم تحديث كتالوج العقار *#" +
-            recent.code +
-            "* بنجاح.\n📸 إجمالي الصور المعتمدة: (" +
-            allImageUrls.length +
-            ")."
-        );
-      }
     }
 
-    return sendWhatsAppText(
-      from,
-      "⚠️ *تم استلام صور بدون أي تفاصيل أو كود عقار.*\n\nيرجى إرسال مواصفات الوحدة في رسالة نصية أو تسجيل صوتي ليتم تسجيلها وتصميم الكتالوج."
-    );
-  }
+    // Append and process raw images (compressed for Gemini ingestion)
+    const validImageBuffers = [];
+    if (batch.images && batch.images.length > 0) {
+      for (const imgItem of batch.images) {
+        if (!imgItem.buffer) continue;
+        validImageBuffers.push(imgItem.buffer);
 
-  // Scenario B: Text / Audio Only (Zero Photos)
-  if (images.length === 0 && (textBody || audios.length > 0)) {
-    await sendWhatsAppText(from, "⏳ جاري استخراج وحفظ بيانات العقار...");
+        // Resize buffer for Gemini input to conserve token bandwidth
+        const lowRes = await sharp(imgItem.buffer)
+          .resize({ width: 1024, height: 1024, fit: "inside" })
+          .jpeg({ quality: 80 })
+          .toBuffer();
 
-    const promptText = [
-      "You are an expert Egyptian real estate data extractor. Extract specs into strict JSON:",
-      "{",
-      '  "code": "optional unit code or null",',
-      '  "title": "Concise Arabic title",',
-      '  "property_type": "apartment | villa | townhouse | twinhouse | duplex | penthouse | studio | chalet | office | commercial",',
-      '  "listing_type": "sale | rent",',
-      '  "price_value": null,',
-      '  "price_display": "formatted Arabic price or null",',
-      '  "area_value": null,',
-      '  "bedrooms": null,',
-      '  "location": "Compound and/or district in Arabic",',
-      '  "compound": "Compound in Arabic or null",',
-      '  "district": "District in Arabic or null",',
-      '  "city": "City in Arabic or null",',
-      '  "location_keywords": ["canonical terms in Arabic, English, Franco"],',
-      '  "clean_summary": "Professional Arabic summary without broker contact info",',
-      '  "short_summary": "1-line concise Arabic highlight",',
-      '  "features": ["up to 5 key features"],',
-      '  "down_payment_value": null,',
-      '  "installments_years": null',
-      "}",
-      CANONICAL_REAL_ESTATE_RULES
-    ].join("\n");
-
-    const parts = [{ text: promptText }];
-    if (textBody) parts.push({ text: "\n--- DETAILS ---\n" + textBody });
-
-    for (let i = 0; i < audios.length; i++) {
-      const audio = audios[i];
-      if (audio.buffer && audio.buffer.length > 0) {
         parts.push({
           inlineData: {
-            mimeType: audio.mimeType || "audio/ogg",
-            data: audio.buffer.toString("base64")
+            mimeType: "image/jpeg",
+            data: lowRes.toString("base64")
           }
         });
       }
     }
 
+    // Process voice recordings if present
+    if (batch.voices && batch.voices.length > 0) {
+      for (const voiceItem of batch.voices) {
+        if (!voiceItem.buffer) continue;
+        parts.push({
+          inlineData: {
+            mimeType: voiceItem.mimeType || "audio/ogg",
+            data: voiceItem.buffer.toString("base64")
+          }
+        });
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // STEP 2: CALL GEMINI WITH RESILIENT RETRY & FALLBACK
+    // -------------------------------------------------------------------------
     let draftData = {};
     let usage = {};
+
     try {
-      const response = await ai.models.generateContent({
-        model: GEMINI_MODEL_ID,
+      const response = await generateContentWithRetry({
         contents: parts,
-        config: LISTING_CONFIG
+        config: {
+          temperature: 0.2,
+          responseMimeType: "application/json"
+        },
+        primaryModel: process.env.GEMINI_MODEL || "gemini-3.8-flash",
+        fallbackModel: "gemini-2.5-flash",
+        maxRetries: 3
       });
+
       const resText = cleanJsonResponse(response.text);
       usage = response.usageMetadata || {};
       draftData = JSON.parse(resText);
-    } catch (err) {
-      console.error("[EXTRACTION ERROR TEXT/AUDIO]:", err.message);
+    } catch (aiErr) {
+      console.error("[MULTIMODAL EXTRACTION ERROR]:", aiErr.message);
       return sendWhatsAppText(
         from,
-        "❌ تعذر استخراج مواصفات العقار. يرجى توضيح السعر والموقع والمساحة وإعادة المحاولة."
+        "⚠️ خوادم الذكاء الاصطناعي تشهد ضغطاً مؤقتاً في الوقت الحالي. يرجى إعادة إرسال الوحدة بعد لحظات."
       );
     }
 
-    const listingCode =
-      draftData.code && String(draftData.code).trim().length > 2
-        ? String(draftData.code).trim().toUpperCase()
-        : generateListingCode();
+    // -------------------------------------------------------------------------
+    // STEP 3: UPLOAD LISTING IMAGES TO SUPABASE STORAGE
+    // -------------------------------------------------------------------------
+    // Generate a temporary unique code identifier for path naming
+    const timestampCode = Math.floor(10000 + Math.random() * 90000);
+    const unitPrefix = `RK-${
+      draftData.property_type ? draftData.property_type.charAt(0) : "U"
+    }-${timestampCode}`;
 
-    const insertQuery =
-      "INSERT INTO listings (" +
-      "agency_id, broker_id, code, title, property_type, listing_type, " +
-      "price_value, price_display, area_value, bedrooms, location, " +
-      "compound, district, city, location_keywords, flyer_url, status, details" +
-      ") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING *;";
+    const uploadedUrls = [];
+    if (validImageBuffers.length > 0) {
+      for (let i = 0; i < validImageBuffers.length; i++) {
+        // Optimize image to high-efficiency web format
+        const optimizedBuffer = await sharp(validImageBuffers[i])
+          .resize({
+            width: 1600,
+            height: 1600,
+            fit: "inside",
+            withoutEnlargement: true
+          })
+          .jpeg({ quality: 84, mozjpeg: true })
+          .toBuffer();
 
-    const values = [
-      broker.agency_id,
-      broker.id,
-      listingCode,
-      draftData.title || "وحدة سكنية متميزة",
-      draftData.property_type || "apartment",
-      draftData.listing_type || "sale",
-      draftData.price_value || null,
-      draftData.price_display ||
-        (draftData.price_value
-          ? Number(draftData.price_value).toLocaleString("en-US") + " ج"
-          : "عند الطلب"),
-      draftData.area_value || null,
-      draftData.bedrooms || null,
-      draftData.location || null,
-      draftData.compound || null,
-      draftData.district || null,
-      draftData.city || null,
-      draftData.location_keywords || [],
-      null,
-      "active",
-      draftData
-    ];
+        const publicUrl = await uploadListingImage(
+          broker.agency_id,
+          `${unitPrefix}-${i + 1}`,
+          optimizedBuffer
+        );
 
-    const { rows } = await pool.query(insertQuery, values);
-    const listing = rows[0];
+        if (publicUrl) {
+          uploadedUrls.push(publicUrl);
+        }
+      }
+    }
 
-    await pool.query(
-      "INSERT INTO usage_events (agency_id, broker_id, phone, event_type, listing_id, duration_ms, meta) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-      [
+    // -------------------------------------------------------------------------
+    // STEP 4: FETCH AGENCY BRANDING & GENERATE BROCHURE FLYER
+    // -------------------------------------------------------------------------
+    const agencyRes = await pool.query(
+      "SELECT id, name, logo_url, primary_color, secondary_color FROM agencies WHERE id = $1 LIMIT 1",
+      [broker.agency_id]
+    );
+    const agency = agencyRes.rows[0] || {};
+
+    let flyerStorageUrl = null;
+    let flyerBuffer = null;
+
+    if (uploadedUrls.length > 0) {
+      try {
+        flyerBuffer = await generateFlyerBuffer({
+          listing: {
+            code: unitPrefix,
+            title: draftData.title,
+            listing_type: draftData.listing_type,
+            price_value: draftData.price_value,
+            price_display: draftData.price_display,
+            area_value: draftData.area_value,
+            bedrooms: draftData.bedrooms,
+            location: draftData.location,
+            details: draftData.details || {}
+          },
+          agency: agency,
+          images: uploadedUrls
+        });
+
+        if (flyerBuffer) {
+          flyerStorageUrl = await uploadListingFlyer(
+            broker.agency_id,
+            `${unitPrefix}-flyer`,
+            flyerBuffer
+          );
+        }
+      } catch (flyerErr) {
+        console.error("[FLYER RENDER ERROR]:", flyerErr);
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // STEP 5: ATOMIC TRANSACTIONAL DATABASE INSERTION
+    // -------------------------------------------------------------------------
+    const client = await pool.connect();
+    let savedListing = null;
+
+    try {
+      await client.query("BEGIN");
+
+      // A. Insert the property listing
+      const insertListingSql = `
+        INSERT INTO listings (
+          agency_id,
+          broker_id,
+          code,
+          title,
+          property_type,
+          listing_type,
+          price_value,
+          price_display,
+          area_value,
+          bedrooms,
+          location,
+          compound,
+          district,
+          city,
+          location_keywords,
+          details,
+          flyer_url,
+          status
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'active'
+        )
+        RETURNING *;
+      `;
+
+      const listingRes = await client.query(insertListingSql, [
         broker.agency_id,
         broker.id,
-        from,
-        "create_listing",
-        listing.id,
-        Date.now() - startMs,
-        {
-          stored_photos: 0,
-          stored_bytes: 0,
-          has_flyer: false,
-          prompt_tokens: usage.promptTokenCount || 0,
-          candidates_tokens: usage.candidatesTokenCount || 0,
-          total_tokens: usage.totalTokenCount || 0,
-          model_used: "gemini-3.8-flash-reasoning"
-        }
-      ]
-    );
-
-    const summaryText = draftData.clean_summary
-      ? "\n\n📝 *التفاصيل:*\n" + draftData.clean_summary
-      : "";
-    return sendWhatsAppText(
-      from,
-      [
-        "✅ *تم حفظ بيانات العقار بنجاح برمز: #" + listing.code + "*",
-        "• الوحدة: " + listing.title,
-        "• السعر: *" + listing.price_display + "*",
-        "• المساحة: " +
-          (listing.area_value ? listing.area_value + " م²" : "-") +
-          " | الغرف: " +
-          (listing.bedrooms || "-"),
-        "• الموقع: " + (listing.location || "-") + summaryText,
-        "",
-        "💡 *ملحوظة:* تم حفظ الوحدة بدون صور. لإصدار كتالوج مخصص، أرسل صور الوحدة واكتب في التعليق: *#" +
-          listing.code +
-          "*."
-      ].join("\n")
-    );
-  }
-
-  // Scenario C: Complete Pipeline (Text/Audio + Candidate Images)
-  let preWaitNotice =
-    "⏳ *جاري فحص البيانات وتصميم الكتالوج...*\n⏱️ يستغرق التجهيز دقيقة واحدة تقريباً.\n\n⚠️ *تنبيه:* يرجى الانتظار حتى استلام الكتالوج قبل إرسال عقار جديد لتجنب تداخل البيانات.";
-  if (images.length > MAX_VISION_EVAL_IMAGES) {
-    preWaitNotice =
-      "📸 *تم استلام " +
-      images.length +
-      " صورة.* (الحد الأقصى للفحص الذكي 15 صورة).\n🔍 *سيتم فحص أول 15 صورة واختيار أفضل 9 صور للكتالوج تلقائياً.*\n\n" +
-      preWaitNotice;
-  }
-  await sendWhatsAppText(from, preWaitNotice);
-
-  const candidateCompressed = await prepareImagesForGemini(
-    images,
-    MAX_VISION_EVAL_IMAGES
-  );
-
-  const prompt = [
-    "You are an expert Egyptian real estate data extractor and architectural photo art director.",
-    "Extract all specs and evaluate candidate images into strict JSON:",
-    "{",
-    '  "code": "optional unit code or null",',
-    '  "title": "Concise Arabic title",',
-    '  "property_type": "apartment | villa | townhouse | twinhouse | duplex | penthouse | studio | chalet | office | commercial",',
-    '  "listing_type": "sale | rent",',
-    '  "price_value": null,',
-    '  "price_display": "formatted Arabic price or null",',
-    '  "area_value": null,',
-    '  "bedrooms": null,',
-    '  "location": "Compound and/or district in Arabic",',
-    '  "compound": "Compound in Arabic or null",',
-    '  "district": "District in Arabic or null",',
-    '  "city": "City in Arabic or null",',
-    '  "location_keywords": ["canonical terms in Arabic, English, Franco"],',
-    '  "clean_summary": "Professional Arabic summary without broker contact info",',
-    '  "short_summary": "1-line concise Arabic highlight",',
-    '  "features": ["up to 5 key features"],',
-    '  "down_payment_value": null,',
-    '  "installments_years": null,',
-    '  "hero_index": 0,',
-    '  "selected_image_indices": [0, 1, 2],',
-    '  "floorplan_indices": []',
-    "}",
-    "PHOTO CURATION DIRECTIVES (UP TO 9 BROCHURE IMAGES):",
-    "1. hero_index: 0-based index of the best standout shot (wide panoramic view, golf view, or grand reception).",
-    "2. selected_image_indices: Array of up to 9 distinct image indices ordered with hero_index first. EXCLUDE selfies, blurry shots, utility meters, corridors, or duplicate angles.",
-    "3. floorplan_indices: 0-based indices of 2D architectural blueprints (exclude from selected_image_indices).",
-    CANONICAL_REAL_ESTATE_RULES
-  ].join("\n");
-
-  const parts = [{ text: prompt }];
-  if (textBody) parts.push({ text: "\n--- TEXT CAPTIONS ---\n" + textBody });
-
-  for (let i = 0; i < audios.length; i++) {
-    const audio = audios[i];
-    if (audio.buffer && audio.buffer.length > 0) {
-      parts.push({
-        inlineData: {
-          mimeType: audio.mimeType || "audio/ogg",
-          data: audio.buffer.toString("base64")
-        }
-      });
-    }
-  }
-
-  for (let i = 0; i < candidateCompressed.length; i++) {
-    const img = candidateCompressed[i];
-    parts.push({
-      inlineData: {
-        mimeType: img.mimeType,
-        data: img.buffer.toString("base64")
-      }
-    });
-  }
-
-  let draftData = {};
-  let usage = {};
-  try {
-    const response = await generateContentWithRetry({
-      contents: parts,
-      config: LISTING_CONFIG,
-      primaryModel: GEMINI_MODEL_ID,
-      fallbackModel: "gemini-2.6-flash",
-      maxRetries: 3
-    });
-    const resText = cleanJsonResponse(response.text);
-    usage = response.usageMetadata || {};
-    draftData = JSON.parse(resText);
-  } catch (err) {
-    console.error("[MULTIMODAL EXTRACTION ERROR]:", err.message);
-    return sendWhatsAppText(
-      from,
-      "⚠️ خوادم الذكاء الاصطناعي تشهد ضغطاً مؤقتاً في الوقت الحالي. يرجى إعادة إرسال الوحدة بعد قليل."
-    );
-  }
-
-  let selectedBuffers = [];
-  if (
-    Array.isArray(draftData.selected_image_indices) &&
-    draftData.selected_image_indices.length > 0
-  ) {
-    const seenIndices = new Set();
-    for (let i = 0; i < draftData.selected_image_indices.length; i++) {
-      const idx = draftData.selected_image_indices[i];
-      if (
-        typeof idx === "number" &&
-        candidateCompressed[idx] &&
-        !seenIndices.has(idx)
-      ) {
-        selectedBuffers.push(candidateCompressed[idx]);
-        seenIndices.add(idx);
-      }
-      if (selectedBuffers.length === MAX_FLYER_IMAGES) break;
-    }
-  }
-
-  if (selectedBuffers.length === 0) {
-    selectedBuffers = candidateCompressed.slice(0, MAX_FLYER_IMAGES);
-  }
-
-  const uploadedUrls = [];
-  let totalBytesStored = 0;
-  for (let i = 0; i < selectedBuffers.length; i++) {
-    const buffer = selectedBuffers[i].buffer;
-    totalBytesStored += buffer.length;
-    const url = await uploadListingImage(broker.agency_id, null, buffer);
-    if (url) uploadedUrls.push(url);
-  }
-
-  const listingCode =
-    draftData.code && String(draftData.code).trim().length > 2
-      ? String(draftData.code).trim().toUpperCase()
-      : generateListingCode();
-
-  const insertQuery =
-    "INSERT INTO listings (" +
-    "agency_id, broker_id, code, title, property_type, listing_type, " +
-    "price_value, price_display, area_value, bedrooms, location, " +
-    "compound, district, city, location_keywords, flyer_url, status, details" +
-    ") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING *;";
-
-  const values = [
-    broker.agency_id,
-    broker.id,
-    listingCode,
-    draftData.title || "وحدة سكنية راقية",
-    draftData.property_type || "apartment",
-    draftData.listing_type || "sale",
-    draftData.price_value || null,
-    draftData.price_display ||
-      (draftData.price_value
-        ? Number(draftData.price_value).toLocaleString("en-US") + " ج"
-        : "عند الطلب"),
-    draftData.area_value || null,
-    draftData.bedrooms || null,
-    draftData.location || null,
-    draftData.compound || null,
-    draftData.district || null,
-    draftData.city || null,
-    draftData.location_keywords || [],
-    null,
-    "active",
-    draftData
-  ];
-
-  const { rows } = await pool.query(insertQuery, values);
-  const listing = rows[0];
-
-  for (let pos = 0; pos < uploadedUrls.length; pos++) {
-    await pool.query(
-      "INSERT INTO listing_images (listing_id, agency_id, url, position) VALUES ($1, $2, $3, $4)",
-      [listing.id, broker.agency_id, uploadedUrls[pos], pos]
-    );
-  }
-
-  const agencyRes = await pool.query(
-    "SELECT name, logo_url, primary_color, secondary_color FROM agencies WHERE id = $1",
-    [broker.agency_id]
-  );
-  const agency = agencyRes.rows[0] || {};
-
-  let finalFlyerUrl = null;
-  try {
-    const flyerBuffer = await generateFlyerBuffer({
-      listing: listing,
-      agency: agency,
-      images: uploadedUrls
-    });
-    finalFlyerUrl = await uploadFlyerImage(
-      broker.agency_id,
-      listing.code,
-      flyerBuffer
-    );
-    if (finalFlyerUrl) {
-      await pool.query("UPDATE listings SET flyer_url = $1 WHERE id = $2", [
-        finalFlyerUrl,
-        listing.id
+        unitPrefix,
+        draftData.title || "وحدة سكنية معروضة",
+        draftData.property_type || "شقة",
+        draftData.listing_type || "sale",
+        draftData.price_value || null,
+        draftData.price_display || "",
+        draftData.area_value || null,
+        draftData.bedrooms || null,
+        draftData.location || "",
+        draftData.compound || "",
+        draftData.district || "",
+        draftData.city || "",
+        draftData.location_keywords || [],
+        draftData.details || {},
+        flyerStorageUrl
       ]);
-    }
-  } catch (renderErr) {
-    console.error("[FLYER RENDER ERROR]:", renderErr.message);
-  }
 
-  await pool.query(
-    "INSERT INTO usage_events (agency_id, broker_id, phone, event_type, listing_id, duration_ms, meta) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-    [
-      broker.agency_id,
-      broker.id,
-      from,
-      "create_listing",
-      listing.id,
-      Date.now() - startMs,
-      {
-        received_photos: images.length,
-        evaluated_photos: candidateCompressed.length,
-        stored_photos: uploadedUrls.length,
-        stored_bytes: totalBytesStored,
-        has_flyer: Boolean(finalFlyerUrl),
-        prompt_tokens: usage.promptTokenCount || 0,
-        candidates_tokens: usage.candidatesTokenCount || 0,
-        total_tokens: usage.totalTokenCount || 0,
-        model_used: "gemini-3.8-flash-reasoning"
+      savedListing = listingRes.rows[0];
+
+      // B. Insert all associated image rows
+      if (uploadedUrls.length > 0) {
+        for (let pos = 0; pos < uploadedUrls.length; pos++) {
+          await client.query(
+            `INSERT INTO listing_images (listing_id, agency_id, url, position)
+             VALUES ($1, $2, $3, $4)`,
+            [savedListing.id, broker.agency_id, uploadedUrls[pos], pos]
+          );
+        }
       }
-    ]
-  );
 
-  let photoCountSummary =
-    "📸 تم تصميم الكتالوج بـ (" + uploadedUrls.length + ") صور.";
-  if (images.length > MAX_VISION_EVAL_IMAGES) {
-    photoCountSummary =
-      "📸 تم استلام " +
-      images.length +
-      " صورة (تم فحص أول 15 واختيار أفضل " +
-      uploadedUrls.length +
-      " صور للكتالوج).";
-  } else if (images.length > MAX_FLYER_IMAGES) {
-    photoCountSummary =
-      "📸 تم استلام " +
-      images.length +
-      " صور (تم اختيار أفضل " +
-      uploadedUrls.length +
-      " صور واستبعاد المكرر).";
-  }
+      // C. Record system usage telemetry
+      await client.query(
+        `INSERT INTO usage_events (agency_id, broker_id, phone, event_type, listing_id, duration_ms, meta)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          broker.agency_id,
+          broker.id,
+          from,
+          "listing_creation",
+          savedListing.id,
+          Date.now() - startTime,
+          JSON.stringify({
+            images_count: uploadedUrls.length,
+            tokens: usage.totalTokenCount || 0,
+            has_flyer: Boolean(flyerStorageUrl)
+          })
+        ]
+      );
 
-  const summaryText = draftData.clean_summary
-    ? "\n\n📝 *التفاصيل:*\n" + draftData.clean_summary
-    : "";
-  const flyerCaption = [
-    "✅ *تم اعتماد العقار برمز: #" + listing.code + "*",
-    "• الوحدة: " + listing.title,
-    "• السعر: *" + listing.price_display + "*",
-    "• المساحة: " +
-      (listing.area_value ? listing.area_value + " م²" : "-") +
-      " | الغرف: " +
-      (listing.bedrooms || "-"),
-    "• الموقع: " + (listing.location || "-"),
-    photoCountSummary + summaryText,
-    "",
-    "💡 *لإرسال العرض لعميلك:* أرسل: عميل " + listing.code
-  ].join("\n");
+      // Commit all changes atomically
+      await client.query("COMMIT");
+      console.log(`✅ [LISTING SAVED ATOMICALLY]: ${savedListing.code}`);
+    } catch (dbErr) {
+      await client.query("ROLLBACK");
+      console.error(`❌ [TRANSACTION FAILED - ROLLEDBACK]:`, dbErr);
+      throw dbErr; // Re-throw to trigger user error alert in outer catch
+    } finally {
+      client.release();
+    }
 
-  if (finalFlyerUrl) {
-    return sendWhatsAppImage(
+    // -------------------------------------------------------------------------
+    // STEP 6: DISPATCH FINAL CONFIRMATION & CLIENT-FACING TEXT TO BROKER
+    // -------------------------------------------------------------------------
+    // Send the rendered visual flyer image
+    if (flyerStorageUrl) {
+      await sendWhatsAppImage(
+        from,
+        flyerStorageUrl,
+        `📋 كتالوج تسويقي معتمد - كود الوحدة: #${savedListing.code}`
+      );
+    }
+
+    // Send formatted copy-pasteable client marketing summary
+    const clientSummaryText = formatClientListingText(savedListing, broker);
+    await sendWhatsAppText(from, clientSummaryText);
+  } catch (fatalErr) {
+    console.error("[BATCH EXECUTION FATAL ERROR]:", fatalErr);
+    await sendWhatsAppText(
       from,
-      finalFlyerUrl + "?t=" + Date.now(),
-      flyerCaption
+      "❌ عذراً، واجه النظام خطأ غير متوقع أثناء معالجة وحفظ العقار. تم إلغاء التسجيل الجزئي تلقائياً لضمان سلامة بياناتك، يرجى إعادة الإرسال."
     );
   }
-
-  return sendWhatsAppText(from, flyerCaption);
 }
-
 // ---------------------------------------------------------------------------
 // 2. SEARCH ENGINE: handleSearchMessage
 // ---------------------------------------------------------------------------
