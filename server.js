@@ -75,6 +75,42 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 // ---------------------------------------------------------------------------
 // Utility & Schema Helpers
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Dynamic Processing Duration Cache (Zero DB load on webhooks)
+// ---------------------------------------------------------------------------
+let cachedAvgSecs = 55; // Safe realistic default
+
+async function refreshAvgDuration() {
+  try {
+    const res = await pool.query(`
+      SELECT ROUND(AVG(duration_ms) / 1000) AS avg_secs
+      FROM usage_events
+      WHERE event_type = 'create'
+        AND duration_ms BETWEEN 5000 AND 180000
+        AND created_at > NOW() - INTERVAL '7 days'
+    `);
+    const val = Number(res.rows[0]?.avg_secs);
+    if (val && val >= 20 && val <= 150) {
+      cachedAvgSecs = Math.round(val / 5) * 5; // Round to nearest 5s
+    }
+  } catch (err) {
+    console.error(
+      "⚠️ [METRICS CACHE] Could not refresh avg duration:",
+      err.message
+    );
+  }
+}
+
+// Warm cache at startup, then refresh hourly
+refreshAvgDuration();
+setInterval(refreshAvgDuration, 60 * 60 * 1000);
+
+function getFormattedWaitTime() {
+  if (cachedAvgSecs >= 50 && cachedAvgSecs <= 70) {
+    return "دقيقة واحدة تقريباً";
+  }
+  return `حوالي ${cachedAvgSecs} ثانية`;
+}
 function cleanAudioMime(mime = "") {
   return (
     String(mime || "audio/ogg")
@@ -622,367 +658,211 @@ function enqueueIncomingMessage(from, msg, broker) {
   }, debounceDelay);
 }
 
-async function processBatchedListing(from, items, broker) {
-  const collectedText = [];
-  const imageItems = [];
-  const audioItems = [];
+async function processBatchedListing(broker, batch) {
+  const from = batch.from;
+  const startMs = Date.now();
+  const images = batch.images || [];
+  const audios = batch.audios || [];
+  const textBody = (batch.texts || []).join("\n").trim();
 
-  for (const item of items) {
-    if (item.type === "text" && item.text?.body) {
-      collectedText.push(item.text.body);
-    } else if (item.type === "image" && item.image) {
-      imageItems.push(item.image);
-      if (item.image.caption) collectedText.push(item.image.caption);
-    } else if (
-      item.type === "document" &&
-      item.document?.mime_type?.startsWith("image/")
-    ) {
-      imageItems.push(item.document);
-      if (item.document.caption) collectedText.push(item.document.caption);
-    } else if (
-      (item.type === "audio" || item.type === "voice") &&
-      (item.audio || item.voice)
-    ) {
-      audioItems.push(item.audio || item.voice);
+  // -------------------------------------------------------------------------
+  // Edge Case 1: Images Only (Zero Text, Zero Audio)
+  // -------------------------------------------------------------------------
+  if (!textBody && audios.length === 0 && images.length > 0) {
+    // Check if the broker created a listing in the last 5 minutes (Late Images)
+    const recentRes = await pool.query(
+      `SELECT id, code, flyer_url FROM listings
+       WHERE broker_id = $1 AND created_at > NOW() - INTERVAL '5 minutes'
+       ORDER BY created_at DESC LIMIT 1`,
+      [broker.id]
+    );
+
+    if (recentRes.rowCount > 0) {
+      const recent = recentRes.rows[0];
+      await sendWhatsAppText(
+        from,
+        `📸 جاري إلحاق الصور الجديدة بالعقار رقم *#${recent.code}*...`
+      );
+
+      // Upload and append images
+      for (let i = 0; i < images.length; i++) {
+        const imgUrl = await uploadListingImage(
+          broker.agency_id,
+          recent.id,
+          images[i].buffer
+        );
+        if (imgUrl) {
+          await pool.query(
+            `INSERT INTO listing_images (listing_id, url, position)
+             VALUES ($1, $2, (SELECT COALESCE(MAX(position), -1) + 1 FROM listing_images WHERE listing_id = $1))`,
+            [recent.id, imgUrl]
+          );
+        }
+      }
+
+      // Re-render flyer with updated photos
+      const allImgsRes = await pool.query(
+        "SELECT url FROM listing_images WHERE listing_id = $1 ORDER BY position ASC LIMIT 9",
+        [recent.id]
+      );
+      const flyerUrl = await generateAndUploadFlyer({
+        broker,
+        listing: recent,
+        imageSources: allImgsRes.rows.map((r) => r.url)
+      });
+
+      return sendWhatsAppImage(
+        from,
+        `${flyerUrl}?t=${Date.now()}`,
+        `✅ تم تحديث كتالوج العقار *#${recent.code}* بالصور الجديدة.`
+      );
     }
-  }
 
-  if (
-    imageItems.length === 0 &&
-    collectedText.length === 0 &&
-    audioItems.length === 0
-  ) {
-    return;
-  }
-
-  if (imageItems.length === 0) {
-    const handled = await routeTextOrVoice({
+    // No recent listing found -> Reject orphan image batch
+    return sendWhatsAppText(
       from,
+      "⚠️ *تم استلام الصور بدون أي تفاصيل أو تسجيل صوتي.*\n\nيرجى إرسال مواصفات الوحدة (السعر، المساحة، الموقع) في رسالة نصية أو تسجيل صوتي ليتم تسجيلها."
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Edge Case 2: Text / Audio Only (No Images)
+  // -------------------------------------------------------------------------
+  if (images.length === 0 && (textBody || audios.length > 0)) {
+    await sendWhatsAppText(from, "⏳ جاري مراجعة وحفظ بيانات الوحدة...");
+
+    const { draftData, usage } = await extractListingDetailsWithAi({
+      text: textBody,
+      audios,
+      images: []
+    });
+
+    const listing = await insertListingToDatabase({
       broker,
-      collectedText,
-      audioItems
-    });
-    if (handled) return;
-  }
-
-  sendWhatsAppText(
-    from,
-    "⏳ جاري استخراج البيانات واختيار أفضل الصور وتصميم الكتالوج..."
-  ).catch(() => {});
-
-  const downloadedImages = [];
-  for (const img of imageItems) {
-    if (!img?.id) continue;
-    const media = await downloadWhatsAppMedia(img.id);
-    if (media && media.buffer) {
-      const phash = await computeDHash64(media.buffer);
-      downloadedImages.push({
-        mediaId: img.id,
-        buffer: media.buffer,
-        mimeType: media.mimeType,
-        dataUri: `data:${media.mimeType};base64,${media.buffer.toString(
-          "base64"
-        )}`,
-        phash
-      });
-    }
-  }
-
-  const downloadedAudio = [];
-  for (const aud of audioItems) {
-    if (!aud?.id) continue;
-    const cachedAudio = mediaCache.get(aud.id);
-    const media = cachedAudio
-      ? cachedAudio.media
-      : await downloadWhatsAppMedia(aud.id);
-    if (media && media.buffer) {
-      downloadedAudio.push({
-        mediaId: aud.id,
-        buffer: media.buffer,
-        mimeType: cleanAudioMime(media.mimeType)
-      });
-    }
-  }
-
-  const visionCount = Math.min(downloadedImages.length, MAX_VISION_IMAGES);
-  const rawTextJoined = collectedText.join("\n").trim();
-
-  // Inside server.js -> processBatchedListing()
-
-  const promptText = `
-You are an expert Egyptian real estate AI assistant and architectural photo editor.
-Extract the real estate unit parameters from the provided text, images (including any Arabic/English text inside flyers or screenshots), and audio voice notes into strict JSON format:
-{
-  "code": "optional alphanumeric unit code if explicitly mentioned in text/image (e.g. ANH245, MV-104, A101) or null",
-  "title": "concise attractive Arabic title for the unit (e.g. شقة فاخرة بفيو مفتوح في التجمع الخامس)",
-  "property_type": "apartment | villa | townhouse | twinhouse | duplex | penthouse | studio | chalet | office | commercial",
-  "listing_type": "sale | rent",
-  "price_value": numeric total price in EGP (e.g. 6500000) or null,
-  "price_display": "formatted Arabic price string (e.g. 6,500,000 جنيه or 6.5 مليون جنيه) or null",
-  "area_value": numeric square meters (e.g. 165) or null,
-  "bedrooms": numeric integer count of bedrooms (e.g. 3) or null,
-  "location": "compound name and/or district in Arabic (e.g. التجمع الخامس - كمبوند ميفيدا)",
-  "location_name": "city or area name in Arabic (e.g. القاهرة الجديدة)",
-  "compound": "compound / project name in Arabic (e.g. ميفيدا) or null",
-  "district": "district in Arabic (e.g. التجمع الخامس, الشيخ زايد, مدينة نصر) or null",
-  "city": "city / region in Arabic (e.g. القاهرة الجديدة, 6 أكتوبر) or null",
-  "location_keywords": ["up to 12 names a buyer might type to find this unit: the compound, district and city in Arabic AND English/Franco spellings, common misspellings, developer name if known"],
-  "features": ["up to 6 key features in Arabic, e.g. تشطيب الترا سوبر لوكس, بحري, فيو لاندسكيب, استلام فوري"],
-  "clean_summary": "a professional 2-3 sentence Arabic summary of the unit's technical specifications and payment terms. ABSOLUTELY EXCLUDE all external broker names, external agency branding, marketing slogans, and contact numbers/CTAs",
-  "short_summary": "exactly one concise, natural, grammatically complete Arabic sentence (maximum 20-25 words) highlighting finishing, view, delivery status, and key financial terms. Strictly exclude any broker names or marketing fluff.",
-  "language": "ar | en",
-  "hero_position": integer (0-based index from 0 to ${Math.max(
-    0,
-    visionCount - 1
-  )} of the single BEST cover photo),
-  "image_order": [array of 0-based integer indices ranking the images from best to worst visual appeal, starting with hero_position],
-  "duplicate_indices": [array of indices of any redundant or near-duplicate images in this batch to discard],
-  "floorplan_indices": [array of indices of floor plans or 2D layout diagrams],
-  "is_primary_developer": boolean (true if developer installment plan is offered),
-  "down_payment_value": numeric down payment in EGP or null,
-  "installment_years": numeric integer years of installments or null,
-  "installment_value": numeric installment check amount or null,
-  "payment_frequency": "monthly | quarterly | semi_annual | annual",
-  "delivery_date": "delivery year/status in Arabic or null",
-  "maintenance_pct": numeric maintenance percentage or null,
-  "transcribed_text": "if audio or image text was read, include a summary of the raw text here"
-}
-
-STRICT EXCLUSION RULES FOR "clean_summary", "short_summary", AND "title":
-1. REMOVE ALL EXTERNAL BRANDING & BROKER NAMES: Do not include competitor names or agencies (e.g. 'EGY Property', 'RE/MAX', etc.).
-2. REMOVE ALL ADVERTISING SLOGANS: Filter out marketing fluff like 'Your #1 choice for stress-free real estate', 'Buy, rent, or invest with ease', 'Our experienced agents provide...', etc.
-3. REMOVE ALL CONTACT CALLS-TO-ACTION (CTAs): Do not include 'Call Us', 'Contact via WhatsApp', 'Offer your unit with us', phone numbers, or social media handles.
-4. RETAIN ALL PHYSICAL & FINANCIAL SPECS: Keep BUA/area, bedrooms, bathrooms, maid's room, terraces, finishing type, view (e.g. Golf View), delivery status (e.g. Ready to move), and cash/installment payment structure.
-`;
-
-  const geminiContents = [];
-  for (let i = 0; i < visionCount; i++) {
-    const img = downloadedImages[i];
-    geminiContents.push({ text: `Image Index ${i}:` });
-    geminiContents.push({
-      inlineData: {
-        data: img.buffer.toString("base64"),
-        mimeType: img.mimeType
-      }
-    });
-  }
-
-  for (const aud of downloadedAudio) {
-    geminiContents.push({
-      inlineData: {
-        data: aud.buffer.toString("base64"),
-        mimeType: cleanAudioMime(aud.mimeType)
-      }
-    });
-  }
-
-  geminiContents.push({ text: promptText });
-
-  let extractedData = {};
-  const geminiStartMs = Date.now();
-  try {
-    const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: geminiContents,
-      config: { responseMimeType: "application/json" }
+      draftData,
+      flyerUrl: null // No flyer generated
     });
 
-    const rawJson = (response.text || "{}").trim();
-    extractedData = JSON.parse(rawJson);
-
-    const usageMeta = response.usageMetadata || {};
     await logUsageEvent({
       agencyId: broker.agency_id,
       brokerId: broker.id,
       phone: from,
-      eventType: "gemini",
-      durationMs: Date.now() - geminiStartMs,
-      tokensInput: usageMeta.promptTokenCount || 0,
-      tokensOutput: usageMeta.candidatesTokenCount || 0,
-      meta: {
-        model: modelName,
-        imagesCount: downloadedImages.length,
-        audioCount: downloadedAudio.length,
-        heroChosen: extractedData.hero_position
-      }
+      eventType: "create",
+      listingId: listing.id,
+      durationMs: Date.now() - startMs,
+      meta: { imageCount: 0, hasFlyer: false }
     });
-  } catch (err) {
-    console.error("❌ [GEMINI] Extraction failed:", err.message);
-    await logUsageEvent({
-      agencyId: broker.agency_id,
-      brokerId: broker.id,
-      phone: from,
-      eventType: "error",
-      meta: { stage: "gemini", message: err.message }
-    });
-    // Generic error message for broker, details logged internally only
-    await sendWhatsAppText(
-      from,
-      "⚠️ تعذر قراءة بيانات الإعلان تلقائياً. يرجى التأكد من وضوح الصور أو النصوص."
-    );
-    return;
+
+    const summaryText = draftData.clean_summary
+      ? `\n\n📝 *التفاصيل:*\n${draftData.clean_summary}`
+      : "";
+    const confirmationText = [
+      `✅ *تم تسجيل بيانات العقار بنجاح برمز: #${listing.code}*`,
+      `• الوحدة: ${listing.title || "-"}`,
+      `• السعر: *${listing.price_display || "عند الطلب"}*`,
+      `• المساحة: ${
+        listing.area_value ? `${listing.area_value} م²` : "-"
+      } | الغرف: ${listing.bedrooms || "-"}`,
+      `• الموقع: ${listing.location || "-"}${summaryText}`,
+      "",
+      "💡 *ملحوظة:* تم حفظ الوحدة بدون صور. لإصدار كتالوج بتصميم احترافي، أرسل صور العقار مرفقة بالكود في أي وقت (مثال: أرسل الصور واكتب في التعليق: *#" +
+        listing.code +
+        "*)."
+    ].join("\n");
+
+    return sendWhatsAppText(from, confirmationText);
   }
 
-  if (!extractedData.price_value && rawTextJoined) {
-    const fallbackPrice = T.parsePrice(rawTextJoined);
-    if (fallbackPrice) extractedData.price_value = fallbackPrice;
-  }
-  if (extractedData.price_value && !extractedData.price_display) {
-    extractedData.price_display = T.formatPrice(extractedData.price_value);
-  }
-
-  let listingCode = normalizeCode(extractedData.code);
-  const isExplicitCode = Boolean(listingCode);
-
-  // Auto-generate code if none was provided, silently retrying if a sequence code already exists
-  if (!listingCode) {
-    while (true) {
-      const seq = await pool.query(
-        "SELECT nextval('listing_code_seq') AS code"
-      );
-      const cand = String(seq.rows[0].code);
-      const exists = await pool.query(
-        "SELECT 1 FROM listings WHERE agency_id = $1 AND lower(code) = lower($2)",
-        [broker.agency_id, cand]
-      );
-      if (exists.rowCount === 0) {
-        listingCode = cand;
-        break;
-      }
-    }
-  }
-
-  // Check collision for explicit broker-supplied code
-  if (isExplicitCode) {
-    const existingCodeRes = await pool.query(
-      "SELECT id, broker_id FROM listings WHERE agency_id = $1 AND lower(code) = lower($2)",
-      [broker.agency_id, listingCode]
-    );
-
-    if (existingCodeRes.rowCount > 0) {
-      const existingListing = existingCodeRes.rows[0];
-      const isSameBroker =
-        String(existingListing.broker_id) === String(broker.id);
-
-      // Different broker in same agency: Trigger 10-minute duplicate code window
-      if (!isSameBroker) {
-        const dupSet = new Set(
-          Array.isArray(extractedData.duplicate_indices)
-            ? extractedData.duplicate_indices
-            : []
-        );
-        const fpSet = new Set(
-          Array.isArray(extractedData.floorplan_indices)
-            ? extractedData.floorplan_indices
-            : []
-        );
-
-        const validOrder = [];
-        const addIdx = (idx) => {
-          const n = Number(idx);
-          if (
-            Number.isInteger(n) &&
-            n >= 0 &&
-            n < downloadedImages.length &&
-            !dupSet.has(n) &&
-            !validOrder.includes(n)
-          ) {
-            validOrder.push(n);
-          }
-        };
-
-        addIdx(extractedData.hero_position);
-        if (Array.isArray(extractedData.image_order))
-          extractedData.image_order.forEach(addIdx);
-        for (let i = 0; i < downloadedImages.length; i++) addIdx(i);
-
-        const flyerMosaicImages = validOrder
-          .filter((idx) => !fpSet.has(idx))
-          .slice(0, 9)
-          .map((idx) => downloadedImages[idx]);
-        const storedImages = validOrder.map((idx) => ({
-          bufferB64: downloadedImages[idx].buffer.toString("base64"),
-          mimeType: downloadedImages[idx].mimeType,
-          phash: downloadedImages[idx].phash,
-          isFloorplan: fpSet.has(idx)
-        }));
-
-        const draftPayload = {
-          draftData: {
-            ...extractedData,
-            rawTextJoined,
-            isExplicitCode
-          },
-          rankedImages: storedImages,
-          flyerMosaicDataUris: flyerMosaicImages.map((d) => d.dataUri)
-        };
-
-        await upsertSession(from, "waiting_code", null, draftPayload);
-        await logUsageEvent({
-          agencyId: broker.agency_id,
-          brokerId: broker.id,
-          phone: from,
-          eventType: "duplicate_warning",
-          meta: { clashingCode: listingCode }
-        });
-
-        return sendWhatsAppText(
-          from,
-          `⚠️ الكود *#${listingCode}* مسجل بالفعل لوحدة أخرى تابعة لزميل في الوكالة.\n\nأرسل *كود جديد فقط* (مثلاً #A205) خلال 10 دقائق لحفظ الإعلان، أو أرسل أي رسالة أخرى لإلغاء العملية.`
-        );
-      }
-    }
-  }
-
-  const dupSet = new Set(
-    Array.isArray(extractedData.duplicate_indices)
-      ? extractedData.duplicate_indices
-      : []
-  );
-  const fpSet = new Set(
-    Array.isArray(extractedData.floorplan_indices)
-      ? extractedData.floorplan_indices
-      : []
-  );
-
-  const validOrder = [];
-  const addIdx = (idx) => {
-    const n = Number(idx);
-    if (
-      Number.isInteger(n) &&
-      n >= 0 &&
-      n < downloadedImages.length &&
-      !dupSet.has(n) &&
-      !validOrder.includes(n)
-    ) {
-      validOrder.push(n);
-    }
-  };
-
-  addIdx(extractedData.hero_position);
-  if (Array.isArray(extractedData.image_order))
-    extractedData.image_order.forEach(addIdx);
-  for (let i = 0; i < downloadedImages.length; i++) addIdx(i);
-
-  const storedImages = validOrder.map((idx) => ({
-    buffer: downloadedImages[idx].buffer,
-    mimeType: downloadedImages[idx].mimeType,
-    phash: downloadedImages[idx].phash,
-    dataUri: downloadedImages[idx].dataUri,
-    isFloorplan: fpSet.has(idx)
-  }));
-
-  await finalizeListingCreation({
-    broker,
+  // -------------------------------------------------------------------------
+  // Standard Case: Text/Audio + Images (Full Flyer Pipeline)
+  // -------------------------------------------------------------------------
+  const waitDuration = getFormattedWaitTime();
+  await sendWhatsAppText(
     from,
-    draftData: {
-      ...extractedData,
-      rawTextJoined
-    },
-    listingCode,
-    rankedImages: storedImages
+    `⏳ *جاري استخراج البيانات وتصميم الكتالوج...*\n⏱️ يستغرق التجهيز ${waitDuration}.\n\n⚠️ *تنبيه:* يرجى الانتظار حتى استلام الكتالوج قبل إرسال عقار جديد أو إجراء بحث لتجنب تداخل البيانات.`
+  );
+
+  // 1. Process Gemini Multimodal Extraction
+  const { draftData, usage } = await extractListingDetailsWithAi({
+    text: textBody,
+    audios,
+    images
   });
+
+  // 2. Upload Compressed Images
+  const uploadedUrls = [];
+  for (let i = 0; i < images.length; i++) {
+    const url = await uploadListingImage(
+      broker.agency_id,
+      null,
+      images[i].buffer
+    );
+    if (url) uploadedUrls.push(url);
+  }
+
+  // 3. Insert Listing Record
+  const listing = await insertListingToDatabase({
+    broker,
+    draftData,
+    flyerUrl: null
+  });
+
+  // Save image references
+  for (let pos = 0; pos < uploadedUrls.length; pos++) {
+    await pool.query(
+      "INSERT INTO listing_images (listing_id, url, position) VALUES ($1, $2, $3)",
+      [listing.id, uploadedUrls[pos], pos]
+    );
+  }
+
+  // 4. Render Flyer via Satori
+  let flyerUrl = null;
+  try {
+    flyerUrl = await generateAndUploadFlyer({
+      broker,
+      listing,
+      imageSources: uploadedUrls
+    });
+
+    await pool.query("UPDATE listings SET flyer_url = $1 WHERE id = $2", [
+      flyerUrl,
+      listing.id
+    ]);
+  } catch (err) {
+    console.error("❌ [FLYER RENDER ERROR]:", err.message);
+  }
+
+  // 5. Log Metrics
+  await logUsageEvent({
+    agencyId: broker.agency_id,
+    brokerId: broker.id,
+    phone: from,
+    eventType: "create",
+    listingId: listing.id,
+    durationMs: Date.now() - startMs,
+    meta: { imageCount: uploadedUrls.length, hasFlyer: Boolean(flyerUrl) }
+  });
+
+  // 6. Send Response
+  const summaryText = draftData.clean_summary
+    ? `\n\n📝 *التفاصيل:*\n${draftData.clean_summary}`
+    : "";
+  const flyerCaption = [
+    `✅ *تم اعتماد العقار برمز: #${listing.code}*`,
+    `• الوحدة: ${listing.title || "-"}`,
+    `• السعر: *${listing.price_display || "عند الطلب"}*`,
+    `• المساحة: ${
+      listing.area_value ? `${listing.area_value} م²` : "-"
+    } | الغرف: ${listing.bedrooms || "-"}`,
+    `• الموقع: ${listing.location || "-"}`,
+    `📸 تم اعتماد الكتالوج بـ (${uploadedUrls.length}) صور.${summaryText}`
+  ].join("\n");
+
+  if (flyerUrl) {
+    return sendWhatsAppImage(from, `${flyerUrl}?t=${Date.now()}`, flyerCaption);
+  }
+
+  return sendWhatsAppText(from, flyerCaption);
 }
 
 // ---------------------------------------------------------------------------
@@ -1818,6 +1698,10 @@ async function handleCommand(cmd, broker, from) {
         `• وحدات مؤرشفة: *${c.archived_count || 0}*`
       ].join("\n")
     );
+  }
+
+  if (cmd.type === "help") {
+    return sendWhatsAppText(from, T.getHelpMessage());
   }
 }
 
