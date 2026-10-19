@@ -8,7 +8,9 @@ const { GoogleGenAI } = require("@google/genai");
 const sharp = require("sharp");
 const mediaCache = new Map();
 const pendingQueues = new Map();
-
+const PAGE_SIZE = 10;
+const SEARCH_SESSION_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+const PAGINATION_DEBOUNCE_MS = 2000; // 2 seconds
 function cleanAudioMime(mime = "") {
   return (
     String(mime || "audio/ogg")
@@ -705,51 +707,53 @@ async function processBatchedListing(from, items, broker) {
   const visionCount = Math.min(downloadedImages.length, MAX_VISION_IMAGES);
   const rawTextJoined = collectedText.join("\n").trim();
 
+  // Inside server.js -> processBatchedListing()
+
   const promptText = `
 You are an expert Egyptian real estate AI assistant and architectural photo editor.
 Extract the real estate unit parameters from the provided text, images (including any Arabic/English text inside flyers or screenshots), and audio voice notes into strict JSON format:
 {
-  "code": "alphanumeric unit code (e.g. RK-D-31337) or null",
-  "title": "concise attractive Arabic title (e.g. شقة للبيع بإطلالة جولف في أبتاون كايرو)",
+  "code": "optional alphanumeric unit code if explicitly mentioned in text/image (e.g. ANH245, MV-104, A101) or null",
+  "title": "concise attractive Arabic title for the unit (e.g. شقة فاخرة بفيو مفتوح في التجمع الخامس)",
   "property_type": "apartment | villa | townhouse | twinhouse | duplex | penthouse | studio | chalet | office | commercial",
   "listing_type": "sale | rent",
-  "price_value": numeric total or cash required price in EGP (e.g. 19200000) or null,
-  "price_display": "formatted Arabic price string (e.g. 19,200,000 جنيه كاش مطلوب) or null",
-  "area_value": numeric square meters (e.g. 177) or null,
+  "price_value": numeric total price in EGP (e.g. 6500000) or null,
+  "price_display": "formatted Arabic price string (e.g. 6,500,000 جنيه or 6.5 مليون جنيه) or null",
+  "area_value": numeric square meters (e.g. 165) or null,
   "bedrooms": numeric integer count of bedrooms (e.g. 3) or null,
-  "bathrooms": numeric integer count of bathrooms (e.g. 3) or null,
-  "location": "compound and district in Arabic (e.g. المقطم - كمبوند أبتاون كايرو)",
-  "location_name": "city/district in Arabic (e.g. المقطم)",
-  "compound": "compound name in Arabic (e.g. أبتاون كايرو) or null",
-  "district": "district in Arabic (e.g. المقطم) or null",
-  "city": "city in Arabic (e.g. القاهرة) or null",
-  "location_keywords": ["abtown cairo", "uptown cairo", "ابتاون كايرو", "المقطم", "mokattam"],
-  "features": ["up to 6 actual unit features, e.g. فيو جولف, تشطيب كامل, استلام فوري, غرفة خادمة, 2 تراس"],
+  "location": "compound name and/or district in Arabic (e.g. التجمع الخامس - كمبوند ميفيدا)",
+  "location_name": "city or area name in Arabic (e.g. القاهرة الجديدة)",
+  "compound": "compound / project name in Arabic (e.g. ميفيدا) or null",
+  "district": "district in Arabic (e.g. التجمع الخامس, الشيخ زايد, مدينة نصر) or null",
+  "city": "city / region in Arabic (e.g. القاهرة الجديدة, 6 أكتوبر) or null",
+  "location_keywords": ["up to 12 names a buyer might type to find this unit: the compound, district and city in Arabic AND English/Franco spellings, common misspellings, developer name if known"],
+  "features": ["up to 6 key features in Arabic, e.g. تشطيب الترا سوبر لوكس, بحري, فيو لاندسكيب, استلام فوري"],
   "clean_summary": "a professional 2-3 sentence Arabic summary of the unit's technical specifications and payment terms. ABSOLUTELY EXCLUDE all external broker names, external agency branding, marketing slogans, and contact numbers/CTAs",
-  "language": "ar",
-  "hero_position": 0,
-  "image_order": [0],
-  "duplicate_indices": [],
-  "floorplan_indices": [],
-  "is_primary_developer": boolean,
+  "short_summary": "exactly one concise, natural, grammatically complete Arabic sentence (maximum 20-25 words) highlighting finishing, view, delivery status, and key financial terms. Strictly exclude any broker names or marketing fluff.",
+  "language": "ar | en",
+  "hero_position": integer (0-based index from 0 to ${Math.max(
+    0,
+    visionCount - 1
+  )} of the single BEST cover photo),
+  "image_order": [array of 0-based integer indices ranking the images from best to worst visual appeal, starting with hero_position],
+  "duplicate_indices": [array of indices of any redundant or near-duplicate images in this batch to discard],
+  "floorplan_indices": [array of indices of floor plans or 2D layout diagrams],
+  "is_primary_developer": boolean (true if developer installment plan is offered),
   "down_payment_value": numeric down payment in EGP or null,
-  "installment_years": null,
-  "installment_value": null,
-  "payment_frequency": "quarterly",
-  "delivery_date": "استلام فوري",
-  "maintenance_pct": null,
-  "transcribed_text": ""
+  "installment_years": numeric integer years of installments or null,
+  "installment_value": numeric installment check amount or null,
+  "payment_frequency": "monthly | quarterly | semi_annual | annual",
+  "delivery_date": "delivery year/status in Arabic or null",
+  "maintenance_pct": numeric maintenance percentage or null,
+  "transcribed_text": "if audio or image text was read, include a summary of the raw text here"
 }
 
-STRICT EXCLUSION RULES FOR "clean_summary", "title", AND "features":
+STRICT EXCLUSION RULES FOR "clean_summary", "short_summary", AND "title":
 1. REMOVE ALL EXTERNAL BRANDING & BROKER NAMES: Do not include competitor names or agencies (e.g. 'EGY Property', 'RE/MAX', etc.).
 2. REMOVE ALL ADVERTISING SLOGANS: Filter out marketing fluff like 'Your #1 choice for stress-free real estate', 'Buy, rent, or invest with ease', 'Our experienced agents provide...', etc.
 3. REMOVE ALL CONTACT CALLS-TO-ACTION (CTAs): Do not include 'Call Us', 'Contact via WhatsApp', 'Offer your unit with us', phone numbers, or social media handles.
 4. RETAIN ALL PHYSICAL & FINANCIAL SPECS: Keep BUA/area, bedrooms, bathrooms, maid's room, terraces, finishing type, view (e.g. Golf View), delivery status (e.g. Ready to move), and cash/installment payment structure.
-
-Provided Text:
-${rawTextJoined || "(Extract details from attached media)"}
-  `.trim();
+`;
 
   const geminiContents = [];
   for (let i = 0; i < visionCount; i++) {
@@ -1328,15 +1332,15 @@ async function runAiSearch({
   parsed,
   isVoice = false,
   startMs = Date.now(),
-  usedFallback = false
+  usedFallback = false,
+  offset = 0
 }) {
-  // 1. Rate Limiting Check: max searches per hour per broker
+  // 1. Rate Limiting Check
   const lim = await pool.query(
     `SELECT COUNT(*) AS n FROM usage_events
       WHERE broker_id = $1 AND event_type = 'search' AND created_at > NOW() - INTERVAL '1 hour'`,
     [broker.id]
   );
-
   if (Number(lim.rows[0].n) >= MAX_SEARCHES_PER_HOUR) {
     return sendWhatsAppText(
       from,
@@ -1344,73 +1348,97 @@ async function runAiSearch({
     );
   }
 
-  // 2. Ensure at least one filter or keyword exists
+  // 2. Validate Filter Presence
   if (!S.hasAnyFilter(parsed)) {
     return sendWhatsAppText(
       from,
-      'حدد منطقة أو نوع أو سعر عشان أدورلك، مثلاً: "شقة 3 غرف في التجمع الخامس تحت 7 مليون".'
+      'حدد منطقة أو نوع أو ميزانية عشان أدورلك، مثلاً: "شقة 3 غرف في التجمع تحت 7 مليون".'
     );
   }
 
-  // 3. Execute Search Query (Strict match first, then relaxed if zero results)
+  // 3. Query Execution with LIMIT 10 and OFFSET
   let relaxed = false;
-  let q = S.buildSearchQuery(broker.agency_id, parsed);
+  let q = S.buildSearchQuery(broker.agency_id, parsed, {
+    limit: PAGE_SIZE,
+    offset
+  });
   let res = await pool.query(q.sql, q.params);
 
-  if (res.rowCount === 0 && !parsed.filters.code) {
+  if (res.rowCount === 0 && offset === 0 && !parsed.filters.code) {
     relaxed = true;
-    q = S.buildSearchQuery(broker.agency_id, parsed, { relaxed: true });
+    q = S.buildSearchQuery(broker.agency_id, parsed, {
+      relaxed: true,
+      limit: PAGE_SIZE,
+      offset
+    });
     res = await pool.query(q.sql, q.params);
   }
 
-  // 4. Record search telemetry in `search_analytics`
-  try {
-    await pool.query(
-      `INSERT INTO search_analytics (agency_id, broker_id, query_raw, tokens, results_count, is_voice)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        broker.agency_id,
-        broker.id,
-        parsed.transcript || "",
-        parsed.location_terms,
-        res.rowCount,
-        isVoice
-      ]
-    );
-  } catch (saErr) {
-    console.error("⚠️ [SEARCH_ANALYTICS] Insert error:", saErr.message);
-  }
+  const totalCount = res.rowCount > 0 ? Number(res.rows[0].total_count) : 0;
+  const now = Date.now();
 
-  // 5. Audit log in `usage_events`
-  await logUsageEvent({
-    agencyId: broker.agency_id,
-    brokerId: broker.id,
-    phone: from,
-    eventType: "search",
-    durationMs: Date.now() - startMs,
-    meta: {
-      resultsCount: res.rowCount,
-      relaxed,
-      isVoice,
-      usedFallback,
-      terms: parsed.location_terms
-    }
+  // 4. Save/Refresh Pagination State in Postgres
+  await upsertSession(from, "search_paging", null, {
+    parsed,
+    offset,
+    totalCount,
+    relaxed,
+    timestamp: offset === 0 ? now : undefined, // Reset 10-min window on new search
+    lastPagingAt: now
   });
 
+  // 5. Usage & Analytics Logging
+  if (offset === 0) {
+    try {
+      await pool.query(
+        `INSERT INTO search_analytics (agency_id, broker_id, query_raw, tokens, results_count, is_voice)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          broker.agency_id,
+          broker.id,
+          parsed.transcript || "",
+          parsed.location_terms,
+          totalCount,
+          isVoice
+        ]
+      );
+    } catch (_) {}
+
+    await logUsageEvent({
+      agencyId: broker.agency_id,
+      brokerId: broker.id,
+      phone: from,
+      eventType: "search",
+      durationMs: Date.now() - startMs,
+      meta: {
+        totalCount,
+        relaxed,
+        isVoice,
+        usedFallback,
+        terms: parsed.location_terms
+      }
+    });
+  }
+
+  // 6. Build Compact 10-Unit Response
   const understood = S.formatInterpretation(parsed);
-  const header = `🔍 *فهمت طلبك:* ${understood || parsed.transcript}${
+  const header = `🔍 *طلبك:* ${understood || parsed.transcript}${
     usedFallback ? " _(بحث بالكلمات)_" : ""
   }`;
 
-  if (res.rowCount === 0) {
+  if (totalCount === 0) {
     return sendWhatsAppText(
       from,
-      `${header}\n\nمفيش وحدات نشطة مطابقة. جرّب تشيل السعر أو عدد الغرف، أو اكتب المنطقة بشكل تاني.`
+      `${header}\n\n❌ مفيش وحدات نشطة مطابقة حالياً.\n💡 جرّب توسيع نطاق السعر أو تغيير المنطقة.`
     );
   }
 
-  // 6. Format matched listings including details->clean_summary
-  const lines = res.rows.map((r) => {
+  const startIdx = offset + 1;
+  const endIdx = Math.min(offset + res.rowCount, totalCount);
+
+  // Render compact lines with indented short_summary
+  const lines = res.rows.map((r, i) => {
+    const num = startIdx + i;
     const title = r.title || "وحدة سكنية";
     const loc = r.location || "-";
     const price =
@@ -1419,21 +1447,48 @@ async function runAiSearch({
     const area = r.area_value ? `${r.area_value}م²` : "-";
     const beds = r.bedrooms ? `${r.bedrooms} غرف` : "-";
 
-    // Retrieve clean_summary if available from the JSONB details or row attribute
-    const cleanSummary = r.details?.clean_summary || r.clean_summary || "";
-    const summaryBlock = cleanSummary ? `\n  📝 _${cleanSummary}_` : "";
+    // Prioritize pre-stored short_summary
+    const summary = r.details?.short_summary || r.details?.clean_summary || "";
+    const summaryLine = summary ? `\n   📝 _${summary}_` : "";
 
-    return `• *#${r.code}* — ${title} (${loc})\n  💰 ${price} | 📐 ${area} | 🛏️ ${beds}${summaryBlock}`;
+    return `*${num}. #${r.code}* — ${title}\n   📍 ${loc} | 💰 *${price}* | 📐 ${area} | 🛏️ ${beds}${summaryLine}`;
   });
 
-  const note = relaxed ? "\n⚠️ مفيش تطابق كامل، دي أقرب النتائج.\n" : "\n";
+  const note = relaxed ? "⚠️ _(أقرب نتائج تقريبية لعدم وجود تطابق تام)_\n" : "";
+  const remaining = totalCount - endIdx;
 
-  return sendWhatsAppText(
-    from,
-    `${header}${note}\n*النتائج (${res.rowCount}):*\n\n${lines.join(
-      "\n\n"
-    )}\n\n💡 لعرض كتالوج أي وحدة أرسل: *#الكود*`
-  );
+  const footerParts = [
+    `\n━━━━━━━━━━━━━━━━━━━━`,
+    `⚠️ *ملحوظة:* البحث الجماعي يعرض ملخصات نصية فقط لتوفير الوقت وسرعة التصفح. للحصول على الكتالوج والصور اطلب بالرمز: *كتالوج #الكود*`,
+    `\n💡 *لتضييق النتائج:* أرسل رسالة محددة أكثر بالسعر أو عدد الغرف (مثال: "تحت 18 مليون" أو "3 غرف").`,
+    `• لعرض بيانات أي وحدة: *#الكود*`,
+    `• لتحميل كتالوج أي وحدة: *كتالوج الكود*`
+  ];
+
+  if (remaining > 0) {
+    footerParts.push(
+      `\n📄 متبقي *${remaining}* وحدة أخرى. لرؤية الـ 10 التالية أرسل: *المزيد*`
+    );
+  }
+
+  if (totalCount > PAGE_SIZE) {
+    footerParts.push(
+      `📊 لتنزيل كل النتائج (*${totalCount}* وحدة) في ملف إكسيل أرسل: *اكسيل*`
+    );
+  }
+
+  const replyText = [
+    header,
+    note,
+    `📊 *إجمالي النتائج:* تم العثور على *${totalCount}* وحدة (معروض أفضل ${startIdx} إلى ${endIdx}):`,
+    "",
+    lines.join("\n\n"),
+    footerParts.join("\n")
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return sendWhatsAppText(from, replyText);
 }
 
 async function handleCommand(cmd, broker, from) {
@@ -1574,11 +1629,76 @@ async function handleCommand(cmd, broker, from) {
       );
     }
   }
+  if (cmd.type === "more") {
+    const sRes = await pool.query("SELECT * FROM sessions WHERE phone = $1", [
+      from
+    ]);
+    const session = sRes.rows[0];
 
-  if (cmd.type === "show") {
+    // 1. Check if an active search session exists
+    if (
+      !session ||
+      session.state !== "search_paging" ||
+      !session.data?.parsed
+    ) {
+      return sendWhatsAppText(
+        from,
+        '⚠️ مفيش نتائج سابقة لعرض المزيد. ابدأ بحث جديد أولاً (مثال: "بحث شقة في التجمع").'
+      );
+    }
+
+    const sessionData = session.data || {};
+    const now = Date.now();
+    const sessionAge = now - (sessionData.timestamp || 0);
+    const lastPagingElapsed = now - (sessionData.lastPagingAt || 0);
+
+    // 2. Anti-spam 2-Second Guard: Ignore duplicate taps within 2 seconds
+    if (lastPagingElapsed < PAGINATION_DEBOUNCE_MS) {
+      // Silently ignore rapid double-taps to prevent skipping pages
+      return;
+    }
+
+    // 3. 10-Minute Expiry Check
+    if (sessionAge > SEARCH_SESSION_EXPIRY_MS) {
+      await pool.query("DELETE FROM sessions WHERE phone = $1", [from]);
+      return sendWhatsAppText(
+        from,
+        "⏳ انتهت جلسة البحث السابقة (صلاحية البحث 10 دقائق). يرجى كتابة طلب البحث مجدداً."
+      );
+    }
+
+    const { parsed, offset = 0, totalCount = 0 } = sessionData;
+    const nextOffset = offset + PAGE_SIZE;
+
+    // 4. Check if all listings have already been rendered
+    if (nextOffset >= totalCount) {
+      return sendWhatsAppText(
+        from,
+        `🏁 تم عرض جميع النتائج بالكامل (*${totalCount}* وحدة).\n💡 للبحث بمواصفات أخرى أرسل طلبك مباشرة.`
+      );
+    }
+
+    // 5. Update lastPagingAt timestamp atomically before fetching
+    await upsertSession(from, "search_paging", null, {
+      ...sessionData,
+      offset: nextOffset,
+      lastPagingAt: now
+    });
+
+    return runAiSearch({
+      broker,
+      from,
+      parsed,
+      offset: nextOffset,
+      startMs
+    });
+  }
+  if (cmd.type === "show" || cmd.type === "catalog") {
     const cleanCode = normalizeCode(cmd.code);
     const res = await pool.query(
-      "SELECT *, details->>'clean_summary' AS clean_summary FROM listings WHERE agency_id = $1 AND lower(code) = lower($2)",
+      `SELECT *, details->>'clean_summary' AS clean_summary
+       FROM listings
+       WHERE agency_id = $1 AND lower(code) = lower($2)`,
       [broker.agency_id, cleanCode]
     );
 
@@ -1587,10 +1707,42 @@ async function handleCommand(cmd, broker, from) {
     }
 
     const l = res.rows[0];
+    let flyerUrl = l.flyer_url;
+
+    // If flyer_url is missing (or forced via catalog/regenerate), generate it on the fly
+    if (!flyerUrl || cmd.type === "catalog") {
+      try {
+        const imgsRes = await pool.query(
+          "SELECT url FROM listing_images WHERE listing_id = $1 ORDER BY position ASC LIMIT 9",
+          [l.id]
+        );
+        const imageUrls = imgsRes.rows.map((r) => r.url);
+
+        flyerUrl = await generateAndUploadFlyer({
+          broker,
+          listing: l,
+          imageSources: imageUrls
+        });
+      } catch (err) {
+        console.error(
+          "⚠️ [SHOW AUTO-RENDER] Flyer generation failed:",
+          err.message
+        );
+      }
+    }
+
+    await logUsageEvent({
+      agencyId: broker.agency_id,
+      brokerId: broker.id,
+      phone: from,
+      eventType: "show",
+      listingId: l.id,
+      durationMs: Date.now() - startMs
+    });
+
     const summaryText = l.clean_summary
       ? `\n\n📝 *التفاصيل:*\n${l.clean_summary}`
       : "";
-
     const caption = [
       `📋 *بيانات العقار #${l.code}*`,
       `• العنوان: ${l.title || "-"}`,
@@ -1602,8 +1754,8 @@ async function handleCommand(cmd, broker, from) {
       `• الحالة: ${l.status}${summaryText}`
     ].join("\n");
 
-    if (l.flyer_url) {
-      return sendWhatsAppImage(from, `${l.flyer_url}?t=${Date.now()}`, caption);
+    if (flyerUrl) {
+      return sendWhatsAppImage(from, `${flyerUrl}?t=${Date.now()}`, caption);
     }
 
     return sendWhatsAppText(from, caption);
