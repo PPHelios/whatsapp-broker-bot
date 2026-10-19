@@ -250,7 +250,59 @@ function enqueueToBatch(broker, item) {
     }
   }, BATCH_DEBOUNCE_MS);
 }
+/**
+ * Executes a Gemini generateContent request with automatic retry on 503/429
+ * and optional fallback model routing.
+ */
+async function generateContentWithRetry({
+  contents,
+  config,
+  primaryModel = "gemini-3.8-flash",
+  fallbackModel = "gemini-2.6-flash",
+  maxRetries = 3
+}) {
+  let attempt = 0;
+  let currentModel = primaryModel;
 
+  while (attempt < maxRetries) {
+    try {
+      return await ai.models.generateContent({
+        model: currentModel,
+        contents: contents,
+        config: config
+      });
+    } catch (err) {
+      attempt++;
+      const errStr = String(err?.message || JSON.stringify(err));
+      const isTransient =
+        errStr.includes("503") ||
+        errStr.includes("UNAVAILABLE") ||
+        errStr.includes("429") ||
+        errStr.includes("RESOURCE_EXHAUSTED");
+
+      if (!isTransient || attempt >= maxRetries) {
+        // If primary model failed repeatedly on 503, attempt 1 final shot with fallback model
+        if (currentModel !== fallbackModel && fallbackModel) {
+          console.warn(
+            `[GEMINI 503 SPIKE] Switching from ${currentModel} to fallback ${fallbackModel}...`
+          );
+          currentModel = fallbackModel;
+          attempt = 0; // reset attempts for fallback
+          continue;
+        }
+        throw err;
+      }
+
+      // Exponential backoff with jitter: 1.5s, 3s, 6s...
+      const delayMs =
+        Math.pow(2, attempt) * 1000 + Math.floor(Math.random() * 500);
+      console.warn(
+        `[GEMINI RETRY] Attempt ${attempt}/${maxRetries} failed with 503/429. Retrying in ${delayMs}ms...`
+      );
+      await new Promise((res) => setTimeout(res, delayMs));
+    }
+  }
+}
 // ---------------------------------------------------------------------------
 // 1. INGESTION PIPELINE: processBatchedListing
 // ---------------------------------------------------------------------------
@@ -592,10 +644,12 @@ async function processBatchedListing(broker, batch) {
   let draftData = {};
   let usage = {};
   try {
-    const response = await ai.models.generateContent({
-      model: GEMINI_MODEL_ID,
+    const response = await generateContentWithRetry({
       contents: parts,
-      config: LISTING_CONFIG
+      config: LISTING_CONFIG,
+      primaryModel: GEMINI_MODEL_ID,
+      fallbackModel: "gemini-2.6-flash",
+      maxRetries: 3
     });
     const resText = cleanJsonResponse(response.text);
     usage = response.usageMetadata || {};
@@ -604,7 +658,7 @@ async function processBatchedListing(broker, batch) {
     console.error("[MULTIMODAL EXTRACTION ERROR]:", err.message);
     return sendWhatsAppText(
       from,
-      "❌ حدث خطأ أثناء فحص الصور والمواصفات عبر الذكاء الاصطناعي. يرجى إعادة المحاولة."
+      "⚠️ خوادم الذكاء الاصطناعي تشهد ضغطاً مؤقتاً في الوقت الحالي. يرجى إعادة إرسال الوحدة بعد قليل."
     );
   }
 
@@ -849,10 +903,12 @@ async function handleSearchMessage(broker, options) {
   let parsed = { intent: "search", filters: {}, location_terms: [] };
   let usage = {};
   try {
-    const response = await ai.models.generateContent({
-      model: GEMINI_MODEL_ID,
+    const response = await generateContentWithRetry({
       contents: parts,
-      config: activeConfig
+      config: activeConfig,
+      primaryModel: GEMINI_MODEL_ID,
+      fallbackModel: "gemini-2.6-flash",
+      maxRetries: 3
     });
     const resText = cleanJsonResponse(response.text);
     usage = response.usageMetadata || {};
