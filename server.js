@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { Pool } = require('pg');
 const { createClient } = require('@supabase/supabase-js');
 const { GoogleGenAI } = require('@google/genai');
+const sharp = require('sharp');
 const mediaCache = new Map();
 const pendingQueues = new Map();
 
