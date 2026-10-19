@@ -129,27 +129,41 @@ async function logUsageEvent({
   tokensOutput = 0,
   meta = {}
 }) {
+  const safeDuration = Number.isFinite(Number(durationMs))
+    ? Math.round(Number(durationMs))
+    : null;
+  const safeCost = Number.isFinite(Number(costUsd)) ? Number(costUsd) : 0;
+  const safeIn = Number.isFinite(Number(tokensInput))
+    ? Math.round(Number(tokensInput))
+    : 0;
+  const safeOut = Number.isFinite(Number(tokensOutput))
+    ? Math.round(Number(tokensOutput))
+    : 0;
+
   try {
     await pool.query(
       `INSERT INTO usage_events (
         agency_id, broker_id, phone, event_type, listing_id,
         duration_ms, cost_usd, tokens_input, tokens_output, meta
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)`,
       [
-        agencyId,
-        brokerId,
-        phone,
-        eventType,
-        listingId,
-        durationMs,
-        costUsd,
-        tokensInput,
-        tokensOutput,
+        agencyId || null,
+        brokerId || null,
+        phone ? String(phone) : null,
+        String(eventType || "unknown"),
+        listingId || null,
+        safeDuration,
+        safeCost,
+        safeIn,
+        safeOut,
         JSON.stringify(meta || {})
       ]
     );
   } catch (err) {
-    console.error("⚠️ [USAGE_EVENTS] Failed to log event:", err.message);
+    console.error(
+      `❌ [USAGE_EVENTS] Failed to log "${eventType}":`,
+      err.message
+    );
   }
 }
 
@@ -695,63 +709,46 @@ async function processBatchedListing(from, items, broker) {
 You are an expert Egyptian real estate AI assistant and architectural photo editor.
 Extract the real estate unit parameters from the provided text, images (including any Arabic/English text inside flyers or screenshots), and audio voice notes into strict JSON format:
 {
-  "code": "optional alphanumeric unit code if explicitly mentioned in text/image (e.g. ANH245, MV-104, A101) or null",
-  "title": "concise attractive Arabic title for the unit (e.g. شقة فاخرة بفيو مفتوح في التجمع الخامس)",
+  "code": "alphanumeric unit code (e.g. RK-D-31337) or null",
+  "title": "concise attractive Arabic title (e.g. شقة للبيع بإطلالة جولف في أبتاون كايرو)",
   "property_type": "apartment | villa | townhouse | twinhouse | duplex | penthouse | studio | chalet | office | commercial",
   "listing_type": "sale | rent",
-  "price_value": numeric total price in EGP (e.g. 6500000) or null,
-  "price_display": "formatted Arabic price string (e.g. 6,500,000 جنيه or 6.5 مليون جنيه) or null",
-  "area_value": numeric square meters (e.g. 165) or null,
+  "price_value": numeric total or cash required price in EGP (e.g. 19200000) or null,
+  "price_display": "formatted Arabic price string (e.g. 19,200,000 جنيه كاش مطلوب) or null",
+  "area_value": numeric square meters (e.g. 177) or null,
   "bedrooms": numeric integer count of bedrooms (e.g. 3) or null,
-  "location": "compound name and/or district in Arabic (e.g. التجمع الخامس - كمبوند ميفيدا)",
-  "location_name": "city or area name in Arabic (e.g. القاهرة الجديدة)",
-  "compound": "compound / project name in Arabic (e.g. ميفيدا) or null",
-  "district": "district in Arabic (e.g. التجمع الخامس, الشيخ زايد, مدينة نصر) or null",
-  "city": "city / region in Arabic (e.g. القاهرة الجديدة, 6 أكتوبر) or null",
-  "location_keywords": ["up to 12 names a buyer might type to find this unit: the compound, district and city in Arabic AND English/Franco spellings, common misspellings, developer name if known"],
-  "features": ["up to 6 key features in Arabic, e.g. تشطيب الترا سوبر لوكس, بحري, فيو لاندسكيب, استلام فوري"],
-  "language": "ar | en",
-  "hero_position": integer (0-based index from 0 to ${Math.max(
-    0,
-    visionCount - 1
-  )} of the single BEST cover photo),
-  "image_order": [array of 0-based integer indices ranking the images from best to worst visual appeal, starting with hero_position],
-  "duplicate_indices": [array of indices of any redundant or near-duplicate images in this batch to discard],
-  "floorplan_indices": [array of indices of floor plans or 2D layout diagrams],
-  "is_primary_developer": boolean (true if developer installment plan is offered),
+  "bathrooms": numeric integer count of bathrooms (e.g. 3) or null,
+  "location": "compound and district in Arabic (e.g. المقطم - كمبوند أبتاون كايرو)",
+  "location_name": "city/district in Arabic (e.g. المقطم)",
+  "compound": "compound name in Arabic (e.g. أبتاون كايرو) or null",
+  "district": "district in Arabic (e.g. المقطم) or null",
+  "city": "city in Arabic (e.g. القاهرة) or null",
+  "location_keywords": ["abtown cairo", "uptown cairo", "ابتاون كايرو", "المقطم", "mokattam"],
+  "features": ["up to 6 actual unit features, e.g. فيو جولف, تشطيب كامل, استلام فوري, غرفة خادمة, 2 تراس"],
+  "clean_summary": "a professional 2-3 sentence Arabic summary of the unit's technical specifications and payment terms. ABSOLUTELY EXCLUDE all external broker names, external agency branding, marketing slogans, and contact numbers/CTAs",
+  "language": "ar",
+  "hero_position": 0,
+  "image_order": [0],
+  "duplicate_indices": [],
+  "floorplan_indices": [],
+  "is_primary_developer": boolean,
   "down_payment_value": numeric down payment in EGP or null,
-  "installment_years": numeric integer years of installments or null,
-  "installment_value": numeric installment check amount or null,
-  "payment_frequency": "monthly | quarterly | semi_annual | annual",
-  "delivery_date": "delivery year/status in Arabic or null",
-  "maintenance_pct": numeric maintenance percentage or null,
-  "transcribed_text": "if audio or image text was read, include a summary of the raw text here"
+  "installment_years": null,
+  "installment_value": null,
+  "payment_frequency": "quarterly",
+  "delivery_date": "استلام فوري",
+  "maintenance_pct": null,
+  "transcribed_text": ""
 }
 
-Hero Image & Ranking Rules:
-- Evaluate all ${visionCount} attached images (labeled Image Index 0 to Image Index ${Math.max(
-    0,
-    visionCount - 1
-  )}).
-- Pick the single most visually impressive photo as "hero_position":
-  1. First priority: Bright, wide-angle exterior facade, pool, garden, or landscape view.
-  2. Second priority: Spacious, well-lit main reception / living room with high-end finishing.
-  3. Third priority: Master bedroom or clean architectural shot.
-- NEVER pick a bathroom, toilet, corridor, dark corner, or floorplan diagram as "hero_position".
-- Mark floor plans in "floorplan_indices" so they are stored but excluded from the main photo mosaic.
-- In "image_order", rank the best architectural and room photos in descending order of visual appeal.
-
-Data Extraction Rules:
-- Convert any shorthand like "6.5 مليون" to price_value: 6500000.
-- If a number like "180م" or "180 متر" is mentioned, set area_value: 180.
-- If bedrooms are mentioned (e.g. "3 غرف" or "3 نوم"), set bedrooms: 3.
-- Do NOT invent numbers if they are not present in the text, images, or audio; use null instead.
+STRICT EXCLUSION RULES FOR "clean_summary", "title", AND "features":
+1. REMOVE ALL EXTERNAL BRANDING & BROKER NAMES: Do not include competitor names or agencies (e.g. 'EGY Property', 'RE/MAX', etc.).
+2. REMOVE ALL ADVERTISING SLOGANS: Filter out marketing fluff like 'Your #1 choice for stress-free real estate', 'Buy, rent, or invest with ease', 'Our experienced agents provide...', etc.
+3. REMOVE ALL CONTACT CALLS-TO-ACTION (CTAs): Do not include 'Call Us', 'Contact via WhatsApp', 'Offer your unit with us', phone numbers, or social media handles.
+4. RETAIN ALL PHYSICAL & FINANCIAL SPECS: Keep BUA/area, bedrooms, bathrooms, maid's room, terraces, finishing type, view (e.g. Golf View), delivery status (e.g. Ready to move), and cash/installment payment structure.
 
 Provided Text:
-${
-  rawTextJoined ||
-  "(No text caption provided — extract details from the attached images/audio)"
-}
+${rawTextJoined || "(Extract details from attached media)"}
   `.trim();
 
   const geminiContents = [];
@@ -1212,15 +1209,23 @@ async function finalizeListingCreation({
     : "-";
   const displayRooms = listingRow.bedrooms ? `${listingRow.bedrooms} غرف` : "-";
 
+  const displaySummary = draftData.clean_summary || "";
+  const displayBathrooms = draftData.bathrooms
+    ? ` | الحمامات: *${draftData.bathrooms}*`
+    : "";
+
   if (flyerPublicUrl) {
     const caption = [
       `🏡 *تم تجهيز الكتالوج بنجاح!*`,
       `• الكود: *#${listingCode}*`,
       `• الوحدة: *${propertyTitle}*`,
       `• السعر: *${displayPrice}*`,
-      `• المساحة: *${displayArea}* | الغرف: *${displayRooms}*`,
-      `• الموقع: *${locationText || "القاهرة"}*`
-    ].join("\n");
+      `• المساحة: *${displayArea}* | الغرف: *${displayRooms}*${displayBathrooms}`,
+      `• الموقع: *${locationText || "القاهرة"}*`,
+      displaySummary ? `\n📝 *ملخص الوحدة:*\n${displaySummary}` : ""
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     await sendWhatsAppImage(from, `${flyerPublicUrl}?t=${Date.now()}`, caption);
   } else {
@@ -1325,11 +1330,13 @@ async function runAiSearch({
   startMs = Date.now(),
   usedFallback = false
 }) {
+  // 1. Rate Limiting Check: max searches per hour per broker
   const lim = await pool.query(
     `SELECT COUNT(*) AS n FROM usage_events
       WHERE broker_id = $1 AND event_type = 'search' AND created_at > NOW() - INTERVAL '1 hour'`,
     [broker.id]
   );
+
   if (Number(lim.rows[0].n) >= MAX_SEARCHES_PER_HOUR) {
     return sendWhatsAppText(
       from,
@@ -1337,6 +1344,7 @@ async function runAiSearch({
     );
   }
 
+  // 2. Ensure at least one filter or keyword exists
   if (!S.hasAnyFilter(parsed)) {
     return sendWhatsAppText(
       from,
@@ -1344,15 +1352,18 @@ async function runAiSearch({
     );
   }
 
+  // 3. Execute Search Query (Strict match first, then relaxed if zero results)
   let relaxed = false;
   let q = S.buildSearchQuery(broker.agency_id, parsed);
   let res = await pool.query(q.sql, q.params);
+
   if (res.rowCount === 0 && !parsed.filters.code) {
     relaxed = true;
     q = S.buildSearchQuery(broker.agency_id, parsed, { relaxed: true });
     res = await pool.query(q.sql, q.params);
   }
 
+  // 4. Record search telemetry in `search_analytics`
   try {
     await pool.query(
       `INSERT INTO search_analytics (agency_id, broker_id, query_raw, tokens, results_count, is_voice)
@@ -1370,6 +1381,7 @@ async function runAiSearch({
     console.error("⚠️ [SEARCH_ANALYTICS] Insert error:", saErr.message);
   }
 
+  // 5. Audit log in `usage_events`
   await logUsageEvent({
     agencyId: broker.agency_id,
     brokerId: broker.id,
@@ -1397,18 +1409,28 @@ async function runAiSearch({
     );
   }
 
-  const lines = res.rows.map(
-    (r) =>
-      `• *#${r.code}* — ${r.title || "وحدة"} (${r.location || "-"})\n  💰 ${
-        r.price_display || "عند الطلب"
-      } | 📐 ${r.area_value ? `${r.area_value}م²` : "-"} | 🛏️ ${
-        r.bedrooms || "-"
-      }`
-  );
-  const note = relaxed ? "\n⚠️ مفيش تطابق كامل، دي أقرب النتائج." : "";
+  // 6. Format matched listings including details->clean_summary
+  const lines = res.rows.map((r) => {
+    const title = r.title || "وحدة سكنية";
+    const loc = r.location || "-";
+    const price =
+      r.price_display ||
+      (r.price_value ? T.formatPrice(r.price_value) : "عند الطلب");
+    const area = r.area_value ? `${r.area_value}م²` : "-";
+    const beds = r.bedrooms ? `${r.bedrooms} غرف` : "-";
+
+    // Retrieve clean_summary if available from the JSONB details or row attribute
+    const cleanSummary = r.details?.clean_summary || r.clean_summary || "";
+    const summaryBlock = cleanSummary ? `\n  📝 _${cleanSummary}_` : "";
+
+    return `• *#${r.code}* — ${title} (${loc})\n  💰 ${price} | 📐 ${area} | 🛏️ ${beds}${summaryBlock}`;
+  });
+
+  const note = relaxed ? "\n⚠️ مفيش تطابق كامل، دي أقرب النتائج.\n" : "\n";
+
   return sendWhatsAppText(
     from,
-    `${header}${note}\n\n*النتائج (${res.rowCount}):*\n\n${lines.join(
+    `${header}${note}\n*النتائج (${res.rowCount}):*\n\n${lines.join(
       "\n\n"
     )}\n\n💡 لعرض كتالوج أي وحدة أرسل: *#الكود*`
   );
@@ -1556,7 +1578,7 @@ async function handleCommand(cmd, broker, from) {
   if (cmd.type === "show") {
     const cleanCode = normalizeCode(cmd.code);
     const res = await pool.query(
-      "SELECT * FROM listings WHERE agency_id = $1 AND lower(code) = lower($2)",
+      "SELECT *, details->>'clean_summary' AS clean_summary FROM listings WHERE agency_id = $1 AND lower(code) = lower($2)",
       [broker.agency_id, cleanCode]
     );
 
@@ -1565,14 +1587,9 @@ async function handleCommand(cmd, broker, from) {
     }
 
     const l = res.rows[0];
-    await logUsageEvent({
-      agencyId: broker.agency_id,
-      brokerId: broker.id,
-      phone: from,
-      eventType: "show",
-      listingId: l.id,
-      durationMs: Date.now() - startMs
-    });
+    const summaryText = l.clean_summary
+      ? `\n\n📝 *التفاصيل:*\n${l.clean_summary}`
+      : "";
 
     const caption = [
       `📋 *بيانات العقار #${l.code}*`,
@@ -1582,7 +1599,7 @@ async function handleCommand(cmd, broker, from) {
         l.bedrooms || "-"
       }`,
       `• الموقع: ${l.location || "-"}`,
-      `• الحالة: ${l.status}`
+      `• الحالة: ${l.status}${summaryText}`
     ].join("\n");
 
     if (l.flyer_url) {
