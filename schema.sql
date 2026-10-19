@@ -94,7 +94,7 @@ create table if not exists processed_messages (      -- Webhook deduplication (p
 
 create table if not exists sessions (                -- Conversation state machine per broker
   phone        text primary key,
-  state        text not null check (state in ('collecting','clarifying','review')),
+  state        text not null check (state in ('collecting','clarifying','review','waiting_code','search_paging')),
   listing_id   uuid references listings(id) on delete set null,
   data         jsonb not null default '{}'::jsonb,
   updated_at   timestamptz not null default now()
