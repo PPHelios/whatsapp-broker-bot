@@ -5,7 +5,12 @@ const crypto = require('crypto');
 const { Pool } = require('pg');
 const { createClient } = require('@supabase/supabase-js');
 const { GoogleGenAI } = require('@google/genai');
-const sharp = require('sharp');
+const mediaCache = new Map();
+const pendingQueues = new Map();
+
+function cleanAudioMime(mime = '') {
+  return String(mime || 'audio/ogg').split(';')[0].trim().toLowerCase() || 'audio/ogg';
+}
 
 const T = require('./lib/text');
 const R = require('./lib/render');
@@ -56,7 +61,6 @@ const supabase = createClient(
 );
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
-const pendingQueues = new Map();
 
 // ---------------------------------------------------------------------------
 // Utility & Schema Helpers
@@ -296,6 +300,24 @@ async function sendWhatsAppImage(to, imageUrl, caption) {
 
 async function generateAndUploadFlyer({ broker, listing, imageSources = [] }) {
   const startMs = Date.now();
+  const renderFn = R.renderFlyerJpeg || R.renderFlyerPng || R.renderFlyerSatori;
+const flyerBuffer = await renderFn({
+  agencyName: broker.agency_name,
+  brandColor: broker.brand_color,
+  accentColor: broker.accent_color,
+  logoUrl: broker.logo_url,
+  code: listing.code,
+  title: displayTitle,
+  priceDisplay,
+  area: listing.area_value ? `${listing.area_value} م²` : null,
+  bedrooms: listing.bedrooms ? `${listing.bedrooms} غرف` : null,
+  location: listing.location || listing.location_name || 'القاهرة',
+  brokerPhone: broker.contact_phone || broker.phone,
+  features: Array.isArray(listing.features) ? listing.features : [],
+  images: imageSources,
+  downPayment: downPaymentDisplay,
+  installmentYears: listing.installment_years || null
+});
   const typeAr = T.translatePropertyType(listing.property_type);
   const displayTitle =
     listing.title ||
@@ -1086,7 +1108,6 @@ async function finalizeListingCreation({ broker, from, draftData, listingCode, r
 // ---------------------------------------------------------------------------
 // AI Search (Text or Voice) & Command Handlers
 // ---------------------------------------------------------------------------
-const mediaCache = new Map();
 const MAX_SEARCHES_PER_HOUR = parseInt(process.env.MAX_SEARCHES_PER_HOUR, 10) || 60;
 const searchModel = () =>
   process.env.GEMINI_SEARCH_MODEL || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
