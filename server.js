@@ -84,6 +84,7 @@ async function withDistributedListingLock(agencyId, code, workFn) {
     client.release();
   }
 }
+
 function log(level, msg, meta = {}) {
   const line = JSON.stringify({
     t: new Date().toISOString(),
@@ -146,7 +147,147 @@ async function reply(broker, text, opts = {}) {
     return null;
   }
 }
+// server.js - handleImage
+const Drafts = require("./lib/drafts");
+/* ====================================================================== */
+/* AI Gateway: Multimodal Property Extraction & Audio Transcription       */
+/* ====================================================================== */
+const AI = {
+  /**
+   * Transcribes Egyptian Arabic voice queries to text for search/intent routing
+   */
+  async transcribeAudio(buffer, mimeType) {
+    if (!buffer) return "";
+    const cleanMime = U.cleanAudioMime(mimeType);
+    const prompt =
+      "Transcribe this Egyptian Arabic real estate voice note accurately into Arabic text. " +
+      "Return ONLY the spoken words with no explanations, markdown, or commentary.";
 
+    try {
+      const res = await callGemini({
+        contents: [
+          { text: prompt },
+          {
+            inlineData: {
+              mimeType: cleanMime,
+              data: buffer.toString("base64")
+            }
+          }
+        ],
+        config: {
+          temperature: 0.1,
+          maxOutputTokens: 500
+        }
+      });
+
+      return cleanJson(res.res.text).trim();
+    } catch (err) {
+      log("warn", "Audio transcription failed", errMeta(err));
+      return "";
+    }
+  },
+
+  /**
+   * Multimodal extraction of property specifications from text, voice, and photos
+   */
+  async extractPropertyDetails({
+    texts = [],
+    voiceBuffer = null,
+    voiceMime = "audio/ogg",
+    images = [],
+    lang = "ar"
+  } = {}) {
+    const rawText = texts.filter(Boolean).join("\n").trim();
+    const fenceToken = crypto.randomBytes(4).toString("hex").toUpperCase();
+
+    const parts = [{ text: L.buildListingPrompt(lang, fenceToken) }];
+
+    // 1. Text descriptions sandboxed against prompt injection
+    if (rawText) {
+      parts.push({
+        text: `===${fenceToken}===\n${rawText}\n===${fenceToken}===`
+      });
+    }
+
+    // 2. Audio voice notes
+    if (voiceBuffer && Buffer.isBuffer(voiceBuffer)) {
+      parts.push({
+        inlineData: {
+          mimeType: U.cleanAudioMime(voiceMime),
+          data: voiceBuffer.toString("base64")
+        }
+      });
+    }
+
+    // 3. Up to 9 listing photos for amenity/room vision inspection
+    for (const img of images.slice(0, 9)) {
+      const buf = img.buffer || img;
+      if (Buffer.isBuffer(buf)) {
+        parts.push({
+          inlineData: {
+            mimeType: "image/jpeg",
+            data: buf.toString("base64")
+          }
+        });
+      }
+    }
+
+    const aiRes = await callGemini({
+      contents: parts,
+      config: {
+        temperature: 0.1,
+        maxOutputTokens: 3072,
+        responseMimeType: "application/json"
+      }
+    });
+
+    let draft = L.validateDraft(JSON.parse(cleanJson(aiRes.res.text)), lang);
+
+    // Sanitize features (e.g. "بول" -> "حمام سباحة")
+    if (draft.details && Array.isArray(draft.details.features)) {
+      draft.details.features = T.cleanFeaturesList(draft.details.features);
+    }
+
+    return draft;
+  }
+};
+async function handleImage(broker, message) {
+  const mediaId = message.image && message.image.id;
+  const caption = (message.image && message.image.caption) || "";
+  const lang = broker.preferred_lang || "ar";
+
+  if (!mediaId) return "done";
+
+  // Check custom code in caption
+  const explicitCode = L.extractExplicitUnitCode(caption);
+
+  const { draft, isNew } = await Drafts.appendToDraft(broker, {
+    mediaId,
+    text: caption.trim() || null,
+    customCode: explicitCode
+  });
+
+  // If this is the first image opening the draft, send the control bubble
+  if (isNew) {
+    const msg =
+      lang === "en"
+        ? "📝 *Started new listing draft.*\nSend remaining photos, voice notes, or text details.\n\nWhen done, tap *Save* or type *done*."
+        : "📝 *بدأت تجهيز مسودة وحدة جديدة.*\nأرسل باقي الصور، فويس نوت بالتفاصيل، أو اكتب المواصفات.\n\nعند الانتهاء اضغط *حفظ* أو اكتب *تم*.";
+
+    await WA.sendWhatsAppButtons(broker.phone, msg, [
+      {
+        id: "DRAFT_SAVE",
+        title: lang === "en" ? "✅ Save (Done)" : "✅ حفظ الوحدة (تم)"
+      },
+      {
+        id: "DRAFT_CANCEL",
+        title: lang === "en" ? "❌ Cancel" : "❌ إلغاء المسودة"
+      }
+    ]);
+  }
+
+  return "batched";
+}
 /* ====================================================================== */
 /* Unified Canonical Observability (`operation_logs`)                     */
 /* ====================================================================== */
@@ -1992,67 +2133,43 @@ async function handleCommand(broker, raw, message = null) {
 }
 
 async function handleInteractive(broker, message) {
-  const id =
-    message.interactive?.button_reply?.id ||
-    message.interactive?.list_reply?.id ||
-    "";
-  const [kind, ...rest] = id.split(":");
-  const lang = broker.preferred_lang || "ar";
+  const replyId = message.interactive?.button_reply?.id;
+  if (!replyId) return "done";
 
-  // When a broker taps a search result row
-  if (kind === "inspect" && rest[0]) {
-    const code = rest[0].toUpperCase();
-    const l = await fetchListing(broker, code);
-    if (!l) return notFound(broker, code);
+  const draft = await Drafts.getDraft(broker.id);
 
-    // 1. SET ACTIVE CONTEXT
-    setActiveListing(broker, code);
+  if (replyId === "DRAFT_SAVE" && draft) {
+    return finalizeDraft(broker, draft);
+  }
 
-    // 2. SEND FULL SPECS
-    await reply(broker, T.formatInternalListingDetails(l, lang));
-
-    // 3. SEND INTERACTIVE ACTION BUTTONS
-    await WA.sendWhatsAppButtons(
-      to(broker),
-      M(lang, `إجراءات سريعة للوحدة #${code}:`, `Quick actions for #${code}:`),
-      [
-        { id: `flyer:en:dark:${code}`, title: "📄 Flyer (EN)" },
-        {
-          id: `client:${code}`,
-          title: M(lang, "📲 نص العميل", "📲 Client Text")
-        },
-        {
-          id: `status:sold:${code}`,
-          title: M(lang, "🏷️ تم البيع", "🏷️ Mark Sold")
-        }
-      ]
+  if (replyId === "DRAFT_CANCEL" && draft) {
+    await Drafts.clearDraft(broker.id);
+    await WA.sendWhatsAppText(
+      broker.phone,
+      broker.preferred_lang === "en"
+        ? "🗑️ Draft discarded."
+        : "🗑️ تم إلغاء المسودة بنجاح."
     );
-
-    // 4. SEND MONOSPACE CODE BUBBLE (One-tap clipboard copy)
-    await WA.sendWhatsAppText(to(broker), `\`${code}\``);
     return "done";
   }
 
-  // Handle Action Buttons
-  if (kind === "status" && rest[0] && rest[1]) {
-    const [newStatus, code] = rest;
-    setActiveListing(broker, code);
-    return cmdStatus(broker, code, newStatus, lang);
+  if (replyId.startsWith("SWAP_SEARCH:")) {
+    const rawQuery = Buffer.from(
+      replyId.replace("SWAP_SEARCH:", ""),
+      "base64"
+    ).toString("utf-8");
+    await Drafts.clearDraft(broker.id);
+    return handleSearchMessage(broker, { text: rawQuery, msgId: message.id });
   }
 
-  if (kind === "client" && rest[0]) {
-    const code = rest[0].toUpperCase();
-    setActiveListing(broker, code);
-    const l = await fetchListing(broker, code);
-    return l
-      ? reply(broker, T.formatClientListingText(l, broker, lang))
-      : notFound(broker, code);
-  }
-
-  if (kind === "flyer" && rest.length >= 3) {
-    const [fl, theme, code] = rest;
-    setActiveListing(broker, code);
-    return cmdFlyer(broker, code, fl, { theme });
+  if (replyId === "KEEP_DRAFT") {
+    await WA.sendWhatsAppText(
+      broker.phone,
+      broker.preferred_lang === "en"
+        ? "👍 Draft kept open. Send remaining details and tap Save."
+        : "👍 تم الإبقاء على المسودة. أرسل باقي التفاصيل واضغط حفظ."
+    );
+    return "done";
   }
 
   return "done";
@@ -2062,133 +2179,380 @@ async function handleInteractive(broker, message) {
 /* Message Ingestion Routing                                              */
 /* ====================================================================== */
 async function handleAudio(broker, message) {
-  const key = U.normalizePhone(broker.phone);
+  const voiceId =
+    (message.voice && message.voice.id) || (message.audio && message.audio.id);
   const lang = broker.preferred_lang || "ar";
-  const media = message.audio || message.voice || {};
-  const duration = Number(media.duration) || 0;
+  if (!voiceId) return "done";
 
-  if (duration > CFG.maxListingAudioSec) {
-    await reply(
-      broker,
-      M(
-        lang,
-        `⚠️ التسجيل طويل جداً (${duration} ثانية). الحد الأقصى دقيقتان.`,
-        `⚠️ Audio too long (${duration}s). Max 120s.`
-      )
+  const draft = await Drafts.getDraft(broker.id);
+
+  // Scenario 1: User is already drafting -> Attach audio directly to listing
+  if (draft) {
+    await Drafts.appendToDraft(broker, { voiceId });
+    await WA.sendWhatsAppText(
+      broker.phone,
+      lang === "en"
+        ? "🎙️ Voice note added to draft. Send more or type *done*."
+        : "🎙️ تم إضافة الفويس نوت للمسودة. اكتب *تم* عند الانتهاء."
+    );
+    return "batched";
+  }
+
+  // Scenario 2: User is in IDLE -> Download & classify intent
+  const audioData = await WA.downloadWhatsAppMedia(voiceId);
+  if (!audioData) return "done";
+
+  // Fast transcription/classification via Gemini
+  const transcription = await AI.transcribeAudio(
+    audioData.buffer,
+    audioData.mimeType
+  );
+  if (!transcription) return "done";
+
+  const isSearchIntent =
+    /^(?:بحث|ابحث|دورلي|محتاج|عايز|مطلوب|عندك|search|looking for|find)/i.test(
+      transcription
+    );
+
+  if (isSearchIntent) {
+    return handleSearchMessage(broker, {
+      text: transcription,
+      msgId: message.id
+    });
+  }
+
+  // Listing intent detected -> open draft with the audio
+  await Drafts.appendToDraft(broker, { voiceId, text: transcription });
+  await WA.sendWhatsAppButtons(
+    broker.phone,
+    lang === "en"
+      ? `📝 *New listing draft opened from voice note:*\n"${transcription.slice(
+          0,
+          100
+        )}..."\n\nSend photos now, then tap *Save*.`
+      : `📝 *تم فتح مسودة وحدة جديدة من التسجيل:*\n"${transcription.slice(
+          0,
+          100
+        )}..."\n\nأرسل الصور الآن، ثم اضغط *حفظ*.`,
+    [
+      { id: "DRAFT_SAVE", title: lang === "en" ? "✅ Save" : "✅ حفظ (تم)" },
+      { id: "DRAFT_CANCEL", title: lang === "en" ? "❌ Cancel" : "❌ إلغاء" }
+    ]
+  );
+
+  return "batched";
+}
+/**
+ * Sends rich confirmation bubbles, copyable unit code, and client text
+ */
+async function sendListingConfirmation(broker, listing, created = true) {
+  const lang = broker.preferred_lang || "ar";
+  const rawCode = String(listing?.code || "UNT")
+    .trim()
+    .toUpperCase();
+  const safeCode = rawCode.replace(/[^A-Z0-9_-]/g, "");
+
+  const titleAr = created ? "تم حفظ الوحدة بنجاح" : "تم تحديث الوحدة بنجاح";
+  const titleEn = created
+    ? "Unit saved successfully"
+    : "Unit updated successfully";
+
+  let body =
+    lang === "en"
+      ? `✅ *${titleEn} #${safeCode}*\n📍 ${listing?.location || "-"}\n💰 ${
+          listing?.price_display || "-"
+        }`
+      : `✅ *${titleAr} #${safeCode}*\n📍 ${listing?.location || "-"}\n💰 ${
+          listing?.price_display || "-"
+        }`;
+
+  if (listing?.details?.ambiguous_location) {
+    body +=
+      lang === "en"
+        ? "\n\n⚠️ *Location Note:* The compound name might exist in multiple areas. Please review and clarify if needed."
+        : "\n\n⚠️ *تنبيه موقع:* اسم الكمبوند قد يحتمل أكثر من منطقة. يرجى مراجعة وتحديد الموقع في الوصف إن لزم.";
+  }
+
+  const buttons = [
+    {
+      id: "flyer:en:dark:" + safeCode,
+      title: "Flyer EN"
+    },
+    {
+      id: "client:" + safeCode,
+      title: lang === "en" ? "Client Text" : "نص العميل"
+    },
+    {
+      id: "status:sold:" + safeCode,
+      title: lang === "en" ? "Mark Sold" : "تم البيع"
+    }
+  ];
+
+  const phone = String(broker.phone || "").replace(/\D/g, "");
+
+  // 1. Send interactive action buttons
+  await WA.sendWhatsAppButtons(phone, body, buttons);
+
+  // 2. Send monospace copyable unit code using clean concatenation
+  await WA.sendWhatsAppText(phone, "`" + safeCode + "`");
+
+  // 3. Send client marketing text for newly created listings
+  if (created) {
+    await reply(broker, T.formatClientListingText(listing, broker, lang));
+  }
+}
+
+async function finalizeDraft(broker, draft) {
+  const lang = broker.preferred_lang || "ar";
+  const mediaCount = (draft.media_ids || []).length;
+  const textCount = (draft.texts || []).length;
+  const voiceCount = (draft.voice_ids || []).length;
+
+  // RULE: Reject images-only submissions
+  if (mediaCount > 0 && textCount === 0 && voiceCount === 0) {
+    await WA.sendWhatsAppButtons(
+      broker.phone,
+      lang === "en"
+        ? "⚠️ Cannot create listing with photos only.\nPlease send a voice note or text with the price and location, then tap Save."
+        : "⚠️ لا يمكن تسجيل الوحدة بالصور فقط دون تفاصيل.\nيرجى إرسال فويس نوت أو رسالة تحتوي على السعر والموقع، ثم اضغط حفظ.",
+      [
+        { id: "DRAFT_SAVE", title: lang === "en" ? "✅ Save" : "✅ حفظ (تم)" },
+        { id: "DRAFT_CANCEL", title: lang === "en" ? "❌ Cancel" : "❌ إلغاء" }
+      ]
     );
     return "done";
   }
 
-  let batch = null;
-  if (isBatchingActive(key)) {
-    batch = reserveBatch(broker, message.id);
-    batch.pendingDownloads++;
-  }
-
-  const dl = await WA.downloadWhatsAppMedia(media.id, {
-    maxBytes: 12 * 1024 * 1024
-  });
-  if (!dl) {
-    if (batch) {
-      batch.pendingDownloads = Math.max(0, batch.pendingDownloads - 1);
-      armBatchTimer(key);
-    }
-    await reply(
-      broker,
-      M(
-        lang,
-        "⚠️ تعذر تحميل الرسالة الصوتية.",
-        "⚠️ Failed to download voice note."
-      )
-    );
-    return batch ? "batched" : "done";
-  }
-
-  const audioObj = { buffer: dl.buffer, mimeType: dl.mimeType, duration };
-  if (batch) {
-    batch.audios.push(audioObj);
-    batch.voices.push(audioObj);
-    batch.pendingDownloads = Math.max(0, batch.pendingDownloads - 1);
-    armBatchTimer(key);
-    return "batched";
-  }
-
-  return (
-    (await handleSearchMessage(broker, {
-      audio: audioObj,
-      msgId: message.id
-    })) || "done"
+  await WA.sendWhatsAppText(
+    broker.phone,
+    lang === "en"
+      ? "⏳ Processing and creating your listing..."
+      : "⏳ جاري معالجة وحفظ الوحدة..."
   );
+
+  // 1. Download media buffers from WhatsApp CDN
+  const downloadedImages = [];
+  for (const mid of draft.media_ids || []) {
+    const file = await WA.downloadWhatsAppMedia(mid);
+    if (file && file.buffer) {
+      downloadedImages.push({
+        buffer: await normalizeImage(file.buffer),
+        mimeType: "image/jpeg"
+      });
+    }
+  }
+
+  // 2. Download audio note if present
+  let voiceBuffer = null;
+  let voiceMime = "audio/ogg";
+  if (draft.voice_ids && draft.voice_ids.length > 0) {
+    const vFile = await WA.downloadWhatsAppMedia(draft.voice_ids[0]);
+    if (vFile && vFile.buffer) {
+      voiceBuffer = vFile.buffer;
+      voiceMime = vFile.mimeType || "audio/ogg";
+    }
+  }
+
+  // 3. Run Gemini Extraction
+  const extracted = await AI.extractPropertyDetails({
+    texts: draft.texts || [],
+    voiceBuffer,
+    voiceMime,
+    images: downloadedImages.slice(0, 9),
+    lang
+  });
+
+  if (!extracted || (!extracted.price_raw && !extracted.location)) {
+    await WA.sendWhatsAppText(
+      broker.phone,
+      lang === "en"
+        ? "❌ Could not recognize essential details (price or location). Please send more details then type done."
+        : "❌ لم نتمكن من تحديد السعر أو الموقع من المدخلات. يرجى إرسال تفاصيل إضافية ثم اكتب تم."
+    );
+    return "done";
+  }
+
+  // 4. Generate listing code & price formatting
+  let { code, explicit: codeExplicit } = L.generateListingCode(
+    draft.custom_code,
+    extracted.property_type || "UNT"
+  );
+
+  const price = T.parseEgyptianPrice(extracted.price_raw, {
+    lang,
+    listingType: extracted.listing_type || "sale"
+  });
+
+  // 5. Upload images to Supabase Storage
+  const up = downloadedImages.length
+    ? await uploadImages(broker.agency_id, code, downloadedImages).catch(
+        (err) => {
+          log("error", "Image upload failed in finalizeDraft", errMeta(err));
+          return { ok: [], failed: downloadedImages.length };
+        }
+      )
+    : { ok: [], failed: 0 };
+
+  // 6. Geographic enrichment
+  let enriched = null;
+  if (
+    extracted.location &&
+    extracted.location_keywords.length < 4 &&
+    (await withinAiQuota(broker.agency_id))
+  ) {
+    try {
+      enriched = await S.enrichLocation(aiShim, {
+        location: extracted.location,
+        title: extracted.title,
+        rawText: (draft.texts || []).join(" "),
+        model: CFG.geminiFallback
+      });
+      extracted.compound = extracted.compound || enriched.compound || "";
+      extracted.district = extracted.district || enriched.district || "";
+      extracted.city = extracted.city || enriched.city || "";
+      extracted.location_keywords = S.normalizeKeywords([
+        ...extracted.location_keywords,
+        ...enriched.keywords
+      ]);
+    } catch (e) {
+      log("warn", "location enrichment skipped in finalizeDraft", errMeta(e));
+    }
+  }
+
+  // 7. Compose fields and Persist atomically to PostgreSQL
+  const fields = L.composeFields({
+    existing: null,
+    draft: extracted,
+    price,
+    imageOnly: false,
+    lang,
+    enriched
+  });
+
+  const batchKey = U.sha1(`${broker.id}:${code}:${Date.now()}`);
+
+  const result = await persistListing({
+    broker,
+    code,
+    existing: null,
+    fields,
+    newImages: up.ok,
+    replace: false,
+    batchKey
+  });
+
+  if (result.conflict || !result.listing) {
+    throw new Error(
+      "Failed to persist listing due to concurrency conflict or database error"
+    );
+  }
+
+  const savedListing = result.listing;
+  setActiveListing(broker, savedListing.code);
+
+  // 8. Wipe the temporary draft from PostgreSQL
+  await Drafts.clearDraft(broker.id);
+
+  // 9. Send success bubbles
+  await sendListingConfirmation(broker, savedListing, result.created);
+  return "done";
 }
-
-// server.js - Replace handleText with this corrected precedence order:
-
 async function handleText(broker, message) {
-  const key = U.normalizePhone(broker.phone);
-  const lang = broker.preferred_lang || "ar";
   const raw = ((message.text && message.text.body) || "").trim();
   if (!raw) return "done";
+  const lang = broker.preferred_lang || "ar";
 
-  // 1. Commands ALWAYS execute immediately (e.g., "تم", "sold", "price", "help")
+  // 1. Direct Commands (price, sold, help, etc.) always execute
   if (await handleCommand(broker, raw, message)) return "done";
 
-  // 2. Batch lock for accumulating ongoing listing descriptions/edits
-  if (isBatchingActive(key)) {
-    reserveBatch(broker, message.id).texts.push(raw);
-    return "batched";
-  }
+  const draft = await Drafts.getDraft(broker.id);
 
-  // 3. Explicit listing actions open an ingestion batch immediately
-  const explicitCode = L.extractExplicitUnitCode(raw);
-  const isExplicitAction =
-    /(?:إضافة|اضافة|استبدال|add|replace)\s*#?[A-Za-z0-9_-]{2,}/i.test(raw);
-  if (explicitCode && isExplicitAction) {
-    const batch = reserveBatch(broker, message.id, explicitCode);
-    batch.texts.push(raw);
-    return "batched";
-  }
-
-  // 4. Metadata buffer window for new listings
-  if (L.isLikelyListingMetadata(raw)) {
-    const timer = setTimeout(() => {
-      const e = pendingTextBuffers.get(key);
-      if (!e || e.timer !== timer) return;
-      pendingTextBuffers.delete(key);
-      perBroker(key, () =>
-        als.run(
-          {
-            reqId: message.id,
-            agencyId: broker.agency_id,
-            brokerId: broker.id
-          },
-          async () => {
-            try {
-              const outcome = await handleSearchMessage(broker, {
-                text: raw,
-                msgId: message.id
-              });
-              await markMsgs(
-                [message.id],
-                outcome === "batched" ? "batched" : "done"
-              );
-            } catch (err) {
-              log("error", "buffered text failed", errMeta(err));
-              await markMsgs([message.id], "failed");
-            }
-          }
-        )
+  // =========================================================================
+  // DRAFTING STATE ACTIONS
+  // =========================================================================
+  if (draft) {
+    // A. "تم" / "done" Trigger
+    if (/^(?:تم|تمام|حفظ|ابدا|ابدأ|خلاص|go|done|save)$/i.test(n)) {
+      const draft = await Drafts.getDraft(broker.id);
+      if (draft) {
+        await finalizeDraft(broker, draft);
+        return true;
+      }
+      await reply(
+        broker,
+        M(lang, "لا توجد وحدة قيد التجهيز.", "No active draft in progress.")
       );
-    }, CFG.textBufferMs);
+      return true;
+    }
 
-    pendingTextBuffers.set(key, {
-      text: raw,
-      customCode: explicitCode,
-      msgId: message.id,
-      timer
-    });
+    // B. "إلغاء" / "cancel" Trigger
+    if (/^(?:الغاء|إلغاء|cancel|discard)$/i.test(raw)) {
+      await Drafts.clearDraft(broker.id);
+      await WA.sendWhatsAppText(
+        broker.phone,
+        lang === "en" ? "🗑️ Draft discarded." : "🗑️ تم إلغاء المسودة بنجاح."
+      );
+      return "done";
+    }
+
+    // C. Search Collision Guard during Draft
+    const isSearchQuery =
+      /^(?:بحث|ابحث|دورلي|محتاج|عايز|مطلوب|عندك|search|find|looking)\b/i.test(
+        raw
+      );
+    if (isSearchQuery) {
+      const encodedQuery = Buffer.from(raw).toString("base64");
+      await WA.sendWhatsAppButtons(
+        broker.phone,
+        lang === "en"
+          ? `⚠️ You have an active listing draft (${
+              (draft.media_ids || []).length
+            } photos).\nDo you want to cancel the draft and search instead?`
+          : `⚠️ لديك مسودة وحدة قيد الإضافة حالياً (${
+              (draft.media_ids || []).length
+            } صور).\nهل تريد إلغاء المسودة وتنفيذ البحث؟`,
+        [
+          {
+            id: `SWAP_SEARCH:${encodedQuery}`,
+            title: lang === "en" ? "🔍 Cancel & Search" : "🔍 إلغاء والبحث"
+          },
+          {
+            id: "KEEP_DRAFT",
+            title: lang === "en" ? "📝 Keep Draft" : "📝 إكمال المسودة"
+          }
+        ]
+      );
+      return "done";
+    }
+
+    // D. Additional listing specifications / custom code
+    const explicitCode = L.extractExplicitUnitCode(raw);
+    await Drafts.appendToDraft(broker, { text: raw, customCode: explicitCode });
     return "batched";
   }
 
+  // =========================================================================
+  // IDLE STATE ACTIONS
+  // =========================================================================
+
+  // Explicit listing start via text (e.g., "+ شقة في ميفيدا" or "إضافة: شقة...")
+  if (/^(?:\+|إضافة:|اضافة:|add:)/i.test(raw)) {
+    const cleanText = raw.replace(/^(?:\+|إضافة:|اضافة:|add:)\s*/i, "");
+    await Drafts.appendToDraft(broker, { text: cleanText });
+    await WA.sendWhatsAppButtons(
+      broker.phone,
+      lang === "en"
+        ? "📝 *Listing draft started.*\nSend photos or voice notes, then tap *Save*."
+        : "📝 *تم فتح مسودة وحدة.*\nأرسل الصور أو فويس نوت، ثم اضغط *حفظ*.",
+      [
+        { id: "DRAFT_SAVE", title: lang === "en" ? "✅ Save" : "✅ حفظ (تم)" },
+        { id: "DRAFT_CANCEL", title: lang === "en" ? "❌ Cancel" : "❌ إلغاء" }
+      ]
+    );
+    return "batched";
+  }
+
+  // Default in IDLE: Natural Language Search
   return (
     (await handleSearchMessage(broker, { text: raw, msgId: message.id })) ||
     "done"
@@ -2198,12 +2562,7 @@ async function handleText(broker, message) {
 async function dispatchMessage(broker, message) {
   switch (message.type) {
     case "image":
-      return addImageToBatch(
-        broker,
-        message,
-        message.image,
-        ((message.image && message.image.caption) || "").trim()
-      );
+      return handleImage(broker, message);
     case "document":
       const mime = (message.document && message.document.mime_type) || "";
       const filename = (message.document && message.document.filename) || "";
@@ -2212,12 +2571,13 @@ async function dispatchMessage(broker, message) {
         /\.(jpe?g|png|webp|heic|heif)$/i.test(filename);
 
       if (isImageDoc) {
-        return addImageToBatch(
-          broker,
-          message,
-          message.document,
-          (message.document.caption || "").trim()
-        );
+        return handleImage(broker, {
+          ...message,
+          image: {
+            id: message.document.id,
+            caption: message.document.caption
+          }
+        });
       }
       await reply(
         broker,
