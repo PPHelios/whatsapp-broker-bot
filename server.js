@@ -381,7 +381,29 @@ async function processBatchedListing(broker, batch) {
 مهمتك استخراج مواصفات الوحدة العقارية بدقة متناهية وإخراجها حصراً في صيغة JSON صالحة.
 اللغة المطلوبة للمخرجات: "${targetLang}" (ar أو en فقط).
 
+==================================================
+قواعد استخراج البيانات الجغرافية والموقع (CRITICAL LOCATION RULES):
+==================================================
+- انتبه جيداً للكلمات الأولى في التسجيلات الصوتية والنصوص: غالباً ما يذكر الوسيط اسم الكمبوند أو المنطقة مباشرة في بداية كلامه (مثال: "شقة ميفيدا"، "فيلا في بادية"، "دوبلكس في بالم هيلز").
+- يحظر تماماً إهمال اسم المشروع أو الكمبوند أو تركه فارغاً إذا ذُكر في الصوت أو النص.
+- املأ الحقول الجغرافية كالآتي:
+  1. (compound): اسم الكمبوند أو المشروع تحديداً (مثال: "ميفيدا"، "أبتاون كايرو"، "مدينتي").
+  2. (district): الحي أو المنطقة (مثال: "التجمع الخامس"، "الشيخ زايد"، "المقطم").
+  3. (city): المدينة الرئيسية (مثال: "القاهرة الجديدة"، "6 أكتوبر"، "القاهرة").
+  4. (location): الموقع الكامل المعروض للعميل مدمجاً بشكل جذاب (مثال: "ميفيدا، التجمع الخامس، القاهرة الجديدة").
+
+==================================================
+قواعد تصنيف الصور واختيار الصورة الرئيسية (HERO IMAGE RULES):
+==================================================
+- قم بفحص وتحليل محتوى كل صورة من الصور المرفقة:
+  1. حدد دور ونوع كل صورة بالترتيب الأصلي في مصفوفة (details.image_roles) باستخدام إحدى القيم التالية فقط:
+     ["view", "garden", "exterior", "facade", "reception", "living", "bedroom", "kitchen", "bathroom", "other"]
+  2. رتب الصور في مصفوفة (details.image_order) بحيث يكون **الرقم الأول (index 0) هو أفضل صورة تسويقية جذابة للبروشور** (تفضل الإطلالات المفتوحة View، الحدائق Garden، الواجهات الخارجية Exterior، أو الريسبشن الواسع).
+  3. **يُمنع منعاً باتاً** وضع أي صورة مصنفة كـ "kitchen" أو "bathroom" في الترتيب الأول (index 0)؛ اجعل صور المطابخ والحمامات دائماً في نهاية المصفوفة.
+
+==================================================
 حقول الإخراج المطلوبة (JSON Schema):
+==================================================
 {
   "custom_code": "أي كود خاص ذكره الوسيط (مثال: gj765 أو ref-20)، وإن لم يذكر اتركه null",
   "title": "عنوان تسويقي رسمي جذاب مستوحى من النص/الصوت فقط",
@@ -390,18 +412,20 @@ async function processBatchedListing(broker, batch) {
   "price_value": "القيمة الرقمية المجردة للسعر كرقم أو null",
   "price_display": "السعر المنسق مع العملة أو null",
   "area_value": "المساحة كرقم بالمتر المربع أو null",
-  "bedrooms": "عدد الغرف كرقم أو null",
-  "location": "المدينة أو الحي",
-  "compound": "اسم الكمبوند أو ''",
-  "district": "المنطقة بالتفصيل",
-  "city": "المدينة الرئيسية",
-  "location_keywords": [],
+  "bedrooms": "عدد غرف النوم كرقم فقط أو null",
+  "location": "الموقع المنسق بالكامل شاملاً الكمبوند والحي والمدينة",
+  "compound": "اسم الكمبوند أو المشروع المذكور، أو ''",
+  "district": "المنطقة أو الحي بالتفصيل",
+  "city": "المدينة الرئيسية أو المحافظة",
+  "location_keywords": ["مصفوفة تضم اسم الكمبوند والمنطقة والمدينة وأي مرادفات جغرافية"],
   "details": {
+    "bathrooms": "عدد الحمامات كرقم فقط إن ذُكر في الصوت/النص، أو null",
     "clean_summary": "صياغة تنفيذية منسقة لما ورد في الوصف والصوت",
-    "features": [],
+    "features": ["مصفوفة بأبرز المميزات المذكورة كالجنينة أو الناني روم أو الفيو"],
     "installment_years": null,
     "down_payment_value": null,
-    "image_order": []
+    "image_roles": ["تصنيف كل صورة حسب ترتيب استلامها: view, garden, exterior, reception, kitchen, bathroom, etc"],
+    "image_order": [مصفوفة أرقام تبدأ من 0 تمثل أفضل ترتيب تسويقي لصور المعرض مع استبعاد المطبخ والحمام من المركز 0]
   }
 }`
     });
@@ -581,13 +605,24 @@ async function processBatchedListing(broker, batch) {
               listing: {
                 code: existingListing.code,
                 title: updatedTitle,
+                property_type:
+                  draftData.property_type ||
+                  existingListing.property_type ||
+                  "apartment",
                 listing_type:
-                  draftData.listing_type || existingListing.listing_type,
+                  draftData.listing_type ||
+                  existingListing.listing_type ||
+                  "sale",
                 price_value: updatedPriceVal,
                 price_display: updatedPriceDisp,
                 area_value: updatedArea,
                 bedrooms: updatedBeds,
-                location: draftData.location || existingListing.location,
+                bathrooms:
+                  draftData.details?.bathrooms ||
+                  existingListing.details?.bathrooms ||
+                  null,
+                location: draftData.location || existingListing.location || "",
+                contact_phone: broker.contact_phone || broker.phone || "",
                 details: Object.assign(
                   {},
                   existingListing.details || {},
@@ -598,12 +633,13 @@ async function processBatchedListing(broker, batch) {
               images: allImageUrls,
               lang: targetLang
             });
-            if (flyerBuffer)
+            if (flyerBuffer) {
               updatedFlyerUrl = await uploadFlyerImage(
                 broker.agency_id,
                 `${unitPrefix}-flyer-${Date.now()}`,
                 flyerBuffer
               );
+            }
           } catch (flyerErr) {
             console.error("[FLYER RE-RENDER ERROR]:", flyerErr);
           }
@@ -672,24 +708,28 @@ async function processBatchedListing(broker, batch) {
           listing: {
             code: unitPrefix,
             title: draftData.title,
+            property_type: draftData.property_type || "apartment",
             listing_type: draftData.listing_type || "sale",
             price_value: sanitizedPrice.priceValue,
             price_display: sanitizedPrice.priceDisplay,
             area_value: parsedArea,
             bedrooms: parsedBeds,
+            bathrooms: draftData.details?.bathrooms || null,
             location: draftData.location || "",
+            contact_phone: broker.contact_phone || broker.phone || "",
             details: draftData.details || {}
           },
           agency,
           images: uploadedUrls,
           lang: targetLang
         });
-        if (flyerBuffer)
+        if (flyerBuffer) {
           flyerStorageUrl = await uploadFlyerImage(
             broker.agency_id,
             `${unitPrefix}-flyer`,
             flyerBuffer
           );
+        }
       } catch (flyerErr) {
         console.error("[FLYER RENDER ERROR]:", flyerErr);
       }
@@ -1094,7 +1134,20 @@ async function handleSingleMessage(broker, message) {
           [broker.agency_id]
         );
         const flyerBuffer = await generateFlyerBuffer({
-          listing: upd.rows[0],
+          listing: {
+            code: upd.rows[0].code,
+            title: upd.rows[0].title,
+            property_type: upd.rows[0].property_type || "apartment",
+            listing_type: upd.rows[0].listing_type || "sale",
+            price_value: upd.rows[0].price_value,
+            price_display: upd.rows[0].price_display,
+            area_value: upd.rows[0].area_value,
+            bedrooms: upd.rows[0].bedrooms,
+            bathrooms: upd.rows[0].details?.bathrooms || null,
+            location: upd.rows[0].location || "",
+            contact_phone: broker.contact_phone || broker.phone || "",
+            details: upd.rows[0].details || {}
+          },
           agency: agencyRes.rows[0] || {},
           images: imgRes.rows.map((r) => r.url),
           lang: targetLang
