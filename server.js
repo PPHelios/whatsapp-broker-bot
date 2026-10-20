@@ -161,7 +161,26 @@ const uploadLimiter = U.createLimiter(4);
 const rateGate = U.createRateGate(CFG.geminiRpm);
 const msgRate = U.createCounter(60000, 80);
 let inFlight = 0;
+function resolveLang(rawText, broker) {
+  if (!rawText) return broker.preferred_lang || "ar";
+  // If the text is predominantly Latin/English characters and standard symbols
+  const isEnglish = /^[a-zA-Z0-9\s#_.,:/\-+!?()]+$/.test(rawText.trim());
+  return isEnglish ? "en" : broker.preferred_lang || "ar";
+}
+function setActiveListing(broker, code) {
+  const key = U.normalizePhone(broker.phone);
+  recentBrokerListings.set(key, { code: code.toUpperCase(), at: Date.now() });
+}
 
+function getActiveListingCode(broker) {
+  const key = U.normalizePhone(broker.phone);
+  const rec = recentBrokerListings.get(key);
+  // Valid for 2 hours (7,200,000 ms)
+  if (rec && Date.now() - rec.at < 7200000) {
+    return rec.code;
+  }
+  return null;
+}
 /* ====================================================================== */
 /* Gemini Gateway                                                         */
 /* ====================================================================== */
@@ -788,6 +807,9 @@ async function processBatch(batch) {
     );
     perf.listing_code = code;
 
+    // Generate dynamic nonce token to sandbox user text input against prompt injection
+    const fenceToken = crypto.randomBytes(4).toString("hex").toUpperCase();
+
     // Build Gemini extraction payload
     const parts = [{ text: L.buildListingPrompt(lang, fenceToken) }];
 
@@ -833,6 +855,12 @@ async function processBatch(batch) {
     perf.model_used = aiRes.model;
 
     let draft = L.validateDraft(JSON.parse(cleanJson(aiRes.res.text)), lang);
+
+    // Enforce clean feature vocabulary to prevent phonetic errors like "بول"
+    if (draft.details && Array.isArray(draft.details.features)) {
+      draft.details.features = T.cleanFeaturesList(draft.details.features);
+    }
+
     const price = T.parseEgyptianPrice(draft.price_raw, {
       lang,
       listingType: draft.listing_type || "sale"
@@ -882,7 +910,7 @@ async function processBatch(batch) {
       }
     }
 
-    // Atomic DB Commit
+    // Atomic DB Commit with Advisory Locking and Retry Protection
     let result = null;
     const db0 = Date.now();
     for (let attempt = 0; attempt < 3 && !result; attempt++) {
@@ -933,11 +961,13 @@ async function processBatch(batch) {
     if (!result) throw new Error("concurrency retry limit exceeded");
 
     const listing = result.listing;
-    recentBrokerListings.set(key, { code: listing.code, at: Date.now() });
+
+    // Lock as active listing context for shortcut commands (price/sold/flyer)
+    setActiveListing(broker, listing.code);
     await markMsgs(ids, "done");
 
     // Success Notification & Action Buttons
-    const body = M(
+    let body = M(
       lang,
       `✅ ${result.created ? "تم حفظ" : "تم تحديث"} الوحدة بنجاح *#${
         listing.code
@@ -948,6 +978,7 @@ async function processBatch(batch) {
         listing.price_display || "-"
       }`
     );
+
     if (listing.details && listing.details.ambiguous_location) {
       body += M(
         lang,
@@ -955,18 +986,29 @@ async function processBatch(batch) {
         `\n\n⚠️ *Location Note:* The compound name might exist in multiple areas. Please review and clarify if needed.`
       );
     }
+
     const buttons = [
       { id: `flyer:en:dark:${listing.code}`, title: "📄 Flyer (EN)" },
-      { id: `flyer:en:light:${listing.code}`, title: "📄 Flyer (Light)" },
       {
         id: `client:${listing.code}`,
         title: M(lang, "📲 نص العميل", "📲 Client Text")
+      },
+      {
+        id: `status:sold:${listing.code}`,
+        title: M(lang, "🏷️ تم البيع", "🏷️ Mark Sold")
       }
     ];
 
+    // 1. Send the rich interactive message with buttons
     await WA.sendWhatsAppButtons(to(broker), body, buttons);
-    if (result.created)
+
+    // 2. Send the monospace unit code bubble for one-tap mobile clipboard copy
+    await WA.sendWhatsAppText(to(broker), `\`${listing.code}\``);
+
+    // 3. Send formatted customer-facing text if unit is newly created
+    if (result.created) {
       await reply(broker, T.formatClientListingText(listing, broker, lang));
+    }
 
     perf.total_duration_ms = Date.now() - t0;
     logOperation(perf).catch(() => {});
@@ -1687,99 +1729,163 @@ async function cmdFlyer(
   }
 }
 
-async function handleCommand(broker, raw, lang) {
-  const key = U.normalizePhone(broker.phone);
-  const n = T.normalizeAr(raw);
+async function handleCommand(broker, raw, msg) {
+  const lang = resolveLang(raw, broker); // Dynamic English/Arabic response
+  const n = raw.trim();
   let m;
+  if (/^(?:مساعدة|اوامر|أوامر|تعليمات|help|commands|\?)$/i.test(n)) {
+    await reply(broker, T.getHelpMessage(lang));
+    return true;
+  }
 
-  if (/^(help|مساعده|اوامر|قواعد|تعليمات)$/.test(n))
-    return void (await reply(broker, T.getHelpMessage())) || true;
-  if (/^(تم|تمام|ابدا|خلاص|go|done)$/.test(n)) {
-    if (incomingBatches.has(key))
+  // ==========================================
+  // 2. BATCH COMPLETION TRIGGER
+  // ==========================================
+  if (/^(تم|تمام|ابدا|خلاص|go|done)$/i.test(n)) {
+    if (incomingBatches.has(key)) {
       finalizeBatch(key, { force: true }).catch((e) =>
         log("error", "finalize failed", errMeta(e))
       );
-    else
+    } else if (activeProcessingKeys.has(key)) {
+      log(
+        "info",
+        "User sent 'تم' while batch was already processing. Silencing false-alarm reply.",
+        { key }
+      );
+    } else {
       await reply(
         broker,
         M(lang, "لا توجد وحدة قيد التجهيز.", "No active batch in progress.")
       );
+    }
     return true;
   }
-  if (/^(المزيد|more|التالي)$/.test(n))
-    return void (await handleSearchMessage(broker, { more: true })) || true;
-  if (/^(احصاييات|احصائيات|stats)$/.test(n))
-    return void (await cmdStats(broker, lang)) || true;
-  if (/^(اكسيل|excel|csv|تصدير)$/.test(n))
-    return void (await cmdExport(broker, lang)) || true;
+  // Helper to extract explicit code OR fallback to active listing
+  const resolveTargetCode = (explicitCode) => {
+    if (explicitCode) return explicitCode.toUpperCase();
+    return getActiveListingCode(broker);
+  };
 
-  // Status transitions
-  if ((m = raw.match(new RegExp(`^(?:تم البيع|مباع|sold)\\s+#?${CODE}$`, "i"))))
-    return void (await cmdStatus(broker, m[1], "sold", lang)) || true;
+  // 1. FLYER (e.g., "flyer", "flyer #HAS101", "كتالوج", "كتالوج #HAS101")
   if (
-    (m = raw.match(new RegExp(`^(?:ارشيف|ارشفة|archive)\\s+#?${CODE}$`, "i")))
-  )
-    return void (await cmdStatus(broker, m[1], "archived", lang)) || true;
-  if ((m = raw.match(new RegExp(`^(?:تفعيل|نشط|activate)\\s+#?${CODE}$`, "i"))))
-    return void (await cmdStatus(broker, m[1], "active", lang)) || true;
-
-  // Permanent Delete
-  if ((m = raw.match(new RegExp(`^(?:حذف|delete|remove)\\s+#?${CODE}$`, "i"))))
-    return void (await cmdDelete(broker, m[1], lang)) || true;
-
-  // Price update
-  if (
-    (m = raw.match(
-      new RegExp(
-        `^(?:سعر|price)\\s+#?${CODE}\\s+(?:إلى|الى|ل|to)\\s+(.+)$`,
-        "i"
-      )
+    (m = n.match(
+      /^(?:كتالوج|بروشور|flyer|catalog)(?:\s+#?([a-zA-Z0-9_-]+))?$/i
     ))
-  )
-    return void (await cmdPrice(broker, m[1], m[2], lang)) || true;
-
-  // Brochure variants
-  if (
-    (m = raw.match(
-      new RegExp(`^(?:كتالوج|بروشور|flyer)\\s+فاتح\\s+#?${CODE}$`, "i")
-    ))
-  )
+  ) {
+    const targetCode = resolveTargetCode(m[1]);
+    if (!targetCode) {
+      return (
+        void (await reply(
+          broker,
+          M(
+            lang,
+            "⚠️ يرجى تحديد كود الوحدة أو فحص وحدة أولاً.",
+            "⚠️ Please specify a unit code or select a unit first."
+          )
+        )) || true
+      );
+    }
     return (
-      void (await cmdFlyer(broker, m[1], lang, { theme: "light" })) || true
-    );
-  if (
-    (m = raw.match(
-      new RegExp(`^(?:كتالوج|بروشور|flyer)\\s+مكتب\\s+#?${CODE}$`, "i")
-    ))
-  )
-    return (
-      void (await cmdFlyer(broker, m[1], lang, { unbranded: true })) || true
-    );
-  if (
-    (m = raw.match(
-      new RegExp(`^(?:كتالوج|بروشور|flyer|catalog)\\s+#?${CODE}$`, "i")
-    ))
-  )
-    return void (await cmdFlyer(broker, m[1], lang, { theme: "dark" })) || true;
-
-  // Client Text
-  if ((m = raw.match(new RegExp(`^(?:عميل|client)\\s+#?${CODE}$`, "i")))) {
-    const l = await fetchListing(broker, m[1]);
-    return (
-      void (await (l
-        ? reply(broker, T.formatClientListingText(l, broker, lang))
-        : notFound(broker, m[1].toUpperCase()))) || true
+      void (await cmdFlyer(broker, targetCode, "en", { theme: "dark" })) || true
     );
   }
 
-  // Internal Inspect
-  if ((m = raw.match(new RegExp(`^#${CODE}$`)))) {
-    const l = await fetchListing(broker, m[1]);
+  // 2. CLIENT TEXT (e.g., "client", "client #HAS101", "عميل", "عميل #HAS101")
+  if ((m = n.match(/^(?:عميل|زبون|client)(?:\s+#?([a-zA-Z0-9_-]+))?$/i))) {
+    const targetCode = resolveTargetCode(m[1]);
+    if (!targetCode) {
+      return (
+        void (await reply(
+          broker,
+          M(
+            lang,
+            "⚠️ يرجى تحديد كود الوحدة أو فحص وحدة أولاً.",
+            "⚠️ Please specify a unit code or select a unit first."
+          )
+        )) || true
+      );
+    }
+    const l = await fetchListing(broker, targetCode);
     return (
-      void (await (l
-        ? reply(broker, T.formatInternalListingDetails(l, lang))
-        : notFound(broker, m[1].toUpperCase()))) || true
+      void (l
+        ? reply(broker, T.formatClientListingText(l, broker, lang))
+        : notFound(broker, targetCode)) || true
     );
+  }
+
+  // 3. STATUS CHANGE: SOLD (e.g., "sold", "sold #HAS101", "مباع", "تم البيع #HAS101")
+  if ((m = n.match(/^(?:مباع|تم\s+البيع|sold)(?:\s+#?([a-zA-Z0-9_-]+))?$/i))) {
+    const targetCode = resolveTargetCode(m[1]);
+    if (!targetCode) {
+      return (
+        void (await reply(
+          broker,
+          M(
+            lang,
+            "⚠️ يرجى تحديد كود الوحدة لتغيير حالتها.",
+            "⚠️ Please specify a unit code to update."
+          )
+        )) || true
+      );
+    }
+    return void (await cmdStatus(broker, targetCode, "sold", lang)) || true;
+  }
+
+  // 4. PRICE UPDATE WITH OR WITHOUT CODE
+  // Format A: "price #HAS101 to 18.5M" or "سعر #HAS101 إلى 18.5 مليون"
+  // Format B (Contextual): "price to 18.5M", "price 18.5M", "سعر إلى 18.5 مليون"
+  if (
+    (m = n.match(
+      /^(?:سعر|price)(?:\s+#?([a-zA-Z0-9_-]+))?\s+(?:إلى|to|=)?\s*(.+)$/i
+    ))
+  ) {
+    let explicitCode = m[1];
+    let priceRaw = m[2];
+
+    // If m[1] was actually the start of the price (e.g., "price 18.5M")
+    if (explicitCode && /^\d/.test(explicitCode) && !priceRaw) {
+      priceRaw = explicitCode;
+      explicitCode = null;
+    }
+
+    const targetCode = resolveTargetCode(explicitCode);
+    if (!targetCode) {
+      return (
+        void (await reply(
+          broker,
+          M(
+            lang,
+            "⚠️ حدد كود الوحدة المراد تعديل سعرها.",
+            "⚠️ Please specify a unit code to update price."
+          )
+        )) || true
+      );
+    }
+    return void (await cmdPrice(broker, targetCode, priceRaw, lang)) || true;
+  }
+
+  // 5. LANGUAGE TOGGLE (e.g., "lang en", "lang ar", "عربي", "english")
+  if (/^(?:lang\s+en|english|إنجليزي|انجليزي)$/i.test(n)) {
+    await pool.query("UPDATE brokers SET preferred_lang = 'en' WHERE id = $1", [
+      broker.id
+    ]);
+    broker.preferred_lang = "en";
+    await reply(
+      broker,
+      "✅ Language set to English. All confirmations will now be sent in English."
+    );
+    return true;
+  }
+  if (/^(?:lang\s+ar|arabic|عربي)$/i.test(n)) {
+    await pool.query("UPDATE brokers SET preferred_lang = 'ar' WHERE id = $1", [
+      broker.id
+    ]);
+    broker.preferred_lang = "ar";
+    await reply(
+      broker,
+      "✅ تم ضبط اللغة إلى العربية. سيتم إرسال كافة التأكيدات بالعربية."
+    );
+    return true;
   }
 
   return false;
@@ -1787,43 +1893,68 @@ async function handleCommand(broker, raw, lang) {
 
 async function handleInteractive(broker, message) {
   const id =
-    (message.interactive &&
-      ((message.interactive.button_reply &&
-        message.interactive.button_reply.id) ||
-        (message.interactive.list_reply &&
-          message.interactive.list_reply.id))) ||
+    message.interactive?.button_reply?.id ||
+    message.interactive?.list_reply?.id ||
     "";
   const [kind, ...rest] = id.split(":");
   const lang = broker.preferred_lang || "ar";
 
+  // When a broker taps a search result row
   if (kind === "inspect" && rest[0]) {
     const code = rest[0].toUpperCase();
     const l = await fetchListing(broker, code);
     if (!l) return notFound(broker, code);
 
-    // Show full internal specs then send interactive action buttons
+    // 1. SET ACTIVE CONTEXT
+    setActiveListing(broker, code);
+
+    // 2. SEND FULL SPECS
     await reply(broker, T.formatInternalListingDetails(l, lang));
-    return WA.sendWhatsAppButtons(
+
+    // 3. SEND INTERACTIVE ACTION BUTTONS
+    await WA.sendWhatsAppButtons(
       to(broker),
-      M(lang, `إجراءات الوحدة #${code}:`, `Actions for #${code}:`),
+      M(lang, `إجراءات سريعة للوحدة #${code}:`, `Quick actions for #${code}:`),
       [
-        { id: `flyer:en:dark:${code}`, title: "📄 Flyer (Dark)" },
-        { id: `flyer:en:light:${code}`, title: "📄 Flyer (Light)" },
+        { id: `flyer:en:dark:${code}`, title: "📄 Flyer (EN)" },
         {
           id: `client:${code}`,
           title: M(lang, "📲 نص العميل", "📲 Client Text")
+        },
+        {
+          id: `status:sold:${code}`,
+          title: M(lang, "🏷️ تم البيع", "🏷️ Mark Sold")
         }
       ]
     );
-  } else if (kind === "client" && rest[0]) {
-    const l = await fetchListing(broker, rest[0]);
-    await (l
-      ? reply(broker, T.formatClientListingText(l, broker, lang))
-      : notFound(broker, rest[0].toUpperCase()));
-  } else if (kind === "flyer" && rest.length >= 3) {
-    const [fl, theme, code] = rest;
-    await cmdFlyer(broker, code, fl, { theme });
+
+    // 4. SEND MONOSPACE CODE BUBBLE (One-tap clipboard copy)
+    await WA.sendWhatsAppText(to(broker), `\`${code}\``);
+    return "done";
   }
+
+  // Handle Action Buttons
+  if (kind === "status" && rest[0] && rest[1]) {
+    const [newStatus, code] = rest;
+    setActiveListing(broker, code);
+    return cmdStatus(broker, code, newStatus, lang);
+  }
+
+  if (kind === "client" && rest[0]) {
+    const code = rest[0].toUpperCase();
+    setActiveListing(broker, code);
+    const l = await fetchListing(broker, code);
+    return l
+      ? reply(broker, T.formatClientListingText(l, broker, lang))
+      : notFound(broker, code);
+  }
+
+  if (kind === "flyer" && rest.length >= 3) {
+    const [fl, theme, code] = rest;
+    setActiveListing(broker, code);
+    return cmdFlyer(broker, code, fl, { theme });
+  }
+
   return "done";
 }
 
