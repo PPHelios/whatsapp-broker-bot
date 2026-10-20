@@ -19,14 +19,13 @@ const T = require("./lib/text");
 const S = require("./lib/search");
 const L = require("./lib/listing");
 const U = require("./lib/util");
-const fenceToken = crypto.randomBytes(4).toString("hex").toUpperCase();
 /* ====================================================================== */
 /* Config                                                                 */
 /* ====================================================================== */
 const CFG = {
   port: Number(process.env.PORT || 3000),
   geminiModel: process.env.GEMINI_MODEL || "gemini-3.8-flash",
-  geminiFallback: process.env.GEMINI_FALLBACK_MODEL || "gemini-3.5-flash-lite",
+  geminiFallback: process.env.GEMINI_FALLBACK_MODEL || "gemini-3.6-flash",
   geminiRpm: Number(process.env.GEMINI_RPM || 12),
   geminiTimeoutMs: Number(process.env.GEMINI_TIMEOUT_MS || 45000),
   aiDailyLimit: Number(process.env.AI_DAILY_LIMIT_PER_AGENCY || 300),
@@ -155,7 +154,6 @@ const cooldowns = new Map();
 
 const perBroker = U.createSerializer();
 const brokerWork = U.createSerializer();
-const listingLocks = U.createSerializer();
 const listingLimiter = U.createLimiter(2, { maxQueue: 40 });
 const uploadLimiter = U.createLimiter(4);
 const rateGate = U.createRateGate(CFG.geminiRpm);
