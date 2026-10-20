@@ -97,7 +97,55 @@ function log(level, msg, meta = {}) {
 const errMeta = (e) => ({ err: e && e.message, code: e && e.code });
 const M = (lang, ar, en) => (lang === "en" ? en : ar);
 const to = (broker) => U.normalizePhone(broker.phone);
-const reply = (broker, text) => WA.sendWhatsAppText(to(broker), text);
+// server.js - Replace line 100 with this robust implementation
+async function reply(broker, text, opts = {}) {
+  if (!text) return null;
+  const recipient = to(broker);
+
+  try {
+    return await WA.sendWhatsAppText(recipient, text, opts);
+  } catch (err) {
+    const apiCode = err?.response?.data?.error?.code || err?.code;
+    const apiSubcode = err?.response?.data?.error?.error_subcode;
+
+    // Error 131047: Meta 24-hour service window closed
+    if (apiCode === 131047 || apiSubcode === 131047) {
+      log(
+        "warn",
+        "WhatsApp 24-hour session expired; cannot send freeform text",
+        {
+          brokerId: broker?.id,
+          phone: broker?.phone
+        }
+      );
+      return null;
+    }
+
+    // Rate limiting from Meta (code 80007 / 130429): back off 1s and retry once
+    if (apiCode === 80007 || apiCode === 130429) {
+      log("warn", "WhatsApp API rate limit reached, retrying in 1s", {
+        phone: broker?.phone
+      });
+      await U.sleep(1000);
+      try {
+        return await WA.sendWhatsAppText(recipient, text, opts);
+      } catch (retryErr) {
+        log(
+          "error",
+          "WhatsApp retry failed after rate limit",
+          errMeta(retryErr)
+        );
+        return null;
+      }
+    }
+
+    log("error", "WhatsApp reply failed", {
+      phone: broker?.phone,
+      ...errMeta(err)
+    });
+    return null;
+  }
+}
 
 /* ====================================================================== */
 /* Unified Canonical Observability (`operation_logs`)                     */
@@ -151,7 +199,7 @@ const agencyCache = new Map();
 const unknownNotified = new Map();
 const lastTouch = new Map();
 const cooldowns = new Map();
-
+const activeProcessingKeys = new Set();
 const perBroker = U.createSerializer();
 const brokerWork = U.createSerializer();
 const listingLimiter = U.createLimiter(2, { maxQueue: 40 });
@@ -183,10 +231,6 @@ function getActiveListingCode(broker) {
 /* Gemini Gateway                                                         */
 /* ====================================================================== */
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-const isTransient = (e) =>
-  /503|UNAVAILABLE|429|RESOURCE_EXHAUSTED|timeout|ECONNRESET|ETIMEDOUT|fetch failed|\b500\b|INTERNAL|DEADLINE/i.test(
-    String((e && e.message) || e)
-  );
 
 async function withinAiQuota(agencyId) {
   if (!CFG.aiDailyLimit) return true;
@@ -207,10 +251,23 @@ const isDailyQuotaExhausted = (e) =>
     String(e && e.message)
   );
 
-async function callGemini({ contents, config, model, maxRetries = 2 }) {
-  const models = [model || CFG.geminiModel, CFG.geminiFallback].filter(
-    (m, i, a) => m && a.indexOf(m) === i
+// In server.js - Full Replacement for callGemini
+
+const isTransientError = (e) => {
+  const msg = String((e && e.message) || e);
+  return /503|UNAVAILABLE|429|RESOURCE_EXHAUSTED|timeout|ETIMEDOUT|ECONNRESET|fetch failed/i.test(
+    msg
   );
+};
+
+async function callGemini({ contents, config, model, maxRetries = 2 }) {
+  // 3-tier cascade: 3.8 -> 3.6 -> fallback (3.5-flash-lite)
+  const primary = model || CFG.geminiModel || "gemini-3.8-flash";
+  const models = [
+    primary,
+    "gemini-3.6-flash",
+    CFG.geminiFallback || "gemini-3.5-flash-lite"
+  ].filter((m, i, a) => m && a.indexOf(m) === i);
 
   let lastErr;
 
@@ -221,8 +278,8 @@ async function callGemini({ contents, config, model, maxRetries = 2 }) {
         const t0 = Date.now();
         const res = await U.withTimeout(
           ai.models.generateContent({ model: currentModel, contents, config }),
-          CFG.geminiTimeoutMs,
-          `gemini-${currentModel}`
+          CFG.geminiTimeoutMs || 30000,
+          currentModel // cleaner label: "gemini-3.8-flash timeout"
         );
         const dur = Date.now() - t0;
         return {
@@ -236,32 +293,45 @@ async function callGemini({ contents, config, model, maxRetries = 2 }) {
         };
       } catch (err) {
         lastErr = err;
+        const errMsg = String((err && err.message) || err);
         log("warn", "gemini call failed", {
           model: currentModel,
           attempt,
-          ...errMeta(err)
+          err: errMsg
         });
 
-        // If this model's daily quota is completely exhausted, break immediately to the fallback model!
-        if (isDailyQuotaExhausted(err)) {
+        const isSpike = /503|UNAVAILABLE|high demand/i.test(errMsg);
+        const isQuota =
+          /RESOURCE_EXHAUSTED|free_tier_requests|limit:\s*20/i.test(errMsg);
+        const isTimeout = /timeout|ETIMEDOUT/i.test(errMsg);
+
+        // If current model timed out, spiked (503), or hit quota:
+        // Bail out immediately on the very first attempt and switch to the next model in the chain!
+        if (
+          (isSpike || isQuota || isTimeout) &&
+          models.length > 1 &&
+          currentModel !== models[models.length - 1]
+        ) {
           log(
-            "error",
-            `Daily quota exhausted on ${currentModel}. Failing over to next model...`
+            "warn",
+            `Model ${currentModel} failed (${
+              isTimeout ? "timeout" : isSpike ? "503 spike" : "quota"
+            }). Failing over to next model...`
           );
-          break; // exits retry loop, advances to next model in `models` array
+          break; // break retry loop to jump to next model in outer loop
         }
 
-        if (!isTransient(err)) break;
+        if (!isTransientError(err)) break;
 
-        // Exponential backoff for 503s or per-minute rate limits
+        // Exponential backoff only for recoverable per-minute rate limits
         if (attempt < maxRetries - 1) {
-          await U.sleep(
-            Math.min(6000, 1500 * (attempt + 1)) + Math.random() * 500
-          );
+          const delay = 1500 * (attempt + 1) + Math.random() * 500;
+          await U.sleep(delay);
         }
       }
     }
   }
+
   throw lastErr;
 }
 
@@ -383,17 +453,28 @@ const toThumbnail = (buf) =>
     .catch(() => buf);
 
 async function uploadImages(agencyId, code, items) {
+  if (!items || !items.length) return { ok: [], failed: 0 };
   const tag = crypto.randomBytes(3).toString("hex");
+
   const out = await Promise.all(
     items.map((it, i) =>
       uploadLimiter(async () => {
         try {
+          if (!it || !it.buffer) return null;
+
+          // Guarantee compression: if buffer > 250KB, compress to 1600px MozJPEG
+          let finalBuf = it.buffer;
+          if (finalBuf.length > 250 * 1024) {
+            finalBuf = await normalizeImage(finalBuf);
+          }
+
           const path = `agency_${agencyId}/listing_${code}/${code}-${tag}-${
             i + 1
           }.jpg`;
-          const url = await uploadListingImage(agencyId, path, it.buffer);
+          const url = await uploadListingImage(agencyId, path, finalBuf);
+
           return url
-            ? { url, role: it.role || null, buffer: it.buffer, path }
+            ? { url, role: it.role || null, buffer: finalBuf, path }
             : null;
         } catch (e) {
           log("error", "image upload failed", errMeta(e));
@@ -402,6 +483,7 @@ async function uploadImages(agencyId, code, items) {
       })
     )
   );
+
   return { ok: out.filter(Boolean), failed: out.filter((x) => !x).length };
 }
 
@@ -818,10 +900,10 @@ async function processBatch(batch) {
     }
 
     for (const v of batch.voices) {
-      if (v.buffer) {
+      if (v.buffer && Buffer.isBuffer(v.buffer)) {
         parts.push({
           inlineData: {
-            mimeType: String(v.mimeType || "audio/ogg").split(";")[0],
+            mimeType: U.cleanAudioMime(v.mimeType),
             data: v.buffer.toString("base64")
           }
         });
@@ -842,7 +924,14 @@ async function processBatch(batch) {
         }
       }),
       images.length
-        ? uploadImages(agencyId, code, images)
+        ? uploadImages(agencyId, code, images).catch((uploadErr) => {
+            log(
+              "error",
+              "Parallel image upload failed; proceeding with unit specs",
+              errMeta(uploadErr)
+            );
+            return { ok: [], failed: images.length, error: uploadErr.message };
+          })
         : Promise.resolve({ ok: [], failed: 0 })
     ]);
 
@@ -996,7 +1085,14 @@ async function processBatch(batch) {
         title: M(lang, "🏷️ تم البيع", "🏷️ Mark Sold")
       }
     ];
-
+    // Alert the broker if photos failed to upload, without losing the listing
+    if (images.length > 0 && up.failed > 0 && up.ok.length === 0) {
+      body += M(
+        lang,
+        `\n\n⚠️ *تنبيه الصور:* تعذر رفع الصور لضعف شبكة السيرفر. يمكنك إعادة إرسالها لاحقاً: *إضافة #${listing.code}*`,
+        `\n\n⚠️ *Photo Notice:* Photos failed to upload due to network timeout. You can re-send them: *add #${listing.code}*`
+      );
+    }
     // 1. Send the rich interactive message with buttons
     await WA.sendWhatsAppButtons(to(broker), body, buttons);
 
@@ -1109,6 +1205,9 @@ async function finalizeBatch(key, { force = false } = {}) {
   incomingBatches.delete(key);
   batch.closed = true;
 
+  // Mark key as currently in flight
+  activeProcessingKeys.add(key);
+
   inFlight++;
   try {
     await brokerWork(key, () =>
@@ -1125,6 +1224,8 @@ async function finalizeBatch(key, { force = false } = {}) {
     );
   } finally {
     inFlight--;
+    // Retain for 8 seconds to swallow duplicate "تم" taps
+    setTimeout(() => activeProcessingKeys.delete(key), 8000);
   }
 }
 
@@ -1727,9 +1828,10 @@ async function cmdFlyer(
   }
 }
 
-async function handleCommand(broker, raw, msg) {
+async function handleCommand(broker, raw, message = null) {
   const lang = resolveLang(raw, broker); // Dynamic English/Arabic response
   const n = raw.trim();
+  const key = U.normalizePhone(broker.phone);
   let m;
   if (/^(?:مساعدة|اوامر|أوامر|تعليمات|help|commands|\?)$/i.test(n)) {
     await reply(broker, T.getHelpMessage(lang));
@@ -2019,19 +2121,24 @@ async function handleAudio(broker, message) {
   );
 }
 
+// server.js - Replace handleText with this corrected precedence order:
+
 async function handleText(broker, message) {
   const key = U.normalizePhone(broker.phone);
   const lang = broker.preferred_lang || "ar";
   const raw = ((message.text && message.text.body) || "").trim();
   if (!raw) return "done";
 
-  // Batch lock
+  // 1. Commands ALWAYS execute immediately (e.g., "تم", "sold", "price", "help")
+  if (await handleCommand(broker, raw, message)) return "done";
+
+  // 2. Batch lock for accumulating ongoing listing descriptions/edits
   if (isBatchingActive(key)) {
     reserveBatch(broker, message.id).texts.push(raw);
     return "batched";
   }
 
-  // Explicit listing actions open an ingestion batch immediately
+  // 3. Explicit listing actions open an ingestion batch immediately
   const explicitCode = L.extractExplicitUnitCode(raw);
   const isExplicitAction =
     /(?:إضافة|اضافة|استبدال|add|replace)\s*#?[A-Za-z0-9_-]{2,}/i.test(raw);
@@ -2041,10 +2148,7 @@ async function handleText(broker, message) {
     return "batched";
   }
 
-  // Commands execute without delay
-  if (await handleCommand(broker, raw, lang)) return "done";
-
-  // Metadata buffer window
+  // 4. Metadata buffer window for new listings
   if (L.isLikelyListingMetadata(raw)) {
     const timer = setTimeout(() => {
       const e = pendingTextBuffers.get(key);
@@ -2258,12 +2362,11 @@ function verifySignature(req) {
     .digest("hex");
   const got = sig.slice(7);
 
-  // Both buffers must match length before timingSafeEqual
-  if (Buffer.byteLength(got) !== Buffer.byteLength(expected)) return false;
-  return crypto.timingSafeEqual(
-    Buffer.from(got, "utf8"),
-    Buffer.from(expected, "utf8")
-  );
+  // Buffer length check and constant-time comparison
+  const a = Buffer.from(got, "utf8");
+  const b = Buffer.from(expected, "utf8");
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
 }
 
 app.post("/webhook", async (req, res) => {
