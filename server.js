@@ -184,25 +184,33 @@ async function withinAiQuota(agencyId) {
   }
 }
 
-async function callGemini({ contents, config, model, maxRetries = 3 }) {
+// In server.js: Differentiate transient 429 from daily quota exhaustion
+const isDailyQuotaExhausted = (e) =>
+  /GenerateRequestsPerDayPerProjectPerModel|free_tier_requests|limit:\s*20/i.test(
+    String(e && e.message)
+  );
+
+async function callGemini({ contents, config, model, maxRetries = 2 }) {
   const models = [model || CFG.geminiModel, CFG.geminiFallback].filter(
     (m, i, a) => m && a.indexOf(m) === i
   );
+
   let lastErr;
-  for (const m of models) {
+
+  for (const currentModel of models) {
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       await rateGate();
       try {
         const t0 = Date.now();
         const res = await U.withTimeout(
-          ai.models.generateContent({ model: m, contents, config }),
+          ai.models.generateContent({ model: currentModel, contents, config }),
           CFG.geminiTimeoutMs,
-          "gemini"
+          `gemini-${currentModel}`
         );
         const dur = Date.now() - t0;
         return {
           res,
-          model: m,
+          model: currentModel,
           duration_ms: dur,
           usage: {
             input: res.usageMetadata?.promptTokenCount || 0,
@@ -212,15 +220,28 @@ async function callGemini({ contents, config, model, maxRetries = 3 }) {
       } catch (err) {
         lastErr = err;
         log("warn", "gemini call failed", {
-          model: m,
+          model: currentModel,
           attempt,
           ...errMeta(err)
         });
-        if (!isTransient(err)) break;
-        if (attempt < maxRetries - 1)
-          await U.sleep(
-            Math.min(8000, 1000 * 2 ** attempt) + Math.random() * 400
+
+        // If this model's daily quota is completely exhausted, break immediately to the fallback model!
+        if (isDailyQuotaExhausted(err)) {
+          log(
+            "error",
+            `Daily quota exhausted on ${currentModel}. Failing over to next model...`
           );
+          break; // exits retry loop, advances to next model in `models` array
+        }
+
+        if (!isTransient(err)) break;
+
+        // Exponential backoff for 503s or per-minute rate limits
+        if (attempt < maxRetries - 1) {
+          await U.sleep(
+            Math.min(6000, 1500 * (attempt + 1)) + Math.random() * 500
+          );
+        }
       }
     }
   }
