@@ -8,16 +8,20 @@ const sharp = require("sharp");
 const { GoogleGenAI } = require("@google/genai");
 
 const { pool } = require("./lib/db");
-const { uploadListingImage, uploadFlyerImage } = require("./lib/supabase");
+const {
+  uploadListingImage,
+  uploadFlyerImage,
+  deleteStorageFiles
+} = require("./lib/supabase");
 const { generateFlyerBuffer } = require("./lib/flyer");
 const WA = require("./lib/whatsapp");
 const T = require("./lib/text");
 const S = require("./lib/search");
 const L = require("./lib/listing");
 const U = require("./lib/util");
-
+const fenceToken = crypto.randomBytes(4).toString("hex").toUpperCase();
 /* ====================================================================== */
-/* Config                                                                  */
+/* Config                                                                 */
 /* ====================================================================== */
 const CFG = {
   port: Number(process.env.PORT || 3000),
@@ -25,10 +29,10 @@ const CFG = {
   geminiFallback: process.env.GEMINI_FALLBACK_MODEL || "gemini-3.5-flash-lite",
   geminiRpm: Number(process.env.GEMINI_RPM || 12),
   geminiTimeoutMs: Number(process.env.GEMINI_TIMEOUT_MS || 45000),
-  aiDailyLimit: Number(process.env.AI_DAILY_LIMIT_PER_AGENCY || 300), // 0 = unlimited
+  aiDailyLimit: Number(process.env.AI_DAILY_LIMIT_PER_AGENCY || 300),
   debounceMs: Number(process.env.BATCH_DEBOUNCE_MS || 5000),
   batchMaxWaitMs: 90000,
-  textBufferMs: 2500,
+  textBufferMs: 3500,
   maxImages: 15,
   searchPageSize: 10,
   maxSearchAudioSec: 45,
@@ -57,10 +61,30 @@ sharp.concurrency(1);
 sharp.cache({ items: 20, memory: 64 });
 
 /* ====================================================================== */
-/* Logging + request context                                               */
+/* Request Context & Logging                                              */
 /* ====================================================================== */
 const als = new AsyncLocalStorage();
 const ctx = () => als.getStore() || {};
+async function withDistributedListingLock(agencyId, code, workFn) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // 64-bit advisory transaction lock keyed to agency UUID hash and listing code hash
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
+      [String(agencyId), String(code).toUpperCase()]
+    );
+
+    const result = await workFn(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
 function log(level, msg, meta = {}) {
   const line = JSON.stringify({
     t: new Date().toISOString(),
@@ -77,21 +101,61 @@ const to = (broker) => U.normalizePhone(broker.phone);
 const reply = (broker, text) => WA.sendWhatsAppText(to(broker), text);
 
 /* ====================================================================== */
-/* In-process state (everything here is rebuilt or irrelevant after a restart:  */
-/* durable state lives in Postgres — inbound_messages, processed_batches, ...)  */
+/* Unified Canonical Observability (`operation_logs`)                     */
+/* ====================================================================== */
+async function logOperation(p) {
+  const c = ctx();
+  const sql = `
+    INSERT INTO operation_logs (
+      agency_id, broker_id, listing_code, operation_type, status, error_code,
+      total_duration_ms, gemini_ms, media_download_ms, image_process_ms, flyer_render_ms, storage_upload_ms, db_ms,
+      tokens_input, tokens_output, model_used, estimated_cost_usd
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+  `;
+  const cost = S.estimateCostUsd({
+    input: p.tokens_input,
+    output: p.tokens_output
+  });
+  try {
+    await pool.query(sql, [
+      c.agencyId || p.agency_id || null,
+      c.brokerId || p.broker_id || null,
+      p.listing_code || null,
+      p.operation_type,
+      p.status || "success",
+      p.error_code || null,
+      p.total_duration_ms || 0,
+      p.gemini_ms || 0,
+      p.media_download_ms || 0,
+      p.image_process_ms || 0,
+      p.flyer_render_ms || 0,
+      p.storage_upload_ms || 0,
+      p.db_ms || 0,
+      p.tokens_input || 0,
+      p.tokens_output || 0,
+      p.model_used || null,
+      cost
+    ]);
+  } catch (err) {
+    log("warn", "failed to record operation log", errMeta(err));
+  }
+}
+
+/* ====================================================================== */
+/* Concurrency & State Maps                                               */
 /* ====================================================================== */
 const incomingBatches = new Map();
 const pendingTextBuffers = new Map();
-const recentBrokerListings = new Map(); // key -> { code, at }
+const recentBrokerListings = new Map();
 const brokerCache = new Map();
 const agencyCache = new Map();
 const unknownNotified = new Map();
 const lastTouch = new Map();
 const cooldowns = new Map();
 
-const perBroker = U.createSerializer(); // message handling order, per broker
-const brokerWork = U.createSerializer(); // batch processing, per broker
-const listingLocks = U.createSerializer(); // in-process mutex per listing
+const perBroker = U.createSerializer();
+const brokerWork = U.createSerializer();
+const listingLocks = U.createSerializer();
 const listingLimiter = U.createLimiter(2, { maxQueue: 40 });
 const uploadLimiter = U.createLimiter(4);
 const rateGate = U.createRateGate(CFG.geminiRpm);
@@ -99,7 +163,7 @@ const msgRate = U.createCounter(60000, 80);
 let inFlight = 0;
 
 /* ====================================================================== */
-/* Gemini: rate gate, retries, model fallback, usage + daily quota          */
+/* Gemini Gateway                                                         */
 /* ====================================================================== */
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const isTransient = (e) =>
@@ -107,43 +171,20 @@ const isTransient = (e) =>
     String((e && e.message) || e)
   );
 
-function recordUsage(kind, model, u = {}) {
-  const c = ctx();
-  pool
-    .query(
-      "INSERT INTO ai_usage (agency_id, broker_id, kind, model, input_tokens, output_tokens) VALUES ($1,$2,$3,$4,$5,$6)",
-      [
-        c.agencyId || null,
-        c.brokerId || null,
-        kind,
-        model,
-        u.promptTokenCount || 0,
-        u.candidatesTokenCount || 0
-      ]
-    )
-    .catch((e) => log("warn", "usage log failed", errMeta(e)));
-}
-
 async function withinAiQuota(agencyId) {
   if (!CFG.aiDailyLimit) return true;
   try {
     const r = await pool.query(
-      "SELECT COUNT(*)::int AS n FROM ai_usage WHERE agency_id = $1 AND created_at >= date_trunc('day', now())",
+      "SELECT COUNT(*)::int AS n FROM operation_logs WHERE agency_id = $1 AND created_at >= date_trunc('day', now()) AND tokens_input > 0",
       [agencyId]
     );
     return r.rows[0].n < CFG.aiDailyLimit;
   } catch {
-    return true; // never block brokers because of a bookkeeping failure
+    return true;
   }
 }
 
-async function callGemini({
-  contents,
-  config,
-  model,
-  kind = "generic",
-  maxRetries = 3
-}) {
+async function callGemini({ contents, config, model, maxRetries = 3 }) {
   const models = [model || CFG.geminiModel, CFG.geminiFallback].filter(
     (m, i, a) => m && a.indexOf(m) === i
   );
@@ -152,13 +193,22 @@ async function callGemini({
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       await rateGate();
       try {
+        const t0 = Date.now();
         const res = await U.withTimeout(
           ai.models.generateContent({ model: m, contents, config }),
           CFG.geminiTimeoutMs,
           "gemini"
         );
-        recordUsage(kind, m, res.usageMetadata);
-        return res;
+        const dur = Date.now() - t0;
+        return {
+          res,
+          model: m,
+          duration_ms: dur,
+          usage: {
+            input: res.usageMetadata?.promptTokenCount || 0,
+            output: res.usageMetadata?.candidatesTokenCount || 0
+          }
+        };
       } catch (err) {
         lastErr = err;
         log("warn", "gemini call failed", {
@@ -166,7 +216,7 @@ async function callGemini({
           attempt,
           ...errMeta(err)
         });
-        if (!isTransient(err)) break; // non-transient: go straight to the fallback model
+        if (!isTransient(err)) break;
         if (attempt < maxRetries - 1)
           await U.sleep(
             Math.min(8000, 1000 * 2 ** attempt) + Math.random() * 400
@@ -176,16 +226,17 @@ async function callGemini({
   }
   throw lastErr;
 }
-// lib/search.js talks to `ai.models.generateContent`; route it through the same gate/retry/usage.
+
 const aiShim = {
   models: {
-    generateContent: (a) =>
-      callGemini({
+    generateContent: async (a) => {
+      const out = await callGemini({
         contents: a.contents,
         config: a.config,
-        model: a.model,
-        kind: "search"
-      })
+        model: a.model
+      });
+      return out.res;
+    }
   }
 };
 
@@ -197,7 +248,7 @@ const cleanJson = (t) =>
     .trim();
 
 /* ====================================================================== */
-/* Loaders                                                                 */
+/* Database Loaders                                                       */
 /* ====================================================================== */
 async function getBroker(from) {
   const key = U.normalizePhone(from);
@@ -226,7 +277,7 @@ async function getAgency(agencyId) {
 
 async function loadListingImages(listingId) {
   const r = await pool.query(
-    "SELECT url, role FROM listing_images WHERE listing_id = $1 ORDER BY position ASC LIMIT 15",
+    "SELECT id, url, role, position FROM listing_images WHERE listing_id = $1 ORDER BY position ASC LIMIT 15",
     [listingId]
   );
   return r.rows;
@@ -265,11 +316,12 @@ async function markMsgs(ids, status) {
 }
 
 /* ====================================================================== */
-/* Images                                                                  */
+/* Media Normalization & Storage                                          */
 /* ====================================================================== */
-// Downscale immediately on arrival: keeps batch memory small (15 x ~300KB instead of 15 x ~5MB).
+// BEFORE
+// AFTER
 const normalizeImage = (buf) =>
-  sharp(buf)
+  sharp(buf, { failOn: "none" })
     .rotate()
     .resize({
       width: 1600,
@@ -279,8 +331,9 @@ const normalizeImage = (buf) =>
     })
     .jpeg({ quality: 82 })
     .toBuffer();
-const toGeminiImage = (buf) =>
-  sharp(buf)
+
+const toThumbnail = (buf) =>
+  sharp(buf, { failOn: "none" })
     .resize({
       width: 768,
       height: 768,
@@ -297,12 +350,13 @@ async function uploadImages(agencyId, code, items) {
     items.map((it, i) =>
       uploadLimiter(async () => {
         try {
-          const url = await uploadListingImage(
-            agencyId,
-            `${code}-${tag}-${i + 1}`,
-            it.buffer
-          );
-          return url ? { url, role: it.role || null, buffer: it.buffer } : null;
+          const path = `agency_${agencyId}/listing_${code}/${code}-${tag}-${
+            i + 1
+          }.jpg`;
+          const url = await uploadListingImage(agencyId, path, it.buffer);
+          return url
+            ? { url, role: it.role || null, buffer: it.buffer, path }
+            : null;
         } catch (e) {
           log("error", "image upload failed", errMeta(e));
           return null;
@@ -314,128 +368,184 @@ async function uploadImages(agencyId, code, items) {
 }
 
 /* ====================================================================== */
-/* Flyer                                                                   */
+/* On-Demand Lazy Vision & Multi-Variant Brochure Engine                  */
 /* ====================================================================== */
-async function renderFlyer({ listing, images, agency, broker, lang, theme }) {
-  try {
-    const l = T.localizeListing(listing, lang);
-    const d = l.details || {};
-    return await generateFlyerBuffer({
-      listing: {
-        code: l.code,
-        title: l.title,
-        property_type: l.property_type || "apartment",
-        listing_type: l.listing_type || "sale",
-        price_value: l.price_value,
-        price_display: l.price_display,
-        area_value: l.area_value,
-        bedrooms: l.bedrooms,
-        bathrooms: d.bathrooms || null,
-        location: l.location || "",
-        contact_phone: broker.contact_phone || broker.phone || "",
-        details: {
-          ...d,
-          image_roles: images.map((i) => i.role || ""),
-          image_order: undefined
-        }
-      },
-      agency,
-      images: images.map((i) => i.buffer || i.url), // Buffers when we have them: no re-download
-      lang,
-      theme: theme || (agency && agency.flyer_theme) || "dark"
-    });
-  } catch (e) {
-    log("error", "flyer render failed", errMeta(e));
-    return null;
-  }
-}
+async function classifyListingImages(listing, images) {
+  if (!images.length) return images;
+  const hasUnclassified = images.some((img) => !img.role);
+  if (!hasUnclassified) return images;
 
-async function uploadFlyer(agencyId, code, buf, suffix = "") {
   try {
-    return (
-      (await uploadFlyerImage(
-        agencyId,
-        `${code}-flyer${suffix}-${Date.now()}`,
-        buf
-      )) || null
+    const thumbs = await Promise.all(
+      images.map(async (im) => {
+        const buf =
+          im.buffer ||
+          (await U.withTimeout(
+            fetch(im.url).then((r) => r.arrayBuffer()),
+            7000,
+            "img-fetch"
+          )
+            .then(Buffer.from)
+            .catch(() => null));
+        return buf ? await toThumbnail(buf) : null;
+      })
     );
-  } catch (e) {
-    log("error", "flyer upload failed", errMeta(e));
-    return null;
-  }
-}
 
-// Sends the stored flyer. Prefers a cached WhatsApp media id; falls back to the public URL.
-async function sendListingFlyer(broker, listing, caption, freshBuffer = null) {
-  const fresh =
-    listing.flyer_wa_media_id &&
-    listing.flyer_wa_media_at &&
-    Date.now() - new Date(listing.flyer_wa_media_at).getTime() < 25 * 86400000;
-  let mediaId = fresh ? listing.flyer_wa_media_id : null;
-  if (!mediaId && freshBuffer)
-    mediaId = await WA.uploadWhatsAppMedia(freshBuffer, {
-      mimeType: "image/jpeg",
-      filename: `${listing.code}.jpg`
+    const parts = [{ text: L.buildVisionPrompt() }];
+    thumbs.forEach((buf, i) => {
+      if (buf)
+        parts.push({
+          inlineData: { mimeType: "image/jpeg", data: buf.toString("base64") }
+        });
     });
 
-  let sent = mediaId
-    ? await WA.sendWhatsAppImage(to(broker), { id: mediaId }, caption)
-    : null;
-  if (!sent && listing.flyer_url) {
-    sent = await WA.sendWhatsAppImage(to(broker), listing.flyer_url, caption);
-    if (!sent && fresh)
-      await pool
-        .query("UPDATE listings SET flyer_wa_media_id = NULL WHERE id = $1", [
-          listing.id
-        ])
-        .catch(() => {});
-    mediaId = null;
-  }
-  if (sent && mediaId && !fresh && listing.id) {
-    pool
+    const visionResult = await callGemini({
+      contents: parts,
+      config: { temperature: 0.1, responseMimeType: "application/json" }
+    });
+
+    const parsed = L.validateVisionDraft(
+      JSON.parse(cleanJson(visionResult.res.text)),
+      images.length
+    );
+
+    await Promise.all(
+      images.map(async (im, idx) => {
+        const role = parsed.image_roles[idx] || "other";
+        im.role = role;
+        if (im.id) {
+          await pool
+            .query("UPDATE listing_images SET role = $1 WHERE id = $2", [
+              role,
+              im.id
+            ])
+            .catch(() => {});
+        }
+      })
+    );
+
+    await pool
       .query(
-        "UPDATE listings SET flyer_wa_media_id = $1, flyer_wa_media_at = NOW() WHERE id = $2 AND flyer_url IS NOT DISTINCT FROM $3",
-        [mediaId, listing.id, listing.flyer_url || null]
+        "UPDATE listings SET details = jsonb_set(details, '{image_order}', $1::jsonb) WHERE id = $2",
+        [JSON.stringify(parsed.image_order), listing.id]
       )
       .catch(() => {});
+
+    return images;
+  } catch (err) {
+    log(
+      "warn",
+      "lazy image classification failed, proceeding with raw order",
+      errMeta(err)
+    );
+    return images;
   }
-  return Boolean(sent);
 }
 
-async function renderStoredFlyer(broker, listing, { lang, theme, persist }) {
+async function renderFlyerOnDemand(
+  broker,
+  listing,
+  { lang = "en", theme = "dark", unbranded = false } = {}
+) {
+  const t0 = Date.now();
+  const perf = {
+    agency_id: broker.agency_id,
+    broker_id: broker.id,
+    listing_code: listing.code,
+    operation_type: "flyer_ondemand",
+    gemini_ms: 0,
+    flyer_render_ms: 0,
+    storage_upload_ms: 0
+  };
+
   const agency = await getAgency(broker.agency_id);
-  const images = await loadListingImages(listing.id);
-  if (!images.length) return { ok: false, reason: "no_images" };
-  const buf = await renderFlyer({
-    listing,
-    images,
-    agency,
-    broker,
-    lang,
-    theme
-  });
-  if (!buf) return { ok: false, reason: "render" };
-  if (persist) {
-    const url = await uploadFlyer(broker.agency_id, listing.code, buf);
-    if (url) {
-      await pool.query(
-        "UPDATE listings SET flyer_url = $1, flyer_wa_media_id = NULL, flyer_wa_media_at = NULL WHERE id = $2",
-        [url, listing.id]
-      );
-      listing = {
-        ...listing,
-        flyer_url: url,
-        flyer_wa_media_id: null,
-        flyer_wa_media_at: null
-      };
+  const cacheKey = unbranded
+    ? `unbranded_${lang}_${theme}`
+    : `${broker.id}_${lang}_${theme}`;
+  const flyerCache = listing.flyer_cache || {};
+
+  // Check valid cache entry (under 25 days old)
+  if (flyerCache[cacheKey]) {
+    const cached = flyerCache[cacheKey];
+    const isFresh =
+      cached.wa_media_at &&
+      Date.now() - new Date(cached.wa_media_at).getTime() < 25 * 86400000;
+    if (isFresh && cached.wa_media_id) {
+      return { ok: true, wa_media_id: cached.wa_media_id, url: cached.url };
     }
   }
-  return { ok: true, buf, listing };
+
+  let images = await loadListingImages(listing.id);
+  if (!images.length) return { ok: false, reason: "no_images" };
+
+  // Run lazy vision classification if roles are missing
+  const v0 = Date.now();
+  images = await classifyListingImages(listing, images);
+  perf.gemini_ms = Date.now() - v0;
+
+  const r0 = Date.now();
+  const flyerBuf = await generateFlyerBuffer({
+    listing: {
+      code: listing.code,
+      title: listing.title,
+      property_type: listing.property_type,
+      listing_type: listing.listing_type,
+      price_value: listing.price_value,
+      price_display: listing.price_display,
+      area_value: listing.area_value,
+      bedrooms: listing.bedrooms,
+      location: listing.location,
+      agent_name: broker.name,
+      contact_phone: broker.contact_phone || broker.phone,
+      details: listing.details || {}
+    },
+    agency,
+    images: images.map((i) => i.url),
+    lang: "en",
+    theme,
+    unbranded
+  });
+  perf.flyer_render_ms = Date.now() - r0;
+  if (!flyerBuf) return { ok: false, reason: "render_failed" };
+
+  const u0 = Date.now();
+  const storagePath = `agency_${broker.agency_id}/listing_${listing.code}/flyer_${cacheKey}.jpg`;
+  const flyerUrl = await uploadFlyerImage(
+    broker.agency_id,
+    storagePath,
+    flyerBuf
+  );
+  perf.storage_upload_ms = Date.now() - u0;
+
+  const waMediaId = await WA.uploadWhatsAppMedia(flyerBuf, {
+    mimeType: "image/jpeg",
+    filename: `${listing.code}.jpg`
+  });
+
+  // Update Cache in PostgreSQL
+  const entry = {
+    url: flyerUrl,
+    wa_media_id: waMediaId,
+    wa_media_at: new Date().toISOString(),
+    agent_name: broker.name,
+    agent_phone: broker.contact_phone || broker.phone
+  };
+
+  await pool
+    .query(
+      "UPDATE listings SET flyer_cache = jsonb_set(COALESCE(flyer_cache, '{}'::jsonb), $1::text[], $2::jsonb) WHERE id = $3",
+      [[cacheKey], JSON.stringify(entry), listing.id]
+    )
+    .catch((e) => log("warn", "cache write failed", errMeta(e)));
+
+  perf.total_duration_ms = Date.now() - t0;
+  logOperation(perf).catch(() => {});
+
+  return { ok: true, wa_media_id: waMediaId, url: flyerUrl, buf: flyerBuf };
 }
 
 /* ====================================================================== */
-/* Listing persistence (optimistic concurrency; the transaction only holds   */
-/* DB writes — rendering/uploading happen before it)                         */
+/* Atomic Listing Persistence                                             */
 /* ====================================================================== */
 async function insertImages(client, listingId, agencyId, start, images) {
   if (!images.length) return;
@@ -461,8 +571,6 @@ async function persistListing({
   fields,
   newImages,
   replace,
-  flyerUrl,
-  flyerChanged,
   batchKey
 }) {
   const agencyId = broker.agency_id;
@@ -472,6 +580,7 @@ async function persistListing({
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
       `${agencyId}:${code}`
     ]);
+
     const cur = await client.query(
       "SELECT id, updated_at FROM listings WHERE agency_id = $1 AND code = $2 FOR UPDATE",
       [agencyId, code]
@@ -489,9 +598,10 @@ async function persistListing({
     let row;
     if (!exists) {
       const ins = await client.query(
-        `INSERT INTO listings (agency_id, broker_id, code, title, property_type, listing_type, price_value, price_display,
-           area_value, bedrooms, location, compound, district, city, location_keywords, details, flyer_url, status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'active') RETURNING *`,
+        `INSERT INTO listings (
+           agency_id, broker_id, code, title, property_type, listing_type, price_value, price_display,
+           area_value, bedrooms, location, compound, district, city, location_keywords, details, flyer_cache, status
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'{}'::jsonb,'active') RETURNING *`,
         [
           agencyId,
           broker.id,
@@ -508,8 +618,7 @@ async function persistListing({
           fields.district,
           fields.city,
           fields.location_keywords,
-          fields.details,
-          flyerUrl
+          fields.details
         ]
       );
       row = ins.rows[0];
@@ -517,27 +626,27 @@ async function persistListing({
     } else {
       const id = existing.id;
       let start = 0;
-      if (replace)
+      if (replace) {
         await client.query("DELETE FROM listing_images WHERE listing_id = $1", [
           id
         ]);
-      else
-        start = Number(
-          (
-            await client.query(
-              "SELECT COALESCE(MAX(position), -1) + 1 AS p FROM listing_images WHERE listing_id = $1",
-              [id]
-            )
-          ).rows[0].p
+      } else {
+        const pRes = await client.query(
+          "SELECT COALESCE(MAX(position), -1) + 1 AS p FROM listing_images WHERE listing_id = $1",
+          [id]
         );
+        start = Number(pRes.rows[0].p);
+      }
       await insertImages(client, id, agencyId, start, newImages);
+
+      // Invalidate flyer cache if photos or specs changed
       const upd = await client.query(
-        `UPDATE listings SET title=$1, property_type=$2, listing_type=$3, price_value=$4, price_display=$5, area_value=$6,
-           bedrooms=$7, location=$8, compound=$9, district=$10, city=$11, location_keywords=$12, details=$13, flyer_url=$14,
-           flyer_wa_media_id = CASE WHEN $15::boolean THEN NULL ELSE flyer_wa_media_id END,
-           flyer_wa_media_at = CASE WHEN $15::boolean THEN NULL ELSE flyer_wa_media_at END,
+        `UPDATE listings SET
+           title=$1, property_type=$2, listing_type=$3, price_value=$4, price_display=$5, area_value=$6,
+           bedrooms=$7, location=$8, compound=$9, district=$10, city=$11, location_keywords=$12, details=$13,
+           flyer_cache = CASE WHEN $14::boolean THEN '{}'::jsonb ELSE flyer_cache END,
            updated_at = NOW()
-         WHERE id = $16 RETURNING *`,
+         WHERE id = $15 RETURNING *`,
         [
           fields.title,
           fields.property_type,
@@ -552,13 +661,13 @@ async function persistListing({
           fields.city,
           fields.location_keywords,
           fields.details,
-          flyerUrl,
-          Boolean(flyerChanged),
+          Boolean(newImages.length || replace),
           id
         ]
       );
       row = upd.rows[0];
     }
+
     await client.query(
       "INSERT INTO processed_batches (batch_key, agency_id, listing_code) VALUES ($1,$2,$3)",
       [batchKey, agencyId, code]
@@ -570,7 +679,7 @@ async function persistListing({
     if (err.code === "23505") {
       if (String(err.constraint || "").includes("processed_batches"))
         return { duplicate: true };
-      return { conflict: true }; // someone created/changed the same code meanwhile
+      return { conflict: true };
     }
     throw err;
   } finally {
@@ -579,101 +688,26 @@ async function persistListing({
 }
 
 /* ====================================================================== */
-/* Price sanity (soft warning, never blocks)                                */
+/* Batch Processing (Text & Audio Ingestion)                              */
 /* ====================================================================== */
-async function priceSanityNote(agencyId, f, lang) {
-  if (f.listing_type !== "sale" || !f.price_value) return "";
-  if (f.price_value < 100000)
-    return M(
-      lang,
-      "⚠️ السعر يبدو منخفضاً جداً، راجعه.",
-      "⚠️ The price looks very low, please double-check."
-    );
-  if (!f.area_value) return "";
-  try {
-    const r = await pool.query(
-      `SELECT COUNT(*)::int AS n, percentile_cont(0.5) WITHIN GROUP (ORDER BY price_value / area_value) AS med
-       FROM listings
-       WHERE agency_id = $1 AND listing_type = 'sale' AND area_value > 0 AND price_value > 0 AND code <> $4
-         AND (($2::text <> '' AND compound = $2::text) OR ($3::text <> '' AND district = $3::text))`,
-      [agencyId, f.compound || "", f.district || "", f.code]
-    );
-    const { n, med } = r.rows[0];
-    if (n < 5 || !med) return "";
-    const ppm = f.price_value / f.area_value;
-    const ratio = ppm / Number(med);
-    if (ratio >= 0.5 && ratio <= 1.8) return "";
-    const fmt = (v) => Math.round(v).toLocaleString("en-US");
-    return M(
-      lang,
-      `⚠️ سعر المتر (${fmt(ppm)}) يختلف كثيراً عن متوسط وحدات مشابهة (${fmt(
-        med
-      )}). لو في خطأ: سعر ${f.code} إلى ...`,
-      `⚠️ Price/sqm (${fmt(ppm)}) differs a lot from similar units (${fmt(
-        med
-      )}). To fix: price ${f.code} to ...`
-    );
-  } catch {
-    return "";
-  }
-}
-
-/* ====================================================================== */
-/* Batch processing                                                         */
-/* ====================================================================== */
-async function extractDraft({ batch, lang, geminiImgs }) {
-  const parts = [{ text: L.buildListingPrompt(lang) }];
-  const notes = [...batch.texts, ...batch.captions];
-  if (notes.length)
-    parts.push({
-      text: `--- [EXPLICIT BROKER TEXT] ---\n${notes.join("\n\n")}`
-    });
-  if (batch.voices.length) {
-    parts.push({ text: "--- [BROKER AUDIO RECORDINGS] ---" });
-    for (const v of batch.voices) {
-      if (v.buffer)
-        parts.push({
-          inlineData: {
-            mimeType: String(v.mimeType || "audio/ogg").split(";")[0],
-            data: v.buffer.toString("base64")
-          }
-        });
-    }
-  }
-  if (geminiImgs.length) {
-    parts.push({
-      text: `--- [ATTACHED IMAGES: ${geminiImgs.length}, index starts at 0] ---`
-    });
-    for (const b of geminiImgs)
-      parts.push({
-        inlineData: { mimeType: "image/jpeg", data: b.toString("base64") }
-      });
-  }
-  const res = await callGemini({
-    contents: parts,
-    config: {
-      temperature: 0.1,
-      maxOutputTokens: 3072,
-      responseMimeType: "application/json",
-      thinkingConfig: { thinkingBudget: 768 }
-    },
-    kind: "listing_extract"
-  });
-  let raw;
-  try {
-    raw = JSON.parse(cleanJson(res.text));
-  } catch {
-    throw new Error("model returned invalid JSON");
-  }
-  return L.validateDraft(raw, geminiImgs.length, lang);
-}
-
 async function processBatch(batch) {
+  const t0 = Date.now();
   const { broker } = batch;
   const ids = batch.msgIds;
   const key = U.normalizePhone(broker.phone);
   const agencyId = broker.agency_id;
   const batchKey = U.sha1([...ids].sort().join(","));
+
+  const perf = {
+    agency_id: agencyId,
+    broker_id: broker.id,
+    operation_type: "listing_ingest",
+    gemini_ms: 0,
+    media_download_ms: 0,
+    image_process_ms: 0,
+    storage_upload_ms: 0,
+    db_ms: 0
+  };
 
   const text = [...batch.texts, ...batch.captions].join(" ");
   const lang = L.detectLang(text, broker.preferred_lang || "ar");
@@ -687,12 +721,10 @@ async function processBatch(batch) {
       [batchKey]
     );
     if (done.rowCount) {
-      log("info", "batch already processed, skipping", { batchKey });
       await markMsgs(ids, "done");
       return;
     }
 
-    // photos-only follow-up shortly after a listing => attach to that listing (told to the broker)
     let explicit = batch.customCode || L.extractExplicitUnitCode(text);
     let carried = null;
     const recent = recentBrokerListings.get(key);
@@ -709,17 +741,11 @@ async function processBatch(batch) {
 
     await reply(
       broker,
-      images.length
-        ? M(
-            lang,
-            "⏳ جاري فحص البيانات والمواصفات وتصميم الكتالوج...",
-            "⏳ Verifying property details and designing the brochure..."
-          )
-        : M(
-            lang,
-            "⏳ جاري استخراج مواصفات الوحدة وحفظ البيانات...",
-            "⏳ Extracting property specifications and saving the unit..."
-          )
+      M(
+        lang,
+        "⏳ جاري استخراج مواصفات الوحدة وحفظ العقار...",
+        "⏳ Extracting specifications and saving listing..."
+      )
     );
 
     if (!(await withinAiQuota(agencyId))) {
@@ -728,36 +754,69 @@ async function processBatch(batch) {
         broker,
         M(
           lang,
-          "⛔ تم الوصول للحد اليومي لاستخدام الذكاء الاصطناعي لوكالتك. حاول غداً.",
-          "⛔ Your agency reached today's AI usage limit. Try again tomorrow."
+          "⛔ تم استهلاك الحد اليومي للذكاء الاصطناعي.",
+          "⛔ Daily AI quota reached."
         )
       ));
     }
 
-    // ---- AI extraction ----
-    const geminiImgs = await Promise.all(
-      images.map((i) => toGeminiImage(i.buffer))
+    // Generate listing code up front so upload paths can start immediately
+    let { code, explicit: codeExplicit } = L.generateListingCode(
+      explicit,
+      "UNT"
     );
-    let draft;
-    try {
-      draft = await extractDraft({ batch, lang, geminiImgs });
-    } catch (e) {
-      log("error", "extraction failed", errMeta(e));
-      await markMsgs(ids, "failed");
-      return void (await reply(
-        broker,
-        M(
-          lang,
-          "⚠️ تعذر تحليل الوحدة الآن (ضغط مؤقت). اكتب «أعد المحاولة» ولن تحتاج لإعادة إرسال الصور.",
-          "⚠️ Could not analyse the unit right now. Send «retry» — no need to resend the photos."
-        )
-      ));
+    perf.listing_code = code;
+
+    // Build Gemini extraction payload
+    const parts = [{ text: L.buildListingPrompt(lang, fenceToken) }];
+
+    if (text.trim()) {
+      parts.push({
+        text: `===${fenceToken}===\n${text.trim()}\n===${fenceToken}===`
+      });
     }
 
+    for (const v of batch.voices) {
+      if (v.buffer) {
+        parts.push({
+          inlineData: {
+            mimeType: String(v.mimeType || "audio/ogg").split(";")[0],
+            data: v.buffer.toString("base64")
+          }
+        });
+      }
+    }
+
+    // RUN GEMINI & SUPABASE STORAGE UPLOADS SIMULTANEOUSLY
+    const gem0 = Date.now();
+    const u0 = Date.now();
+
+    const [aiRes, up] = await Promise.all([
+      callGemini({
+        contents: parts,
+        config: {
+          temperature: 0.1,
+          maxOutputTokens: 3072,
+          responseMimeType: "application/json"
+        }
+      }),
+      images.length
+        ? uploadImages(agencyId, code, images)
+        : Promise.resolve({ ok: [], failed: 0 })
+    ]);
+
+    perf.gemini_ms = Date.now() - gem0;
+    perf.storage_upload_ms = Date.now() - u0;
+    perf.tokens_input = aiRes.usage.input;
+    perf.tokens_output = aiRes.usage.output;
+    perf.model_used = aiRes.model;
+
+    let draft = L.validateDraft(JSON.parse(cleanJson(aiRes.res.text)), lang);
     const price = T.parseEgyptianPrice(draft.price_raw, {
       lang,
       listingType: draft.listing_type || "sale"
     });
+
     if (
       !images.length &&
       !price.priceValue &&
@@ -769,13 +828,13 @@ async function processBatch(batch) {
         broker,
         M(
           lang,
-          "⚠️ لم يتم استخراج مواصفات كافية ولم تُرفق صور. لم يتم حفظ العقار.",
-          "⚠️ Not enough specifications and no photos. Listing not saved."
+          "⚠️ لم يتم استخراج مواصفات كافية ولم تُرفق صور.",
+          "⚠️ Insufficient details and no photos attached."
         )
       ));
     }
 
-    // ---- location enrichment (helps search recall) ----
+    // Geographic Enrichment
     let enriched = null;
     if (
       !imageOnly &&
@@ -802,41 +861,14 @@ async function processBatch(batch) {
       }
     }
 
-    // ---- images in marketing order, with roles ----
-    const ordered = draft.details.image_order.map((idx) => ({
-      buffer: images[idx].buffer,
-      role: draft.details.image_roles[idx]
-    }));
-    let { code, explicit: codeExplicit } = L.generateListingCode(
-      explicit || draft.custom_code,
-      draft.property_type
-    );
-    const up = ordered.length
-      ? await uploadImages(agencyId, code, ordered)
-      : { ok: [], failed: 0 };
-    if (ordered.length && !up.ok.length && imageOnly) {
-      await markMsgs(ids, "failed");
-      return void (await reply(
-        broker,
-        M(
-          lang,
-          "⚠️ تعذر رفع الصور. اكتب «أعد المحاولة».",
-          "⚠️ Photo upload failed. Send «retry»."
-        )
-      ));
-    }
-
-    const agency = await getAgency(agencyId);
-    const theme = agency.flyer_theme || "dark";
-
-    // ---- build -> render -> commit (retry on concurrent change) ----
+    // Atomic DB Commit
     let result = null;
-    let flyerBuf = null;
-    let fields = null;
+    const db0 = Date.now();
     for (let attempt = 0; attempt < 3 && !result; attempt++) {
       const existing = await loadExisting(agencyId, code);
       if (existing && !codeExplicit) {
-        code = L.generateListingCode(null, draft.property_type).code; // random code collided
+        code = L.generateListingCode(null, draft.property_type).code;
+        perf.listing_code = code;
         continue;
       }
       if (existing && !canEdit(broker, existing)) {
@@ -845,12 +877,13 @@ async function processBatch(batch) {
           broker,
           M(
             lang,
-            `⛔ الكود #${code} يخص وحدة مسجلة بواسطة زميل. اطلب من المدير تعديلها.`,
-            `⛔ Code #${code} belongs to a colleague's unit. Ask an admin to edit it.`
+            `⛔ الكود #${code} مسجل باسم زميل آخر.`,
+            `⛔ Code #${code} belongs to another broker.`
           )
         ));
       }
-      fields = L.composeFields({
+
+      const fields = L.composeFields({
         existing,
         draft,
         price,
@@ -859,29 +892,7 @@ async function processBatch(batch) {
         enriched
       });
       const replace = Boolean(existing && replaceMode && up.ok.length);
-      const kept = existing && !replace ? existing.images : [];
-      const allImages = [...kept, ...up.ok];
 
-      flyerBuf = null;
-      let flyerUrl = existing ? existing.flyer_url : null;
-      let flyerChanged = false;
-      if (allImages.length) {
-        flyerBuf = await renderFlyer({
-          listing: { code, ...fields },
-          images: allImages,
-          agency,
-          broker,
-          lang,
-          theme
-        });
-        if (flyerBuf) {
-          const u = await uploadFlyer(agencyId, code, flyerBuf);
-          if (u) {
-            flyerUrl = u;
-            flyerChanged = true;
-          }
-        }
-      }
       const r = await persistListing({
         broker,
         code,
@@ -889,8 +900,6 @@ async function processBatch(batch) {
         fields,
         newImages: up.ok,
         replace,
-        flyerUrl,
-        flyerChanged: flyerChanged || replace,
         batchKey
       });
       if (r.duplicate) {
@@ -899,150 +908,67 @@ async function processBatch(batch) {
       }
       if (!r.conflict) result = r;
     }
-    if (!result)
-      throw new Error("listing changed concurrently, retries exhausted");
+    perf.db_ms = Date.now() - db0;
+    if (!result) throw new Error("concurrency retry limit exceeded");
 
     const listing = result.listing;
     recentBrokerListings.set(key, { code: listing.code, at: Date.now() });
     await markMsgs(ids, "done");
-    log("info", "listing saved", {
-      code: listing.code,
-      created: result.created,
-      images: up.ok.length
-    });
 
-    // ---- notify (failures here never undo the save) ----
-    const warnings = [];
-    if (carried)
-      warnings.push(
-        M(
-          lang,
-          `🔗 أُضيفت الصور إلى آخر وحدة #${carried}. لو دي وحدة جديدة ابعت مواصفاتها مع الصور.`,
-          `🔗 Photos were added to your last unit #${carried}. For a new unit, send its details with the photos.`
-        )
-      );
-    if (up.failed)
-      warnings.push(
-        M(
-          lang,
-          `⚠️ تعذر رفع ${up.failed} صورة.`,
-          `⚠️ ${up.failed} photo(s) failed to upload.`
-        )
-      );
-    if (batch.dropped)
-      warnings.push(
-        M(
-          lang,
-          `ℹ️ تم تجاهل ${batch.dropped} صورة (الحد ${CFG.maxImages}).`,
-          `ℹ️ ${batch.dropped} photo(s) ignored (max ${CFG.maxImages}).`
-        )
-      );
-    if (batch.failedDownloads)
-      warnings.push(
-        M(
-          lang,
-          `⚠️ تعذر تحميل ${batch.failedDownloads} صورة من واتساب.`,
-          `⚠️ ${batch.failedDownloads} photo(s) could not be downloaded.`
-        )
-      );
-    const imgCount =
-      (result.created ? 0 : 0) +
-      (
-        await pool.query(
-          "SELECT COUNT(*)::int AS n FROM listing_images WHERE listing_id = $1",
-          [listing.id]
-        )
-      ).rows[0].n;
-    if (imgCount > 0 && !flyerBuf && !listing.flyer_url)
-      warnings.push(
-        M(
-          lang,
-          `⚠️ تم الحفظ لكن تعذر تصميم الكتالوج. اكتب: كتالوج ${listing.code}`,
-          `⚠️ Saved, but the flyer failed. Send: catalog ${listing.code}`
-        )
-      );
-    if (imgCount === 0)
-      warnings.push(
-        M(
-          lang,
-          `💡 تم التسجيل بدون صور. أرسل الصور مع: إضافة #${listing.code}`,
-          `💡 Saved without photos. Send photos with: add #${listing.code}`
-        )
-      );
-    const sanity = await priceSanityNote(agencyId, { ...listing }, lang);
-    if (sanity) warnings.push(sanity);
-
-    if (flyerBuf || listing.flyer_url) {
-      await sendListingFlyer(
-        broker,
-        listing,
-        result.created
-          ? M(
-              lang,
-              `📋 كتالوج تسويقي معتمد - كود الوحدة: #${listing.code}`,
-              `📋 Verified Brochure - Unit #${listing.code}`
-            )
-          : M(
-              lang,
-              `📋 كتالوج تسويقي محدث - كود الوحدة: #${listing.code}`,
-              `📋 Updated Brochure - Unit #${listing.code}`
-            ),
-        flyerBuf
+    // Success Notification & Action Buttons
+    const body = M(
+      lang,
+      `✅ ${result.created ? "تم حفظ" : "تم تحديث"} الوحدة بنجاح *#${
+        listing.code
+      }*\n📍 ${listing.location || "-"}\n💰 ${listing.price_display || "-"}`,
+      `✅ Unit *#${listing.code}* ${
+        result.created ? "saved" : "updated"
+      } successfully.\n📍 ${listing.location || "-"}\n💰 ${
+        listing.price_display || "-"
+      }`
+    );
+    if (listing.details && listing.details.ambiguous_location) {
+      body += M(
+        lang,
+        `\n\n⚠️ *تنبيه موقع:* اسم الكمبوند قد يحتمل أكثر من منطقة (مثل جاردينيا سيتي / جاردينيا سبرنجز). يرجى مراجعة وتحديد الموقع في الوصف إن لزم.`,
+        `\n\n⚠️ *Location Note:* The compound name might exist in multiple areas. Please review and clarify if needed.`
       );
     }
+    const buttons = [
+      { id: `flyer:en:dark:${listing.code}`, title: "📄 Flyer (EN)" },
+      { id: `flyer:en:light:${listing.code}`, title: "📄 Flyer (Light)" },
+      {
+        id: `client:${listing.code}`,
+        title: M(lang, "📲 نص العميل", "📲 Client Text")
+      }
+    ];
+
+    await WA.sendWhatsAppButtons(to(broker), body, buttons);
     if (result.created)
       await reply(broker, T.formatClientListingText(listing, broker, lang));
 
-    const otherLang = lang === "en" ? "ar" : "en";
-    const otherTheme = theme === "dark" ? "light" : "dark";
-    const body = [
-      M(
-        lang,
-        `✅ ${result.created ? "تم حفظ" : "تم تحديث"} الوحدة *#${
-          listing.code
-        }*`,
-        `✅ Unit *#${listing.code}* ${result.created ? "saved" : "updated"}`
-      ),
-      ...warnings
-    ].join("\n");
-    const buttons = [
-      {
-        id: `client:${listing.code}`,
-        title: M(lang, "نص للعميل", "Client text")
-      }
-    ];
-    if (imgCount > 0) {
-      buttons.unshift({
-        id: `flyer:${otherLang}:${theme}:${listing.code}`,
-        title: otherLang === "en" ? "Flyer EN" : "كتالوج عربي"
-      });
-      buttons.push({
-        id: `flyer:${lang}:${otherTheme}:${listing.code}`,
-        title: M(
-          lang,
-          otherTheme === "light" ? "ثيم فاتح" : "ثيم داكن",
-          otherTheme === "light" ? "Light theme" : "Dark theme"
-        )
-      });
-    }
-    if (!(await WA.sendWhatsAppButtons(to(broker), body, buttons)))
-      await reply(broker, body);
+    perf.total_duration_ms = Date.now() - t0;
+    logOperation(perf).catch(() => {});
   } catch (err) {
-    log("error", "batch processing failed", errMeta(err));
+    log("error", "process batch failed", errMeta(err));
+    perf.status = "failed";
+    perf.error_code = err.message;
+    perf.total_duration_ms = Date.now() - t0;
+    logOperation(perf).catch(() => {});
     await markMsgs(ids, "failed");
     await reply(
       broker,
       M(
         lang,
-        "❌ حدث خطأ أثناء حفظ العقار. اكتب «أعد المحاولة» وسنكمل من حيث توقفنا.",
-        "❌ An error occurred while saving. Send «retry» and we'll pick up where we left off."
+        "❌ حدث خطأ أثناء الحفظ. اكتب «أعد المحاولة».",
+        "❌ Error during saving. Send «retry»."
       )
     );
   }
 }
 
 /* ====================================================================== */
-/* Batching (debounce window that groups photos + text + voice of one unit)   */
+/* Inbound Ingestion Buffering & Flow Control                             */
 /* ====================================================================== */
 function reserveBatch(broker, msgId, initialCode = null) {
   const key = U.normalizePhone(broker.phone);
@@ -1050,7 +976,6 @@ function reserveBatch(broker, msgId, initialCode = null) {
   if (!batch) {
     batch = {
       broker,
-      from: broker.phone,
       texts: [],
       captions: [],
       audios: [],
@@ -1075,7 +1000,9 @@ function reserveBatch(broker, msgId, initialCode = null) {
         "📥 Received. Send the remaining photos/details — I'll start in a few seconds (or send «done» to start now)."
       )
     ).catch(() => {});
-  } else if (initialCode && !batch.customCode) batch.customCode = initialCode;
+  } else if (initialCode && !batch.customCode) {
+    batch.customCode = initialCode;
+  }
 
   if (msgId && !batch.msgIds.includes(msgId)) batch.msgIds.push(msgId);
   const buffered = pendingTextBuffers.get(key);
@@ -1121,18 +1048,6 @@ async function finalizeBatch(key, { force = false } = {}) {
   incomingBatches.delete(key);
   batch.closed = true;
 
-  const lang = batch.broker.preferred_lang || "ar";
-  const st = listingLimiter.stats();
-  if (st.queued > 0) {
-    reply(
-      batch.broker,
-      M(
-        lang,
-        `🕐 طلبك في الانتظار (رقم ${st.queued} في الدور).`,
-        `🕐 Queued (position ${st.queued}).`
-      )
-    ).catch(() => {});
-  }
   inFlight++;
   try {
     await brokerWork(key, () =>
@@ -1146,23 +1061,6 @@ async function finalizeBatch(key, { force = false } = {}) {
           () => processBatch(batch)
         )
       )
-    );
-  } catch (err) {
-    log("error", "batch scheduling failed", errMeta(err));
-    await markMsgs(batch.msgIds, "failed");
-    await reply(
-      batch.broker,
-      err.code === "QUEUE_FULL"
-        ? M(
-            lang,
-            "⚠️ النظام مشغول جداً الآن. اكتب «أعد المحاولة» بعد دقيقة.",
-            "⚠️ System is busy. Send «retry» in a minute."
-          )
-        : M(
-            lang,
-            "❌ حدث خطأ غير متوقع. اكتب «أعد المحاولة».",
-            "❌ Unexpected error. Send «retry»."
-          )
     );
   } finally {
     inFlight--;
@@ -1187,10 +1085,7 @@ function addImageToBatch(broker, message, media, caption) {
     try {
       const dl = await WA.downloadWhatsAppMedia(media.id);
       if (!dl || !dl.buffer) return void batch.failedDownloads++;
-      if (batch.closed)
-        return void log("warn", "image arrived after batch closed", {
-          mediaId: media.id
-        });
+      if (batch.closed) return;
       batch.images[slot] = {
         buffer: await normalizeImage(dl.buffer),
         mimeType: "image/jpeg"
@@ -1210,16 +1105,8 @@ const isBatchingActive = (key) =>
   incomingBatches.has(key) || pendingTextBuffers.has(key);
 
 /* ====================================================================== */
-/* Search                                                                   */
+/* Search Execution                                                       */
 /* ====================================================================== */
-async function loadSearchState(key) {
-  const r = await pool.query(
-    "SELECT parsed, next_offset FROM broker_search_state WHERE phone_key = $1",
-    [key]
-  );
-  return r.rows[0] || null;
-}
-
 async function handleSearchMessage(
   broker,
   { text = "", audio = null, more = false, msgId = null } = {}
@@ -1231,7 +1118,12 @@ async function handleSearchMessage(
   let offset = 0;
 
   if (more) {
-    const st = await loadSearchState(key);
+    const st = (
+      await pool.query(
+        "SELECT parsed, next_offset FROM broker_search_state WHERE phone_key = $1",
+        [key]
+      )
+    ).rows[0];
     if (!st)
       return void (await reply(
         broker,
@@ -1240,25 +1132,34 @@ async function handleSearchMessage(
     parsed = st.parsed;
     offset = st.next_offset;
   } else {
+    // Search audio limit validated before calling Gemini
+    if (isVoice && audio.duration > CFG.maxSearchAudioSec) {
+      return void (await reply(
+        broker,
+        M(
+          lang,
+          `⚠️ تسجيل البحث طويل (${audio.duration} ث). الحد ${CFG.maxSearchAudioSec} ثانية.`,
+          `⚠️ Search audio too long (${audio.duration}s). Max ${CFG.maxSearchAudioSec}s.`
+        )
+      ));
+    }
+
     if (!(await withinAiQuota(broker.agency_id))) {
       return void (await reply(
         broker,
         M(
           lang,
-          "⛔ تم الوصول للحد اليومي للذكاء الاصطناعي.",
+          "⛔ تم استهلاك حد الذكاء الاصطناعي اليومي.",
           "⛔ Daily AI limit reached."
         )
       ));
     }
+
     reply(
       broker,
       isVoice
-        ? M(
-            lang,
-            "🎙️ جاري الاستماع لطلبك...",
-            "🎙️ Listening to your request..."
-          )
-        : M(lang, "🔍 جاري البحث...", "🔍 Searching...")
+        ? M(lang, "🎙️ جاري الاستماع للبحث...", "🎙️ Listening...")
+        : M(lang, "🔍 جاري البحث في المخزون...", "🔍 Searching...")
     ).catch(() => {});
     try {
       ({ parsed } = await S.parseSearchRequest(aiShim, {
@@ -1267,17 +1168,17 @@ async function handleSearchMessage(
         model: CFG.geminiModel
       }));
     } catch (e) {
-      log("warn", "search parse failed", errMeta(e));
+      log("warn", "search parse failed, using fallback", errMeta(e));
       if (isVoice)
         return void (await reply(
           broker,
           M(
             lang,
-            "❌ تعذر فهم التسجيل. جرب مرة أخرى أو اكتب طلبك.",
-            "❌ Could not understand the recording. Try again or type it."
+            "❌ تعذر فهم التسجيل. أعد المحاولة كتابةً.",
+            "❌ Could not parse audio. Try typing."
           )
         ));
-      parsed = S.fallbackParse(text); // Gemini unavailable: keyword search still works
+      parsed = S.fallbackParse(text);
     }
 
     if (parsed.intent === "listing") {
@@ -1294,18 +1195,8 @@ async function handleSearchMessage(
         broker,
         M(
           lang,
-          "👋 اكتب `مساعدة` لعرض الأوامر، أو اكتب طلب بحثك (مثال: شقة 3 غرف في التجمع تحت 10 مليون).",
-          "👋 Send `help` for commands, or type a search (e.g. 3-bed apartment in New Cairo under 10M)."
-        )
-      ));
-    }
-    if (isVoice && audio.duration > CFG.maxSearchAudioSec) {
-      return void (await reply(
-        broker,
-        M(
-          lang,
-          `⚠️ تسجيل البحث طويل (${audio.duration} ثانية). الحد ${CFG.maxSearchAudioSec} ثانية.`,
-          `⚠️ Search recording too long (${audio.duration}s). Max ${CFG.maxSearchAudioSec}s.`
+          "👋 أهلاً بك! اكتب «مساعدة» لعرض الأوامر، أو اكتب مواصفات بحثك.",
+          "👋 Welcome! Send «help» for commands or type your search."
         )
       ));
     }
@@ -1319,6 +1210,7 @@ async function handleSearchMessage(
     });
     return (await pool.query(sql, params)).rows;
   };
+
   let rows;
   let relaxed = Boolean(parsed.__relaxed);
   try {
@@ -1331,11 +1223,7 @@ async function handleSearchMessage(
     log("error", "search query failed", errMeta(e));
     return void (await reply(
       broker,
-      M(
-        lang,
-        "❌ خطأ أثناء البحث. حاول مرة أخرى.",
-        "❌ Search error. Please try again."
-      )
+      M(lang, "❌ خطأ أثناء البحث.", "❌ Search error.")
     ));
   }
 
@@ -1345,19 +1233,68 @@ async function handleSearchMessage(
       broker,
       M(
         lang,
-        "🔍 لم يتم العثور على وحدات مطابقة. جرب توسيع الميزانية أو المنطقة.",
-        "🔍 No matching units. Try widening the budget or area."
+        "🔍 لم نجد وحدات مطابقة. جرب توسيع الميزانية أو المنطقة.",
+        "🔍 No units matched. Try widening your criteria."
       )
     ));
 
   pool
     .query(
       `INSERT INTO broker_search_state (phone_key, parsed, next_offset, updated_at) VALUES ($1,$2,$3,NOW())
-       ON CONFLICT (phone_key) DO UPDATE SET parsed = EXCLUDED.parsed, next_offset = EXCLUDED.next_offset, updated_at = NOW()`,
+     ON CONFLICT (phone_key) DO UPDATE SET parsed = EXCLUDED.parsed, next_offset = EXCLUDED.next_offset, updated_at = NOW()`,
       [key, { ...parsed, __relaxed: relaxed }, offset + rows.length]
     )
-    .catch((e) => log("warn", "search state save failed", errMeta(e)));
+    .catch(() => {});
 
+  // Send WhatsApp Interactive List if 10 or fewer results
+  if (rows.length <= 10) {
+    const listRows = rows.map((u) => {
+      const price =
+        u.price_display ||
+        (u.price_value ? `${+(u.price_value / 1e6).toFixed(1)}M EGP` : "-");
+      const beds = u.bedrooms ? `${u.bedrooms} Beds` : "";
+      const area = u.area_value ? `${u.area_value} sqm` : "";
+      const desc = [u.compound || u.location, beds, area]
+        .filter(Boolean)
+        .join(" • ")
+        .slice(0, 72);
+
+      return {
+        id: `inspect:${u.code}`,
+        title: `#${u.code} | ${price}`.slice(0, 24),
+        description: desc
+      };
+    });
+
+    const header = M(
+      lang,
+      `نتائج البحث (${total} وحدة)`,
+      `Search Results (${total} units)`
+    );
+    const summary =
+      (more ? "" : S.formatInterpretation(parsed)) ||
+      M(
+        lang,
+        "اختر وحدة لعرض كافة التفاصيل:",
+        "Select a unit to view details:"
+      );
+    const btnLabel = M(lang, "عرض الوحدات", "View Units");
+
+    return void (await WA.sendWhatsAppList(
+      to(broker),
+      header,
+      summary,
+      btnLabel,
+      [
+        {
+          title: M(lang, "الوحدات المطابقة", "Matching Listings"),
+          rows: listRows
+        }
+      ]
+    ));
+  }
+
+  // Fallback to text for larger result sets
   await reply(
     broker,
     T.formatSearchResults(rows, {
@@ -1371,7 +1308,7 @@ async function handleSearchMessage(
 }
 
 /* ====================================================================== */
-/* Commands                                                                 */
+/* Command Handlers                                                       */
 /* ====================================================================== */
 const CODE = "([A-Za-z0-9_-]+)";
 const notFound = (broker, code) =>
@@ -1394,146 +1331,223 @@ async function fetchListing(broker, code) {
 
 async function cmdPrice(broker, codeRaw, priceRaw, lang) {
   const code = codeRaw.toUpperCase();
-  return listingLocks(`${broker.agency_id}:${code}`, async () => {
-    const l = await fetchListing(broker, code);
+  return withDistributedListingLock(broker.agency_id, code, async (client) => {
+    const r = await client.query(
+      "SELECT * FROM listings WHERE agency_id = $1 AND code = $2 FOR UPDATE",
+      [broker.agency_id, code]
+    );
+    const l = r.rows[0];
     if (!l) return notFound(broker, code);
-    if (!canEdit(broker, l))
+    if (!canEdit(broker, l)) {
       return reply(
         broker,
         M(
           lang,
           "⛔ لا تملك صلاحية تعديل هذه الوحدة.",
-          "⛔ You can't edit this unit."
+          "⛔ Unauthorized to edit this unit."
         )
       );
+    }
+
     const p = T.parseEgyptianPrice(priceRaw, {
       lang,
       listingType: l.listing_type
     });
-    if (!p.priceValue)
+    if (!p.priceValue) {
       return reply(
         broker,
         M(
           lang,
-          "❌ مش قادر أفهم السعر. مثال: سعر " + code + " إلى 19.5 مليون",
-          "❌ Couldn't parse the price. Example: price " + code + " to 19.5M"
+          `❌ تعذر تحديد السعر. مثال: سعر ${code} إلى 18.5 مليون`,
+          `❌ Invalid price. Example: price ${code} to 18.5M`
         )
       );
-    const u = await pool.query(
-      "UPDATE listings SET price_value = $1, price_display = $2, updated_at = NOW() WHERE id = $3 RETURNING *",
+    }
+
+    await client.query(
+      "UPDATE listings SET price_value = $1, price_display = $2, flyer_cache = '{}'::jsonb, updated_at = NOW() WHERE id = $3",
       [p.priceValue, p.priceDisplay, l.id]
     );
-    let listing = u.rows[0];
-    const out = await renderStoredFlyer(broker, listing, {
-      lang,
-      persist: true
-    });
-    if (out.ok) {
-      listing = out.listing;
-      await sendListingFlyer(
-        broker,
-        listing,
-        M(lang, `📋 كتالوج محدث #${code}`, `📋 Updated flyer #${code}`),
-        out.buf
-      );
-    }
-    const note = await priceSanityNote(broker.agency_id, listing, lang);
+
     await reply(
       broker,
-      [
-        M(
-          lang,
-          `✅ تم تحديث سعر #${code} إلى ${p.priceDisplay}.`,
-          `✅ Price of #${code} updated to ${p.priceDisplay}.`
-        ),
-        note
-      ]
-        .filter(Boolean)
-        .join("\n")
+      M(
+        lang,
+        `✅ تم تعديل سعر الوحدة #${code} إلى ${p.priceDisplay} وتم تحديث الكاش.`,
+        `✅ Price for #${code} updated to ${p.priceDisplay}. Flyer cache invalidated.`
+      )
     );
   });
 }
 
-async function cmdFlyer(
-  broker,
-  code,
-  lang,
-  { theme, persist = false, caption } = {}
-) {
-  const l = await fetchListing(broker, code);
-  if (!l) return notFound(broker, code);
-  if (!theme && !persist && l.flyer_url) {
-    if (await sendListingFlyer(broker, l, caption || `📋 #${l.code}`)) return;
-  }
-  const out = await renderStoredFlyer(broker, l, {
-    lang,
-    theme,
-    persist: persist || (!theme && !l.flyer_url)
-  });
-  if (!out.ok) {
-    return reply(
-      broker,
-      out.reason === "no_images"
-        ? M(
-            lang,
-            `⚠️ لا توجد صور لهذه الوحدة. أرسل الصور مع: إضافة #${l.code}`,
-            `⚠️ No photos for this unit. Send photos with: add #${l.code}`
-          )
-        : M(
-            lang,
-            "⚠️ تعذر تصميم الكتالوج الآن. حاول بعد قليل.",
-            "⚠️ Could not render the flyer now. Try again shortly."
-          )
+async function cmdStatus(broker, codeRaw, newStatus, lang) {
+  const code = codeRaw.toUpperCase();
+  return withDistributedListingLock(broker.agency_id, code, async (client) => {
+    const r = await client.query(
+      "SELECT * FROM listings WHERE agency_id = $1 AND code = $2 FOR UPDATE",
+      [broker.agency_id, code]
     );
-  }
-  if (persist || (!theme && !l.flyer_url))
-    return void (await sendListingFlyer(
-      broker,
-      out.listing,
-      caption || `📋 #${l.code}`,
-      out.buf
-    ));
-  // one-off variant (language / theme): sent, not stored
-  const id = await WA.uploadWhatsAppMedia(out.buf, {
-    mimeType: "image/jpeg",
-    filename: `${l.code}-${lang}-${theme}.jpg`
-  });
-  if (
-    !(
-      id &&
-      (await WA.sendWhatsAppImage(
-        to(broker),
-        { id },
-        caption || `📋 #${l.code}`
-      ))
-    )
-  ) {
+    const l = r.rows[0];
+    if (!l) return notFound(broker, code);
+    if (!canEdit(broker, l)) {
+      return reply(
+        broker,
+        M(
+          lang,
+          "⛔ لا تملك صلاحية تعديل حالة الوحدة.",
+          "⛔ Unauthorized to change status."
+        )
+      );
+    }
+
+    await client.query(
+      "UPDATE listings SET status = $1, updated_at = NOW() WHERE id = $2",
+      [newStatus, l.id]
+    );
+
+    const labels = {
+      sold: M(lang, "تم البيع", "SOLD"),
+      archived: M(lang, "مؤرشفة", "ARCHIVED"),
+      active: M(lang, "نشطة", "ACTIVE")
+    };
     await reply(
       broker,
-      M(lang, "⚠️ تعذر إرسال الصورة.", "⚠️ Could not send the image.")
+      M(
+        lang,
+        `✅ أصبحت حالة الوحدة #${code}: *${labels[newStatus]}*.`,
+        `✅ Unit #${code} status updated to: *${labels[newStatus]}*.`
+      )
     );
-  }
+  });
+}
+
+async function cmdDelete(broker, codeRaw, lang) {
+  const code = codeRaw.toUpperCase();
+  return withDistributedListingLock(broker.agency_id, code, async (client) => {
+    const r = await client.query(
+      "SELECT * FROM listings WHERE agency_id = $1 AND code = $2 FOR UPDATE",
+      [broker.agency_id, code]
+    );
+    const l = r.rows[0];
+    if (!l) return notFound(broker, code);
+    if (!canEdit(broker, l)) {
+      return reply(
+        broker,
+        M(
+          lang,
+          "⛔ لا تملك صلاحية حذف هذه الوحدة.",
+          "⛔ Unauthorized to delete this unit."
+        )
+      );
+    }
+
+    // Collect storage paths safely
+    const imgRows = await client.query(
+      "SELECT url FROM listing_images WHERE listing_id = $1",
+      [l.id]
+    );
+    const flyerCache = l.flyer_cache || {};
+    const urls = imgRows.rows.map((row) => row.url);
+    Object.values(flyerCache).forEach((v) => {
+      if (v.url) urls.push(v.url);
+    });
+
+    const paths = urls
+      .map((u) => {
+        const m = u.match(
+          /\/listing-images\/(agency_[^/]+\/listing_[^/]+\/[a-zA-Z0-9._-]+)$/
+        );
+        return m ? m[1] : null;
+      })
+      .filter(Boolean);
+
+    if (paths.length) {
+      await deleteStorageFiles(paths);
+    }
+
+    await client.query("DELETE FROM listings WHERE id = $1", [l.id]);
+    await reply(
+      broker,
+      M(
+        lang,
+        `🗑️ تم حذف الوحدة #${code} نهائياً ومسح كافة وسائطها وملفاتها من السيرفر.`,
+        `🗑️ Unit #${code} and all associated media permanently deleted.`
+      )
+    );
+  });
 }
 
 async function cmdStats(broker, lang) {
-  const r = await pool.query(
-    `SELECT COUNT(*) FILTER (WHERE status='active') AS active, COUNT(*) FILTER (WHERE status='sold') AS sold,
-            COUNT(*) FILTER (WHERE broker_id = $2) AS mine FROM listings WHERE agency_id = $1`,
-    [broker.agency_id, broker.id]
-  );
-  const s = r.rows[0] || {};
-  await reply(
-    broker,
+  const [counts, types, locs] = await Promise.all([
+    pool.query(
+      `
+      SELECT
+        COUNT(*) FILTER (WHERE status='active') AS active,
+        COUNT(*) FILTER (WHERE status='sold') AS sold,
+        COUNT(*) FILTER (WHERE status='archived') AS archived,
+        COUNT(*) FILTER (WHERE broker_id = $2) AS mine
+      FROM listings WHERE agency_id = $1`,
+      [broker.agency_id, broker.id]
+    ),
+    pool.query(
+      `
+      SELECT property_type, COUNT(*) AS count
+      FROM listings WHERE agency_id = $1 AND status='active'
+      GROUP BY property_type ORDER BY count DESC LIMIT 4`,
+      [broker.agency_id]
+    ),
+    pool.query(
+      `
+      SELECT COALESCE(NULLIF(compound,''), district) AS zone, COUNT(*) AS count
+      FROM listings WHERE agency_id = $1 AND status='active' AND (compound <> '' OR district <> '')
+      GROUP BY zone ORDER BY count DESC LIMIT 3`,
+      [broker.agency_id]
+    )
+  ]);
+
+  const s = counts.rows[0] || {};
+  const typeLines = types.rows
+    .map(
+      (r) => `  • ${S.TYPE_AR[r.property_type] || r.property_type}: ${r.count}`
+    )
+    .join("\n");
+  const locLines = locs.rows.map((r) => `  • ${r.zone}: ${r.count}`).join("\n");
+
+  const msg = [
     M(
       lang,
-      `📊 إحصائيات المخزون:\n• الوحدات النشطة: ${s.active || 0}\n• المباعة: ${
-        s.sold || 0
-      }\n• وحداتك: ${s.mine || 0}`,
-      `📊 Inventory:\n• Active: ${s.active || 0}\n• Sold: ${
-        s.sold || 0
-      }\n• Yours: ${s.mine || 0}`
-    )
-  );
+      "📊 *تقرير مخزون الوكالة الفوري:*",
+      "📊 *Agency Inventory Report:*"
+    ),
+    M(
+      lang,
+      `• الوحدات المعروضة (نشطة): ${s.active || 0}`,
+      `• Active Listings: ${s.active || 0}`
+    ),
+    M(
+      lang,
+      `• الوحدات المباعة: ${s.sold || 0}`,
+      `• Sold Listings: ${s.sold || 0}`
+    ),
+    M(
+      lang,
+      `• الوحدات المؤرشفة: ${s.archived || 0}`,
+      `• Archived Listings: ${s.archived || 0}`
+    ),
+    M(
+      lang,
+      `• مساهمتك الشخصية: ${s.mine || 0} وحدة`,
+      `• Your Listings: ${s.mine || 0}`
+    ),
+    "",
+    M(lang, "*توزيع الوحدات النشطة:*", "*Active Types Breakdown:*"),
+    typeLines || "  -",
+    "",
+    M(lang, "*أبرز المناطق بالمخزون:*", "*Top Active Locations:*"),
+    locLines || "  -"
+  ].join("\n");
+
+  await reply(broker, msg);
 }
 
 async function cmdExport(broker, lang) {
@@ -1548,54 +1562,110 @@ async function cmdExport(broker, lang) {
       )
     );
   cooldowns.set(key, Date.now() + 60000);
+
   const isAdmin = CFG.adminRoles.includes(
     String(broker.role || "").toLowerCase()
   );
   const r = await pool.query(
-    `SELECT code, title, property_type, listing_type, price_value, area_value, bedrooms, location, compound, status, flyer_url, created_at
+    `SELECT code, title, property_type, listing_type, price_value, price_display, area_value, bedrooms, location, compound, details, status, created_at
      FROM listings WHERE agency_id = $1 ${
        isAdmin ? "" : "AND broker_id = $2"
      } ORDER BY created_at DESC LIMIT 5000`,
     isAdmin ? [broker.agency_id] : [broker.agency_id, broker.id]
   );
+
   if (!r.rowCount)
     return reply(
       broker,
-      M(lang, "لا توجد وحدات للتصدير.", "No units to export.")
+      M(lang, "لا توجد وحدات للتصدير.", "No units available to export.")
     );
+  const csvData = T.listingsToCsv(r.rows);
   const sent = await WA.sendWhatsAppDocument(
     to(broker),
-    Buffer.from(T.listingsToCsv(r.rows), "utf8"),
-    `listings-${new Date().toISOString().slice(0, 10)}.csv`,
-    M(lang, `📄 ${r.rowCount} وحدة`, `📄 ${r.rowCount} units`)
+    Buffer.from(csvData, "utf8"),
+    `inventory-${new Date().toISOString().slice(0, 10)}.csv`,
+    M(
+      lang,
+      `📄 ملف إكسيل تنفيذي جاهز (${r.rowCount} وحدة)`,
+      `📄 Inventory Export (${r.rowCount} units)`
+    )
   );
   if (!sent)
     await reply(
       broker,
-      M(lang, "⚠️ تعذر إرسال الملف.", "⚠️ Could not send the file.")
+      M(lang, "⚠️ تعذر إرسال الملف.", "⚠️ Failed to send file.")
     );
 }
 
-async function cmdRetry(broker, lang) {
-  const key = U.normalizePhone(broker.phone);
-  const r = await pool.query(
-    `UPDATE inbound_messages SET status = 'new', attempts = 0, updated_at = NOW()
-     WHERE phone_key = $1 AND status = 'failed' AND received_at > NOW() - INTERVAL '15 minutes'
-     RETURNING msg_id, phone_key, payload, received_at`,
-    [key]
-  );
-  if (!r.rowCount)
+async function cmdFlyer(
+  broker,
+  codeRaw,
+  lang,
+  { theme = "dark", unbranded = false } = {}
+) {
+  const code = codeRaw.toUpperCase();
+  const l = await fetchListing(broker, code);
+  if (!l) return notFound(broker, code);
+
+  reply(
+    broker,
+    M(
+      lang,
+      "⏳ جاري إعداد وتصميم الكتالوج المعتمد...",
+      "⏳ Preparing brochure..."
+    )
+  ).catch(() => {});
+  const res = await renderFlyerOnDemand(broker, l, {
+    lang: "en",
+    theme,
+    unbranded
+  });
+  if (!res.ok) {
     return reply(
       broker,
-      M(lang, "لا توجد عملية فاشلة حديثة لإعادتها.", "Nothing recent to retry.")
+      res.reason === "no_images"
+        ? M(
+            lang,
+            `⚠️ لا توجد صور لهذه الوحدة. أرسل الصور مع: إضافة #${code}`,
+            `⚠️ No images for #${code}. Send photos with: add #${code}`
+          )
+        : M(
+            lang,
+            "⚠️ تعذر تصميم الكتالوج حالياً.",
+            "⚠️ Failed to generate brochure."
+          )
     );
-  await reply(broker, M(lang, "🔁 جاري إعادة المحاولة...", "🔁 Retrying..."));
-  replayRows(r.rows).catch((e) =>
-    log("error", "retry replay failed", errMeta(e))
-  ); // not awaited: we are inside the broker's queue
+  }
+
+  const caption = M(
+    lang,
+    `📋 كتالوج معتمد #${code}`,
+    `📋 Verified Brochure #${code}`
+  );
+
+  // Try WhatsApp media ID first, fall back to public URL if Meta CDN rejects it
+  if (res.wa_media_id) {
+    try {
+      const sent = await WA.sendWhatsAppImage(
+        to(broker),
+        { id: res.wa_media_id },
+        caption
+      );
+      if (sent) return;
+    } catch (sendErr) {
+      log(
+        "warn",
+        "Sending flyer via wa_media_id failed, falling back to public URL",
+        errMeta(sendErr)
+      );
+    }
+  }
+
+  if (res.url) {
+    await WA.sendWhatsAppImage(to(broker), res.url, caption);
+  }
 }
 
-// returns true when the text was a command
 async function handleCommand(broker, raw, lang) {
   const key = U.normalizePhone(broker.phone);
   const n = T.normalizeAr(raw);
@@ -1611,23 +1681,32 @@ async function handleCommand(broker, raw, lang) {
     else
       await reply(
         broker,
-        M(
-          lang,
-          "لا توجد وحدة قيد التجهيز الآن.",
-          "Nothing is being prepared right now."
-        )
+        M(lang, "لا توجد وحدة قيد التجهيز.", "No active batch in progress.")
       );
     return true;
   }
   if (/^(المزيد|more|التالي)$/.test(n))
     return void (await handleSearchMessage(broker, { more: true })) || true;
-  if (/^(احصائيات|stats)$/.test(n))
+  if (/^(احصاييات|احصائيات|stats)$/.test(n))
     return void (await cmdStats(broker, lang)) || true;
-  if (/^(اعد المحاوله|اعاده المحاوله|retry)$/.test(n))
-    return void (await cmdRetry(broker, lang)) || true;
   if (/^(اكسيل|excel|csv|تصدير)$/.test(n))
     return void (await cmdExport(broker, lang)) || true;
 
+  // Status transitions
+  if ((m = raw.match(new RegExp(`^(?:تم البيع|مباع|sold)\\s+#?${CODE}$`, "i"))))
+    return void (await cmdStatus(broker, m[1], "sold", lang)) || true;
+  if (
+    (m = raw.match(new RegExp(`^(?:ارشيف|ارشفة|archive)\\s+#?${CODE}$`, "i")))
+  )
+    return void (await cmdStatus(broker, m[1], "archived", lang)) || true;
+  if ((m = raw.match(new RegExp(`^(?:تفعيل|نشط|activate)\\s+#?${CODE}$`, "i"))))
+    return void (await cmdStatus(broker, m[1], "active", lang)) || true;
+
+  // Permanent Delete
+  if ((m = raw.match(new RegExp(`^(?:حذف|delete|remove)\\s+#?${CODE}$`, "i"))))
+    return void (await cmdDelete(broker, m[1], lang)) || true;
+
+  // Price update
   if (
     (m = raw.match(
       new RegExp(
@@ -1638,20 +1717,31 @@ async function handleCommand(broker, raw, lang) {
   )
     return void (await cmdPrice(broker, m[1], m[2], lang)) || true;
 
+  // Brochure variants
   if (
     (m = raw.match(
-      new RegExp(
-        `^(?:كتالوج|بروشور|catalog|brochure)\\s+(?:عميل|client)\\s+#?${CODE}$`,
-        "i"
-      )
+      new RegExp(`^(?:كتالوج|بروشور|flyer)\\s+فاتح\\s+#?${CODE}$`, "i")
     ))
-  ) {
-    const l = await fetchListing(broker, m[1]);
-    if (!l) return void (await notFound(broker, m[1].toUpperCase())) || true;
-    if (l.flyer_url) await sendListingFlyer(broker, l, `📋 #${l.code}`);
-    await reply(broker, T.formatClientListingText(l, broker, lang));
-    return true;
-  }
+  )
+    return (
+      void (await cmdFlyer(broker, m[1], lang, { theme: "light" })) || true
+    );
+  if (
+    (m = raw.match(
+      new RegExp(`^(?:كتالوج|بروشور|flyer)\\s+مكتب\\s+#?${CODE}$`, "i")
+    ))
+  )
+    return (
+      void (await cmdFlyer(broker, m[1], lang, { unbranded: true })) || true
+    );
+  if (
+    (m = raw.match(
+      new RegExp(`^(?:كتالوج|بروشور|flyer|catalog)\\s+#?${CODE}$`, "i")
+    ))
+  )
+    return void (await cmdFlyer(broker, m[1], lang, { theme: "dark" })) || true;
+
+  // Client Text
   if ((m = raw.match(new RegExp(`^(?:عميل|client)\\s+#?${CODE}$`, "i")))) {
     const l = await fetchListing(broker, m[1]);
     return (
@@ -1660,12 +1750,8 @@ async function handleCommand(broker, raw, lang) {
         : notFound(broker, m[1].toUpperCase()))) || true
     );
   }
-  if (
-    (m = raw.match(
-      new RegExp(`^(?:كتالوج|بروشور|catalog|brochure)\\s+#?${CODE}$`, "i")
-    ))
-  )
-    return void (await cmdFlyer(broker, m[1], lang)) || true;
+
+  // Internal Inspect
   if ((m = raw.match(new RegExp(`^#${CODE}$`)))) {
     const l = await fetchListing(broker, m[1]);
     return (
@@ -1674,6 +1760,7 @@ async function handleCommand(broker, raw, lang) {
         : notFound(broker, m[1].toUpperCase()))) || true
     );
   }
+
   return false;
 }
 
@@ -1687,48 +1774,67 @@ async function handleInteractive(broker, message) {
     "";
   const [kind, ...rest] = id.split(":");
   const lang = broker.preferred_lang || "ar";
-  if (kind === "client" && rest[0]) {
+
+  if (kind === "inspect" && rest[0]) {
+    const code = rest[0].toUpperCase();
+    const l = await fetchListing(broker, code);
+    if (!l) return notFound(broker, code);
+
+    // Show full internal specs then send interactive action buttons
+    await reply(broker, T.formatInternalListingDetails(l, lang));
+    return WA.sendWhatsAppButtons(
+      to(broker),
+      M(lang, `إجراءات الوحدة #${code}:`, `Actions for #${code}:`),
+      [
+        { id: `flyer:en:dark:${code}`, title: "📄 Flyer (Dark)" },
+        { id: `flyer:en:light:${code}`, title: "📄 Flyer (Light)" },
+        {
+          id: `client:${code}`,
+          title: M(lang, "📲 نص العميل", "📲 Client Text")
+        }
+      ]
+    );
+  } else if (kind === "client" && rest[0]) {
     const l = await fetchListing(broker, rest[0]);
     await (l
       ? reply(broker, T.formatClientListingText(l, broker, lang))
       : notFound(broker, rest[0].toUpperCase()));
-  } else if (kind === "flyer" && rest.length === 3) {
+  } else if (kind === "flyer" && rest.length >= 3) {
     const [fl, theme, code] = rest;
-    if (["ar", "en"].includes(fl) && ["dark", "light"].includes(theme))
-      await cmdFlyer(broker, code, fl, {
-        theme,
-        caption: `📋 #${code.toUpperCase()}`
-      });
+    await cmdFlyer(broker, code, fl, { theme });
   }
   return "done";
 }
 
 /* ====================================================================== */
-/* Message dispatch                                                         */
+/* Message Ingestion Routing                                              */
 /* ====================================================================== */
 async function handleAudio(broker, message) {
   const key = U.normalizePhone(broker.phone);
   const lang = broker.preferred_lang || "ar";
   const media = message.audio || message.voice || {};
   const duration = Number(media.duration) || 0;
+
   if (duration > CFG.maxListingAudioSec) {
     await reply(
       broker,
       M(
         lang,
-        `⚠️ التسجيل طويل (${duration} ثانية). الحد ${CFG.maxListingAudioSec} ثانية.`,
-        `⚠️ Recording too long (${duration}s). Max ${CFG.maxListingAudioSec}s.`
+        `⚠️ التسجيل طويل جداً (${duration} ثانية). الحد الأقصى دقيقتان.`,
+        `⚠️ Audio too long (${duration}s). Max 120s.`
       )
     );
     return "done";
   }
+
   let batch = null;
   if (isBatchingActive(key)) {
     batch = reserveBatch(broker, message.id);
     batch.pendingDownloads++;
   }
+
   const dl = await WA.downloadWhatsAppMedia(media.id, {
-    maxBytes: 8 * 1024 * 1024
+    maxBytes: 12 * 1024 * 1024
   });
   if (!dl) {
     if (batch) {
@@ -1739,12 +1845,13 @@ async function handleAudio(broker, message) {
       broker,
       M(
         lang,
-        "⚠️ تعذر تحميل التسجيل الصوتي. أعد إرساله.",
-        "⚠️ Could not download the voice note. Please resend it."
+        "⚠️ تعذر تحميل الرسالة الصوتية.",
+        "⚠️ Failed to download voice note."
       )
     );
     return batch ? "batched" : "done";
   }
+
   const audioObj = { buffer: dl.buffer, mimeType: dl.mimeType, duration };
   if (batch) {
     batch.audios.push(audioObj);
@@ -1753,6 +1860,7 @@ async function handleAudio(broker, message) {
     armBatchTimer(key);
     return "batched";
   }
+
   return (
     (await handleSearchMessage(broker, {
       audio: audioObj,
@@ -1767,12 +1875,26 @@ async function handleText(broker, message) {
   const raw = ((message.text && message.text.body) || "").trim();
   if (!raw) return "done";
 
-  if (await handleCommand(broker, raw, lang)) return "done"; // commands work even while a batch is open
-
+  // Batch lock
   if (isBatchingActive(key)) {
     reserveBatch(broker, message.id).texts.push(raw);
     return "batched";
   }
+
+  // Explicit listing actions open an ingestion batch immediately
+  const explicitCode = L.extractExplicitUnitCode(raw);
+  const isExplicitAction =
+    /(?:إضافة|اضافة|استبدال|add|replace)\s*#?[A-Za-z0-9_-]{2,}/i.test(raw);
+  if (explicitCode && isExplicitAction) {
+    const batch = reserveBatch(broker, message.id, explicitCode);
+    batch.texts.push(raw);
+    return "batched";
+  }
+
+  // Commands execute without delay
+  if (await handleCommand(broker, raw, lang)) return "done";
+
+  // Metadata buffer window
   if (L.isLikelyListingMetadata(raw)) {
     const timer = setTimeout(() => {
       const e = pendingTextBuffers.get(key);
@@ -1798,36 +1920,28 @@ async function handleText(broker, message) {
             } catch (err) {
               log("error", "buffered text failed", errMeta(err));
               await markMsgs([message.id], "failed");
-              await reply(
-                broker,
-                M(
-                  lang,
-                  "❌ حدث خطأ. أعد إرسال الرسالة.",
-                  "❌ Something went wrong. Please resend."
-                )
-              );
             }
           }
         )
       );
     }, CFG.textBufferMs);
+
     pendingTextBuffers.set(key, {
       text: raw,
-      customCode: L.extractExplicitUnitCode(raw),
+      customCode: explicitCode,
       msgId: message.id,
       timer
     });
     return "batched";
   }
+
   return (
     (await handleSearchMessage(broker, { text: raw, msgId: message.id })) ||
     "done"
   );
 }
 
-// -> "batched" (kept in the durable inbox until its batch completes) | "done"
 async function dispatchMessage(broker, message) {
-  const lang = broker.preferred_lang || "ar";
   switch (message.type) {
     case "image":
       return addImageToBatch(
@@ -1837,10 +1951,13 @@ async function dispatchMessage(broker, message) {
         ((message.image && message.image.caption) || "").trim()
       );
     case "document":
-      if (
-        message.document &&
-        /^image\//i.test(message.document.mime_type || "")
-      ) {
+      const mime = (message.document && message.document.mime_type) || "";
+      const filename = (message.document && message.document.filename) || "";
+      const isImageDoc =
+        /^image\//i.test(mime) ||
+        /\.(jpe?g|png|webp|heic|heif)$/i.test(filename);
+
+      if (isImageDoc) {
         return addImageToBatch(
           broker,
           message,
@@ -1850,43 +1967,17 @@ async function dispatchMessage(broker, message) {
       }
       await reply(
         broker,
-        M(
-          lang,
-          "📎 الملفات غير مدعومة. أرسل الصور كصور عادية.",
-          "📎 Files aren't supported. Send photos as regular images."
-        )
+        "📎 المستندات غير مدعومة. أرسل الصور كملفات وسائط عادية."
       );
       return "done";
     case "audio":
     case "voice":
       return handleAudio(broker, message);
-    case "video":
-      await reply(
-        broker,
-        M(
-          lang,
-          "📹 الفيديو غير مدعوم للكتالوجات. أرسل صوراً أو مواصفات صوتية/نصية.",
-          "📹 Videos aren't supported. Send photos or voice/text specs."
-        )
-      );
-      return "done";
     case "interactive":
       return handleInteractive(broker, message);
     case "text":
       return handleText(broker, message);
-    case "reaction":
-    case "system":
-    case "unsupported":
-      return "done";
     default:
-      await reply(
-        broker,
-        M(
-          lang,
-          "⚠️ نوع الرسالة غير مدعوم. أرسل نصاً أو صوتاً أو صوراً.",
-          "⚠️ Unsupported message type. Send text, voice or photos."
-        )
-      );
       return "done";
   }
 }
@@ -1902,21 +1993,22 @@ async function processMessage(message, { replay = false } = {}) {
           unknownNotified.set(key, Date.now() + 600000);
           await WA.sendWhatsAppText(
             key,
-            "⚠️ رقم الهاتف غير مسجل في أي وكالة عقارية معتمدة."
+            "⚠️ هذا الرقم غير مسجل كوكيل عقاري معتمد لدينا."
           );
         }
         return markMsgs([message.id], "done");
       }
       ctx().agencyId = broker.agency_id;
       ctx().brokerId = broker.id;
+
       if (broker.is_active === false) {
-        await reply(broker, "⛔ تم تعطيل هذا الحساب مؤقتاً.");
+        await reply(broker, "⛔ الحساب معطل حالياً.");
         return markMsgs([message.id], "done");
       }
       if (!replay && !msgRate(key)) {
-        log("warn", "rate limit hit", { key });
         return markMsgs([message.id], "done");
       }
+
       if (!(lastTouch.get(key) > Date.now() - 300000)) {
         lastTouch.set(key, Date.now());
         pool
@@ -1925,20 +2017,18 @@ async function processMessage(message, { replay = false } = {}) {
           ])
           .catch(() => {});
       }
-      if (!replay && (message.type !== "image" || !isBatchingActive(key)))
+
+      if (!replay && (message.type !== "image" || !isBatchingActive(key))) {
         WA.markAsRead(message.id, {
           typing: message.type !== "interactive"
         }).catch(() => {});
+      }
 
       const outcome = await dispatchMessage(broker, message);
       await markMsgs([message.id], outcome === "batched" ? "batched" : "done");
     } catch (err) {
-      log("error", "message processing failed", errMeta(err));
+      log("error", "processMessage top-level failure", errMeta(err));
       await markMsgs([message.id], "failed");
-      await WA.sendWhatsAppText(
-        key,
-        "❌ حدث خطأ غير متوقع. اكتب «أعد المحاولة» أو أعد الإرسال."
-      ).catch(() => {});
     } finally {
       inFlight--;
     }
@@ -1949,7 +2039,7 @@ const scheduleMessage = (message) =>
   perBroker(U.normalizePhone(message.from), () => processMessage(message));
 
 /* ====================================================================== */
-/* Durable inbox: persist -> ACK -> process; replay unfinished work on boot   */
+/* Durable Webhook Ingestion & Crash Recovery                             */
 /* ====================================================================== */
 async function persistIncoming(body) {
   const msgs = [];
@@ -1967,33 +2057,9 @@ async function persistIncoming(body) {
       "INSERT INTO inbound_messages (msg_id, phone_key, payload) VALUES ($1,$2,$3) ON CONFLICT (msg_id) DO NOTHING RETURNING msg_id",
       [m.id, U.normalizePhone(m.from), m]
     );
-    if (r.rowCount) fresh.push(m); // duplicates (Meta retries / restarts) are dropped here, durably
+    if (r.rowCount) fresh.push(m);
   }
   return fresh;
-}
-
-// Rebuilds batches from stored messages; media is re-downloaded by id. Groups by time gaps so two
-// unfinished units are never merged into one.
-async function replayRows(rows) {
-  const byPhone = new Map();
-  for (const r of rows) {
-    if (!byPhone.has(r.phone_key)) byPhone.set(r.phone_key, []);
-    byPhone.get(r.phone_key).push(r);
-  }
-  await Promise.all(
-    [...byPhone].map(async ([key, list]) => {
-      list.sort((a, b) => new Date(a.received_at) - new Date(b.received_at));
-      let prev = null;
-      for (const r of list) {
-        const t = new Date(r.received_at).getTime();
-        if (prev !== null && t - prev > 20000)
-          await finalizeBatch(key, { force: true });
-        await perBroker(key, () => processMessage(r.payload, { replay: true }));
-        prev = t;
-      }
-      await finalizeBatch(key, { force: true });
-    })
-  );
 }
 
 async function recoverInbound() {
@@ -2003,46 +2069,15 @@ async function recoverInbound() {
        SELECT msg_id FROM inbound_messages
        WHERE status IN ('new','batched') AND received_at > NOW() - INTERVAL '20 minutes' AND attempts < 3
        ORDER BY received_at FOR UPDATE SKIP LOCKED
-     ) RETURNING msg_id, phone_key, payload, received_at`
+     ) RETURNING payload`
   );
-  if (r.rowCount)
-    log("info", "replaying unfinished messages", { count: r.rowCount });
-  await replayRows(r.rows);
-}
-
-async function housekeeping() {
-  try {
-    await pool.query(
-      "UPDATE inbound_messages SET status = 'expired' WHERE status IN ('new','batched') AND received_at < NOW() - INTERVAL '30 minutes'"
-    );
-    await pool.query(
-      "DELETE FROM inbound_messages WHERE received_at < NOW() - INTERVAL '7 days'"
-    );
-    await pool.query(
-      "DELETE FROM broker_search_state WHERE updated_at < NOW() - INTERVAL '2 days'"
-    );
-    await pool.query(
-      "DELETE FROM processed_batches WHERE created_at < NOW() - INTERVAL '30 days'"
-    );
-  } catch (e) {
-    log("warn", "housekeeping failed", errMeta(e));
+  for (const row of r.rows) {
+    scheduleMessage(row.payload).catch(() => {});
   }
 }
 
-setInterval(() => {
-  const now = Date.now();
-  for (const [k, v] of recentBrokerListings)
-    if (now - v.at > 300000) recentBrokerListings.delete(k);
-  for (const [k, v] of brokerCache) if (v.exp < now) brokerCache.delete(k);
-  for (const [k, v] of agencyCache) if (v.exp < now) agencyCache.delete(k);
-  for (const [k, v] of unknownNotified) if (v < now) unknownNotified.delete(k);
-  for (const [k, v] of lastTouch) if (v < now - 600000) lastTouch.delete(k);
-  for (const [k, v] of cooldowns) if (v < now) cooldowns.delete(k);
-}, 60000).unref();
-setInterval(housekeeping, 3600000).unref();
-
 /* ====================================================================== */
-/* HTTP                                                                     */
+/* HTTP API & Lifecycles                                                  */
 /* ====================================================================== */
 const app = express();
 app.disable("x-powered-by");
@@ -2055,19 +2090,29 @@ app.use(
   })
 );
 
+if (!process.env.WHATSAPP_APP_SECRET) {
+  console.error(
+    "FATAL: WHATSAPP_APP_SECRET is mandatory for webhook integrity."
+  );
+  process.exit(1);
+}
+
 function verifySignature(req) {
   const secret = process.env.WHATSAPP_APP_SECRET;
-  if (!secret) return !CFG.isProd; // dev convenience only; production refuses to boot without the secret
   const sig = req.get("x-hub-signature-256") || "";
-  if (!sig.startsWith("sha256=") || !req.rawBody) return false;
+  if (!secret || !sig.startsWith("sha256=") || !req.rawBody) return false;
+
   const expected = crypto
     .createHmac("sha256", secret)
     .update(req.rawBody)
     .digest("hex");
   const got = sig.slice(7);
-  return (
-    got.length === expected.length &&
-    crypto.timingSafeEqual(Buffer.from(got), Buffer.from(expected))
+
+  // Both buffers must match length before timingSafeEqual
+  if (Buffer.byteLength(got) !== Buffer.byteLength(expected)) return false;
+  return crypto.timingSafeEqual(
+    Buffer.from(got, "utf8"),
+    Buffer.from(expected, "utf8")
   );
 }
 
@@ -2077,8 +2122,8 @@ app.post("/webhook", async (req, res) => {
   try {
     fresh = await persistIncoming(req.body);
   } catch (err) {
-    log("error", "persisting webhook failed", errMeta(err));
-    return res.sendStatus(500); // Meta will retry; nothing was lost
+    log("error", "persisting incoming webhook failed", errMeta(err));
+    return res.sendStatus(500);
   }
   res.status(200).send("EVENT_RECEIVED");
   for (const m of fresh)
@@ -2091,8 +2136,9 @@ app.get("/webhook", (req, res) => {
   if (
     req.query["hub.mode"] === "subscribe" &&
     req.query["hub.verify_token"] === process.env.WHATSAPP_VERIFY_TOKEN
-  )
+  ) {
     return res.status(200).send(req.query["hub.challenge"]);
+  }
   return res.sendStatus(403);
 });
 
@@ -2101,57 +2147,70 @@ app.get("/health", async (req, res) => {
     await pool.query("SELECT 1");
     res.status(200).json({
       status: "ok",
-      uptime: process.uptime(),
-      database: "connected",
       queue: listingLimiter.stats(),
       openBatches: incomingBatches.size,
       inFlight
     });
   } catch (err) {
-    res
-      .status(500)
-      .json({ status: "error", database: "disconnected", error: err.message });
+    res.status(500).json({ status: "error", error: err.message });
   }
 });
 
-app.get("/", (req, res) =>
-  res.status(200).send("Real Estate WhatsApp Engine is active.")
-);
-
-/* ====================================================================== */
-/* Process lifecycle                                                        */
-/* ====================================================================== */
-process.on("unhandledRejection", (r) =>
-  log("error", "unhandledRejection", { err: String((r && r.message) || r) })
-);
-process.on("uncaughtException", (e) => {
-  log("error", "uncaughtException", errMeta(e));
-  setTimeout(() => process.exit(1), 500).unref();
-});
-
 let server;
+let isShuttingDown = false;
+
 async function shutdown(sig) {
-  log("info", "shutting down", { sig });
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  log("info", "server shutting down", { sig });
   if (server) server.close();
+
   const until = Date.now() + 25000;
   while (
     (inFlight > 0 || perBroker.size() > 0 || brokerWork.size() > 0) &&
     Date.now() < until
-  )
+  ) {
     await U.sleep(300);
-  // anything still in an open batch stays 'batched' in inbound_messages and is replayed on next boot
+  }
+
   await pool.end().catch(() => {});
   process.exit(0);
 }
+
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
 
-if (require.main === module) {
+const { loadFont } = require("./lib/flyer");
+
+async function boot() {
+  // 1. Pre-warm fonts in memory to avoid cold-start delays
+  log("info", "Pre-warming fonts into RAM...");
+  await Promise.all([
+    loadFont("Cairo-Bold.ttf"),
+    loadFont("Cairo-Regular.ttf")
+  ]).catch((err) => log("warn", "Font pre-warming failed", errMeta(err)));
+
+  // 2. Prune old inbound messages (>14 days) to keep indexes fast
+  pool
+    .query(
+      "DELETE FROM inbound_messages WHERE received_at < NOW() - INTERVAL '14 days'"
+    )
+    .catch((e) =>
+      log("warn", "Inbound message table cleanup failed", errMeta(e))
+    );
+
+  // 3. Start server and run crash recovery
   server = app.listen(CFG.port, () => {
-    log("info", `Real Estate WhatsApp Engine online on port ${CFG.port}`);
-    recoverInbound().catch((e) => log("error", "recovery failed", errMeta(e)));
-    housekeeping();
+    log("info", `Real Estate Engine listening on port ${CFG.port}`);
+    recoverInbound().catch((e) =>
+      log("error", "crash recovery failed", errMeta(e))
+    );
   });
+}
+
+if (require.main === module) {
+  boot();
 }
 
 module.exports = { app };
