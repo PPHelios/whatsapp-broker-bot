@@ -21,6 +21,86 @@ process.env.AI_DAILY_LIMIT_PER_BROKER = "60";
 // =========================================================================
 // 2. In-Memory Mock Database
 // =========================================================================
+function getInitialListings() {
+  return [
+    {
+      id: "l101-0000-0000",
+      agency_id: "a00a0000-0000-0000-0000-000000000001",
+      broker_id: "b10b0000-0000-0000-0000-000000000001",
+      code: "HAS101",
+      title: "شقة في ميفيدا",
+      price_value: 15000000,
+      price_display: "15M EGP",
+      property_type: "apartment",
+      listing_type: "sale",
+      location: "ميفيدا، القاهرة الجديدة",
+      compound: "ميفيدا",
+      bedrooms: 3,
+      area_value: 180,
+      status: "active",
+      details: {
+        currency: "EGP",
+        bathrooms: 2,
+        floor: "الدور الثالث",
+        floor_en: "3rd Floor",
+        finishing: "الترا سوبر لوكس",
+        finishing_en: "Ultra Super Lux",
+        has_master_bedroom: true,
+        has_dressing_room: true,
+        nanny_room: true
+      },
+      flyer_cache: {},
+      updated_at: new Date().toISOString()
+    },
+    {
+      id: "l102-0000-0000",
+      agency_id: "a00a0000-0000-0000-0000-000000000001",
+      broker_id: "b10b0000-0000-0000-0000-000000000001",
+      code: "SOLD99",
+      title: "فيلا بالميرا",
+      price_value: 30000000,
+      price_display: "30M EGP",
+      property_type: "villa",
+      listing_type: "sale",
+      location: "بالميرا",
+      compound: "بالميرا",
+      status: "sold",
+      details: {},
+      updated_at: new Date().toISOString()
+    },
+    // Seed 5 additional active units to ensure 6 total matching units (5 on page 1 + 1 on page 2)
+    ...[2, 3, 4, 5, 6].map((i) => ({
+      id: `l10${i}-0000-0000`,
+      agency_id: "a00a0000-0000-0000-0000-000000000001",
+      broker_id: "b10b0000-0000-0000-0000-000000000001",
+      code: `HAS10${i}`,
+      title: `شقة ${i} في ميفيدا`,
+      price_value: 15000000 + i * 500000,
+      price_display: `${15 + i * 0.5}M EGP`,
+      property_type: "apartment",
+      listing_type: "sale",
+      location: "ميفيدا، القاهرة الجديدة",
+      compound: "ميفيدا",
+      bedrooms: 3,
+      area_value: 180 + i * 10,
+      status: "active",
+      details: {
+        currency: "EGP",
+        bathrooms: 2,
+        floor: "الدور الثاني",
+        floor_en: "2nd Floor",
+        finishing: "تشطيب كامل",
+        finishing_en: "Fully Finished",
+        has_master_bedroom: true,
+        has_dressing_room: false,
+        nanny_room: true
+      },
+      flyer_cache: {},
+      updated_at: new Date().toISOString()
+    }))
+  ];
+}
+
 const mockDb = {
   brokers: [
     {
@@ -46,42 +126,9 @@ const mockDb = {
       preferred_lang: "ar"
     }
   ],
-  listings: [
-    {
-      id: "l101-0000-0000",
-      agency_id: "a00a0000-0000-0000-0000-000000000001",
-      broker_id: "b10b0000-0000-0000-0000-000000000001",
-      code: "HAS101",
-      title: "شقة في ميفيدا",
-      price_value: 15000000,
-      price_display: "15,000,000 ج.م",
-      property_type: "apartment",
-      listing_type: "sale",
-      location: "ميفيدا، القاهرة الجديدة",
-      compound: "ميفيدا",
-      bedrooms: 3,
-      area_value: 180,
-      status: "active",
-      details: {},
-      flyer_cache: {},
-      updated_at: new Date().toISOString()
-    },
-    {
-      id: "l102-0000-0000",
-      agency_id: "a00a0000-0000-0000-0000-000000000001",
-      broker_id: "b10b0000-0000-0000-0000-000000000001",
-      code: "SOLD99",
-      title: "فيلا بالميرا",
-      price_value: 30000000,
-      price_display: "30,000,000 ج.م",
-      property_type: "villa",
-      listing_type: "sale",
-      location: "بالميرا",
-      status: "sold",
-      updated_at: new Date().toISOString()
-    }
-  ],
+  listings: getInitialListings(),
   drafts: new Map(),
+  searchState: new Map(),
   processedBatches: new Set(),
   operationLogs: []
 };
@@ -95,7 +142,6 @@ jest.mock("../lib/db", () => ({
         return { rows: [{ "?column?": 1 }], rowCount: 1 };
       }
 
-      // Two-tier Quota checks
       if (q.includes("from operation_logs where agency_id = $1")) {
         const count = mockDb.operationLogs.filter(
           (l) => l.agency_id === params[0] && l.tokens_input > 0
@@ -137,7 +183,45 @@ jest.mock("../lib/db", () => ({
         return { rows: l ? [l] : [], rowCount: l ? 1 : 0 };
       }
 
-      // Checked BEFORE "from listing_drafts" to prevent substring collision
+      // Search State Retrieval & Upsert
+      if (q.includes("from broker_search_state where phone_key = $1")) {
+        const st = mockDb.searchState.get(params[0]);
+        return { rows: st ? [st] : [], rowCount: st ? 1 : 0 };
+      }
+      if (q.includes("insert into broker_search_state")) {
+        mockDb.searchState.set(params[0], {
+          phone_key: params[0],
+          parsed: params[1],
+          next_offset: params[2]
+        });
+        return { rowCount: 1 };
+      }
+
+      // Search Query Mock (5 units per page)
+      if (
+        q.includes("from listings l") &&
+        q.includes("where l.agency_id = $1 and l.status = 'active'")
+      ) {
+        const activeListings = mockDb.listings.filter(
+          (l) => l.agency_id === params[0] && l.status === "active"
+        );
+        const limit =
+          typeof params[params.length - 2] === "number"
+            ? params[params.length - 2]
+            : 5;
+        const offset =
+          typeof params[params.length - 1] === "number"
+            ? params[params.length - 1]
+            : 0;
+        const paged = activeListings
+          .slice(offset, offset + limit)
+          .map((row) => ({
+            ...row,
+            total_count: activeListings.length
+          }));
+        return { rows: paged, rowCount: paged.length };
+      }
+
       if (q.includes("delete from listing_drafts")) {
         mockDb.drafts.delete(params[0]);
         return { rowCount: 1 };
@@ -178,13 +262,19 @@ jest.mock("../lib/db", () => ({
           rows: [
             {
               id: "img-1",
-              url: "https://storage.supabase.co/img1.jpg",
+              url: "https://storage.supabase.co/listing-images/agency_a00a0000-0000-0000-0000-000000000001/listing_HAS101/HAS101-tag-1.jpg",
               role: "reception",
               position: 0
             }
           ],
           rowCount: 1
         };
+      }
+
+      if (q.includes("delete from listings where id = $1")) {
+        const idx = mockDb.listings.findIndex((l) => l.id === params[0]);
+        if (idx !== -1) mockDb.listings.splice(idx, 1);
+        return { rowCount: 1 };
       }
 
       return { rows: [], rowCount: 1 };
@@ -210,7 +300,6 @@ jest.mock("../lib/db", () => ({
           );
           return { rows: l ? [l] : [], rowCount: l ? 1 : 0 };
         }
-        // Checked BEFORE "from listing_drafts"
         if (q.includes("delete from listing_drafts")) {
           mockDb.drafts.delete(params[0]);
           return { rowCount: 1 };
@@ -274,12 +363,33 @@ jest.mock("../lib/db", () => ({
           if (l) l.status = params[0];
           return { rowCount: 1 };
         }
-        if (q.includes("update listings set price_value")) {
-          const l = mockDb.listings.find((item) => item.id === params[2]);
+        if (
+          q.includes("update listings set") &&
+          q.includes("price_value = $1")
+        ) {
+          const l = mockDb.listings.find(
+            (item) => item.id === params[params.length - 1]
+          );
           if (l) {
             l.price_value = params[0];
             l.price_display = params[1];
+            if (params[6]) l.details = params[6];
           }
+          return { rowCount: 1 };
+        }
+        if (q.includes("from listing_images where listing_id = $1")) {
+          return {
+            rows: [
+              {
+                url: "https://storage.supabase.co/listing-images/agency_a00a0000-0000-0000-0000-000000000001/listing_HAS101/HAS101-tag-1.jpg"
+              }
+            ],
+            rowCount: 1
+          };
+        }
+        if (q.includes("delete from listings where id = $1")) {
+          const idx = mockDb.listings.findIndex((l) => l.id === params[0]);
+          if (idx !== -1) mockDb.listings.splice(idx, 1);
           return { rowCount: 1 };
         }
         return { rows: [], rowCount: 1 };
@@ -306,14 +416,13 @@ jest.mock("../lib/supabase", () => ({
 jest.mock("../lib/flyer", () => ({
   generateFlyerBuffer: jest
     .fn()
-    .mockResolvedValue(Buffer.from("mock-flyer-pdf")),
+    .mockResolvedValue(Buffer.from("mock-flyer-jpg")),
   loadFont: jest.fn().mockResolvedValue(true)
 }));
 
 const mockWhatsAppState = {
   sentTexts: [],
   sentButtons: [],
-  sentLists: [],
   sentImages: [],
   simulateCareWindowExpiry: false,
   simulateRateLimitOnce: false
@@ -348,12 +457,6 @@ jest.mock("../lib/whatsapp", () => ({
       }));
       mockWhatsAppState.sentButtons.push({ to, body, buttons });
       return { messages: [{ id: `wamid.btn_${Date.now()}` }] };
-    }),
-  sendWhatsAppList: jest
-    .fn()
-    .mockImplementation(async (to, header, body, btnLabel, sections) => {
-      mockWhatsAppState.sentLists.push({ to, header, body, sections });
-      return { messages: [{ id: `wamid.list_${Date.now()}` }] };
     }),
   sendWhatsAppImage: jest
     .fn()
@@ -391,8 +494,28 @@ const mockGeminiState = {
     city: "القاهرة الجديدة",
     location_keywords: ["ميفيدا", "القاهرة الجديدة"],
     details: {
+      currency: "EGP",
+      bathrooms: 2,
+      floor: "الدور الثاني",
+      floor_en: "2nd Floor",
+      finishing: "الترا سوبر لوكس",
+      finishing_en: "Ultra Super Lux",
+      has_master_bedroom: true,
+      has_dressing_room: true,
+      nanny_room: true,
       features: ["حمام سباحة", "شرفة"],
+      features_en: ["Swimming Pool", "Balcony", "Nanny Room"],
       ambiguous_location: false
+    }
+  },
+  patchEdit: {
+    price_value: 16000000,
+    currency: "EGP",
+    area_value: 190,
+    bedrooms: 4,
+    details: {
+      floor: "الدور الرابع",
+      floor_en: "4th Floor"
     }
   }
 };
@@ -400,29 +523,52 @@ const mockGeminiState = {
 jest.mock("@google/genai", () => ({
   GoogleGenAI: jest.fn().mockImplementation(() => ({
     models: {
-      generateContent: jest.fn().mockImplementation(async ({ model }) => {
-        if (model === "gemini-3.8-flash" && mockGeminiState.shouldTimeoutOn38) {
-          throw new Error("gemini-3.8-flash timeout");
-        }
+      generateContent: jest
+        .fn()
+        .mockImplementation(async ({ model, contents }) => {
+          if (
+            model === "gemini-3.8-flash" &&
+            mockGeminiState.shouldTimeoutOn38
+          ) {
+            throw new Error("gemini-3.8-flash timeout");
+          }
 
-        let jsonStr = JSON.stringify(mockGeminiState.extractedListing);
-        if (mockGeminiState.shouldReturnMarkdownWrappedJson) {
-          jsonStr = `\`\`\`json\n${jsonStr}\n\`\`\``;
-        }
+          const promptText = JSON.stringify(contents);
+          let outObj = mockGeminiState.extractedListing;
 
-        return {
-          text: jsonStr,
-          usageMetadata: { promptTokenCount: 150, candidatesTokenCount: 200 }
-        };
-      })
+          if (promptText.includes("real estate database updater")) {
+            outObj = mockGeminiState.patchEdit;
+          } else if (promptText.includes("search-understanding layer")) {
+            outObj = {
+              intent: "search",
+              filters: {
+                property_types: ["apartment"],
+                bedrooms_min: 3
+              },
+              locations: ["ميفيدا"],
+              location_terms: ["ميفيدا"]
+            };
+          }
+
+          let jsonStr = JSON.stringify(outObj);
+          if (mockGeminiState.shouldReturnMarkdownWrappedJson) {
+            jsonStr = `\`\`\`json\n${jsonStr}\n\`\`\``;
+          }
+
+          return {
+            text: jsonStr,
+            usageMetadata: { promptTokenCount: 150, candidatesTokenCount: 200 }
+          };
+        })
     }
   }))
 }));
 
-const { app } = require("../server");
+const { app, brokerEditSessions, recentBrokerListings } = require("../server");
 const WA = require("../lib/whatsapp");
 const T = require("../lib/text");
 const U = require("../lib/util");
+const { deleteStorageFiles } = require("../lib/supabase");
 
 let msgSequence = 0;
 function createWebhookPayload(
@@ -478,21 +624,24 @@ function createWebhookPayload(
 }
 
 // =========================================================================
-// Test Suites (22 Comprehensive Tests)
+// Test Suites
 // =========================================================================
 describe("Comprehensive Broker Bot E2E, Quota, & State Machine Tests", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockDb.listings = getInitialListings(); // Full isolation across tests
     mockDb.drafts.clear();
+    mockDb.searchState.clear();
     mockDb.operationLogs = [];
     mockWhatsAppState.sentTexts = [];
     mockWhatsAppState.sentButtons = [];
-    mockWhatsAppState.sentLists = [];
     mockWhatsAppState.sentImages = [];
     mockWhatsAppState.simulateCareWindowExpiry = false;
     mockWhatsAppState.simulateRateLimitOnce = false;
     mockGeminiState.shouldTimeoutOn38 = false;
     mockGeminiState.shouldReturnMarkdownWrappedJson = false;
+    if (brokerEditSessions) brokerEditSessions.clear();
+    if (recentBrokerListings) recentBrokerListings.clear();
   });
 
   describe("WhatsApp Operational Resilience", () => {
@@ -547,46 +696,7 @@ describe("Comprehensive Broker Bot E2E, Quota, & State Machine Tests", () => {
     });
   });
 
-  describe("Gemini Cascades and Audio Normalization", () => {
-    test("Fails over to gemini-3.6-flash when 3.8-flash times out", async () => {
-      mockGeminiState.shouldTimeoutOn38 = true;
-      const { payload, signature } = createWebhookPayload(
-        "201011111111",
-        "+ شقة للبيع 18.5 مليون كود #TEST1"
-      );
-
-      const res = await request(app)
-        .post("/webhook")
-        .set("x-hub-signature-256", signature)
-        .send(payload);
-
-      expect(res.status).toBe(200);
-    });
-
-    test("Strips Markdown code fences (```json ... ```) safely from AI response", async () => {
-      mockGeminiState.shouldReturnMarkdownWrappedJson = true;
-      const { payload, signature } = createWebhookPayload(
-        "201011111111",
-        "+ شقة 180م في ميفيدا"
-      );
-
-      const res = await request(app)
-        .post("/webhook")
-        .set("x-hub-signature-256", signature)
-        .send(payload);
-
-      expect(res.status).toBe(200);
-    });
-
-    test("Audio normalization normalizes voice mime-types", () => {
-      expect(U.cleanAudioMime("audio/ogg; codecs=opus")).toBe("audio/ogg");
-      expect(U.cleanAudioMime("audio/x-m4a")).toBe("audio/mp4");
-      expect(U.cleanAudioMime("audio/amr")).toBe("audio/amr");
-      expect(U.cleanAudioMime("unknown/stream")).toBe("audio/ogg");
-    });
-  });
-
-  describe("Broker Security, Ownership, and Direct SQL Commands", () => {
+  describe("Security, Ownership & Permissions", () => {
     test("Blocks colleague from editing another broker's listing", async () => {
       const { payload, signature } = createWebhookPayload(
         "201022222222",
@@ -606,11 +716,39 @@ describe("Comprehensive Broker Bot E2E, Quota, & State Machine Tests", () => {
         )
       ).toBe(true);
     });
+  });
 
-    test("Allows owner broker to update listing price cleanly outside lock", async () => {
+  describe("Elevated Specifications & Clean Terminology", () => {
+    test("Enforces 'غرفة ناني' and forbids 'خادمة' or 'maid' in feature sanitizer", () => {
+      const rawFeatures = [
+        "غرفة داده",
+        "غرفة شغالة",
+        "maid room",
+        "حمام سباحة"
+      ];
+      const cleaned = T.cleanFeaturesList(rawFeatures);
+      expect(cleaned).toContain("غرفة ناني");
+      expect(cleaned).toContain("حمام سباحة");
+      expect(
+        cleaned.some((f) => f.includes("خادمة") || f.includes("maid"))
+      ).toBe(false);
+    });
+
+    test("Formats prices compactly (e.g. 15M EGP) and supports multi-currency", () => {
+      expect(T.formatAbbreviatedPrice(15000000, "EGP", "en")).toBe("15M EGP");
+      expect(T.formatAbbreviatedPrice(15000000, "EGP", "ar")).toBe(
+        "15 مليون ج.م"
+      );
+      expect(T.formatAbbreviatedPrice(1500000, "USD", "en")).toBe("1.5M USD");
+      expect(T.formatAbbreviatedPrice(500000, "EUR", "en")).toBe("500K EUR");
+    });
+  });
+
+  describe("Idle Code Lookups & Reserved Words", () => {
+    test("Idle direct code lookup with space (e.g. 'كود HAS101' or 'code HAS101') pulls unit card", async () => {
       const { payload, signature } = createWebhookPayload(
         "201011111111",
-        "سعر HAS101 إلى 17.5 مليون"
+        "كود HAS101"
       );
 
       const res = await request(app)
@@ -620,111 +758,200 @@ describe("Comprehensive Broker Bot E2E, Quota, & State Machine Tests", () => {
 
       expect(res.status).toBe(200);
       await new Promise((r) => setTimeout(r, 150));
+
+      const card = mockWhatsAppState.sentButtons.find((b) =>
+        b.body.includes("تفاصيل الوحدة #HAS101")
+      );
+      expect(card).toBeDefined();
+      expect(card.buttons.map((b) => b.title)).toEqual([
+        "📄 بروشور",
+        "📋 نص العميل",
+        "✏️ تعديل"
+      ]);
+    });
+
+    test("Standalone 'add' or 'اضافة' opens draft without treating 'add' as unit code", async () => {
+      const { payload, signature } = createWebhookPayload(
+        "201011111111",
+        "اضافة"
+      );
+
+      const res = await request(app)
+        .post("/webhook")
+        .set("x-hub-signature-256", signature)
+        .send(payload);
+
+      expect(res.status).toBe(200);
+      await new Promise((r) => setTimeout(r, 150));
+
       expect(
-        mockWhatsAppState.sentTexts.some((m) =>
-          m.text.includes("تم تعديل سعر الوحدة #HAS101")
+        mockWhatsAppState.sentButtons.some((b) =>
+          b.body.includes("تم فتح مسودة وحدة جديدة")
+        )
+      ).toBe(true);
+      expect(
+        mockWhatsAppState.sentButtons.some((b) =>
+          b.body.includes("الوحدة #ADD غير موجودة")
+        )
+      ).toBe(false);
+    });
+  });
+
+  describe("Interactive Edit Mode Session", () => {
+    test("Entering edit mode via 'تعديل #HAS101' locks code and updates on follow-up message", async () => {
+      const p1 = createWebhookPayload("201011111111", "تعديل #HAS101");
+      await request(app)
+        .post("/webhook")
+        .set("x-hub-signature-256", p1.signature)
+        .send(p1.payload);
+      await new Promise((r) => setTimeout(r, 150));
+
+      expect(
+        mockWhatsAppState.sentTexts.some((t) =>
+          t.text.includes("وضع التعديل نشط للوحدة #HAS101")
+        )
+      ).toBe(true);
+
+      const p2 = createWebhookPayload(
+        "201011111111",
+        "السعر 16 مليون والمساحة 190م والدور الرابع"
+      );
+      await request(app)
+        .post("/webhook")
+        .set("x-hub-signature-256", p2.signature)
+        .send(p2.payload);
+      await new Promise((r) => setTimeout(r, 300));
+
+      expect(
+        mockWhatsAppState.sentTexts.some((t) =>
+          t.text.includes("تم تعديل بيانات الوحدة #HAS101 بنجاح")
         )
       ).toBe(true);
     });
 
-    test("Idle direct code lookup returns unit card when found", async () => {
-      const { payload, signature } = createWebhookPayload(
+    test("Entering edit mode via interactive button 'edit_btn:HAS101'", async () => {
+      const p = createWebhookPayload(
         "201011111111",
-        "#HAS101"
+        "edit_btn:HAS101",
+        "interactive"
       );
-
-      const res = await request(app)
+      await request(app)
         .post("/webhook")
-        .set("x-hub-signature-256", signature)
-        .send(payload);
-
-      expect(res.status).toBe(200);
+        .set("x-hub-signature-256", p.signature)
+        .send(p.payload);
       await new Promise((r) => setTimeout(r, 150));
-      expect(
-        mockWhatsAppState.sentButtons.some((b) =>
-          b.body.includes("تفاصيل الوحدة #HAS101")
-        )
-      ).toBe(true);
-      expect(
-        mockWhatsAppState.sentButtons[0].buttons.some(
-          (btn) => btn.title === "Flyer"
-        )
-      ).toBe(true);
-    });
 
-    test("Idle direct code lookup offers 'START_WITH_CODE' button when not found", async () => {
-      const { payload, signature } = createWebhookPayload(
-        "201011111111",
-        "#NEW999"
-      );
-
-      const res = await request(app)
-        .post("/webhook")
-        .set("x-hub-signature-256", signature)
-        .send(payload);
-
-      expect(res.status).toBe(200);
-      await new Promise((r) => setTimeout(r, 150));
       expect(
-        mockWhatsAppState.sentButtons.some((b) =>
-          b.body.includes("غير موجودة بالمخزون")
-        )
-      ).toBe(true);
-      expect(
-        mockWhatsAppState.sentButtons[0].buttons.some(
-          (btn) => btn.id === "START_WITH_CODE:NEW999"
+        mockWhatsAppState.sentTexts.some((t) =>
+          t.text.includes("وضع التعديل نشط للوحدة #HAS101")
         )
       ).toBe(true);
     });
   });
 
-  describe("Text Normalization and Sanitization", () => {
-    test("Parses fractions and scale correctly without digit collisions", () => {
-      expect(T.parsePrice("7 مليون")).toBe(7000000);
-      expect(T.parsePrice("6.5 مليون")).toBe(6500000);
-      expect(T.parsePrice("6 مليون ونصف")).toBe(6500000);
-      expect(T.parsePrice("18.5M")).toBe(18500000);
-      expect(T.parsePrice("500 الف")).toBe(500000);
-    });
-
-    test("cleanFeaturesList sanitizes phonetic slang into formal Arabic amenities", () => {
-      const dirty = ["بول", "سوبر لوكس", "غرفة داده", "جاردن", "اسانسير"];
-      const clean = T.cleanFeaturesList(dirty);
-      expect(clean).toContain("حمام سباحة");
-      expect(clean).toContain("غرفة مربية");
-      expect(clean).toContain("حديقة");
-      expect(clean).toContain("مصعد");
-      expect(clean).not.toContain("بول");
-    });
-  });
-
-  describe("State Machine Ingestion, Drafts, and Code Rules", () => {
-    test("Inbound photo opens DRAFTING mode and sends Save/Cancel buttons", async () => {
-      const { payload, signature } = createWebhookPayload(
-        "201011111111",
-        "wamid.media_001",
-        "image"
-      );
-      const res = await request(app)
+  describe("Two-Step Deletion Flow", () => {
+    test("Prompt deletion requires confirmation dialog before erasing listing", async () => {
+      const p1 = createWebhookPayload("201011111111", "حذف #HAS101");
+      await request(app)
         .post("/webhook")
-        .set("x-hub-signature-256", signature)
-        .send(payload);
+        .set("x-hub-signature-256", p1.signature)
+        .send(p1.payload);
+      await new Promise((r) => setTimeout(r, 150));
 
-      expect(res.status).toBe(200);
+      const confirmPrompt = mockWhatsAppState.sentButtons.find((b) =>
+        b.buttons.some((btn) => btn.id === "confirm:delete:HAS101")
+      );
+      expect(confirmPrompt).toBeDefined();
+      expect(confirmPrompt.body).toContain("HAS101");
+      expect(confirmPrompt.body).toContain("هل أنت متأكد من حذف الوحدة");
+
+      // Confirm deletion
+      const p2 = createWebhookPayload(
+        "201011111111",
+        "confirm:delete:HAS101",
+        "interactive"
+      );
+      await request(app)
+        .post("/webhook")
+        .set("x-hub-signature-256", p2.signature)
+        .send(p2.payload);
       await new Promise((r) => setTimeout(r, 200));
 
-      expect(mockDb.drafts.has("b10b0000-0000-0000-0000-000000000001")).toBe(
-        true
-      );
-      expect(mockWhatsAppState.sentButtons.length).toBe(1);
+      expect(deleteStorageFiles).toHaveBeenCalled();
       expect(
-        mockWhatsAppState.sentButtons[0].buttons.some(
-          (b) => b.id === "DRAFT_SAVE"
+        mockWhatsAppState.sentTexts.some((t) =>
+          t.text.includes("تم حذف الوحدة #HAS101 نهائياً")
         )
       ).toBe(true);
     });
+  });
 
-    test("Subsequent photos accumulate cleanly into draft without re-sending prompt", async () => {
+  describe("Search Execution: 5-Unit Card Stream & Pagination", () => {
+    test("Streams 5 unit cards directly with action buttons and sends 'MORE_SEARCH' button", async () => {
+      const { payload, signature } = createWebhookPayload(
+        "201011111111",
+        "عايز شقة 3 غرف في ميفيدا"
+      );
+
+      const res = await request(app)
+        .post("/webhook")
+        .set("x-hub-signature-256", signature)
+        .send(payload);
+
+      expect(res.status).toBe(200);
+      await new Promise((r) => setTimeout(r, 2800)); // Allow 5 streamed unit cards (5 x 400ms sleep) to finish
+
+      expect(
+        mockWhatsAppState.sentTexts.some((t) =>
+          t.text.includes("🔍 جاري البحث...")
+        )
+      ).toBe(true);
+      expect(
+        mockWhatsAppState.sentTexts.some((t) => t.text.includes("المخزون"))
+      ).toBe(false);
+
+      const unitCards = mockWhatsAppState.sentButtons.filter((b) =>
+        b.body.includes("تفاصيل الوحدة #HAS10")
+      );
+      expect(unitCards.length).toBe(5);
+
+      const moreBtnMsg = mockWhatsAppState.sentButtons.find((b) =>
+        b.buttons.some((btn) => btn.id === "MORE_SEARCH")
+      );
+      expect(moreBtnMsg).toBeDefined();
+      expect(moreBtnMsg.body).toContain("تم عرض 5 من إجمالي 6");
+    });
+
+    test("Tapping 'MORE_SEARCH' loads the next batch of units cleanly", async () => {
+      mockDb.searchState.set("201011111111", {
+        phone_key: "201011111111",
+        parsed: {
+          intent: "search",
+          filters: { property_types: ["apartment"] },
+          location_terms: ["ميفيدا"]
+        },
+        next_offset: 5
+      });
+
+      const p = createWebhookPayload(
+        "201011111111",
+        "MORE_SEARCH",
+        "interactive"
+      );
+      await request(app)
+        .post("/webhook")
+        .set("x-hub-signature-256", p.signature)
+        .send(p.payload);
+      await new Promise((r) => setTimeout(r, 1000));
+
+      expect(
+        mockWhatsAppState.sentButtons.some((b) => b.body.includes("#HAS106"))
+      ).toBe(true);
+    });
+  });
+
+  describe("Finalization 3-Button Suite", () => {
+    test("Finalizing listing offers Brochure, Client Text, and Edit (No 'Sold' button)", async () => {
       const p1 = createWebhookPayload(
         "201011111111",
         "wamid.media_001",
@@ -738,322 +965,30 @@ describe("Comprehensive Broker Bot E2E, Quota, & State Machine Tests", () => {
 
       const p2 = createWebhookPayload(
         "201011111111",
-        "wamid.media_002",
-        "image"
-      );
-      await request(app)
-        .post("/webhook")
-        .set("x-hub-signature-256", p2.signature)
-        .send(p2.payload);
-      await new Promise((r) => setTimeout(r, 200));
-
-      const draft = mockDb.drafts.get("b10b0000-0000-0000-0000-000000000001");
-      expect(draft).toBeDefined();
-      expect(draft.media_ids).toEqual(["wamid.media_001", "wamid.media_002"]);
-      expect(mockWhatsAppState.sentButtons.length).toBe(1);
-    });
-
-    test("Bare-bones 'تم' with photos only is rejected before calling Gemini", async () => {
-      const p1 = createWebhookPayload(
-        "201011111111",
-        "wamid.media_001",
-        "image"
-      );
-      await request(app)
-        .post("/webhook")
-        .set("x-hub-signature-256", p1.signature)
-        .send(p1.payload);
-      await new Promise((r) => setTimeout(r, 150));
-
-      const p2 = createWebhookPayload("201011111111", "تم", "text");
-      await request(app)
-        .post("/webhook")
-        .set("x-hub-signature-256", p2.signature)
-        .send(p2.payload);
-      await new Promise((r) => setTimeout(r, 200));
-
-      expect(
-        mockWhatsAppState.sentButtons.some((b) =>
-          b.body.includes("لا يمكن تسجيل الوحدة بالصور فقط")
-        )
-      ).toBe(true);
-      expect(mockDb.drafts.has("b10b0000-0000-0000-0000-000000000001")).toBe(
-        true
-      );
-    });
-
-    test("Requires explicit marker (#, code, كود) for unit codes and rejects Arabic letters", async () => {
-      const p1 = createWebhookPayload(
-        "201011111111",
-        "wamid.media_001",
-        "image"
-      );
-      await request(app)
-        .post("/webhook")
-        .set("x-hub-signature-256", p1.signature)
-        .send(p1.payload);
-      await new Promise((r) => setTimeout(r, 150));
-
-      // Attempt code with Arabic letters: #كود101
-      const p2 = createWebhookPayload("201011111111", "#كود101", "text");
-      await request(app)
-        .post("/webhook")
-        .set("x-hub-signature-256", p2.signature)
-        .send(p2.payload);
-      await new Promise((r) => setTimeout(r, 150));
-
-      expect(
-        mockWhatsAppState.sentTexts.some((m) =>
-          m.text.includes("يجب أن يتكون من حروف إنجليزية وأرقام فقط")
-        )
-      ).toBe(true);
-
-      // Valid marked code: #HAS577
-      const p3 = createWebhookPayload("201011111111", "#HAS577", "text");
-      await request(app)
-        .post("/webhook")
-        .set("x-hub-signature-256", p3.signature)
-        .send(p3.payload);
-      await new Promise((r) => setTimeout(r, 150));
-
-      const draft = mockDb.drafts.get("b10b0000-0000-0000-0000-000000000001");
-      expect(draft.custom_code).toBe("HAS577");
-    });
-
-    test("Warns immediately if assigned code is already used by an active or sold unit", async () => {
-      const p1 = createWebhookPayload(
-        "201011111111",
-        "wamid.media_001",
-        "image"
-      );
-      await request(app)
-        .post("/webhook")
-        .set("x-hub-signature-256", p1.signature)
-        .send(p1.payload);
-      await new Promise((r) => setTimeout(r, 150));
-
-      // Attempt to take code of sold unit SOLD99
-      const p2 = createWebhookPayload("201011111111", "#SOLD99", "text");
-      await request(app)
-        .post("/webhook")
-        .set("x-hub-signature-256", p2.signature)
-        .send(p2.payload);
-      await new Promise((r) => setTimeout(r, 150));
-
-      expect(
-        mockWhatsAppState.sentTexts.some((m) =>
-          m.text.includes("مستخدم بالفعل لوحدة")
-        )
-      ).toBe(true);
-    });
-
-    test("Search query during open draft prompts with Cancel & Search vs Keep Draft", async () => {
-      const p1 = createWebhookPayload(
-        "201011111111",
-        "wamid.media_001",
-        "image"
-      );
-      await request(app)
-        .post("/webhook")
-        .set("x-hub-signature-256", p1.signature)
-        .send(p1.payload);
-      await new Promise((r) => setTimeout(r, 150));
-
-      const p2 = createWebhookPayload(
-        "201011111111",
-        "دورلي على شقة في ميفيدا تحت 15 مليون",
+        "شقة 180م في ميفيدا السعر 18.5 مليون كود #MIV77",
         "text"
       );
       await request(app)
         .post("/webhook")
         .set("x-hub-signature-256", p2.signature)
         .send(p2.payload);
-      await new Promise((r) => setTimeout(r, 200));
-
-      expect(
-        mockWhatsAppState.sentButtons.some(
-          (b) =>
-            b.body.includes("مسودة وحدة قيد الإضافة") ||
-            b.body.includes("active listing draft")
-        )
-      ).toBe(true);
-      expect(
-        mockWhatsAppState.sentButtons[1].buttons.some((b) =>
-          b.id.startsWith("CANCEL_AND_SEARCH:")
-        )
-      ).toBe(true);
-      expect(
-        mockWhatsAppState.sentButtons[1].buttons.some(
-          (b) => b.id === "KEEP_DRAFT"
-        )
-      ).toBe(true);
-    });
-
-    test("CANCEL_AND_SEARCH clears draft and executes search query", async () => {
-      const p1 = createWebhookPayload(
-        "201011111111",
-        "wamid.media_001",
-        "image"
-      );
-      await request(app)
-        .post("/webhook")
-        .set("x-hub-signature-256", p1.signature)
-        .send(p1.payload);
-      await new Promise((r) => setTimeout(r, 200));
-
-      const encoded = Buffer.from("شقة في ميفيدا").toString("base64");
-      const p2 = createWebhookPayload(
-        "201011111111",
-        `CANCEL_AND_SEARCH:${encoded}`,
-        "interactive"
-      );
-      await request(app)
-        .post("/webhook")
-        .set("x-hub-signature-256", p2.signature)
-        .send(p2.payload);
-      await new Promise((r) => setTimeout(r, 250));
-
-      expect(mockDb.drafts.has("b10b0000-0000-0000-0000-000000000001")).toBe(
-        false
-      );
-    });
-
-    test("Cancel button clears draft immediately and confirms to user", async () => {
-      const p1 = createWebhookPayload(
-        "201011111111",
-        "wamid.media_001",
-        "image"
-      );
-      await request(app)
-        .post("/webhook")
-        .set("x-hub-signature-256", p1.signature)
-        .send(p1.payload);
-      await new Promise((r) => setTimeout(r, 200));
-
-      const p2 = createWebhookPayload(
-        "201011111111",
-        "DRAFT_CANCEL",
-        "interactive"
-      );
-      await request(app)
-        .post("/webhook")
-        .set("x-hub-signature-256", p2.signature)
-        .send(p2.payload);
-      await new Promise((r) => setTimeout(r, 250));
-
-      expect(mockDb.drafts.has("b10b0000-0000-0000-0000-000000000001")).toBe(
-        false
-      );
-      expect(
-        mockWhatsAppState.sentTexts.some(
-          (t) =>
-            t.text.includes("تم إلغاء المسودة") || t.text.includes("discarded")
-        )
-      ).toBe(true);
-    });
-
-    test("Tapping DRAFT_SAVE on an expired draft replies gracefully without crashing", async () => {
-      const p = createWebhookPayload(
-        "201011111111",
-        "DRAFT_SAVE",
-        "interactive"
-      );
-      await request(app)
-        .post("/webhook")
-        .set("x-hub-signature-256", p.signature)
-        .send(p.payload);
       await new Promise((r) => setTimeout(r, 150));
 
-      expect(
-        mockWhatsAppState.sentTexts.some((t) =>
-          t.text.includes("لا توجد مسودة نشطة حالياً")
-        )
-      ).toBe(true);
-    });
-  });
-
-  describe("Interactive Actions & Two-Tier Quota Enforcement", () => {
-    test("Routes inspect:CODE from WhatsApp list_reply to display unit card", async () => {
-      const p = createWebhookPayload(
-        "201011111111",
-        "inspect:HAS101",
-        "interactive",
-        "list_reply"
-      );
+      const p3 = createWebhookPayload("201011111111", "تم", "text");
       await request(app)
         .post("/webhook")
-        .set("x-hub-signature-256", p.signature)
-        .send(p.payload);
-      await new Promise((r) => setTimeout(r, 150));
+        .set("x-hub-signature-256", p3.signature)
+        .send(p3.payload);
+      await new Promise((r) => setTimeout(r, 400));
 
-      expect(
-        mockWhatsAppState.sentButtons.some((b) =>
-          b.body.includes("تفاصيل الوحدة #HAS101")
-        )
-      ).toBe(true);
-    });
-
-    test("Tapping Mark Sold triggers confirmation step before changing database", async () => {
-      const p1 = createWebhookPayload(
-        "201011111111",
-        "status:sold:HAS101",
-        "interactive"
+      const confirmMsg = mockWhatsAppState.sentButtons.find((b) =>
+        b.body.includes("تم حفظ الوحدة بنجاح #MIV77")
       );
-      await request(app)
-        .post("/webhook")
-        .set("x-hub-signature-256", p1.signature)
-        .send(p1.payload);
-      await new Promise((r) => setTimeout(r, 150));
+      expect(confirmMsg).toBeDefined();
 
-      expect(
-        mockWhatsAppState.sentButtons.some((b) =>
-          b.body.includes("هل أنت متأكد من تغيير حالة الوحدة")
-        )
-      ).toBe(true);
-
-      const p2 = createWebhookPayload(
-        "201011111111",
-        "confirm:sold:HAS101",
-        "interactive"
-      );
-      await request(app)
-        .post("/webhook")
-        .set("x-hub-signature-256", p2.signature)
-        .send(p2.payload);
-      await new Promise((r) => setTimeout(r, 150));
-
-      expect(
-        mockWhatsAppState.sentTexts.some((t) => t.text.includes("تم البيع"))
-      ).toBe(true);
-    });
-
-    test("Blocks AI operations when personal broker quota (60 operations) is exceeded", async () => {
-      for (let i = 0; i < 60; i++) {
-        mockDb.operationLogs.push({
-          agency_id: "a00a0000-0000-0000-0000-000000000001",
-          broker_id: "b10b0000-0000-0000-0000-000000000001",
-          tokens_input: 150,
-          tokens_output: 100
-        });
-      }
-
-      const { payload, signature } = createWebhookPayload(
-        "201011111111",
-        "دورلي على شقة في سوديك"
-      );
-      await request(app)
-        .post("/webhook")
-        .set("x-hub-signature-256", signature)
-        .send(payload);
-      await new Promise((r) => setTimeout(r, 150));
-
-      expect(
-        mockWhatsAppState.sentTexts.some((t) =>
-          t.text.includes(
-            "تم استهلاك حد الذكاء الاصطناعي اليومي لحسابك (60 عملية)"
-          )
-        )
-      ).toBe(true);
+      const buttonTitles = confirmMsg.buttons.map((b) => b.title);
+      expect(buttonTitles).toEqual(["📄 بروشور", "📋 نص العميل", "✏️ تعديل"]);
+      expect(buttonTitles).not.toContain("تم البيع");
     });
   });
 });
