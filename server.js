@@ -155,13 +155,13 @@ async function logOperation(p) {
     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
   `;
   const cost = S.estimateCostUsd({
-    input: p.tokens_input,
-    output: p.tokens_output
+    input: p.tokens_input || 0,
+    output: p.tokens_output || 0
   });
   try {
     await pool.query(sql, [
-      c.agencyId || p.agency_id || null,
-      c.brokerId || p.broker_id || null,
+      p.agency_id || c.agencyId || null,
+      p.broker_id || c.brokerId || null,
       p.listing_code || null,
       p.operation_type,
       p.status || "success",
@@ -322,7 +322,6 @@ const isTransientError = (e) => {
 async function callGemini({ contents, config, model, maxRetries = 2 }) {
   const primary = model || CFG.geminiModel || "gemini-3.8-flash";
 
-  // Ensure 3 distinct tiers without duplicates
   const fallbackTier2 = "gemini-3.6-flash";
   const fallbackTier3 =
     CFG.geminiFallback && CFG.geminiFallback !== fallbackTier2
@@ -347,7 +346,6 @@ async function callGemini({ contents, config, model, maxRetries = 2 }) {
         );
         const dur = Date.now() - t0;
 
-        // Log successful model invocation to console
         log("info", "gemini call succeeded", {
           model: currentModel,
           duration_ms: dur,
@@ -378,7 +376,6 @@ async function callGemini({ contents, config, model, maxRetries = 2 }) {
           /RESOURCE_EXHAUSTED|free_tier_requests|limit:\s*20/i.test(errMsg);
         const isTimeout = /timeout|ETIMEDOUT/i.test(errMsg);
 
-        // Fail over immediately on server capacity spikes or quota exhaustion
         if (
           (isSpike || isQuota || isTimeout) &&
           models.length > 1 &&
@@ -391,7 +388,7 @@ async function callGemini({ contents, config, model, maxRetries = 2 }) {
             }). Failing over silently to next model...`
           );
           await U.sleep(500);
-          break; // move to next model in the cascade
+          break;
         }
 
         if (!isTransientError(err)) break;
@@ -538,20 +535,6 @@ async function loadListingImages(listingId) {
     [listingId]
   );
   return r.rows;
-}
-
-async function loadExisting(agencyId, code) {
-  const r = await pool.query(
-    "SELECT * FROM listings WHERE agency_id = $1 AND code = $2 LIMIT 1",
-    [agencyId, code]
-  );
-  if (!r.rowCount) return null;
-  const row = r.rows[0];
-  return {
-    ...row,
-    updatedAtMs: new Date(row.updated_at).getTime(),
-    images: await loadListingImages(row.id)
-  };
 }
 
 const canEdit = (broker, listing) =>
@@ -1000,7 +983,6 @@ async function sendListingConfirmation(broker, listing, created = true) {
         : "\n\n⚠️ *تنبيه موقع:* اسم الكمبوند قد يحتمل أكثر من منطقة. يرجى مراجعة وتحديد الموقع في الوصف إن لزم.";
   }
 
-  // 3 Actions: Brochure, Client Text, Edit (No "Sold" button on creation)
   const buttons = [
     {
       id: "flyer:en:dark:" + safeCode,
@@ -1059,7 +1041,6 @@ async function showListingCard(broker, listing) {
   const code = String(listing.code || "").toUpperCase();
   const det = listing.details || {};
 
-  // 1. Safe status fallback
   const rawStatus = String(listing.status || "active").toLowerCase();
   const statusLabel =
     rawStatus === "active"
@@ -1070,18 +1051,15 @@ async function showListingCard(broker, listing) {
       ? M(lang, "مؤرشفة", "Archived")
       : rawStatus;
 
-  // 2. Elevated unit type label
   const typeKey = String(listing.property_type || "apartment").toLowerCase();
   const typeLabel =
     (PROPERTY_TYPE_LABELS[lang] && PROPERTY_TYPE_LABELS[lang][typeKey]) ||
     PROPERTY_TYPE_LABELS.ar[typeKey] ||
     typeKey;
 
-  // 3. Compact currency format (e.g. 10M EGP / 10 مليون ج.م)
   const currency = ["USD", "EUR", "EGP"].includes(det.currency)
     ? det.currency
     : "EGP";
-
   const formattedPrice = listing.price_value
     ? T.formatAbbreviatedPrice(
         listing.price_value,
@@ -1091,7 +1069,6 @@ async function showListingCard(broker, listing) {
       )
     : listing.price_display || "-";
 
-  // 4. Elevated room details
   let bedStr = listing.bedrooms ? `${listing.bedrooms}` : "-";
   const extras = [];
   if (det.has_master_bedroom) extras.push(M(lang, "ماستر", "Master"));
@@ -1142,13 +1119,12 @@ async function showListingCard(broker, listing) {
   await WA.sendWhatsAppText(phone, "`" + code + "`");
 }
 
-// =========================================================================
-// Edit Intent Parser Helper
-// =========================================================================
+/* ========================================================================= */
+/* Edit Intent Parser Helper                                                 */
+/* ========================================================================= */
 function parseEditIntent(rawText) {
   const text = String(rawText || "").trim();
 
-  // Pattern A: Explicit "سعر HAS101 إلى 16 مليون"
   const priceMatch = text.match(
     /^(?:سعر|price)\s+#?([A-Za-z0-9_-]+)\s+(?:الى|إلى|to|=)\s+(.+)$/i
   );
@@ -1159,7 +1135,6 @@ function parseEditIntent(rawText) {
     };
   }
 
-  // Pattern B: "تعديل #HAS101 خليه 3 غرف" vs "تعديل #HAS101"
   const editMatch = text.match(
     /^(?:تعديل|عدل|update|edit)\s+#?([A-Za-z0-9_-]+)(?:\s+(.+))?$/i
   );
@@ -1173,16 +1148,17 @@ function parseEditIntent(rawText) {
   return null;
 }
 
-// =========================================================================
-// Path 1: One-Shot Express Patch with Preview Diff Card
-// =========================================================================
+/* ========================================================================= */
+/* Path 1: One-Shot Express Patch with Preview Diff Card                     */
+/* ========================================================================= */
 async function previewQuickPatch(broker, code, changeRequestText) {
+  const t0 = Date.now();
   const lang = broker.preferred_lang || "ar";
   const listing = await fetchListing(broker, code);
 
   if (!listing) return notFound(broker, code);
 
-  if (listing.broker_id !== broker.id) {
+  if (!canEdit(broker, listing)) {
     return reply(
       broker,
       M(
@@ -1193,7 +1169,6 @@ async function previewQuickPatch(broker, code, changeRequestText) {
     );
   }
 
-  // Quota check
   const quota = await withinAiQuota(broker.agency_id, broker.id);
   if (!quota.ok) {
     return reply(
@@ -1211,7 +1186,6 @@ async function previewQuickPatch(broker, code, changeRequestText) {
     M(lang, "⏳ جاري إعداد معاينة التعديل...", "⏳ Preparing edit preview...")
   );
 
-  // Calculate patch diff via Gemini patch prompt
   const patchPrompt = `You are a real estate database updater.
 Listing current data:
 ${JSON.stringify({
@@ -1292,6 +1266,19 @@ Return ONLY a JSON object containing the modified fields:
       );
     }
 
+    logOperation({
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      listing_code: code,
+      operation_type: "edit_preview_diff",
+      status: "success",
+      total_duration_ms: Date.now() - t0,
+      gemini_ms: aiRes.duration_ms || 0,
+      tokens_input: aiRes.usage?.input || 0,
+      tokens_output: aiRes.usage?.output || 0,
+      model_used: aiRes.model
+    }).catch(() => {});
+
     if (!diffLines.length) {
       return reply(
         broker,
@@ -1303,7 +1290,6 @@ Return ONLY a JSON object containing the modified fields:
       );
     }
 
-    // Cache the staged preview for this broker
     brokerPatchPreviews.set(broker.id, { code, patch, summaryDiff: diffLines });
 
     const body = M(
@@ -1331,6 +1317,15 @@ Return ONLY a JSON object containing the modified fields:
     await WA.sendWhatsAppButtons(to(broker), body, buttons);
   } catch (err) {
     log("error", "previewQuickPatch failure", errMeta(err));
+    logOperation({
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      listing_code: code,
+      operation_type: "edit_preview_diff",
+      status: "failed",
+      error_code: err.message,
+      total_duration_ms: Date.now() - t0
+    }).catch(() => {});
     await reply(
       broker,
       M(lang, "❌ فشل تحليل التعديل المطلوب.", "❌ Failed to process edit.")
@@ -1338,9 +1333,9 @@ Return ONLY a JSON object containing the modified fields:
   }
 }
 
-// =========================================================================
-// Path 2: Interactive Staging Session Lifecycle
-// =========================================================================
+/* ========================================================================= */
+/* Path 2: Interactive Staging Session Lifecycle                             */
+/* ========================================================================= */
 async function startInteractiveEditSession(
   broker,
   code,
@@ -1351,7 +1346,7 @@ async function startInteractiveEditSession(
 
   if (!listing) return notFound(broker, code);
 
-  if (listing.broker_id !== broker.id) {
+  if (!canEdit(broker, listing)) {
     return reply(
       broker,
       M(
@@ -1362,14 +1357,15 @@ async function startInteractiveEditSession(
     );
   }
 
-  // Open interactive session
-  brokerEditSessions.set(broker.id, {
+  const session = {
     code,
     texts: [],
     voice_ids: [],
     media_ids: [],
     stagedPatch: initialStagedPatch
-  });
+  };
+  brokerEditSessions.set(broker.id, session);
+  brokerEditSessions.set(to(broker), session);
 
   const body = M(
     lang,
@@ -1385,10 +1381,19 @@ async function startInteractiveEditSession(
     { id: "EDIT_CANCEL", title: M(lang, "❌ إلغاء", "❌ Cancel") }
   ];
 
+  await WA.sendWhatsAppText(to(broker), body);
   await WA.sendWhatsAppButtons(to(broker), body, buttons);
+
+  logOperation({
+    agency_id: broker.agency_id,
+    broker_id: broker.id,
+    listing_code: code,
+    operation_type: "edit_session_open",
+    status: "success",
+    total_duration_ms: 0
+  }).catch(() => {});
 }
 
-// Accumulate edits inside active session
 async function accumulateEditDraft(broker, { text, voiceId, mediaId }) {
   const lang = broker.preferred_lang || "ar";
   const session = brokerEditSessions.get(broker.id);
@@ -1418,8 +1423,8 @@ async function accumulateEditDraft(broker, { text, voiceId, mediaId }) {
   await WA.sendWhatsAppButtons(to(broker), body, buttons);
 }
 
-// Commit the entire Interactive Edit Session
 async function commitEditSession(broker) {
+  const t0 = Date.now();
   const lang = broker.preferred_lang || "ar";
   const session = brokerEditSessions.get(broker.id);
 
@@ -1434,6 +1439,7 @@ async function commitEditSession(broker) {
 
   if (!texts.length && !voice_ids.length && !stagedPatch) {
     brokerEditSessions.delete(broker.id);
+    brokerEditSessions.delete(to(broker));
     return reply(
       broker,
       M(
@@ -1456,14 +1462,20 @@ async function commitEditSession(broker) {
   const listing = await fetchListing(broker, code);
   if (!listing) {
     brokerEditSessions.delete(broker.id);
+    brokerEditSessions.delete(to(broker));
     return notFound(broker, code);
   }
+
+  let geminiMs = 0;
+  let tokensIn = 0;
+  let tokensOut = 0;
+  let modelUsed = null;
+  let dbMs = 0;
 
   try {
     let finalPatch = stagedPatch || {};
 
     if (texts.length || voice_ids.length) {
-      // Download voice notes if any
       const voiceBuffers = [];
       for (const vid of voice_ids) {
         const v = await WA.downloadWhatsAppMedia(vid);
@@ -1491,11 +1503,16 @@ Extract ONLY the changed fields as a JSON object.`
         config: { responseMimeType: "application/json", temperature: 0 }
       });
 
+      geminiMs = res.duration_ms || 0;
+      tokensIn = res.usage?.input || 0;
+      tokensOut = res.usage?.output || 0;
+      modelUsed = res.model;
+
       const extracted = JSON.parse(cleanJson(res.res.text));
       finalPatch = { ...finalPatch, ...extracted };
     }
 
-    // Apply patch directly to DB
+    const dbStart = Date.now();
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
@@ -1505,7 +1522,12 @@ Extract ONLY the changed fields as a JSON object.`
 
       const newPrice = finalPatch.price_value || listing.price_value;
       const cur = finalPatch.currency || listing.details?.currency || "EGP";
-      const newDisplay = T.formatAbbreviatedPrice(newPrice, cur, "en");
+      const newDisplay = T.formatAbbreviatedPrice(
+        newPrice,
+        cur,
+        "en",
+        listing.listing_type
+      );
       const newArea = finalPatch.area_value || listing.area_value;
       const newBeds = finalPatch.bedrooms || listing.bedrooms;
       const newDetails = {
@@ -1513,7 +1535,6 @@ Extract ONLY the changed fields as a JSON object.`
         ...(finalPatch.details || {})
       };
 
-      // Invalidate flyer cache on updates
       await client.query(
         `UPDATE listings
          SET price_value = $1, price_display = $2, area_value = $3, bedrooms = $4, details = $5, flyer_cache = '{}', updated_at = now()
@@ -1524,9 +1545,25 @@ Extract ONLY the changed fields as a JSON object.`
       await client.query("COMMIT");
     } finally {
       client.release();
+      dbMs = Date.now() - dbStart;
     }
 
     brokerEditSessions.delete(broker.id);
+    brokerEditSessions.delete(to(broker));
+
+    logOperation({
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      listing_code: code,
+      operation_type: "edit_session_commit",
+      status: "success",
+      total_duration_ms: Date.now() - t0,
+      gemini_ms: geminiMs,
+      db_ms: dbMs,
+      tokens_input: tokensIn,
+      tokens_output: tokensOut,
+      model_used: modelUsed
+    }).catch(() => {});
 
     await reply(
       broker,
@@ -1540,6 +1577,15 @@ Extract ONLY the changed fields as a JSON object.`
     await showListingCard(broker, refreshed);
   } catch (err) {
     log("error", "commitEditSession failure", errMeta(err));
+    logOperation({
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      listing_code: code,
+      operation_type: "edit_session_commit",
+      status: "failed",
+      error_code: err.message,
+      total_duration_ms: Date.now() - t0
+    }).catch(() => {});
     await reply(
       broker,
       M(lang, "❌ حدث خطأ أثناء حفظ التعديل.", "❌ Failed to save changes.")
@@ -1547,8 +1593,8 @@ Extract ONLY the changed fields as a JSON object.`
   }
 }
 
-// Commit the One-Shot Patch Preview
 async function commitQuickPatch(broker, code) {
+  const t0 = Date.now();
   const lang = broker.preferred_lang || "ar";
   const preview = brokerPatchPreviews.get(broker.id);
 
@@ -1565,6 +1611,8 @@ async function commitQuickPatch(broker, code) {
   const listing = await fetchListing(broker, code);
   if (!listing) return notFound(broker, code);
 
+  let dbMs = 0;
+  const dbStart = Date.now();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -1574,7 +1622,12 @@ async function commitQuickPatch(broker, code) {
 
     const newPrice = patch.price_value || listing.price_value;
     const cur = patch.currency || listing.details?.currency || "EGP";
-    const newDisplay = T.formatAbbreviatedPrice(newPrice, cur, "en");
+    const newDisplay = T.formatAbbreviatedPrice(
+      newPrice,
+      cur,
+      "en",
+      listing.listing_type
+    );
     const newArea = patch.area_value || listing.area_value;
     const newBeds = patch.bedrooms || listing.bedrooms;
     const newDetails = { ...(listing.details || {}), ...(patch.details || {}) };
@@ -1587,9 +1640,36 @@ async function commitQuickPatch(broker, code) {
     );
 
     await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    log("error", "commitQuickPatch DB failure", errMeta(err));
+    logOperation({
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      listing_code: code,
+      operation_type: "edit_patch_commit",
+      status: "failed",
+      error_code: err.message,
+      total_duration_ms: Date.now() - t0
+    }).catch(() => {});
+    return reply(
+      broker,
+      M(lang, "❌ فشل حفظ التعديل.", "❌ Failed to save patch.")
+    );
   } finally {
     client.release();
+    dbMs = Date.now() - dbStart;
   }
+
+  logOperation({
+    agency_id: broker.agency_id,
+    broker_id: broker.id,
+    listing_code: code,
+    operation_type: "edit_patch_commit",
+    status: "success",
+    total_duration_ms: Date.now() - t0,
+    db_ms: dbMs
+  }).catch(() => {});
 
   await reply(
     broker,
@@ -1603,31 +1683,32 @@ async function commitQuickPatch(broker, code) {
   await showListingCard(broker, refreshed);
 }
 
-// =========================================================================
-// Router Hooks inside handleInteractive & handleIncomingMessage
-// =========================================================================
-
-// In handleInteractive(broker, replyId):
-// -------------------------------------------------------------
+/* ========================================================================= */
+/* Router Hooks                                                              */
+/* ========================================================================= */
 async function handleInteractiveHook(broker, replyId) {
   const lang = broker.preferred_lang || "ar";
 
-  // 1. Enter Interactive Edit Session
   if (replyId.startsWith("edit_btn:")) {
     const code = replyId.split(":")[1];
     await startInteractiveEditSession(broker, code);
     return "done";
   }
 
-  // 2. Commit Interactive Edit Session
   if (replyId === "EDIT_SAVE") {
     await commitEditSession(broker);
     return "done";
   }
 
-  // 3. Cancel Interactive Edit Session
   if (replyId === "EDIT_CANCEL") {
     brokerEditSessions.delete(broker.id);
+    brokerEditSessions.delete(to(broker));
+    logOperation({
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      operation_type: "edit_session_cancel",
+      status: "success"
+    }).catch(() => {});
     await reply(
       broker,
       M(lang, "❌ تم إلغاء وضع التعديل.", "❌ Edit mode cancelled.")
@@ -1635,7 +1716,6 @@ async function handleInteractiveHook(broker, replyId) {
     return "done";
   }
 
-  // 4. One-Shot Quick Patch Actions
   if (replyId.startsWith("patch_confirm:")) {
     const code = replyId.split(":")[1];
     await commitQuickPatch(broker, code);
@@ -1653,6 +1733,12 @@ async function handleInteractiveHook(broker, replyId) {
 
   if (replyId.startsWith("patch_cancel:")) {
     brokerPatchPreviews.delete(broker.id);
+    logOperation({
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      operation_type: "edit_patch_cancel",
+      status: "success"
+    }).catch(() => {});
     await reply(
       broker,
       M(lang, "❌ تم إلغاء التعديل المعلق.", "❌ Edit cancelled.")
@@ -1660,15 +1746,12 @@ async function handleInteractiveHook(broker, replyId) {
     return "done";
   }
 
-  return null; // let other handlers process
+  return null;
 }
 
-// In handleIncomingMessage(broker, msg):
-// -------------------------------------------------------------
 async function handleMessageDispatchHook(broker, { text, voiceId, mediaId }) {
   const lang = broker.preferred_lang || "ar";
 
-  // 1. If currently inside an interactive edit session
   if (brokerEditSessions.has(broker.id)) {
     if (text) {
       const lower = text.trim().toLowerCase();
@@ -1678,6 +1761,7 @@ async function handleMessageDispatchHook(broker, { text, voiceId, mediaId }) {
       }
       if (lower === "الغاء" || lower === "إلغاء" || lower === "cancel") {
         brokerEditSessions.delete(broker.id);
+        brokerEditSessions.delete(to(broker));
         await reply(
           broker,
           M(lang, "❌ تم إلغاء وضع التعديل.", "❌ Edit mode cancelled.")
@@ -1685,28 +1769,24 @@ async function handleMessageDispatchHook(broker, { text, voiceId, mediaId }) {
         return "done";
       }
     }
-    // Otherwise, accumulate
     await accumulateEditDraft(broker, { text, voiceId, mediaId });
     return "done";
   }
 
-  // 2. If text triggers an edit intent
   if (text) {
     const editIntent = parseEditIntent(text);
     if (editIntent) {
       if (editIntent.payload) {
-        // One-Shot Express Patch -> calculate diff preview
         await previewQuickPatch(broker, editIntent.code, editIntent.payload);
         return "done";
       } else {
-        // Pure Edit Intent -> start staging session
         await startInteractiveEditSession(broker, editIntent.code);
         return "done";
       }
     }
   }
 
-  return null; // proceed to draft / search handlers
+  return null;
 }
 
 /* ====================================================================== */
@@ -1745,156 +1825,6 @@ async function promptDeleteListing(broker, codeRaw, lang) {
   );
 }
 
-function enterEditMode(broker, code) {
-  const lang = broker.preferred_lang || "ar";
-  brokerEditSessions.set(to(broker), {
-    code: code.toUpperCase(),
-    at: Date.now()
-  });
-
-  return reply(
-    broker,
-    M(
-      lang,
-      `✏️ *وضع التعديل نشط للوحدة #${code}*\nأرسل التعديلات المطلوبة مباشرة عبر رسالة نصية أو فويس نوت (مثال: *"السعر 11 مليون والدور الثالث مع دريسنج وماستر"*).\n\n• تم قفل الكود تلقائياً ولا داعي لذكره في الصوت أو النص.\n• اكتب *إلغاء* للخروج من وضع التعديل.`,
-      `✏️ *Edit Mode active for #${code}*\nSend the changes via text or voice note (e.g. *"Price 11M, 3rd floor with dressing and master"*).\n\n• Code is locked automatically.\n• Type *cancel* to exit.`
-    )
-  );
-}
-
-async function applyListingEdit(broker, code, instructions, lang) {
-  const listing = await fetchListing(broker, code);
-  if (!listing) return notFound(broker, code);
-
-  if (!canEdit(broker, listing)) {
-    return reply(
-      broker,
-      M(
-        lang,
-        "⛔ لا تملك صلاحية تعديل هذه الوحدة.",
-        "⛔ Unauthorized to edit this unit."
-      )
-    );
-  }
-
-  reply(
-    broker,
-    M(
-      lang,
-      "⏳ جاري تطبيق التعديلات وتحديث الوحدة...",
-      "⏳ Applying updates..."
-    )
-  ).catch(() => {});
-
-  const currentSnapshot = {
-    title: listing.title,
-    price_value: listing.price_value,
-    price_display: listing.price_display,
-    area_value: listing.area_value,
-    bedrooms: listing.bedrooms,
-    location: listing.location,
-    compound: listing.compound,
-    details: listing.details || {}
-  };
-
-  const prompt = `You are a real estate database updater for Egypt.
-CURRENT LISTING:
-${JSON.stringify(currentSnapshot)}
-
-REQUESTED CHANGES:
-"${instructions}"
-
-RULES:
-1. Extract ONLY modified fields.
-2. If price changes, calculate numeric price_value and detect currency ("EGP", "USD", "EUR").
-3. If floor/finishing changes, set both Arabic and English fields (e.g. floor, floor_en, finishing, finishing_en).
-4. If master bedroom or dressing room is mentioned, update has_master_bedroom / has_dressing_room.
-5. Strictly use "ناني" / "Nanny Room". Never "خادمة".
-6. Return JSON only conforming to:
-{
-  "price_value": number or null,
-  "currency": "EGP" | "USD" | "EUR" | null,
-  "area_value": number or null,
-  "bedrooms": number or null,
-  "compound": string or null,
-  "location": string or null,
-  "details": object or null
-}`;
-
-  try {
-    const aiRes = await callGemini({
-      contents: [{ text: prompt }],
-      config: { temperature: 0.1, responseMimeType: "application/json" }
-    });
-
-    const patch = JSON.parse(cleanJson(aiRes.res.text));
-
-    await withDistributedListingLock(broker.agency_id, code, async (client) => {
-      const mergedDetails = {
-        ...(listing.details || {}),
-        ...(patch.details || {})
-      };
-      if (patch.currency) mergedDetails.currency = patch.currency;
-
-      const newPrice = patch.price_value ?? listing.price_value;
-      const newDisplay = newPrice
-        ? T.formatAbbreviatedPrice(
-            newPrice,
-            mergedDetails.currency || "EGP",
-            lang
-          )
-        : listing.price_display;
-
-      await client.query(
-        `UPDATE listings SET
-           price_value = $1, price_display = $2,
-           area_value = COALESCE($3, area_value),
-           bedrooms = COALESCE($4, bedrooms),
-           compound = COALESCE($5, compound),
-           location = COALESCE($6, location),
-           details = $7,
-           flyer_cache = '{}'::jsonb,
-           updated_at = NOW()
-         WHERE id = $8`,
-        [
-          newPrice,
-          newDisplay,
-          patch.area_value,
-          patch.bedrooms,
-          patch.compound,
-          patch.location,
-          mergedDetails,
-          listing.id
-        ]
-      );
-    });
-
-    brokerEditSessions.delete(to(broker));
-    const updated = await fetchListing(broker, code);
-    setActiveListing(broker, code);
-
-    await reply(
-      broker,
-      M(
-        lang,
-        `✅ تم تعديل بيانات الوحدة #${code} بنجاح.`,
-        `✅ Unit #${code} updated.`
-      )
-    );
-    await showListingCard(broker, updated);
-  } catch (err) {
-    log("error", "applyListingEdit failure", errMeta(err));
-    await reply(
-      broker,
-      M(
-        lang,
-        "❌ فشل تعديل البيانات. يرجى المحاولة لاحقاً.",
-        "❌ Edit failed. Try again."
-      )
-    );
-  }
-}
-
 /* ====================================================================== */
 /* Draft Finalizer (Parallel I/O, Zero Vision at Save)                    */
 /* ====================================================================== */
@@ -1906,7 +1836,6 @@ async function finalizeDraft(broker, draft) {
   const textCount = (draft.texts || []).length;
   const voiceCount = (draft.voice_ids || []).length;
 
-  // Guard: Reject empty drafts with images only
   if (textCount === 0 && voiceCount === 0) {
     await WA.sendWhatsAppButtons(
       to(broker),
@@ -1923,7 +1852,6 @@ async function finalizeDraft(broker, draft) {
     return "done";
   }
 
-  // Quota verification
   const quotaCheck = await withinAiQuota(agencyId, broker.id);
   if (!quotaCheck.ok) {
     const quotaMsg =
@@ -1942,7 +1870,6 @@ async function finalizeDraft(broker, draft) {
     return "done";
   }
 
-  // Initial feedback (Tier 1 is silent under the hood; no intermediate messages sent)
   await WA.sendWhatsAppText(
     to(broker),
     M(
@@ -2006,7 +1933,6 @@ async function finalizeDraft(broker, draft) {
     const gem0 = Date.now();
     const u0 = Date.now();
 
-    // Parallel extraction and storage upload (Zero vision processing here; vision is lazy on brochure creation)
     const [aiResult, upResult] = await Promise.all([
       AI.extractPropertyDetails({
         texts: draft.texts || [],
@@ -2119,7 +2045,6 @@ async function finalizeDraft(broker, draft) {
     const savedListing = result.listing;
     setActiveListing(broker, savedListing.code);
 
-    // Only clear the draft when successfully committed to PostgreSQL
     await Drafts.clearDraft(broker.id);
     await sendListingConfirmation(broker, savedListing, result.created);
 
@@ -2133,7 +2058,6 @@ async function finalizeDraft(broker, draft) {
     perf.total_duration_ms = Date.now() - t0;
     logOperation(perf).catch(() => {});
 
-    // Interactive recovery prompt: User data is completely preserved in DB draft
     await WA.sendWhatsAppButtons(
       to(broker),
       M(
@@ -2160,11 +2084,16 @@ async function handleSearchMessage(
   broker,
   { text = "", audio = null, more = false, msgId = null } = {}
 ) {
+  const t0 = Date.now();
   const key = to(broker);
   const lang = broker.preferred_lang || "ar";
   const isVoice = Boolean(audio && audio.buffer && audio.buffer.length);
   let parsed;
   let offset = 0;
+  let geminiMs = 0;
+  let tokensIn = 0;
+  let tokensOut = 0;
+  let modelUsed = null;
 
   if (more) {
     const st = (
@@ -2212,13 +2141,12 @@ async function handleSearchMessage(
           : M(
               lang,
               "⛔ تم استهلاك حد الذكاء الاصطناعي اليومي للوكالة.",
-              "⛔ Daily agency AI limit reached."
+              "⛔ Daily agency AI quota reached."
             )
       );
       return;
     }
 
-    // Removed "المخزون"
     reply(
       broker,
       isVoice
@@ -2227,11 +2155,17 @@ async function handleSearchMessage(
     ).catch(() => {});
 
     try {
-      ({ parsed } = await S.parseSearchRequest(aiShim, {
+      const g0 = Date.now();
+      const parseResult = await S.parseSearchRequest(aiShim, {
         text,
         audio: isVoice ? [audio] : [],
         model: CFG.geminiModel
-      }));
+      });
+      geminiMs = Date.now() - g0;
+      parsed = parseResult.parsed;
+      tokensIn = parseResult.usage?.input || 0;
+      tokensOut = parseResult.usage?.output || 0;
+      modelUsed = parseResult.model || CFG.geminiModel;
     } catch (e) {
       log("warn", "search parse failed, using fallback", errMeta(e));
       if (isVoice) {
@@ -2278,7 +2212,6 @@ async function handleSearchMessage(
     }
   }
 
-  // 5 Units Per Page
   const run = async (relaxed) => {
     const { sql, params } = S.buildSearchQuery(broker.agency_id, parsed, {
       relaxed,
@@ -2290,13 +2223,39 @@ async function handleSearchMessage(
 
   let rows;
   let relaxed = Boolean(parsed.__relaxed);
+  let dbMs = 0;
+  const db0 = Date.now();
+
   try {
     rows = await run(relaxed);
+    dbMs = Date.now() - db0;
   } catch (e) {
     log("error", "search query failed", errMeta(e));
+    logOperation({
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      operation_type: more ? "search_more" : "search_query",
+      status: "failed",
+      error_code: e.message,
+      total_duration_ms: Date.now() - t0,
+      gemini_ms: geminiMs
+    }).catch(() => {});
     await reply(broker, M(lang, "❌ خطأ أثناء البحث.", "❌ Search error."));
     return;
   }
+
+  logOperation({
+    agency_id: broker.agency_id,
+    broker_id: broker.id,
+    operation_type: more ? "search_more" : "search_query",
+    status: "success",
+    total_duration_ms: Date.now() - t0,
+    gemini_ms: geminiMs,
+    db_ms: dbMs,
+    tokens_input: tokensIn,
+    tokens_output: tokensOut,
+    model_used: modelUsed
+  }).catch(() => {});
 
   const total = rows.length ? parseInt(rows[0].total_count, 10) : 0;
   if (!total) {
@@ -2319,13 +2278,11 @@ async function handleSearchMessage(
     )
     .catch(() => {});
 
-  // Stream each unit card directly
   for (const unit of rows) {
     await showListingCard(broker, unit);
-    await U.sleep(400); // Prevents notification bombardment
+    await U.sleep(400);
   }
 
-  // Pagination navigation message if more units exist
   const remaining = total - (offset + rows.length);
   if (remaining > 0) {
     const nextBatch = Math.min(5, remaining);
@@ -2372,9 +2329,12 @@ async function fetchListing(broker, code) {
 }
 
 async function cmdPrice(broker, codeRaw, priceRaw, lang) {
+  const t0 = Date.now();
   const code = codeRaw.toUpperCase();
   let outcome = null;
+  let dbMs = 0;
 
+  const dbStart = Date.now();
   await withDistributedListingLock(broker.agency_id, code, async (client) => {
     const r = await client.query(
       "SELECT * FROM listings WHERE agency_id = $1 AND code = $2 FOR UPDATE",
@@ -2405,6 +2365,18 @@ async function cmdPrice(broker, codeRaw, priceRaw, lang) {
     );
     outcome = { status: "ok", priceDisplay: p.priceDisplay };
   });
+  dbMs = Date.now() - dbStart;
+
+  logOperation({
+    agency_id: broker.agency_id,
+    broker_id: broker.id,
+    listing_code: code,
+    operation_type: "cmd_price_update",
+    status: outcome?.status === "ok" ? "success" : "failed",
+    error_code: outcome?.status !== "ok" ? outcome?.status : null,
+    total_duration_ms: Date.now() - t0,
+    db_ms: dbMs
+  }).catch(() => {});
 
   if (!outcome || outcome.status === "not_found") return notFound(broker, code);
   if (outcome.status === "unauthorized") {
@@ -2438,9 +2410,12 @@ async function cmdPrice(broker, codeRaw, priceRaw, lang) {
 }
 
 async function cmdStatus(broker, codeRaw, newStatus, lang) {
+  const t0 = Date.now();
   const code = codeRaw.toUpperCase();
   let outcome = null;
+  let dbMs = 0;
 
+  const dbStart = Date.now();
   await withDistributedListingLock(broker.agency_id, code, async (client) => {
     const r = await client.query(
       "SELECT * FROM listings WHERE agency_id = $1 AND code = $2 FOR UPDATE",
@@ -2462,6 +2437,18 @@ async function cmdStatus(broker, codeRaw, newStatus, lang) {
     );
     outcome = { status: "ok" };
   });
+  dbMs = Date.now() - dbStart;
+
+  logOperation({
+    agency_id: broker.agency_id,
+    broker_id: broker.id,
+    listing_code: code,
+    operation_type: `cmd_status_${newStatus}`,
+    status: outcome?.status === "ok" ? "success" : "failed",
+    error_code: outcome?.status !== "ok" ? outcome?.status : null,
+    total_duration_ms: Date.now() - t0,
+    db_ms: dbMs
+  }).catch(() => {});
 
   if (!outcome || outcome.status === "not_found") return notFound(broker, code);
   if (outcome.status === "unauthorized") {
@@ -2491,9 +2478,12 @@ async function cmdStatus(broker, codeRaw, newStatus, lang) {
 }
 
 async function cmdDelete(broker, codeRaw, lang) {
+  const t0 = Date.now();
   const code = codeRaw.toUpperCase();
   let outcome = null;
+  let dbMs = 0;
 
+  const dbStart = Date.now();
   await withDistributedListingLock(broker.agency_id, code, async (client) => {
     const r = await client.query(
       "SELECT * FROM listings WHERE agency_id = $1 AND code = $2 FOR UPDATE",
@@ -2535,6 +2525,18 @@ async function cmdDelete(broker, codeRaw, lang) {
     await client.query("DELETE FROM listings WHERE id = $1", [l.id]);
     outcome = { status: "ok" };
   });
+  dbMs = Date.now() - dbStart;
+
+  logOperation({
+    agency_id: broker.agency_id,
+    broker_id: broker.id,
+    listing_code: code,
+    operation_type: "cmd_delete_listing",
+    status: outcome?.status === "ok" ? "success" : "failed",
+    error_code: outcome?.status !== "ok" ? outcome?.status : null,
+    total_duration_ms: Date.now() - t0,
+    db_ms: dbMs
+  }).catch(() => {});
 
   if (!outcome || outcome.status === "not_found") return notFound(broker, code);
   if (outcome.status === "unauthorized") {
@@ -2628,6 +2630,7 @@ async function cmdStats(broker, lang) {
 }
 
 async function cmdExport(broker, lang) {
+  const t0 = Date.now();
   const key = `export:${U.normalizePhone(broker.phone)}`;
   if (cooldowns.get(key) > Date.now()) {
     return reply(
@@ -2669,6 +2672,15 @@ async function cmdExport(broker, lang) {
       `📄 Inventory Export (${r.rowCount} units)`
     )
   );
+
+  logOperation({
+    agency_id: broker.agency_id,
+    broker_id: broker.id,
+    operation_type: "cmd_export_csv",
+    status: sent ? "success" : "failed",
+    total_duration_ms: Date.now() - t0
+  }).catch(() => {});
+
   if (!sent) {
     await reply(
       broker,
@@ -2687,7 +2699,6 @@ async function cmdFlyer(
   const l = await fetchListing(broker, code);
   if (!l) return notFound(broker, code);
 
-  // Chat notification strictly respects broker's chat language
   reply(
     broker,
     M(
@@ -2697,13 +2708,20 @@ async function cmdFlyer(
     )
   ).catch(() => {});
 
-  // Brochure generation keeps 100% English layout
   const res = await renderFlyerOnDemand(broker, l, {
     lang: flyerLang,
     theme,
     unbranded
   });
-  // ... rest of cmdFlyer
+
+  if (res.ok && res.wa_media_id) {
+    await WA.sendWhatsAppImage(to(broker), res.wa_media_id, `#${code}`);
+  } else {
+    await reply(
+      broker,
+      M(lang, "❌ تعذر إنشاء البروشور.", "❌ Brochure generation failed.")
+    );
+  }
 }
 
 async function handleCommand(broker, raw, message = null) {
@@ -2761,9 +2779,11 @@ async function handleCommand(broker, raw, message = null) {
     return true;
   }
 
-  // 2. EDIT COMMAND
+  // 2. EDIT COMMAND (Hybrid UX Hook)
   if (
-    (m = n.match(/^(?:تعديل|edit)(?:\s+#?([a-zA-Z0-9_-]+))?(?:\s+(.+))?$/i))
+    (m = n.match(
+      /^(?:تعديل|عدل|edit|update)(?:\s+#?([a-zA-Z0-9_-]+))?(?:\s+(.+))?$/i
+    ))
   ) {
     const targetCode = resolveTargetCode(m[1]);
     const instructions = m[2]?.trim();
@@ -2779,9 +2799,9 @@ async function handleCommand(broker, raw, message = null) {
       return true;
     }
     if (instructions) {
-      await applyListingEdit(broker, targetCode, instructions, lang);
+      await previewQuickPatch(broker, targetCode, instructions);
     } else {
-      await enterEditMode(broker, targetCode);
+      await startInteractiveEditSession(broker, targetCode);
     }
     return true;
   }
@@ -2937,6 +2957,10 @@ async function handleInteractive(broker, message) {
     message.interactive?.list_reply?.id;
 
   if (!replyId) return "done";
+
+  const editHookOutcome = await handleInteractiveHook(broker, replyId);
+  if (editHookOutcome === "done") return "done";
+
   const lang = broker.preferred_lang || "ar";
   const draft = await Drafts.getDraft(broker.id);
 
@@ -3009,8 +3033,6 @@ async function handleInteractive(broker, message) {
     const flyerTheme = parts[2] || "dark";
     const code = parts[3];
 
-    // Pass broker's chat language (lang) for WhatsApp messages,
-    // and flyerCanvasLang strictly for the SVG brochure layout
     await cmdFlyer(broker, code, lang, {
       flyerLang: flyerCanvasLang,
       theme: flyerTheme
@@ -3028,7 +3050,7 @@ async function handleInteractive(broker, message) {
 
   if (replyId.startsWith("edit_btn:")) {
     const code = replyId.split(":")[1];
-    await enterEditMode(broker, code);
+    await startInteractiveEditSession(broker, code);
     return "done";
   }
 
@@ -3095,6 +3117,13 @@ async function handleImage(broker, message) {
 
   if (!mediaId) return "done";
 
+  if (brokerEditSessions.has(broker.id)) {
+    return await handleMessageDispatchHook(broker, {
+      mediaId,
+      text: caption || null
+    });
+  }
+
   const parsedCode = parseExplicitUnitCode(caption);
   let customCode = null;
   let text = caption.trim() || null;
@@ -3144,21 +3173,8 @@ async function handleAudio(broker, message) {
   const lang = broker.preferred_lang || "ar";
   if (!voiceId) return "done";
 
-  // Check active edit session first
-  const editSession = brokerEditSessions.get(to(broker));
-  if (editSession) {
-    const audioData = await WA.downloadWhatsAppMedia(voiceId);
-    if (audioData) {
-      const transcription = await AI.transcribeAudio(
-        audioData.buffer,
-        audioData.mimeType
-      );
-      if (transcription) {
-        await applyListingEdit(broker, editSession.code, transcription, lang);
-        return "done";
-      }
-    }
-    return "done";
+  if (brokerEditSessions.has(broker.id)) {
+    return await handleMessageDispatchHook(broker, { voiceId });
   }
 
   const draft = await Drafts.getDraft(broker.id);
@@ -3225,28 +3241,13 @@ async function handleText(broker, message) {
   if (!raw) return "done";
   const lang = broker.preferred_lang || "ar";
 
-  // Check active edit session first
-  const editSession = brokerEditSessions.get(to(broker));
-  if (editSession) {
-    if (/^(?:الغاء|إلغاء|cancel|خروج|exit)$/i.test(raw)) {
-      brokerEditSessions.delete(to(broker));
-      await reply(
-        broker,
-        M(lang, "تم إلغاء وضع التعديل.", "Edit mode cancelled.")
-      );
-      return "done";
-    }
-    await applyListingEdit(broker, editSession.code, raw, lang);
-    return "done";
-  }
+  const editHandled = await handleMessageDispatchHook(broker, { text: raw });
+  if (editHandled === "done") return "done";
 
   if (await handleCommand(broker, raw, message)) return "done";
 
   const draft = await Drafts.getDraft(broker.id);
 
-  // =========================================================================
-  // DRAFTING STATE
-  // =========================================================================
   if (draft) {
     if (/^(?:تم|تمام|حفظ|ابدا|ابدأ|done|save)$/i.test(raw)) {
       return finalizeDraft(broker, draft);
@@ -3374,13 +3375,9 @@ async function handleText(broker, message) {
     return "batched";
   }
 
-  // =========================================================================
-  // IDLE STATE
-  // =========================================================================
   const RESERVED_WORDS =
     /^(add|new|help|save|edit|sold|delete|remove|stats|excel|more|next|المزيد|تم|حفظ)$/i;
 
-  // Direct Unit Lookup (e.g., "#HAS101", "كود HAS101", "code HAS101")
   const explicitLookup = parseExplicitUnitCode(raw);
   if (
     explicitLookup.hasCode &&
@@ -3410,7 +3407,6 @@ async function handleText(broker, message) {
     return "done";
   }
 
-  // Standalone Add Command (Allows bare "إضافة", "اضافة", "add", "new")
   if (/^(?:\+|إضافة:?|اضافة:?|add:?|new:?)(?:\s+.*)?$/i.test(raw)) {
     const cleanText = raw
       .replace(/^(?:\+|إضافة:?|اضافة:?|add:?|new:?)\s*/i, "")
@@ -3718,4 +3714,10 @@ if (require.main === module) {
   boot();
 }
 
-module.exports = { app, brokerEditSessions, recentBrokerListings };
+module.exports = {
+  app,
+  brokerEditSessions,
+  recentBrokerListings,
+  brokerPatchPreviews,
+  brokerCache
+};

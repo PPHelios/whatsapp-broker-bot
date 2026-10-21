@@ -101,6 +101,81 @@ function getInitialListings() {
   ];
 }
 
+function getParamAt(params, index) {
+  return params && params.length >= index ? params[index - 1] : undefined;
+}
+
+function mockMatchesSearchFilters(listing, sql, params) {
+  const q = String(sql).toLowerCase();
+
+  if (q.includes("l.property_type = any")) {
+    const match = q.match(/l\.property_type = any\(\$(\d+)::text\[\]\)/);
+    const idx = match ? Number(match[1]) : null;
+    if (idx) {
+      const allowed = getParamAt(params, idx);
+      if (Array.isArray(allowed) && !allowed.includes(listing.property_type)) {
+        return false;
+      }
+    }
+  }
+
+  const bedroomsExact = q.match(/l\.bedrooms = \$(\d+)/);
+  if (bedroomsExact) {
+    const expected = Number(getParamAt(params, Number(bedroomsExact[1])));
+    if (listing.bedrooms !== expected) return false;
+  }
+
+  const bedroomsMin = q.match(/l\.bedrooms >= \$(\d+)/);
+  const bedroomsMax = q.match(/l\.bedrooms <= \$(\d+)/);
+  if (bedroomsMin) {
+    const min = Number(getParamAt(params, Number(bedroomsMin[1])));
+    if (listing.bedrooms < min) return false;
+  }
+  if (bedroomsMax) {
+    const max = Number(getParamAt(params, Number(bedroomsMax[1])));
+    if (listing.bedrooms > max) return false;
+  }
+
+  const priceMax = q.match(/l\.price_value <= \$(\d+)/);
+  if (priceMax) {
+    const max = Number(getParamAt(params, Number(priceMax[1])));
+    if (listing.price_value > max) return false;
+  }
+
+  const priceMin = q.match(/l\.price_value >= \$(\d+)/);
+  if (priceMin) {
+    const min = Number(getParamAt(params, Number(priceMin[1])));
+    if (listing.price_value < min) return false;
+  }
+
+  if (q.includes("coalesce(l.details->>'currency'")) {
+    const match = q.match(/\$\d+/g);
+    const currency =
+      match && match[match.length - 1]
+        ? getParamAt(params, Number(match[match.length - 1].slice(1)))
+        : null;
+    if (currency && (listing.details?.currency || "EGP") !== currency)
+      return false;
+  }
+
+  if (q.includes("normalize_arabic(coalesce(l.compound")) {
+    const match = q.match(/\$\d+/g);
+    const compoundParam =
+      match && match[match.length - 1]
+        ? getParamAt(params, Number(match[match.length - 1].slice(1)))
+        : null;
+    if (compoundParam) {
+      const compound = String(compoundParam).trim();
+      const hay = `${listing.compound || ""} ${
+        listing.title || ""
+      }`.toLowerCase();
+      if (!hay.includes(compound.toLowerCase())) return false;
+    }
+  }
+
+  return true;
+}
+
 const mockDb = {
   brokers: [
     {
@@ -205,6 +280,9 @@ jest.mock("../lib/db", () => ({
         const activeListings = mockDb.listings.filter(
           (l) => l.agency_id === params[0] && l.status === "active"
         );
+        const filtered = activeListings.filter((l) =>
+          mockMatchesSearchFilters(l, sql, params)
+        );
         const limit =
           typeof params[params.length - 2] === "number"
             ? params[params.length - 2]
@@ -213,12 +291,10 @@ jest.mock("../lib/db", () => ({
           typeof params[params.length - 1] === "number"
             ? params[params.length - 1]
             : 0;
-        const paged = activeListings
-          .slice(offset, offset + limit)
-          .map((row) => ({
-            ...row,
-            total_count: activeListings.length
-          }));
+        const paged = filtered.slice(offset, offset + limit).map((row) => ({
+          ...row,
+          total_count: filtered.length
+        }));
         return { rows: paged, rowCount: paged.length };
       }
 
@@ -481,6 +557,7 @@ jest.mock("../lib/whatsapp", () => ({
 const mockGeminiState = {
   shouldTimeoutOn38: false,
   shouldReturnMarkdownWrappedJson: false,
+  nextResponse: null,
   extractedListing: {
     title: "شقة للبيع في ميفيدا",
     property_type: "apartment",
@@ -534,12 +611,14 @@ jest.mock("@google/genai", () => ({
           }
 
           const promptText = JSON.stringify(contents);
+          const queuedResponse = mockGeminiState.nextResponse;
           let outObj = mockGeminiState.extractedListing;
 
           if (promptText.includes("real estate database updater")) {
-            outObj = mockGeminiState.patchEdit;
+            outObj = queuedResponse || mockGeminiState.patchEdit;
+            mockGeminiState.nextResponse = null;
           } else if (promptText.includes("search-understanding layer")) {
-            outObj = {
+            outObj = queuedResponse || {
               intent: "search",
               filters: {
                 property_types: ["apartment"],
@@ -548,6 +627,10 @@ jest.mock("@google/genai", () => ({
               locations: ["ميفيدا"],
               location_terms: ["ميفيدا"]
             };
+            mockGeminiState.nextResponse = null;
+          } else if (queuedResponse) {
+            outObj = queuedResponse;
+            mockGeminiState.nextResponse = null;
           }
 
           let jsonStr = JSON.stringify(outObj);
@@ -564,11 +647,22 @@ jest.mock("@google/genai", () => ({
   }))
 }));
 
-const { app, brokerEditSessions, recentBrokerListings } = require("../server");
+const {
+  app,
+  brokerEditSessions,
+  recentBrokerListings,
+  brokerPatchPreviews,
+  brokerCache
+} = require("../server");
 const WA = require("../lib/whatsapp");
 const T = require("../lib/text");
 const U = require("../lib/util");
+const Drafts = require("../lib/drafts");
 const { deleteStorageFiles } = require("../lib/supabase");
+
+function mockGeminiResponseOnce(response) {
+  mockGeminiState.nextResponse = response;
+}
 
 let msgSequence = 0;
 function createWebhookPayload(
@@ -630,6 +724,10 @@ describe("Comprehensive Broker Bot E2E, Quota, & State Machine Tests", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockDb.listings = getInitialListings(); // Full isolation across tests
+    mockDb.brokers.forEach((broker) => {
+      broker.preferred_lang = "ar";
+      broker.is_active = true;
+    });
     mockDb.drafts.clear();
     mockDb.searchState.clear();
     mockDb.operationLogs = [];
@@ -640,8 +738,11 @@ describe("Comprehensive Broker Bot E2E, Quota, & State Machine Tests", () => {
     mockWhatsAppState.simulateRateLimitOnce = false;
     mockGeminiState.shouldTimeoutOn38 = false;
     mockGeminiState.shouldReturnMarkdownWrappedJson = false;
+    mockGeminiState.nextResponse = null;
+    if (brokerCache) brokerCache.clear();
     if (brokerEditSessions) brokerEditSessions.clear();
     if (recentBrokerListings) recentBrokerListings.clear();
+    if (brokerPatchPreviews) brokerPatchPreviews.clear();
   });
 
   describe("WhatsApp Operational Resilience", () => {
@@ -796,7 +897,6 @@ describe("Comprehensive Broker Bot E2E, Quota, & State Machine Tests", () => {
       ).toBe(false);
     });
   });
-
   describe("Interactive Edit Mode Session", () => {
     test("Entering edit mode via 'تعديل #HAS101' locks code and updates on follow-up message", async () => {
       const p1 = createWebhookPayload("201011111111", "تعديل #HAS101");
@@ -804,51 +904,69 @@ describe("Comprehensive Broker Bot E2E, Quota, & State Machine Tests", () => {
         .post("/webhook")
         .set("x-hub-signature-256", p1.signature)
         .send(p1.payload);
-      await new Promise((r) => setTimeout(r, 150));
+
+      await new Promise((r) => setTimeout(r, 200));
 
       expect(
-        mockWhatsAppState.sentTexts.some((t) =>
-          t.text.includes("وضع التعديل نشط للوحدة #HAS101")
+        mockWhatsAppState.sentTexts.some(
+          (t) => t.text && t.text.includes("وضع التعديل نشط للوحدة #HAS101")
         )
       ).toBe(true);
 
+      // Follow-up modification in session
       const p2 = createWebhookPayload(
         "201011111111",
-        "السعر 16 مليون والمساحة 190م والدور الرابع"
+        "السعر 12 مليون والدور الثالث"
       );
       await request(app)
         .post("/webhook")
         .set("x-hub-signature-256", p2.signature)
         .send(p2.payload);
-      await new Promise((r) => setTimeout(r, 300));
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      // Finalize the staged session with 'تم'
+      mockGeminiResponseOnce({
+        price_value: 12000000,
+        details: { floor: "الدور الثالث" }
+      });
+
+      const pDone = createWebhookPayload("201011111111", "تم");
+      await request(app)
+        .post("/webhook")
+        .set("x-hub-signature-256", pDone.signature)
+        .send(pDone.payload);
+
+      await new Promise((r) => setTimeout(r, 200));
 
       expect(
-        mockWhatsAppState.sentTexts.some((t) =>
-          t.text.includes("تم تعديل بيانات الوحدة #HAS101 بنجاح")
+        mockWhatsAppState.sentTexts.some(
+          (t) =>
+            t.text && t.text.includes("تم تعديل بيانات الوحدة #HAS101 بنجاح")
         )
       ).toBe(true);
     });
 
     test("Entering edit mode via interactive button 'edit_btn:HAS101'", async () => {
-      const p = createWebhookPayload(
+      const p1 = createWebhookPayload(
         "201011111111",
         "edit_btn:HAS101",
         "interactive"
       );
       await request(app)
         .post("/webhook")
-        .set("x-hub-signature-256", p.signature)
-        .send(p.payload);
-      await new Promise((r) => setTimeout(r, 150));
+        .set("x-hub-signature-256", p1.signature)
+        .send(p1.payload);
+
+      await new Promise((r) => setTimeout(r, 200));
 
       expect(
-        mockWhatsAppState.sentTexts.some((t) =>
-          t.text.includes("وضع التعديل نشط للوحدة #HAS101")
+        mockWhatsAppState.sentTexts.some(
+          (t) => t.text && t.text.includes("وضع التعديل نشط للوحدة #HAS101")
         )
       ).toBe(true);
     });
   });
-
   describe("Two-Step Deletion Flow", () => {
     test("Prompt deletion requires confirmation dialog before erasing listing", async () => {
       const p1 = createWebhookPayload("201011111111", "حذف #HAS101");
@@ -1075,6 +1193,269 @@ describe("Comprehensive Broker Bot E2E, Quota, & State Machine Tests", () => {
         "⚠️ Confirm Delete",
         "❌ Cancel"
       ]);
+    });
+  });
+  describe("Search Engine Enhancements & Hybrid Edit UX Suite", () => {
+    beforeEach(async () => {
+      // 1. Reset state arrays without calling non-existent .reset()
+      mockWhatsAppState.sentTexts = [];
+      mockWhatsAppState.sentButtons = [];
+      mockWhatsAppState.sentImages = [];
+      mockWhatsAppState.sentDocuments = [];
+      mockGeminiState.nextResponse = null;
+
+      // 2. Clear any lingering drafts or edit sessions that would block search
+      await Drafts.clearDraft("b10b0000-0000-0000-0000-000000000001");
+      brokerEditSessions.clear();
+      brokerPatchPreviews.clear();
+    });
+
+    // -------------------------------------------------------------------------
+    // 1. Strict Search Criteria & Compound Isolation
+    // -------------------------------------------------------------------------
+    test("Compound boundary test: Mivida search does not leak Hyde Park units", async () => {
+      mockGeminiResponseOnce({
+        intent: "search",
+        transcript: "عايز شقة في ميفيدا تحت 13 مليون",
+        language: "ar",
+        filters: {
+          compound: "ميفيدا",
+          property_types: ["apartment"],
+          price_max: 13000000
+        },
+        locations: ["ميفيدا"],
+        location_terms: ["ميفيدا", "mivida"]
+      });
+
+      const payload = createWebhookPayload(
+        "201011111111",
+        "عايز شقة في ميفيدا تحت 13 مليون"
+      );
+
+      await request(app)
+        .post("/webhook")
+        .set("x-hub-signature-256", payload.signature)
+        .send(payload.payload);
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      expect(
+        mockWhatsAppState.sentTexts.some(
+          (t) => t.text && t.text.includes("🔍 جاري البحث...")
+        )
+      ).toBe(true);
+
+      const leakedCard = mockWhatsAppState.sentButtons.find(
+        (b) => b.body && b.body.includes("هايد بارك")
+      );
+      expect(leakedCard).toBeUndefined();
+    });
+
+    test("Exact bedroom filter: 2-bedroom query strictly excludes 3+ bedrooms", async () => {
+      const unit2Bed = {
+        id: "b20b0000-0000-0000-0000-000000000002",
+        agency_id: "a10a0000-0000-0000-0000-000000000001",
+        broker_id: "b10b0000-0000-0000-0000-000000000001",
+        code: "BED202",
+        title: "شقة غرفتين للبيع في زايد",
+        property_type: "apartment",
+        listing_type: "sale",
+        price_value: 8500000,
+        price_display: "8.5M EGP",
+        area_value: 125,
+        bedrooms: 2,
+        location: "الشيخ زايد",
+        compound: "سوديك ويست",
+        details: { bathrooms: 2, floor: "الدور الثاني" },
+        status: "active",
+        search_text_normalized: "شقة غرفتين للبيع في زايد الشيخ زايد سوديك ويست"
+      };
+
+      if (!mockDb.listings.some((l) => l.code === "BED202")) {
+        mockDb.listings.push(unit2Bed);
+      }
+
+      mockGeminiResponseOnce({
+        intent: "search",
+        transcript: "شقة غرفتين في الشيخ زايد",
+        language: "ar",
+        filters: {
+          bedrooms_min: 2,
+          bedrooms_max: 2,
+          property_types: ["apartment"]
+        },
+        locations: ["الشيخ زايد"],
+        location_terms: ["الشيخ زايد", "زايد"]
+      });
+
+      const payload = createWebhookPayload(
+        "201011111111",
+        "شقة غرفتين في الشيخ زايد"
+      );
+
+      await request(app)
+        .post("/webhook")
+        .set("x-hub-signature-256", payload.signature)
+        .send(payload.payload);
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      const returnedCards = mockWhatsAppState.sentButtons.filter(
+        (b) => b.body && b.body.includes("تفاصيل الوحدة #")
+      );
+
+      for (const card of returnedCards) {
+        expect(card.body).toMatch(/🛏️ الغرف:\s*2/);
+        expect(card.body).not.toMatch(/🛏️ الغرف:\s*[345]/);
+      }
+    });
+
+    // -------------------------------------------------------------------------
+    // 2. Abbreviated Pricing & Rental Cadence
+    // -------------------------------------------------------------------------
+    test("Rentals and sales format prices with compact units and no decimal padding", async () => {
+      const rentUnit = {
+        id: "b20b0000-0000-0000-0000-000000000003",
+        agency_id: "a00a0000-0000-0000-0000-000000000001",
+        broker_id: "b10b0000-0000-0000-0000-000000000001",
+        code: "RNT303",
+        title: "شقة للإيجار في ميفيدا",
+        property_type: "apartment",
+        listing_type: "rent",
+        price_value: 40000,
+        price_display: "40.0000000000000000K EGP / mo",
+        area_value: 160,
+        bedrooms: 3,
+        location: "ميفيدا، التجمع الخامس",
+        compound: "ميفيدا",
+        details: { bathrooms: 2, currency: "EGP" },
+        status: "active"
+      };
+
+      if (!mockDb.listings.some((l) => l.code === "RNT303")) {
+        mockDb.listings.push(rentUnit);
+      }
+
+      const payload = createWebhookPayload("201011111111", "كود RNT303");
+
+      await request(app)
+        .post("/webhook")
+        .set("x-hub-signature-256", payload.signature)
+        .send(payload.payload);
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      const card = mockWhatsAppState.sentButtons.find(
+        (b) => b.body && b.body.includes("RNT303")
+      );
+      expect(card).toBeDefined();
+
+      expect(card.body).not.toMatch(/\.000000/);
+      expect(card.body).toMatch(/(?:40 ألف ج\.م \/ شهر|40K EGP \/ mo)/);
+    });
+
+    // -------------------------------------------------------------------------
+    // 3. Hybrid Edit Flow: Express Patch & Preview Diff
+    // -------------------------------------------------------------------------
+    test("One-shot edit command produces a diff preview card with confirmation buttons", async () => {
+      mockGeminiResponseOnce({
+        price_value: 16500000,
+        currency: "EGP",
+        bedrooms: 4,
+        details: {
+          floor: "الدور الرابع"
+        }
+      });
+
+      const payload = createWebhookPayload(
+        "201011111111",
+        "عدل HAS101 السعر 16.5 مليون والدور الرابع"
+      );
+
+      await request(app)
+        .post("/webhook")
+        .set("x-hub-signature-256", payload.signature)
+        .send(payload.payload);
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      const previewCard = mockWhatsAppState.sentButtons.find(
+        (b) => b.body && b.body.includes("معاينة تعديل الوحدة #HAS101")
+      );
+      expect(previewCard).toBeDefined();
+      expect(previewCard.body).toContain("16.5");
+      expect(previewCard.body).toContain("الرابع");
+
+      const buttonIds = previewCard.buttons.map((b) => b.id);
+      expect(buttonIds).toEqual([
+        "patch_confirm:HAS101",
+        "patch_more:HAS101",
+        "patch_cancel:HAS101"
+      ]);
+    });
+
+    test("Pressing [✏️ تعديل إضافي] escalates to interactive staging mode waiting for 'تم'", async () => {
+      const btnPayload = createWebhookPayload(
+        "201011111111",
+        "patch_more:HAS101",
+        "interactive"
+      );
+
+      await request(app)
+        .post("/webhook")
+        .set("x-hub-signature-256", btnPayload.signature)
+        .send(btnPayload.payload);
+
+      await new Promise((r) => setTimeout(r, 150));
+
+      const stagingPrompt = mockWhatsAppState.sentButtons.find(
+        (b) => b.body && b.body.includes("وضع التعديل نشط للوحدة #HAS101")
+      );
+      expect(stagingPrompt).toBeDefined();
+      expect(stagingPrompt.buttons.map((b) => b.id)).toEqual([
+        "EDIT_SAVE",
+        "EDIT_CANCEL"
+      ]);
+
+      const extraMsg = createWebhookPayload(
+        "201011111111",
+        "وضيف كمان غرفة ناني"
+      );
+
+      await request(app)
+        .post("/webhook")
+        .set("x-hub-signature-256", extraMsg.signature)
+        .send(extraMsg.payload);
+
+      await new Promise((r) => setTimeout(r, 150));
+
+      expect(
+        mockWhatsAppState.sentButtons.some(
+          (b) => b.body && b.body.includes("تم إضافة التحديث للمسودة")
+        )
+      ).toBe(true);
+
+      mockGeminiResponseOnce({
+        details: {
+          nanny_room: true
+        }
+      });
+
+      const doneMsg = createWebhookPayload("201011111111", "تم");
+
+      await request(app)
+        .post("/webhook")
+        .set("x-hub-signature-256", doneMsg.signature)
+        .send(doneMsg.payload);
+
+      await new Promise((r) => setTimeout(r, 250));
+
+      expect(
+        mockWhatsAppState.sentTexts.some(
+          (t) =>
+            t.text && t.text.includes("تم تعديل بيانات الوحدة #HAS101 بنجاح")
+        )
+      ).toBe(true);
     });
   });
 });
