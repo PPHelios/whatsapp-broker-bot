@@ -1,153 +1,206 @@
--- Run once in Supabase: SQL Editor -> paste -> Run. (Postgres 14+ required for bit_count)
--- Also create a PUBLIC storage bucket named "media" (Storage -> New bucket).
+-- schema.sql
+-- Run once in Supabase / PostgreSQL 14+
+-- Make sure a public storage bucket named "listing-images" exists in Supabase.
 
 create extension if not exists pgcrypto;
 create extension if not exists pg_trgm;
 
--- Auto-increment sequence for automatic code fallback when broker doesn't supply a code
-create sequence if not exists listing_code_seq start with 1000;
+-- ---------------------------------------------------------------------------
+-- Pure Immutable Arabic Normalization Function (Enables GIN Trigram Search)
+-- ---------------------------------------------------------------------------
+create or replace function normalize_arabic(t text) returns text language sql immutable as $$
+  select regexp_replace(
+    regexp_replace(
+      translate(
+        lower(coalesce(t, '')),
+        'أإآٱىةؤئ٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹',
+        'اااايھووي01234567890123456789'
+      ),
+      '[\u064B-\u065F\u0670\u0640]', '', 'g'
+    ),
+    '[^a-z0-9\u0600-\u06FF\s-]', ' ', 'g'
+  );
+$$;
 
--- ---------------------------------------------------------------- tenants
+-- ---------------------------------------------------------------------------
+-- 1. Agencies (Tenants)
+-- ---------------------------------------------------------------------------
 create table if not exists agencies (
-  id            uuid primary key default gen_random_uuid(),
-  name          text not null,
-  logo_url      text,                          -- Public CDN URL
-  brand_color   text not null default '#0f172a',
-  accent_color  text not null default '#38bdf8',
-  created_at    timestamptz not null default now()
+  id              uuid primary key default gen_random_uuid(),
+  name            text not null,
+  logo_url        text,
+  primary_color   text not null default '#0B132B',
+  secondary_color text not null default '#D4AF37',
+  logo_bg         text not null default '#FFFFFF',
+  flyer_theme     text not null default 'dark' check (flyer_theme in ('dark', 'light')),
+  created_at      timestamptz not null default now()
 );
 
+-- ---------------------------------------------------------------------------
+-- 2. Brokers (Agents)
+-- ---------------------------------------------------------------------------
 create table if not exists brokers (
-  id             uuid primary key default gen_random_uuid(),
-  agency_id      uuid not null references agencies(id) on delete cascade,
-  phone          text not null unique,         -- WhatsApp number, digits only (e.g., 201001234567)
-  name           text not null,
-  contact_phone  text,                         -- Displayed on flyers; defaults to phone
-  role           text not null default 'broker' check (role in ('broker','admin')),
-  is_active      boolean not null default true,
-  created_at     timestamptz not null default now()
+  id               uuid primary key default gen_random_uuid(),
+  agency_id        uuid not null references agencies(id) on delete cascade,
+  name             text not null,
+  phone            text not null,
+  phone_normalized text not null unique,
+  contact_phone    text,
+  role             text not null default 'agent' check (role in ('agent', 'broker', 'admin', 'owner', 'manager')),
+  is_active        boolean not null default true,
+  preferred_lang   text not null default 'ar' check (preferred_lang in ('ar', 'en')),
+  last_active_at   timestamptz default now(),
+  created_at       timestamptz not null default now()
 );
 create index if not exists brokers_agency_idx on brokers(agency_id);
+create index if not exists brokers_phone_idx on brokers(phone_normalized);
 
--- ---------------------------------------------------------------- listings
+-- ---------------------------------------------------------------------------
+-- 3. Listings
+-- ---------------------------------------------------------------------------
 create table if not exists listings (
-  id                   uuid primary key default gen_random_uuid(),
-  code                 text not null,          -- Scoped alphanumeric code (e.g., "1042", "MV-104", "A12")
-  agency_id            uuid not null references agencies(id) on delete cascade,
-  broker_id            uuid not null references brokers(id),
-  status               text not null default 'draft' check (status in ('draft','active','sold','archived')),
-  title                text,
-  property_type        text,
-  listing_type         text,
-  price_value          numeric,
-  price_display        text,
-  area_value           numeric,
-  bedrooms             int,
-  location             text,
-  features             text[] not null default '{}',
-  language             text not null default 'ar',
-  lat                  double precision,
-  lng                  double precision,
-  location_name        text,
-  raw_text             text,
-  details              jsonb not null default '{}'::jsonb,   -- Full Gemini-extracted payload
-  search_text          text not null default '',             -- Normalized text for SQL ILIKE / Trigram search
-  flyer_url            text,                                 -- Public URL to the generated brochure
-  hero_position        int not null default 0,               -- Index of the hero image chosen by AI
+  id                uuid primary key default gen_random_uuid(),
+  agency_id         uuid not null references agencies(id) on delete cascade,
+  broker_id         uuid references brokers(id) on delete set null,
+  code              text not null,
+  title             text,
+  property_type     text,
+  listing_type      text not null default 'sale' check (listing_type in ('sale', 'rent')),
+  price_value       numeric,
+  price_display     text,
+  area_value        numeric,
+  bedrooms          int,
+  location          text,
+  compound          text,
+  district          text,
+  city              text,
+  location_keywords text[] not null default '{}',
+  details           jsonb not null default '{}'::jsonb,
+  flyer_cache       jsonb not null default '{}'::jsonb,
+  status            text not null default 'active' check (status in ('active', 'sold', 'archived', 'draft')),
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now(),
 
-  -- Developer Installment Model
-  is_primary_developer boolean not null default false,
-  down_payment_value   numeric,
-  installment_years    int,
-  installment_value    numeric,                              -- Quarterly or monthly check amount
-  payment_frequency    text default 'quarterly' check (payment_frequency in ('monthly','quarterly','semi_annual','annual')),
-  delivery_date        text,
-  maintenance_pct      numeric default 8,
+  -- Generated searchable text column indexed via trigrams
+  search_text_normalized text generated always as (
+    normalize_arabic(
+      coalesce(title, '') || ' ' ||
+      coalesce(location, '') || ' ' ||
+      coalesce(compound, '') || ' ' ||
+      coalesce(district, '') || ' ' ||
+      coalesce(city, '') || ' ' ||
+      array_to_string(location_keywords, ' ') || ' ' ||
+      coalesce(details::text, '')
+    )
+  ) stored,
 
-  created_at           timestamptz not null default now(),
-  updated_at           timestamptz not null default now(),
-
-  -- Scope code uniqueness per agency (Agency A and Agency B can both have unit #101)
   constraint listings_agency_code_unique unique (agency_id, code)
 );
 
 create index if not exists listings_agency_status_idx on listings(agency_id, status);
-create index if not exists listings_search_trgm_idx on listings using gin (search_text gin_trgm_ops);
-create index if not exists listings_agency_code_idx on listings(agency_id, lower(code));
+create index if not exists listings_search_trgm_idx on listings using gin (search_text_normalized gin_trgm_ops);
+create index if not exists listings_agency_code_lookup_idx on listings(agency_id, code);
 
+-- ---------------------------------------------------------------------------
+-- 4. Listing Images
+-- ---------------------------------------------------------------------------
 create table if not exists listing_images (
   id          uuid primary key default gen_random_uuid(),
   listing_id  uuid not null references listings(id) on delete cascade,
-  agency_id   uuid not null references agencies(id) on delete cascade,  -- Denormalized for scoped duplicate queries
-  position    int  not null,
+  agency_id   uuid not null references agencies(id) on delete cascade,
   url         text not null,
-  phash       bit(64) not null                                          -- 64-bit dHash of the original photo
+  position    int not null default 0,
+  role        text,
+  created_at  timestamptz not null default now()
 );
-create index if not exists listing_images_agency_idx on listing_images(agency_id);
 create index if not exists listing_images_listing_idx on listing_images(listing_id, position);
+create index if not exists listing_images_agency_idx on listing_images(agency_id);
 
--- ---------------------------------------------------------------- operations & state
-create table if not exists processed_messages (      -- Webhook deduplication (persists across restarts)
-  message_id   text primary key,
-  received_at  timestamptz not null default now()
-);
-
-create table if not exists sessions (                -- Conversation state machine per broker
-  phone        text primary key,
-  state        text not null check (state in ('collecting','clarifying','review','waiting_code','search_paging')),
-  listing_id   uuid references listings(id) on delete set null,
-  data         jsonb not null default '{}'::jsonb,
+-- ---------------------------------------------------------------------------
+-- 5. Persistent Listing Drafts (Multi-turn Ingestion Buffer)
+-- ---------------------------------------------------------------------------
+create table if not exists listing_drafts (
+  broker_id    uuid primary key references brokers(id) on delete cascade,
+  agency_id    uuid not null references agencies(id) on delete cascade,
+  broker_phone text not null,
+  media_ids    text[] not null default '{}',
+  voice_ids    text[] not null default '{}',
+  texts        text[] not null default '{}',
+  custom_code  text,
   updated_at   timestamptz not null default now()
 );
+create index if not exists listing_drafts_updated_idx on listing_drafts(updated_at);
 
--- ---------------------------------------------------------------- analytics & metrics
-create table if not exists usage_events (            -- Granular audit log, unit economics & rate limits
-  id           bigserial primary key,
-  agency_id    uuid,
-  broker_id    uuid,
-  phone        text,
-  event_type   text not null,                        -- submission, brochure, regenerate, search, show, status, price, confirm, gemini, duplicate_warning, error, unregistered, rate_limited
-  listing_id   uuid,
-  duration_ms  int,
-  cost_usd     numeric(8, 6) default 0,              -- Real API cost tracked per transaction
-  tokens_input int default 0,
-  tokens_output int default 0,
-  meta         jsonb not null default '{}'::jsonb,
+-- ---------------------------------------------------------------------------
+-- 6. Operation Logs (Two-tier Observability & Quota Metering)
+-- ---------------------------------------------------------------------------
+create table if not exists operation_logs (
+  id                 bigserial primary key,
+  agency_id          uuid references agencies(id) on delete cascade,
+  broker_id          uuid references brokers(id) on delete set null,
+  listing_code       text,
+  operation_type     text not null,
+  status             text not null default 'success',
+  error_code         text,
+  total_duration_ms  int default 0,
+  gemini_ms          int default 0,
+  media_download_ms  int default 0,
+  image_process_ms   int default 0,
+  flyer_render_ms    int default 0,
+  storage_upload_ms  int default 0,
+  db_ms              int default 0,
+  tokens_input       int default 0,
+  tokens_output      int default 0,
+  model_used         text,
+  estimated_cost_usd numeric(10, 6) default 0,
+  created_at         timestamptz not null default now()
+);
+create index if not exists op_logs_agency_daily_idx on operation_logs(agency_id, created_at desc) where tokens_input > 0;
+create index if not exists op_logs_broker_daily_idx on operation_logs(broker_id, created_at desc) where tokens_input > 0;
+
+-- ---------------------------------------------------------------------------
+-- 7. Durable Webhook Inbound Message Queue & Crash Recovery
+-- ---------------------------------------------------------------------------
+create table if not exists inbound_messages (
+  msg_id      text primary key,
+  phone_key   text not null,
+  payload     jsonb not null,
+  status      text not null default 'new' check (status in ('new', 'batched', 'done', 'failed')),
+  attempts    int not null default 0,
+  received_at timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+create index if not exists inbound_recovery_idx on inbound_messages(status, received_at) where status in ('new', 'batched');
+
+-- ---------------------------------------------------------------------------
+-- 8. Broker Search State (Pagination Storage)
+-- ---------------------------------------------------------------------------
+create table if not exists broker_search_state (
+  phone_key   text primary key,
+  parsed      jsonb not null,
+  next_offset int not null default 0,
+  updated_at  timestamptz not null default now()
+);
+
+-- ---------------------------------------------------------------------------
+-- 9. Processed Batches (Idempotent Save Guard)
+-- ---------------------------------------------------------------------------
+create table if not exists processed_batches (
+  batch_key    text primary key,
+  agency_id    uuid not null references agencies(id) on delete cascade,
+  listing_code text not null,
   created_at   timestamptz not null default now()
 );
-create index if not exists usage_broker_type_time_idx on usage_events(broker_id, event_type, created_at desc);
-create index if not exists usage_agency_time_idx on usage_events(agency_id, created_at desc);
 
-create table if not exists search_analytics (        -- Captures local buyer demand & zero-result inventory gaps
-  id            bigserial primary key,
-  agency_id     uuid not null references agencies(id) on delete cascade,
-  broker_id     uuid not null references brokers(id),
-  query_raw     text not null,
-  tokens        text[] not null,
-  results_count int not null,
-  is_voice      boolean default false,
-  created_at    timestamptz not null default now()
-);
-create index if not exists idx_search_analytics_agency on search_analytics(agency_id, created_at desc);
-
-create or replace view daily_usage as
-select date_trunc('day', created_at)::date as day,
-       agency_id,
-       event_type,
-       count(*) as events,
-       round(avg(duration_ms)) as avg_ms,
-       round(sum(cost_usd), 4) as total_cost_usd
-from usage_events
-group by 1, 2, 3;
-
--- ---------------------------------------------------------------- security (row level security)
--- The bot connects using the service key / postgres superuser, bypassing RLS.
--- Enabling RLS with no policies prevents any unauthorized client using the anon key from reading data.
-alter table agencies           enable row level security;
-alter table brokers            enable row level security;
-alter table listings           enable row level security;
-alter table listing_images     enable row level security;
-alter table processed_messages enable row level security;
-alter table sessions           enable row level security;
-alter table usage_events       enable row level security;
-alter table search_analytics   enable row level security;
+-- ---------------------------------------------------------------------------
+-- Security: Row Level Security (RLS)
+-- ---------------------------------------------------------------------------
+alter table agencies            enable row level security;
+alter table brokers             enable row level security;
+alter table listings            enable row level security;
+alter table listing_images      enable row level security;
+alter table listing_drafts      enable row level security;
+alter table operation_logs      enable row level security;
+alter table inbound_messages    enable row level security;
+alter table broker_search_state enable row level security;
+alter table processed_batches   enable row level security;
