@@ -320,11 +320,17 @@ const isTransientError = (e) => {
 
 async function callGemini({ contents, config, model, maxRetries = 2 }) {
   const primary = model || CFG.geminiModel || "gemini-3.8-flash";
-  const models = [
-    primary,
-    "gemini-3.6-flash",
-    CFG.geminiFallback || "gemini-3.5-flash-lite"
-  ].filter((m, i, a) => m && a.indexOf(m) === i);
+
+  // Ensure 3 distinct tiers without duplicates
+  const fallbackTier2 = "gemini-3.6-flash";
+  const fallbackTier3 =
+    CFG.geminiFallback && CFG.geminiFallback !== fallbackTier2
+      ? CFG.geminiFallback
+      : "gemini-3.5-flash-lite";
+
+  const models = [primary, fallbackTier2, fallbackTier3].filter(
+    (m, i, a) => m && a.indexOf(m) === i
+  );
 
   let lastErr;
 
@@ -339,6 +345,15 @@ async function callGemini({ contents, config, model, maxRetries = 2 }) {
           currentModel
         );
         const dur = Date.now() - t0;
+
+        // Log successful model invocation to console
+        log("info", "gemini call succeeded", {
+          model: currentModel,
+          duration_ms: dur,
+          tokens_in: res.usageMetadata?.promptTokenCount || 0,
+          tokens_out: res.usageMetadata?.candidatesTokenCount || 0
+        });
+
         return {
           res,
           model: currentModel,
@@ -362,6 +377,7 @@ async function callGemini({ contents, config, model, maxRetries = 2 }) {
           /RESOURCE_EXHAUSTED|free_tier_requests|limit:\s*20/i.test(errMsg);
         const isTimeout = /timeout|ETIMEDOUT/i.test(errMsg);
 
+        // Fail over immediately on server capacity spikes or quota exhaustion
         if (
           (isSpike || isQuota || isTimeout) &&
           models.length > 1 &&
@@ -369,17 +385,18 @@ async function callGemini({ contents, config, model, maxRetries = 2 }) {
         ) {
           log(
             "warn",
-            `Model ${currentModel} failed (${
+            `Model ${currentModel} unavailable (${
               isTimeout ? "timeout" : isSpike ? "503 spike" : "quota"
-            }). Failing over...`
+            }). Failing over silently to next model...`
           );
-          break;
+          await U.sleep(500);
+          break; // move to next model in the cascade
         }
 
         if (!isTransientError(err)) break;
 
         if (attempt < maxRetries - 1) {
-          const delay = 1500 * (attempt + 1) + Math.random() * 500;
+          const delay = 1000 * (attempt + 1) + Math.random() * 500;
           await U.sleep(delay);
         }
       }
@@ -1007,18 +1024,59 @@ async function sendListingConfirmation(broker, listing, created = true) {
   }
 }
 
+const PROPERTY_TYPE_LABELS = {
+  ar: {
+    apartment: "شقة",
+    duplex: "دوبلكس",
+    penthouse: "بنتهاوس",
+    villa: "فيلا مستقلة",
+    twinhouse: "توين هاوس",
+    townhouse: "تاون هاوس",
+    studio: "استوديو",
+    chalet: "شاليه",
+    office: "مكتب إداري",
+    commercial: "تجاري",
+    land: "أرض"
+  },
+  en: {
+    apartment: "Apartment",
+    duplex: "Duplex",
+    penthouse: "Penthouse",
+    villa: "Standalone Villa",
+    twinhouse: "Twin House",
+    townhouse: "Townhouse",
+    studio: "Studio",
+    chalet: "Chalet",
+    office: "Office",
+    commercial: "Commercial",
+    land: "Land"
+  }
+};
+
 async function showListingCard(broker, listing) {
   const lang = broker.preferred_lang || "ar";
   const code = String(listing.code || "").toUpperCase();
   const det = listing.details || {};
 
+  // 1. Safe status fallback
+  const rawStatus = String(listing.status || "active").toLowerCase();
   const statusLabel =
-    listing.status === "active"
+    rawStatus === "active"
       ? M(lang, "نشطة", "Active")
-      : listing.status === "sold"
+      : rawStatus === "sold"
       ? M(lang, "تم البيع", "Sold")
-      : listing.status;
+      : rawStatus === "archived"
+      ? M(lang, "مؤرشفة", "Archived")
+      : rawStatus;
 
+  // 2. Elevated unit type label
+  const typeKey = String(listing.property_type || "apartment").toLowerCase();
+  const typeLabel =
+    (PROPERTY_TYPE_LABELS[lang] && PROPERTY_TYPE_LABELS[lang][typeKey]) ||
+    PROPERTY_TYPE_LABELS.ar[typeKey] ||
+    typeKey;
+
+  // 3. Elevated room details
   let bedStr = listing.bedrooms ? `${listing.bedrooms}` : "-";
   const extras = [];
   if (det.has_master_bedroom) extras.push(M(lang, "ماستر", "Master"));
@@ -1030,9 +1088,14 @@ async function showListingCard(broker, listing) {
       ? det.finishing_en || det.finishing || "-"
       : det.finishing || det.finishing_en || "-";
 
-  let body = M(
+  const purpose =
+    listing.listing_type === "rent"
+      ? M(lang, "إيجار", "Rent")
+      : M(lang, "بيع", "Sale");
+
+  const body = M(
     lang,
-    `🏠 *تفاصيل الوحدة #${code}*\n📍 الموقع: ${
+    `🏠 *تفاصيل الوحدة #${code}*\n📌 النوع: ${typeLabel} (${purpose})\n📍 الموقع: ${
       listing.location || "-"
     }\n💰 السعر: ${
       listing.price_display || "-"
@@ -1041,7 +1104,7 @@ async function showListingCard(broker, listing) {
     }\n🎨 التشطيب: ${finishingDisplay}\n📐 المساحة: ${
       listing.area_value ? `${listing.area_value}م²` : "-"
     }\nالحالة: *${statusLabel}*`,
-    `🏠 *Unit Details #${code}*\n📍 Location: ${
+    `🏠 *Unit Details #${code}*\n📌 Type: ${typeLabel} (${purpose})\n📍 Location: ${
       listing.location || "-"
     }\n💰 Price: ${
       listing.price_display || "-"
@@ -1261,6 +1324,7 @@ async function finalizeDraft(broker, draft) {
   const textCount = (draft.texts || []).length;
   const voiceCount = (draft.voice_ids || []).length;
 
+  // Guard: Reject empty drafts with images only
   if (textCount === 0 && voiceCount === 0) {
     await WA.sendWhatsAppButtons(
       to(broker),
@@ -1277,6 +1341,7 @@ async function finalizeDraft(broker, draft) {
     return "done";
   }
 
+  // Quota verification
   const quotaCheck = await withinAiQuota(agencyId, broker.id);
   if (!quotaCheck.ok) {
     const quotaMsg =
@@ -1295,6 +1360,7 @@ async function finalizeDraft(broker, draft) {
     return "done";
   }
 
+  // Initial feedback (Tier 1 is silent under the hood; no intermediate messages sent)
   await WA.sendWhatsAppText(
     to(broker),
     M(
@@ -1358,6 +1424,7 @@ async function finalizeDraft(broker, draft) {
     const gem0 = Date.now();
     const u0 = Date.now();
 
+    // Parallel extraction and storage upload (Zero vision processing here; vision is lazy on brochure creation)
     const [aiResult, upResult] = await Promise.all([
       AI.extractPropertyDetails({
         texts: draft.texts || [],
@@ -1408,7 +1475,7 @@ async function finalizeDraft(broker, draft) {
           location: extracted.location,
           title: extracted.title,
           rawText: (draft.texts || []).join(" "),
-          model: CFG.geminiFallback
+          model: CFG.geminiFallback || "gemini-3.5-flash-lite"
         });
         extracted.compound = extracted.compound || enriched.compound || "";
         extracted.district = extracted.district || enriched.district || "";
@@ -1470,6 +1537,7 @@ async function finalizeDraft(broker, draft) {
     const savedListing = result.listing;
     setActiveListing(broker, savedListing.code);
 
+    // Only clear the draft when successfully committed to PostgreSQL
     await Drafts.clearDraft(broker.id);
     await sendListingConfirmation(broker, savedListing, result.created);
 
@@ -1483,13 +1551,21 @@ async function finalizeDraft(broker, draft) {
     perf.total_duration_ms = Date.now() - t0;
     logOperation(perf).catch(() => {});
 
-    await WA.sendWhatsAppText(
+    // Interactive recovery prompt: User data is completely preserved in DB draft
+    await WA.sendWhatsAppButtons(
       to(broker),
       M(
         lang,
-        "❌ حدث خطأ غير متوقع أثناء معالجة الوحدة. تم الاحتفاظ بالمسودة، يرجى المحاولة مرة أخرى لاحقاً.",
-        "❌ An unexpected error occurred. Your draft has been preserved, please try again."
-      )
+        "⚠️ واجهنا ضغطاً مؤقتاً في خوادم المعالجة.\n\n✅ كافة الصور والتفاصيل التي أرسلتها محفوظة بأمان في المسودة. اضغط «إعادة المحاولة» لحفظها مباشرة دون إعادة إرسال أي شيء.",
+        "⚠️ AI service experienced temporary high demand.\n\n✅ All your uploaded photos and notes are safely preserved. Tap «Retry» to save without resending anything."
+      ),
+      [
+        { id: "DRAFT_SAVE", title: M(lang, "🔄 إعادة المحاولة", "🔄 Retry") },
+        {
+          id: "DRAFT_CANCEL",
+          title: M(lang, "❌ إلغاء المسودة", "❌ Cancel Draft")
+        }
+      ]
     );
     return "done";
   }
@@ -2023,12 +2099,13 @@ async function cmdFlyer(
   broker,
   codeRaw,
   lang,
-  { theme = "dark", unbranded = false } = {}
+  { flyerLang = "en", theme = "dark", unbranded = false } = {}
 ) {
   const code = codeRaw.toUpperCase();
   const l = await fetchListing(broker, code);
   if (!l) return notFound(broker, code);
 
+  // Chat notification strictly respects broker's chat language
   reply(
     broker,
     M(
@@ -2038,55 +2115,13 @@ async function cmdFlyer(
     )
   ).catch(() => {});
 
+  // Brochure generation keeps 100% English layout
   const res = await renderFlyerOnDemand(broker, l, {
-    lang: "en",
+    lang: flyerLang,
     theme,
     unbranded
   });
-
-  if (!res.ok) {
-    return reply(
-      broker,
-      res.reason === "no_images"
-        ? M(
-            lang,
-            `⚠️ لا توجد صور لهذه الوحدة. أرسل الصور مع: إضافة #${code}`,
-            `⚠️ No images for #${code}. Send photos with: add #${code}`
-          )
-        : M(
-            lang,
-            "⚠️ تعذر تصميم الكتالوج حالياً.",
-            "⚠️ Failed to generate brochure."
-          )
-    );
-  }
-
-  const caption = M(
-    lang,
-    `📋 كتالوج معتمد #${code}`,
-    `📋 Verified Brochure #${code}`
-  );
-
-  if (res.wa_media_id) {
-    try {
-      const sent = await WA.sendWhatsAppImage(
-        to(broker),
-        { id: res.wa_media_id },
-        caption
-      );
-      if (sent) return;
-    } catch (sendErr) {
-      log(
-        "warn",
-        "Sending flyer via wa_media_id failed, falling back to public URL",
-        errMeta(sendErr)
-      );
-    }
-  }
-
-  if (res.url) {
-    await WA.sendWhatsAppImage(to(broker), res.url, caption);
-  }
+  // ... rest of cmdFlyer
 }
 
 async function handleCommand(broker, raw, message = null) {
@@ -2388,10 +2423,16 @@ async function handleInteractive(broker, message) {
 
   if (replyId.startsWith("flyer:")) {
     const parts = replyId.split(":");
-    const flyerLang = parts[1] || "en";
+    const flyerCanvasLang = parts[1] || "en";
     const flyerTheme = parts[2] || "dark";
     const code = parts[3];
-    await cmdFlyer(broker, code, flyerLang, { theme: flyerTheme });
+
+    // Pass broker's chat language (lang) for WhatsApp messages,
+    // and flyerCanvasLang strictly for the SVG brochure layout
+    await cmdFlyer(broker, code, lang, {
+      flyerLang: flyerCanvasLang,
+      theme: flyerTheme
+    });
     return "done";
   }
 

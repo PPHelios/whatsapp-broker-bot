@@ -991,4 +991,90 @@ describe("Comprehensive Broker Bot E2E, Quota, & State Machine Tests", () => {
       expect(buttonTitles).not.toContain("تم البيع");
     });
   });
+
+  describe("Bilingual Fidelity & Language Respect", () => {
+    test("Brochure interactive button sends Arabic loading message to Arabic brokers", async () => {
+      // 1. Broker is Arabic (preferred_lang: 'ar')
+      const p = createWebhookPayload(
+        "201011111111",
+        "flyer:en:dark:HAS101",
+        "interactive"
+      );
+      await request(app)
+        .post("/webhook")
+        .set("x-hub-signature-256", p.signature)
+        .send(p.payload);
+      await new Promise((r) => setTimeout(r, 200));
+
+      // 2. Chat reply must be Arabic
+      expect(
+        mockWhatsAppState.sentTexts.some((t) =>
+          t.text.includes("⏳ جاري إعداد وتصميم الكتالوج المعتمد...")
+        )
+      ).toBe(true);
+
+      // Must NOT send English notification to an Arabic user
+      expect(
+        mockWhatsAppState.sentTexts.some((t) =>
+          t.text.includes("⏳ Preparing brochure...")
+        )
+      ).toBe(false);
+    });
+
+    test("English broker mode strictly receives English buttons, cards, and delete dialogs", async () => {
+      // 1. Switch broker to English
+      const pLang = createWebhookPayload("201011111111", "lang en");
+      await request(app)
+        .post("/webhook")
+        .set("x-hub-signature-256", pLang.signature)
+        .send(pLang.payload);
+      await new Promise((r) => setTimeout(r, 150));
+
+      expect(
+        mockWhatsAppState.sentTexts.some((t) =>
+          t.text.includes("Language set to English")
+        )
+      ).toBe(true);
+
+      // 2. Fetch unit card (#HAS101) as English broker
+      const pCard = createWebhookPayload("201011111111", "#HAS101");
+      await request(app)
+        .post("/webhook")
+        .set("x-hub-signature-256", pCard.signature)
+        .send(pCard.payload);
+      await new Promise((r) => setTimeout(r, 200));
+
+      const card = mockWhatsAppState.sentButtons.find((b) =>
+        b.body.includes("Unit Details #HAS101")
+      );
+      expect(card).toBeDefined();
+
+      // Assert buttons are 100% English
+      const buttonTitles = card.buttons.map((b) => b.title);
+      expect(buttonTitles).toEqual([
+        "📄 Brochure",
+        "📋 Client Text",
+        "✏️ Edit"
+      ]);
+
+      // 3. Initiate deletion dialog as English broker
+      const pDel = createWebhookPayload("201011111111", "delete #HAS101");
+      await request(app)
+        .post("/webhook")
+        .set("x-hub-signature-256", pDel.signature)
+        .send(pDel.payload);
+      await new Promise((r) => setTimeout(r, 200));
+
+      const deleteDialog = mockWhatsAppState.sentButtons.find((b) =>
+        b.body.includes(
+          "Are you sure you want to permanently delete unit *#HAS101*?"
+        )
+      );
+      expect(deleteDialog).toBeDefined();
+      expect(deleteDialog.buttons.map((b) => b.title)).toEqual([
+        "⚠️ Confirm Delete",
+        "❌ Cancel"
+      ]);
+    });
+  });
 });
