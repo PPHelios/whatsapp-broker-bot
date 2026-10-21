@@ -187,7 +187,8 @@ async function logOperation(p) {
 /* Concurrency & State Maps                                               */
 /* ====================================================================== */
 const recentBrokerListings = new Map();
-const brokerEditSessions = new Map(); // phone -> { code: string, at: number }
+const brokerEditSessions = new Map();
+const brokerPatchPreviews = new Map();
 const brokerCache = new Map();
 const agencyCache = new Map();
 const unknownNotified = new Map();
@@ -1076,7 +1077,21 @@ async function showListingCard(broker, listing) {
     PROPERTY_TYPE_LABELS.ar[typeKey] ||
     typeKey;
 
-  // 3. Elevated room details
+  // 3. Compact currency format (e.g. 10M EGP / 10 مليون ج.م)
+  const currency = ["USD", "EUR", "EGP"].includes(det.currency)
+    ? det.currency
+    : "EGP";
+
+  const formattedPrice = listing.price_value
+    ? T.formatAbbreviatedPrice(
+        listing.price_value,
+        currency,
+        lang,
+        listing.listing_type
+      )
+    : listing.price_display || "-";
+
+  // 4. Elevated room details
   let bedStr = listing.bedrooms ? `${listing.bedrooms}` : "-";
   const extras = [];
   if (det.has_master_bedroom) extras.push(M(lang, "ماستر", "Master"));
@@ -1097,18 +1112,18 @@ async function showListingCard(broker, listing) {
     lang,
     `🏠 *تفاصيل الوحدة #${code}*\n📌 النوع: ${typeLabel} (${purpose})\n📍 الموقع: ${
       listing.location || "-"
-    }\n💰 السعر: ${
-      listing.price_display || "-"
-    }\n🛏️ الغرف: ${bedStr}\n🛁 الحمامات: ${det.bathrooms || "-"}\n🏢 الدور: ${
+    }\n💰 السعر: ${formattedPrice}\n🛏️ الغرف: ${bedStr}\n🛁 الحمامات: ${
+      det.bathrooms || "-"
+    }\n🏢 الدور: ${
       det.floor || "-"
     }\n🎨 التشطيب: ${finishingDisplay}\n📐 المساحة: ${
       listing.area_value ? `${listing.area_value}م²` : "-"
     }\nالحالة: *${statusLabel}*`,
     `🏠 *Unit Details #${code}*\n📌 Type: ${typeLabel} (${purpose})\n📍 Location: ${
       listing.location || "-"
-    }\n💰 Price: ${
-      listing.price_display || "-"
-    }\n🛏️ Beds: ${bedStr}\n🛁 Baths: ${det.bathrooms || "-"}\n🏢 Floor: ${
+    }\n💰 Price: ${formattedPrice}\n🛏️ Beds: ${bedStr}\n🛁 Baths: ${
+      det.bathrooms || "-"
+    }\n🏢 Floor: ${
       det.floor || "-"
     }\n🎨 Finishing: ${finishingDisplay}\n📐 Area: ${
       listing.area_value ? `${listing.area_value} sqm` : "-"
@@ -1125,6 +1140,573 @@ async function showListingCard(broker, listing) {
   const phone = to(broker);
   await WA.sendWhatsAppButtons(phone, body, buttons);
   await WA.sendWhatsAppText(phone, "`" + code + "`");
+}
+
+// =========================================================================
+// Edit Intent Parser Helper
+// =========================================================================
+function parseEditIntent(rawText) {
+  const text = String(rawText || "").trim();
+
+  // Pattern A: Explicit "سعر HAS101 إلى 16 مليون"
+  const priceMatch = text.match(
+    /^(?:سعر|price)\s+#?([A-Za-z0-9_-]+)\s+(?:الى|إلى|to|=)\s+(.+)$/i
+  );
+  if (priceMatch) {
+    return {
+      code: priceMatch[1].toUpperCase(),
+      payload: `السعر ${priceMatch[2]}`
+    };
+  }
+
+  // Pattern B: "تعديل #HAS101 خليه 3 غرف" vs "تعديل #HAS101"
+  const editMatch = text.match(
+    /^(?:تعديل|عدل|update|edit)\s+#?([A-Za-z0-9_-]+)(?:\s+(.+))?$/i
+  );
+  if (editMatch) {
+    return {
+      code: editMatch[1].toUpperCase(),
+      payload: (editMatch[2] || "").trim() || null
+    };
+  }
+
+  return null;
+}
+
+// =========================================================================
+// Path 1: One-Shot Express Patch with Preview Diff Card
+// =========================================================================
+async function previewQuickPatch(broker, code, changeRequestText) {
+  const lang = broker.preferred_lang || "ar";
+  const listing = await fetchListing(broker, code);
+
+  if (!listing) return notFound(broker, code);
+
+  if (listing.broker_id !== broker.id) {
+    return reply(
+      broker,
+      M(
+        lang,
+        "⛔ لا تملك صلاحية تعديل هذه الوحدة.",
+        "⛔ You cannot edit another broker's listing."
+      )
+    );
+  }
+
+  // Quota check
+  const quota = await withinAiQuota(broker.agency_id, broker.id);
+  if (!quota.ok) {
+    return reply(
+      broker,
+      M(
+        lang,
+        "⛔ تم استهلاك حد الذكاء الاصطناعي اليومي.",
+        "⛔ Daily AI quota reached."
+      )
+    );
+  }
+
+  await reply(
+    broker,
+    M(lang, "⏳ جاري إعداد معاينة التعديل...", "⏳ Preparing edit preview...")
+  );
+
+  // Calculate patch diff via Gemini patch prompt
+  const patchPrompt = `You are a real estate database updater.
+Listing current data:
+${JSON.stringify({
+  price_value: listing.price_value,
+  price_display: listing.price_display,
+  bedrooms: listing.bedrooms,
+  area_value: listing.area_value,
+  details: listing.details
+})}
+
+User modification instruction: "${changeRequestText}"
+
+Return ONLY a JSON object containing the modified fields:
+{
+  "price_value": number or null,
+  "currency": "EGP" | "USD" | "EUR" or null,
+  "area_value": number or null,
+  "bedrooms": number or null,
+  "details": {
+    "floor": string or null,
+    "floor_en": string or null,
+    "finishing": string or null,
+    "finishing_en": string or null,
+    "bathrooms": number or null,
+    "nanny_room": boolean or null,
+    "has_master_bedroom": boolean or null,
+    "has_dressing_room": boolean or null
+  }
+}`;
+
+  try {
+    const aiRes = await callGemini({
+      contents: [{ role: "user", parts: [{ text: patchPrompt }] }],
+      config: { responseMimeType: "application/json", temperature: 0 }
+    });
+
+    const patch = JSON.parse(cleanJson(aiRes.res.text));
+    const diffLines = [];
+
+    if (patch.price_value && patch.price_value !== listing.price_value) {
+      const cur = patch.currency || listing.details?.currency || "EGP";
+      const oldP = T.formatAbbreviatedPrice(listing.price_value, cur, lang);
+      const newP = T.formatAbbreviatedPrice(patch.price_value, cur, lang);
+      diffLines.push(`• السعر: ~${oldP}~ ⬅️ *${newP}*`);
+    }
+
+    if (patch.bedrooms && patch.bedrooms !== listing.bedrooms) {
+      diffLines.push(
+        `• الغرف: ~${listing.bedrooms}~ ⬅️ *${patch.bedrooms} غرف*`
+      );
+    }
+
+    if (patch.area_value && patch.area_value !== listing.area_value) {
+      diffLines.push(
+        `• المساحة: ~${listing.area_value}م²~ ⬅️ *${patch.area_value}م²*`
+      );
+    }
+
+    if (
+      patch.details?.floor &&
+      patch.details.floor !== listing.details?.floor
+    ) {
+      diffLines.push(
+        `• الدور: ~${listing.details?.floor || "-"}~ ⬅️ *${
+          patch.details.floor
+        }*`
+      );
+    }
+
+    if (
+      patch.details?.nanny_room !== undefined &&
+      patch.details.nanny_room !== listing.details?.nanny_room
+    ) {
+      diffLines.push(
+        patch.details.nanny_room
+          ? "• إضافة: *غرفة ناني*"
+          : "• إزالة: *غرفة ناني*"
+      );
+    }
+
+    if (!diffLines.length) {
+      return reply(
+        broker,
+        M(
+          lang,
+          "ℹ️ لم نلحظ أي تغيير في بيانات الوحدة بعد التحليل.",
+          "ℹ️ No changes detected."
+        )
+      );
+    }
+
+    // Cache the staged preview for this broker
+    brokerPatchPreviews.set(broker.id, { code, patch, summaryDiff: diffLines });
+
+    const body = M(
+      lang,
+      `📝 *معاينة تعديل الوحدة #${code}:*\n${diffLines.join(
+        "\n"
+      )}\n\nهل تريد اعتماد هذا التعديل أم إضافة تعديلات أخرى؟`,
+      `📝 *Edit Preview for #${code}:*\n${diffLines.join(
+        "\n"
+      )}\n\nDo you want to confirm or add further changes?`
+    );
+
+    const buttons = [
+      {
+        id: `patch_confirm:${code}`,
+        title: M(lang, "✅ تأكيد وحفظ", "✅ Confirm")
+      },
+      {
+        id: `patch_more:${code}`,
+        title: M(lang, "✏️ تعديل إضافي", "✏️ Add More")
+      },
+      { id: `patch_cancel:${code}`, title: M(lang, "❌ تراجع", "❌ Cancel") }
+    ];
+
+    await WA.sendWhatsAppButtons(to(broker), body, buttons);
+  } catch (err) {
+    log("error", "previewQuickPatch failure", errMeta(err));
+    await reply(
+      broker,
+      M(lang, "❌ فشل تحليل التعديل المطلوب.", "❌ Failed to process edit.")
+    );
+  }
+}
+
+// =========================================================================
+// Path 2: Interactive Staging Session Lifecycle
+// =========================================================================
+async function startInteractiveEditSession(
+  broker,
+  code,
+  initialStagedPatch = null
+) {
+  const lang = broker.preferred_lang || "ar";
+  const listing = await fetchListing(broker, code);
+
+  if (!listing) return notFound(broker, code);
+
+  if (listing.broker_id !== broker.id) {
+    return reply(
+      broker,
+      M(
+        lang,
+        "⛔ لا تملك صلاحية تعديل هذه الوحدة.",
+        "⛔ You cannot edit another broker's listing."
+      )
+    );
+  }
+
+  // Open interactive session
+  brokerEditSessions.set(broker.id, {
+    code,
+    texts: [],
+    voice_ids: [],
+    media_ids: [],
+    stagedPatch: initialStagedPatch
+  });
+
+  const body = M(
+    lang,
+    `✏️ *وضع التعديل نشط للوحدة #${code}*\nأرسل التعديلات المطلوبة (تسجيلات صوتية، تفاصيل نصية، أو صور إضافية).\n\nاضغط *حفظ التعديل* أو اكتب *«تم»* عند الانتهاء.`,
+    `✏️ *Edit Mode active for #${code}*\nSend your updates (voice notes, texts, or new photos).\n\nTap *Save Changes* or send *«done»* when finished.`
+  );
+
+  const buttons = [
+    {
+      id: "EDIT_SAVE",
+      title: M(lang, "✅ حفظ التعديل (تم)", "✅ Save (Done)")
+    },
+    { id: "EDIT_CANCEL", title: M(lang, "❌ إلغاء", "❌ Cancel") }
+  ];
+
+  await WA.sendWhatsAppButtons(to(broker), body, buttons);
+}
+
+// Accumulate edits inside active session
+async function accumulateEditDraft(broker, { text, voiceId, mediaId }) {
+  const lang = broker.preferred_lang || "ar";
+  const session = brokerEditSessions.get(broker.id);
+  if (!session) return;
+
+  if (text) session.texts.push(text);
+  if (voiceId) session.voice_ids.push(voiceId);
+  if (mediaId) session.media_ids.push(mediaId);
+
+  const totalItems =
+    session.texts.length + session.voice_ids.length + session.media_ids.length;
+
+  const body = M(
+    lang,
+    `📝 تم إضافة التحديث للمسودة (${totalItems} إضافات).\nأرسل المزيد أو اضغط *حفظ التعديل* لتطبيقه.`,
+    `📝 Update recorded (${totalItems} items).\nSend more details or tap *Save Changes*.`
+  );
+
+  const buttons = [
+    {
+      id: "EDIT_SAVE",
+      title: M(lang, "✅ حفظ التعديل (تم)", "✅ Save Changes")
+    },
+    { id: "EDIT_CANCEL", title: M(lang, "❌ إلغاء", "❌ Cancel") }
+  ];
+
+  await WA.sendWhatsAppButtons(to(broker), body, buttons);
+}
+
+// Commit the entire Interactive Edit Session
+async function commitEditSession(broker) {
+  const lang = broker.preferred_lang || "ar";
+  const session = brokerEditSessions.get(broker.id);
+
+  if (!session) {
+    return reply(
+      broker,
+      M(lang, "ℹ️ لا توجد جلسة تعديل نشطة.", "ℹ️ No active edit session.")
+    );
+  }
+
+  const { code, texts, voice_ids, stagedPatch } = session;
+
+  if (!texts.length && !voice_ids.length && !stagedPatch) {
+    brokerEditSessions.delete(broker.id);
+    return reply(
+      broker,
+      M(
+        lang,
+        "ℹ️ تم إغلاق وضع التعديل لعدم إرسال أي تغييرات.",
+        "ℹ️ Edit mode closed."
+      )
+    );
+  }
+
+  await reply(
+    broker,
+    M(
+      lang,
+      "⏳ جاري تطبيق التعديلات وتحديث العقار...",
+      "⏳ Applying updates..."
+    )
+  );
+
+  const listing = await fetchListing(broker, code);
+  if (!listing) {
+    brokerEditSessions.delete(broker.id);
+    return notFound(broker, code);
+  }
+
+  try {
+    let finalPatch = stagedPatch || {};
+
+    if (texts.length || voice_ids.length) {
+      // Download voice notes if any
+      const voiceBuffers = [];
+      for (const vid of voice_ids) {
+        const v = await WA.downloadWhatsAppMedia(vid);
+        if (v && v.buffer)
+          voiceBuffers.push({ buffer: v.buffer, mimeType: v.mimeType });
+      }
+
+      const promptParts = [
+        {
+          text: `You are updating real estate listing #${code}.
+Existing data: ${JSON.stringify(listing)}
+New user modification notes: "${texts.join(" ")}"
+Extract ONLY the changed fields as a JSON object.`
+        },
+        ...voiceBuffers.map((a) => ({
+          inlineData: {
+            data: a.buffer.toString("base64"),
+            mimeType: U.cleanAudioMime(a.mimeType)
+          }
+        }))
+      ];
+
+      const res = await callGemini({
+        contents: [{ role: "user", parts: promptParts }],
+        config: { responseMimeType: "application/json", temperature: 0 }
+      });
+
+      const extracted = JSON.parse(cleanJson(res.res.text));
+      finalPatch = { ...finalPatch, ...extracted };
+    }
+
+    // Apply patch directly to DB
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT pg_advisory_xact_lock($1)", [
+        U.hashListingCode(code)
+      ]);
+
+      const newPrice = finalPatch.price_value || listing.price_value;
+      const cur = finalPatch.currency || listing.details?.currency || "EGP";
+      const newDisplay = T.formatAbbreviatedPrice(newPrice, cur, "en");
+      const newArea = finalPatch.area_value || listing.area_value;
+      const newBeds = finalPatch.bedrooms || listing.bedrooms;
+      const newDetails = {
+        ...(listing.details || {}),
+        ...(finalPatch.details || {})
+      };
+
+      // Invalidate flyer cache on updates
+      await client.query(
+        `UPDATE listings
+         SET price_value = $1, price_display = $2, area_value = $3, bedrooms = $4, details = $5, flyer_cache = '{}', updated_at = now()
+         WHERE id = $6`,
+        [newPrice, newDisplay, newArea, newBeds, newDetails, listing.id]
+      );
+
+      await client.query("COMMIT");
+    } finally {
+      client.release();
+    }
+
+    brokerEditSessions.delete(broker.id);
+
+    await reply(
+      broker,
+      M(
+        lang,
+        `✅ تم تعديل بيانات الوحدة #${code} بنجاح.`,
+        `✅ Listing #${code} updated.`
+      )
+    );
+    const refreshed = await fetchListing(broker, code);
+    await showListingCard(broker, refreshed);
+  } catch (err) {
+    log("error", "commitEditSession failure", errMeta(err));
+    await reply(
+      broker,
+      M(lang, "❌ حدث خطأ أثناء حفظ التعديل.", "❌ Failed to save changes.")
+    );
+  }
+}
+
+// Commit the One-Shot Patch Preview
+async function commitQuickPatch(broker, code) {
+  const lang = broker.preferred_lang || "ar";
+  const preview = brokerPatchPreviews.get(broker.id);
+
+  if (!preview || preview.code !== code) {
+    return reply(
+      broker,
+      M(lang, "ℹ️ لا توجد معاينة معلقة.", "ℹ️ No pending preview found.")
+    );
+  }
+
+  const { patch } = preview;
+  brokerPatchPreviews.delete(broker.id);
+
+  const listing = await fetchListing(broker, code);
+  if (!listing) return notFound(broker, code);
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock($1)", [
+      U.hashListingCode(code)
+    ]);
+
+    const newPrice = patch.price_value || listing.price_value;
+    const cur = patch.currency || listing.details?.currency || "EGP";
+    const newDisplay = T.formatAbbreviatedPrice(newPrice, cur, "en");
+    const newArea = patch.area_value || listing.area_value;
+    const newBeds = patch.bedrooms || listing.bedrooms;
+    const newDetails = { ...(listing.details || {}), ...(patch.details || {}) };
+
+    await client.query(
+      `UPDATE listings
+       SET price_value = $1, price_display = $2, area_value = $3, bedrooms = $4, details = $5, flyer_cache = '{}', updated_at = now()
+       WHERE id = $6`,
+      [newPrice, newDisplay, newArea, newBeds, newDetails, listing.id]
+    );
+
+    await client.query("COMMIT");
+  } finally {
+    client.release();
+  }
+
+  await reply(
+    broker,
+    M(
+      lang,
+      `✅ تم تعديل سعر/بيانات الوحدة #${code} بنجاح.`,
+      `✅ Listing #${code} updated.`
+    )
+  );
+  const refreshed = await fetchListing(broker, code);
+  await showListingCard(broker, refreshed);
+}
+
+// =========================================================================
+// Router Hooks inside handleInteractive & handleIncomingMessage
+// =========================================================================
+
+// In handleInteractive(broker, replyId):
+// -------------------------------------------------------------
+async function handleInteractiveHook(broker, replyId) {
+  const lang = broker.preferred_lang || "ar";
+
+  // 1. Enter Interactive Edit Session
+  if (replyId.startsWith("edit_btn:")) {
+    const code = replyId.split(":")[1];
+    await startInteractiveEditSession(broker, code);
+    return "done";
+  }
+
+  // 2. Commit Interactive Edit Session
+  if (replyId === "EDIT_SAVE") {
+    await commitEditSession(broker);
+    return "done";
+  }
+
+  // 3. Cancel Interactive Edit Session
+  if (replyId === "EDIT_CANCEL") {
+    brokerEditSessions.delete(broker.id);
+    await reply(
+      broker,
+      M(lang, "❌ تم إلغاء وضع التعديل.", "❌ Edit mode cancelled.")
+    );
+    return "done";
+  }
+
+  // 4. One-Shot Quick Patch Actions
+  if (replyId.startsWith("patch_confirm:")) {
+    const code = replyId.split(":")[1];
+    await commitQuickPatch(broker, code);
+    return "done";
+  }
+
+  if (replyId.startsWith("patch_more:")) {
+    const code = replyId.split(":")[1];
+    const preview = brokerPatchPreviews.get(broker.id);
+    const stagedPatch = preview ? preview.patch : null;
+    brokerPatchPreviews.delete(broker.id);
+    await startInteractiveEditSession(broker, code, stagedPatch);
+    return "done";
+  }
+
+  if (replyId.startsWith("patch_cancel:")) {
+    brokerPatchPreviews.delete(broker.id);
+    await reply(
+      broker,
+      M(lang, "❌ تم إلغاء التعديل المعلق.", "❌ Edit cancelled.")
+    );
+    return "done";
+  }
+
+  return null; // let other handlers process
+}
+
+// In handleIncomingMessage(broker, msg):
+// -------------------------------------------------------------
+async function handleMessageDispatchHook(broker, { text, voiceId, mediaId }) {
+  const lang = broker.preferred_lang || "ar";
+
+  // 1. If currently inside an interactive edit session
+  if (brokerEditSessions.has(broker.id)) {
+    if (text) {
+      const lower = text.trim().toLowerCase();
+      if (lower === "تم" || lower === "done" || lower === "حفظ") {
+        await commitEditSession(broker);
+        return "done";
+      }
+      if (lower === "الغاء" || lower === "إلغاء" || lower === "cancel") {
+        brokerEditSessions.delete(broker.id);
+        await reply(
+          broker,
+          M(lang, "❌ تم إلغاء وضع التعديل.", "❌ Edit mode cancelled.")
+        );
+        return "done";
+      }
+    }
+    // Otherwise, accumulate
+    await accumulateEditDraft(broker, { text, voiceId, mediaId });
+    return "done";
+  }
+
+  // 2. If text triggers an edit intent
+  if (text) {
+    const editIntent = parseEditIntent(text);
+    if (editIntent) {
+      if (editIntent.payload) {
+        // One-Shot Express Patch -> calculate diff preview
+        await previewQuickPatch(broker, editIntent.code, editIntent.payload);
+        return "done";
+      } else {
+        // Pure Edit Intent -> start staging session
+        await startInteractiveEditSession(broker, editIntent.code);
+        return "done";
+      }
+    }
+  }
+
+  return null; // proceed to draft / search handlers
 }
 
 /* ====================================================================== */
