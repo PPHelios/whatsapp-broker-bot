@@ -1,1010 +1,495 @@
-﻿// server.js — Core Ingestion Router, State Machine & Deliverables Engine
+﻿// server.js — Core WhatsApp Ingestion Router, State Machine & Orchestration Engine
 "use strict";
 
-require("dotenv").config();
-const crypto = require("crypto");
 const express = require("express");
+const crypto = require("crypto");
 const sharp = require("sharp");
 const ExcelJS = require("exceljs");
 const { GoogleGenAI } = require("@google/genai");
 
-const {
-  pool,
-  query,
-  withTransaction,
-  withAdvisoryLock,
-  logOperation,
-  als,
-  getRequestContext
-} = require("./lib/db");
-const {
-  uploadListingImage,
-  uploadFlyerImage,
-  deleteStorageFiles
-} = require("./lib/supabase");
-const { generateFlyerBuffer, loadFont } = require("./lib/flyer");
-const WA = require("./lib/whatsapp");
+// Internal Library Modules
+const DB = require("./lib/db");
+const Drafts = require("./lib/drafts");
+const Flyer = require("./lib/flyer");
+const Excel = require("./lib/excel");
+const Supabase = require("./lib/supabase");
+const Financials = require("./lib/financials");
+const U = require("./lib/util");
 const T = require("./lib/text");
-const F = require("./lib/financials");
-const E = require("./lib/excel");
 const S = require("./lib/search");
 const L = require("./lib/listing");
-const U = require("./lib/util");
-const Drafts = require("./lib/drafts");
+const WA = require("./lib/whatsapp");
+
+const app = express();
+
+// Capture raw body buffer for Meta Webhook HMAC-SHA256 signature verification
+app.use(
+  express.json({
+    limit: "50mb",
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    }
+  })
+);
+
+// Ephemeral Debounce Timers & In-Process Concurrency Serializers
+const burstTimers = new Map();
+const brokerSerializers = U.createSerializer();
+
+// Google Gemini AI Client Initialization
+const geminiClient = process.env.GEMINI_API_KEY
+  ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+  : null;
+
+const GEMINI_TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || "gemini-2.5-flash";
+const GEMINI_VISION_MODEL =
+  process.env.GEMINI_VISION_MODEL || "gemini-2.5-flash";
 
 /* ====================================================================== */
-/* 1. Configuration & Startup Validation                                  */
+/* 1. Distributed PostgreSQL Session State Store                          */
 /* ====================================================================== */
-const CFG = {
-  port: Number(process.env.PORT || 3000),
-  geminiModel: process.env.GEMINI_MODEL || "gemini-3.8-flash",
-  geminiFallback: process.env.GEMINI_FALLBACK_MODEL || "gemini-3.6-flash",
-  geminiRpm: Number(process.env.GEMINI_RPM || 12),
-  geminiTimeoutMs: Number(process.env.GEMINI_TIMEOUT_MS || 45000),
-  aiDailyLimit: Number(process.env.AI_DAILY_LIMIT_PER_AGENCY || 300),
-  brokerDailyLimit: Number(process.env.AI_DAILY_LIMIT_PER_BROKER || 60),
-  maxImages: 15,
-  searchPageSize: 5,
-  maxSearchAudioSec: 45,
-  maxListingAudioSec: 120,
-  adminRoles: (process.env.ADMIN_ROLES || "admin,owner,manager")
-    .split(",")
-    .map((s) => s.trim().toLowerCase()),
-  allowColleagueEdits: process.env.ALLOW_COLLEAGUE_EDITS === "true",
-  isProd: process.env.NODE_ENV === "production"
-};
 
-const missing = [
-  "GEMINI_API_KEY",
-  "WHATSAPP_ACCESS_TOKEN",
-  "WHATSAPP_PHONE_NUMBER_ID",
-  "WHATSAPP_VERIFY_TOKEN"
-]
-  .concat(CFG.isProd ? ["WHATSAPP_APP_SECRET"] : [])
-  .filter((k) => !process.env[k]);
-
-if (missing.length) {
-  console.error(
-    "FATAL: Missing mandatory environment variables:",
-    missing.join(", ")
+async function setSession(brokerId, sessionType, data, ttlSeconds = 900) {
+  const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
+  await DB.query(
+    `INSERT INTO broker_sessions (broker_id, session_type, context_data, expires_at)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (broker_id, session_type) DO UPDATE SET
+       context_data = EXCLUDED.context_data,
+       expires_at = EXCLUDED.expires_at`,
+    [brokerId, sessionType, JSON.stringify(data), expiresAt]
   );
-  process.exit(1);
 }
 
-sharp.concurrency(1);
-sharp.cache({ items: 20, memory: 64 });
-
-/* ====================================================================== */
-/* 2. Structured Tracing & Telemetry                                      */
-/* ====================================================================== */
-
-function log(level, msg, meta = {}) {
-  const c = getRequestContext();
-  const line = JSON.stringify({
-    t: new Date().toISOString(),
-    level,
-    msg,
-    reqId: c.reqId || null,
-    agencyId: c.agencyId || null,
-    brokerId: c.brokerId || null,
-    ...meta
-  });
-  (level === "error" ? console.error : console.log)(line);
-}
-
-const errMeta = (e) => ({ err: e && e.message, code: e && e.code });
-const M = (lang, ar, en) => (lang === "en" ? en : ar);
-const to = (broker) => U.normalizePhone(broker.phone);
-
-async function reply(broker, text, opts = {}) {
-  if (!text) return null;
-  const recipient = to(broker);
-
-  try {
-    return await WA.sendWhatsAppText(recipient, text, opts);
-  } catch (err) {
-    const apiCode = err?.code || err?.response?.data?.error?.code;
-    const apiSubcode =
-      err?.subcode || err?.response?.data?.error?.error_subcode;
-
-    if (apiCode === 131047 || apiSubcode === 131047) {
-      log("warn", "WhatsApp 24-hr session expired; cannot dispatch text", {
-        brokerId: broker?.id,
-        phone: broker?.phone
-      });
-      return null;
-    }
-
-    if (apiCode === 80007 || apiCode === 130429) {
-      log("warn", "WhatsApp rate limit reached, retrying in 1000ms...", {
-        phone: broker?.phone
-      });
-      await U.sleep(1000);
-      try {
-        return await WA.sendWhatsAppText(recipient, text, opts);
-      } catch (retryErr) {
-        log(
-          "error",
-          "WhatsApp retry failed after rate limit",
-          errMeta(retryErr)
-        );
-        return null;
-      }
-    }
-
-    log("error", "WhatsApp reply failed", {
-      phone: broker?.phone,
-      ...errMeta(err)
-    });
-    return null;
-  }
-}
-
-/* ====================================================================== */
-/* 3. Concurrency, Ephemeral States & Serialization                       */
-/* ====================================================================== */
-const recentBrokerListings = new Map();
-const brokerCache = new Map();
-const agencyCache = new Map();
-const unknownNotified = new Map();
-const lastTouch = new Map();
-const cooldowns = new Map();
-const recentButtonClicks = new Map();
-const pendingDraftReviews = new Map(); // In-memory pending draft cache for pre-save reviews
-const perBroker = U.createSerializer();
-const listingLimiter = U.createLimiter(2, { maxQueue: 40 });
-const uploadLimiter = U.createLimiter(4);
-const rateGate = U.createRateGate(CFG.geminiRpm);
-const msgRate = U.createCounter(60000, 80);
-let inFlight = 0;
-
-function resolveLang(rawText, broker) {
-  if (!rawText) return broker.preferred_lang || "ar";
-  const isEnglish = /^[a-zA-Z0-9\s#_.,:/\-+!?()]+$/.test(rawText.trim());
-  return isEnglish ? "en" : broker.preferred_lang || "ar";
-}
-
-function setActiveListing(broker, code) {
-  const key = U.normalizePhone(broker.phone);
-  recentBrokerListings.set(key, {
-    code: T.extractCleanCode(code),
-    at: Date.now()
-  });
-}
-
-function getActiveListingCode(broker) {
-  const key = U.normalizePhone(broker.phone);
-  const rec = recentBrokerListings.get(key);
-  if (rec && Date.now() - rec.at < 7200000) {
-    return rec.code;
-  }
-  return null;
-}
-
-/* ====================================================================== */
-/* 4. Gemini AI Gateway with Multi-Model Resilient Cascade               */
-/* ====================================================================== */
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-const isTransientError = (e) => {
-  const msg = String((e && e.message) || e);
-  return /503|UNAVAILABLE|429|RESOURCE_EXHAUSTED|timeout|ETIMEDOUT|ECONNRESET|fetch failed/i.test(
-    msg
+async function getSession(brokerId, sessionType) {
+  const res = await DB.query(
+    `SELECT context_data FROM broker_sessions
+     WHERE broker_id = $1 AND session_type = $2 AND expires_at > NOW()`,
+    [brokerId, sessionType]
   );
-};
-
-async function callGemini({ contents, config, model, maxRetries = 2 }) {
-  const primary = model || CFG.geminiModel || "gemini-3.8-flash";
-  const fallbackTier2 = "gemini-3.6-flash";
-  const fallbackTier3 =
-    CFG.geminiFallback && CFG.geminiFallback !== fallbackTier2
-      ? CFG.geminiFallback
-      : "gemini-3.5-flash-lite";
-
-  const models = [primary, fallbackTier2, fallbackTier3].filter(
-    (m, i, a) => m && a.indexOf(m) === i
-  );
-
-  let lastErr;
-
-  for (const currentModel of models) {
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      await rateGate();
-      try {
-        const t0 = Date.now();
-        const res = await U.withTimeout(
-          ai.models.generateContent({ model: currentModel, contents, config }),
-          CFG.geminiTimeoutMs || 30000,
-          currentModel
-        );
-        const dur = Date.now() - t0;
-
-        return {
-          res,
-          model: currentModel,
-          duration_ms: dur,
-          usage: {
-            input: res.usageMetadata?.promptTokenCount || 0,
-            output: res.usageMetadata?.candidatesTokenCount || 0
-          }
-        };
-      } catch (err) {
-        lastErr = err;
-        const errMsg = String((err && err.message) || err);
-        const isSpike = /503|UNAVAILABLE|high demand/i.test(errMsg);
-        const isQuota =
-          /RESOURCE_EXHAUSTED|free_tier_requests|limit:\s*20/i.test(errMsg);
-        const isTimeout = /timeout|ETIMEDOUT/i.test(errMsg);
-
-        if (
-          (isSpike || isQuota || isTimeout) &&
-          models.length > 1 &&
-          currentModel !== models[models.length - 1]
-        ) {
-          log(
-            "warn",
-            `Model ${currentModel} degraded. Cascading to next fallback tier...`
-          );
-          await U.sleep(400);
-          break;
-        }
-
-        if (!isTransientError(err)) break;
-
-        if (attempt < maxRetries - 1) {
-          const delay = 1000 * (attempt + 1) + Math.random() * 400;
-          await U.sleep(delay);
-        }
-      }
-    }
-  }
-
-  throw lastErr;
+  return res.rows[0]?.context_data || null;
 }
 
-const aiShim = {
-  models: {
-    generateContent: async (a) => {
-      const out = await callGemini({
-        contents: a.contents,
-        config: a.config,
-        model: a.model
-      });
-      return out.res;
-    }
-  }
-};
-
-const cleanJson = (t) =>
-  String(t || "")
-    .trim()
-    .replace(/^```(?:json)?/i, "")
-    .replace(/```$/, "")
-    .trim();
-
-const AI = {
-  async transcribeAudio(buffer, mimeType) {
-    if (!buffer) return "";
-    const cleanMime = U.cleanAudioMime(mimeType);
-    const prompt =
-      "Transcribe this Egyptian Arabic real estate voice note accurately into Arabic text. " +
-      "Return ONLY the spoken words with no explanations, markdown, or commentary.";
-
-    try {
-      const res = await callGemini({
-        contents: [
-          { text: prompt },
-          {
-            inlineData: { mimeType: cleanMime, data: buffer.toString("base64") }
-          }
-        ],
-        config: { temperature: 0.1, maxOutputTokens: 500 }
-      });
-      return cleanJson(res.res.text).trim();
-    } catch (err) {
-      log("warn", "Audio transcription failed", errMeta(err));
-      return "";
-    }
-  },
-
-  async extractPropertyDetails({
-    texts = [],
-    voiceBuffers = [],
-    lang = "ar"
-  } = {}) {
-    const rawText = texts.filter(Boolean).join("\n").trim();
-    const fenceToken = crypto.randomBytes(4).toString("hex").toUpperCase();
-    const parts = [{ text: L.buildListingPrompt(lang, fenceToken) }];
-
-    if (rawText) {
-      parts.push({
-        text: `===${fenceToken}===\n${rawText}\n===${fenceToken}===`
-      });
-    }
-
-    for (const vb of voiceBuffers) {
-      if (vb && vb.buffer && Buffer.isBuffer(vb.buffer)) {
-        parts.push({
-          inlineData: {
-            mimeType: U.cleanAudioMime(vb.mimeType || "audio/ogg"),
-            data: vb.buffer.toString("base64")
-          }
-        });
-      }
-    }
-
-    const aiRes = await callGemini({
-      contents: parts,
-      config: {
-        temperature: 0.1,
-        maxOutputTokens: 3072,
-        responseMimeType: "application/json"
-      }
-    });
-
-    let draft = L.validateDraft(JSON.parse(cleanJson(aiRes.res.text)), lang);
-    if (draft.details && Array.isArray(draft.details.features)) {
-      draft.details.features = T.cleanFeaturesList(draft.details.features);
-    }
-
-    return {
-      draft,
-      usage: aiRes.usage,
-      model: aiRes.model,
-      duration_ms: aiRes.duration_ms
-    };
-  }
-};
+async function deleteSession(brokerId, sessionType) {
+  await DB.query(
+    `DELETE FROM broker_sessions WHERE broker_id = $1 AND session_type = $2`,
+    [brokerId, sessionType]
+  );
+}
 
 /* ====================================================================== */
-/* 5. Database Loaders & Cache Accessors                                  */
+/* 2. Broker Authentication & Multi-Tenancy Helpers                       */
 /* ====================================================================== */
-async function getBroker(from) {
-  const key = U.normalizePhone(from);
-  const hit = brokerCache.get(key);
-  if (hit && hit.exp > Date.now()) return hit.broker;
 
-  const r = await query(
-    "SELECT id, agency_id, name, phone, contact_phone, role, is_active, preferred_lang FROM brokers WHERE phone_normalized = $1 LIMIT 1",
-    [key]
-  );
-  const broker = r.rows[0] || null;
-  brokerCache.set(key, { broker, exp: Date.now() + 60000 });
-  return broker;
-}
+async function resolveBroker(phone) {
+  const cleanPhone = U.normalizePhone(phone);
+  if (!cleanPhone) return null;
 
-async function getAgency(agencyId) {
-  const hit = agencyCache.get(agencyId);
-  if (hit && hit.exp > Date.now()) return hit.row;
-
-  const r = await query(
-    "SELECT id, name, logo_url, primary_color, secondary_color, flyer_theme FROM agencies WHERE id = $1 LIMIT 1",
-    [agencyId]
-  );
-  const row = r.rows[0] || {};
-  agencyCache.set(agencyId, { row, exp: Date.now() + 300000 });
-  return row;
-}
-
-async function fetchListing(broker, code) {
-  const cleanCode = T.extractCleanCode(code);
-  const r = await query(
-    `SELECT l.*, p.name AS project_name, p.developer_name, p.collateral AS project_collateral, p.media AS project_media
-     FROM listings l
-     LEFT JOIN projects p ON l.project_id = p.id
-     WHERE l.agency_id = $1 AND (l.code = $2 OR l.developer_unit_code = $2)
+  const res = await DB.query(
+    `SELECT b.*, a.name AS agency_name, a.logo_url AS agency_logo,
+            a.primary_color, a.secondary_color, a.phone AS agency_phone
+     FROM brokers b
+     JOIN agencies a ON b.agency_id = a.id
+     WHERE b.phone = $1 OR b.whatsapp_id = $1
      LIMIT 1`,
-    [broker.agency_id, cleanCode]
+    [cleanPhone]
   );
-  return r.rows[0] || null;
+  return res.rows[0] || null;
 }
 
-async function loadListingImages(listingId) {
-  const r = await query(
-    "SELECT id, url, role, position FROM listing_images WHERE listing_id = $1 ORDER BY position ASC LIMIT 15",
-    [listingId]
+const to = (broker) => broker.whatsapp_id || broker.phone;
+const M = (lang, ar, en) => (lang === "en" ? en : ar);
+
+async function reply(broker, text) {
+  return WA.sendWhatsAppText(to(broker), text);
+}
+
+function canEdit(broker, listing) {
+  if (!broker || !listing) return false;
+  if (["admin", "owner", "manager"].includes(broker.role)) return true;
+  if (broker.id === listing.broker_id) return true;
+  return process.env.ALLOW_COLLEAGUE_EDITS === "true";
+}
+
+async function fetchListing(broker, rawCode) {
+  const code = T.extractCleanCode(rawCode);
+  if (!code) return null;
+
+  const res = await DB.query(
+    `SELECT * FROM listings
+     WHERE agency_id = $1 AND (code = $2 OR developer_unit_code = $2)
+     LIMIT 1`,
+    [broker.agency_id, code]
   );
-  return r.rows;
+  return res.rows[0] || null;
 }
 
-const canEdit = (broker, listing) =>
-  CFG.allowColleagueEdits ||
-  !listing.broker_id ||
-  listing.broker_id === broker.id ||
-  CFG.adminRoles.includes(String(broker.role || "").toLowerCase());
-
-async function markMsgs(ids, status) {
-  if (!ids || !ids.length) return;
-  try {
-    await query(
-      "UPDATE inbound_messages SET status = $2, updated_at = NOW() WHERE msg_id = ANY($1::text[])",
-      [ids, status]
-    );
-  } catch (e) {
-    log("warn", "Failed to update inbound message status", errMeta(e));
-  }
-}
-
-/* ====================================================================== */
-/* 6. Media Normalization & Storage                                       */
-/* ====================================================================== */
-const normalizeImage = (buf) =>
-  sharp(buf, { failOn: "none" })
-    .rotate()
-    .resize({
-      width: 1600,
-      height: 1600,
-      fit: "inside",
-      withoutEnlargement: true
-    })
-    .jpeg({ quality: 82 })
-    .toBuffer();
-
-async function uploadImages(agencyId, code, items) {
-  if (!items || !items.length) return { ok: [], failed: 0 };
-  const tag = crypto.randomBytes(3).toString("hex");
-
-  const out = await Promise.all(
-    items.map((it, i) =>
-      uploadLimiter(async () => {
-        try {
-          if (!it || !it.buffer) return null;
-          let finalBuf = it.buffer;
-          if (finalBuf.length > 250 * 1024) {
-            finalBuf = await normalizeImage(finalBuf);
-          }
-
-          const path = `agency_${agencyId}/listing_${code}/${code}-${tag}-${
-            i + 1
-          }.jpg`;
-          const url = await uploadListingImage(agencyId, path, finalBuf);
-          return url
-            ? { url, role: it.role || null, buffer: finalBuf, path }
-            : null;
-        } catch (e) {
-          log("error", "Image upload failed", errMeta(e));
-          return null;
-        }
-      })
+async function notFound(broker, code) {
+  const lang = broker.preferred_lang || "ar";
+  DB.logStdout("warn", "Requested property code not found", {
+    code,
+    brokerId: broker.id
+  });
+  await reply(
+    broker,
+    M(
+      lang,
+      `⚠️ لم يتم العثور على وحدة بالكود \`${code}\` في مخزون الوكالة.`,
+      `⚠️ No unit found with code \`${code}\` in agency inventory.`
     )
   );
-
-  return { ok: out.filter(Boolean), failed: out.filter((x) => !x).length };
+  return true;
 }
 
 /* ====================================================================== */
-/* 7. On-Demand Brochure Rendering (Locked to 100% English LTR)           */
+/* 3. Standard Search Card & Pagination View                              */
 /* ====================================================================== */
+
+async function showListingCard(broker, listing) {
+  const lang = broker.preferred_lang || "ar";
+  const isEn = lang === "en";
+  const code = listing.code;
+  const isPrimary = Boolean(listing.payment_terms?.plans?.length);
+
+  const header = T.formatStandardHeader(listing, lang);
+  const specs = [
+    `📐 *${isEn ? "Area:" : "المساحة:"}* ${listing.area_value || "-"} ${
+      isEn ? "sqm" : "م²"
+    }`,
+    `🛏️ *${isEn ? "Beds:" : "الغرف:"}* ${listing.bedrooms ?? "-"}`,
+    listing.details?.bathrooms
+      ? `🛁 *${isEn ? "Baths:" : "الحمامات:"}* ${listing.details.bathrooms}`
+      : null,
+    listing.details?.orientation
+      ? `🧭 *${isEn ? "Orientation:" : "الوجهة:"}* ${
+          listing.details.orientation
+        }`
+      : null,
+    listing.details?.finishing
+      ? `🎨 *${isEn ? "Finishing:" : "التشطيب:"}* ${listing.details.finishing}`
+      : null
+  ]
+    .filter(Boolean)
+    .join(" | ");
+
+  let financialSection = `💰 *${
+    isEn ? "Total Price:" : "إجمالي السعر:"
+  }* ${T.priceText(listing, lang)}`;
+
+  if (isPrimary) {
+    const bestPlan = listing.payment_terms.plans[0];
+    financialSection += `\n💳 *${isEn ? "Payment Plan:" : "نظام السداد:"}* ${
+      bestPlan.years
+    } ${isEn ? "Years" : "سنوات"} (Down: ${bestPlan.down_payment_pct}%)`;
+  } else {
+    const upfront =
+      listing.details?.total_upfront_cash || listing.down_payment_value;
+    if (upfront) {
+      financialSection += `\n💵 *${
+        isEn ? "Cash Required:" : "كاش مطلوب:"
+      }* ${T.formatAbbreviatedPrice(
+        upfront,
+        listing.details?.currency || "EGP",
+        lang
+      )}`;
+    }
+    if (listing.details?.remaining_balance) {
+      financialSection += `\n🗓️ *${
+        isEn ? "Remaining Debt:" : "متبقي أقساط:"
+      }* ${T.formatAbbreviatedPrice(
+        listing.details.remaining_balance,
+        listing.details?.currency || "EGP",
+        lang
+      )}`;
+    }
+  }
+
+  const deliveryStr = listing.details?.ready_to_move
+    ? isEn
+      ? "Immediate (Ready to Move)"
+      : "فوري (جاهز للاستلام)"
+    : listing.details?.delivery_date || "-";
+  financialSection += `\n📅 *${
+    isEn ? "Delivery:" : "الاستلام:"
+  }* ${deliveryStr}`;
+
+  const cardText = `${header}\n─────────────────────────\n${specs}\n─────────────────────────\n${financialSection}`;
+
+  const buttons = [
+    { id: `flyer:${code}`, title: isEn ? "Brochure 📄" : "البروشور 📄" },
+    isPrimary
+      ? {
+          id: `plans_view:${code}`,
+          title: isEn ? "Payment Plans 💳" : "أنظمة السداد 💳"
+        }
+      : { id: `edit_unit:${code}`, title: isEn ? "Edit ✏️" : "تعديل ✏️" },
+    { id: `client:${code}`, title: isEn ? "Client Text 📋" : "نص العميل 📋" }
+  ];
+
+  await WA.sendWhatsAppButtons(to(broker), cardText, buttons);
+}
+
+/* ====================================================================== */
+/* 4. On-Demand First-Flyer Vision Curation & Photo Pruning               */
+/* ====================================================================== */
+
 async function renderFlyerOnDemand(
   broker,
-  listing,
+  code,
   { theme = "dark", unbranded = false } = {}
 ) {
   const t0 = Date.now();
-  const perf = {
-    agency_id: broker.agency_id,
-    broker_id: broker.id,
-    listing_code: listing.code,
-    operation_type: "flyer_ondemand",
-    flyer_render_ms: 0,
-    storage_upload_ms: 0
-  };
+  let geminiDuration = 0;
+  let tokensIn = 0;
+  let tokensOut = 0;
+  let storageUploadDuration = 0;
+  let renderDuration = 0;
 
-  const agency = await getAgency(broker.agency_id);
-  const cacheKey = unbranded
-    ? `unbranded_en_${theme}`
-    : `${broker.id}_en_${theme}`;
-  const flyerCache = listing.flyer_cache || {};
+  const lang = broker.preferred_lang || "ar";
+  const listing = await fetchListing(broker, code);
+  if (!listing) return notFound(broker, code);
 
-  if (flyerCache[cacheKey]) {
-    const cached = flyerCache[cacheKey];
-    const isFresh =
-      cached.wa_media_at &&
-      Date.now() - new Date(cached.wa_media_at).getTime() < 25 * 86400000;
-    if (isFresh && cached.wa_media_id) {
-      return { ok: true, wa_media_id: cached.wa_media_id, url: cached.url };
+  const cacheKey = `${theme}_${unbranded ? "unbranded" : "branded"}`;
+  if (listing.flyer_cache && listing.flyer_cache[cacheKey]) {
+    DB.logStdout("info", "Serving flyer from cache", {
+      code: listing.code,
+      cacheKey
+    });
+    await WA.sendWhatsAppImage(
+      to(broker),
+      listing.flyer_cache[cacheKey],
+      `#${listing.code}`
+    );
+    return true;
+  }
+
+  const imgRes = await DB.query(
+    `SELECT * FROM listing_images
+     WHERE listing_id = $1
+     ORDER BY position ASC`,
+    [listing.id]
+  );
+  let images = imgRes.rows;
+
+  if (!images.length) {
+    DB.logStdout("warn", "Cannot render flyer without images", {
+      code: listing.code
+    });
+    await reply(
+      broker,
+      M(
+        lang,
+        `⚠️ لا توجد صور مرفوعة للوحدة #${listing.code} لإنشاء البروشور.`,
+        `⚠️ No images uploaded for unit #${listing.code} to generate brochure.`
+      )
+    );
+    return false;
+  }
+
+  // FIRST FLYER REQUEST: Run Gemini Vision Curation & Photo Pruning if images are 'unprocessed'
+  const needsCuration = images.some(
+    (img) => img.role === "unprocessed" || !img.role
+  );
+
+  if (needsCuration && images.length > 1 && geminiClient) {
+    try {
+      await DB.checkAiQuota(broker.agency_id, broker.id);
+
+      const imagePayloads = [];
+      for (const img of images.slice(0, 15)) {
+        const res = await fetch(img.url, {
+          signal: AbortSignal.timeout(10000)
+        });
+        if (res.ok) {
+          const buf = Buffer.from(await res.arrayBuffer());
+          imagePayloads.push({
+            id: img.id,
+            url: img.url,
+            inlineData: {
+              mimeType: "image/jpeg",
+              data: buf.toString("base64")
+            }
+          });
+        }
+      }
+
+      if (imagePayloads.length > 1) {
+        const v0 = Date.now();
+        const visionPrompt = L.buildVisionPrompt();
+        const response = await geminiClient.models.generateContent({
+          model: GEMINI_VISION_MODEL,
+          contents: [
+            {
+              role: "user",
+              parts: [
+                { text: visionPrompt },
+                ...imagePayloads.map((p) => ({ inlineData: p.inlineData }))
+              ]
+            }
+          ],
+          config: { responseMimeType: "application/json", temperature: 0.1 }
+        });
+
+        geminiDuration = Date.now() - v0;
+        tokensIn = response.usageMetadata?.promptTokenCount || 0;
+        tokensOut = response.usageMetadata?.candidatesTokenCount || 0;
+
+        const visionRaw = JSON.parse(
+          response.text.replace(/^```json|```$/g, "").trim()
+        );
+        const curation = L.validateVisionDraft(visionRaw, imagePayloads.length);
+
+        const keptIndices = (curation.image_order || []).slice(0, 9);
+        const keptImages = [];
+        const rejectedImages = [];
+
+        imagePayloads.forEach((item, index) => {
+          if (keptIndices.includes(index)) {
+            keptImages.push({
+              id: item.id,
+              url: item.url,
+              position: keptIndices.indexOf(index),
+              role:
+                curation.image_roles[index] ||
+                (keptIndices.indexOf(index) === 0 ? "facade" : "other")
+            });
+          } else {
+            rejectedImages.push(item);
+          }
+        });
+
+        // 1. Update kept images in DB with designated roles and sequential positions (0 to 8)
+        for (const kept of keptImages) {
+          await DB.query(
+            "UPDATE listing_images SET position = $1, role = $2 WHERE id = $3",
+            [kept.position, kept.role, kept.id]
+          );
+        }
+
+        // 2. PRUNING: Permanently delete excess rejected images (10 to 15) from Supabase Storage & DB
+        if (rejectedImages.length > 0) {
+          const pathsToDelete = rejectedImages.map((img) => img.url);
+          await Supabase.deleteStorageFiles(pathsToDelete);
+          await DB.query(
+            "DELETE FROM listing_images WHERE id = ANY($1::uuid[])",
+            [rejectedImages.map((img) => img.id)]
+          );
+        }
+
+        images = keptImages.sort((a, b) => a.position - b.position);
+
+        await DB.logOperation({
+          agency_id: broker.agency_id,
+          broker_id: broker.id,
+          listing_code: listing.code,
+          operation_type: "curate_and_prune_media",
+          status: "success",
+          gemini_ms: geminiDuration,
+          tokens_input: tokensIn,
+          tokens_output: tokensOut,
+          model_used: GEMINI_VISION_MODEL,
+          metadata: { kept: keptImages.length, pruned: rejectedImages.length }
+        });
+
+        DB.logStdout(
+          "info",
+          "Vision curation completed and excess photos pruned",
+          {
+            code: listing.code,
+            keptCount: keptImages.length,
+            prunedCount: rejectedImages.length
+          }
+        );
+      }
+    } catch (err) {
+      DB.logStdout(
+        "warn",
+        "Vision curation bypassed, falling back to sequential ordering",
+        {
+          code: listing.code,
+          err: err.message
+        }
+      );
+      images = images.slice(0, 9);
     }
   }
 
-  let images = await loadListingImages(listing.id);
-  if (!images.length && listing.images) {
-    const pImages = listing.images;
-    images = [
-      pImages.hero && { url: pImages.hero, role: "facade" },
-      pImages.layout && { url: pImages.layout, role: "layout" },
-      ...(Array.isArray(pImages.gallery)
-        ? pImages.gallery.map((url) => ({ url, role: "other" }))
-        : [])
-    ].filter(Boolean);
-  }
-
-  if (!images.length) return { ok: false, reason: "no_images" };
-
+  // Render the Dynamic Luxury Flyer
   const r0 = Date.now();
-  const flyerBuf = await generateFlyerBuffer({
+  const agency = {
+    name: broker.agency_name,
+    logo_url: broker.agency_logo,
+    primary_color: broker.primary_color,
+    secondary_color: broker.secondary_color,
+    phone: broker.agency_phone
+  };
+
+  const flyerBuffer = await Flyer.generateFlyerBuffer({
     listing,
     agency,
+    broker,
     images: images.map((i) => i.url),
     theme,
     unbranded
   });
-  perf.flyer_render_ms = Date.now() - r0;
-  if (!flyerBuf) return { ok: false, reason: "render_failed" };
+  renderDuration = Date.now() - r0;
 
-  const u0 = Date.now();
-  const storagePath = `agency_${broker.agency_id}/listing_${listing.code}/flyer_${cacheKey}.jpg`;
-  const flyerUrl = await uploadFlyerImage(
+  // Upload to Supabase Storage
+  const s0 = Date.now();
+  const storagePath = `flyers/${broker.agency_id}/${
+    listing.code
+  }_${cacheKey}_${Date.now()}.jpg`;
+  const flyerUrl = await Supabase.uploadFlyerImage(
     broker.agency_id,
     storagePath,
-    flyerBuf
+    flyerBuffer
   );
-  perf.storage_upload_ms = Date.now() - u0;
+  storageUploadDuration = Date.now() - s0;
 
-  const waMediaId = await WA.uploadWhatsAppMedia(flyerBuf, {
-    mimeType: "image/jpeg",
-    filename: `${listing.code}.jpg`
-  });
-
-  const entry = {
-    url: flyerUrl,
-    wa_media_id: waMediaId,
-    wa_media_at: new Date().toISOString(),
-    agent_name: broker.name,
-    agent_phone: broker.contact_phone || broker.phone
-  };
-
-  await query(
-    "UPDATE listings SET flyer_cache = jsonb_set(COALESCE(flyer_cache, '{}'::jsonb), $1::text[], $2::jsonb) WHERE id = $3",
-    [[cacheKey], JSON.stringify(entry), listing.id]
-  ).catch((e) => log("warn", "Cache write failed", errMeta(e)));
-
-  perf.total_duration_ms = Date.now() - t0;
-  logOperation(perf).catch(() => {});
-
-  return { ok: true, wa_media_id: waMediaId, url: flyerUrl, buf: flyerBuf };
-}
-
-/* ====================================================================== */
-/* 8. Property Presentation Cards & Dynamic Buttons (Primary vs Resale)   */
-/* ====================================================================== */
-async function showListingCard(broker, listing) {
-  const lang = broker.preferred_lang || "ar";
-  const isEn = lang === "en";
-  const code = T.extractCleanCode(listing.code);
-  const det = listing.details || {};
-  const isPrimary =
-    listing.inventory_type === "developer_model" ||
-    listing.is_primary_developer;
-
-  const header = T.formatStandardHeader(listing, lang);
-
-  const specsList = [
-    `📐 *${isEn ? "Area:" : "المساحة:"}* ${
-      listing.area_value ? `${listing.area_value}${isEn ? "sqm" : "م²"}` : "-"
-    }`,
-    `🛏️ *${isEn ? "Bedrooms:" : "الغرف:"}* ${
-      listing.property_type === "studio"
-        ? isEn
-          ? "Studio"
-          : "استوديو"
-        : listing.bedrooms || "-"
-    }`,
-    det.bathrooms
-      ? `🛁 *${isEn ? "Bathrooms:" : "الحمامات:"}* ${det.bathrooms}`
-      : null,
-    det.orientation
-      ? `🧭 *${isEn ? "Orientation:" : "الوجهة:"}* ${
-          isEn ? det.orientation_en || det.orientation : det.orientation
-        }`
-      : null,
-    det.finishing
-      ? `🎨 *${isEn ? "Finishing:" : "التشطيب:"}* ${
-          isEn ? det.finishing_en || det.finishing : det.finishing
-        }`
-      : null
-  ].filter(Boolean);
-
-  let financialBlock = "";
-  if (isPrimary && listing.payment_terms?.plans?.length) {
-    const plans = listing.payment_terms.plans;
-    const maxYears = Math.max(...plans.map((p) => p.years || 0));
-    const minDownPct = Math.min(...plans.map((p) => p.down_payment_pct ?? 100));
-    const bestCash = plans.find((p) => p.years === 0 || p.discount_pct >= 25);
-
-    financialBlock = isEn
-      ? `💰 *Pricing Options:*\n` +
-        (bestCash
-          ? ` • Cash: ${T.formatPrice(
-              listing.price_value * (1 - bestCash.discount_pct / 100),
-              "en"
-            )}\n`
-          : "") +
-        (maxYears > 0
-          ? ` • Installments: Up to ${maxYears} Years (Down from ${minDownPct}%)`
-          : "")
-      : `💰 *خيارات السعر والتقسيط:*\n` +
-        (bestCash
-          ? ` • الكاش بعد الخصم: ${T.formatPrice(
-              listing.price_value * (1 - bestCash.discount_pct / 100),
-              "ar"
-            )}\n`
-          : "") +
-        (maxYears > 0
-          ? ` • التقسيط: حتى ${maxYears} سنوات (مقدم يبدأ من ${minDownPct}%)`
-          : "");
-  } else {
-    // Resale Cash & Remaining Installments Block
-    const cur = det.currency || "EGP";
-    const upfront =
-      det.total_upfront_cash ||
-      det.down_payment_value ||
-      listing.down_payment_value;
-    const rem = det.remaining_balance;
-    const priceFormatted = listing.price_value
-      ? T.formatAbbreviatedPrice(
-          listing.price_value,
-          cur,
-          lang,
-          listing.listing_type
-        )
-      : listing.price_display || "-";
-
-    const lines = [
-      `💰 *${isEn ? "Total Price:" : "إجمالي السعر:"}* ${priceFormatted}`
-    ];
-    if (upfront) {
-      lines.push(
-        `💵 *${
-          isEn ? "Cash Required:" : "كاش مطلوب:"
-        }* ${T.formatAbbreviatedPrice(
-          upfront,
-          cur,
-          lang,
-          listing.listing_type
-        )}`
-      );
-    }
-    if (rem) {
-      lines.push(
-        `🗓️ *${
-          isEn ? "Remaining Debt:" : "متبقي أقساط:"
-        }* ${T.formatAbbreviatedPrice(rem, cur, lang, listing.listing_type)}`
-      );
-    }
-    financialBlock = lines.join("\n");
-  }
-
-  const deliveryStr = det.ready_to_move
-    ? isEn
-      ? "Immediate (Ready to Move)"
-      : "فوري (جاهز للاستلام)"
-    : det.delivery_date || listing.delivery_date || "-";
-
-  const body = `${header}\n─────────────────────────\n${specsList.join(
-    " | "
-  )}\n─────────────────────────\n${financialBlock}\n📅 *${
-    isEn ? "Delivery:" : "الاستلام:"
-  }* ${deliveryStr}`;
-
-  // Dynamic 3-Button Allocation: Primary gets Payment Plans; Resale gets Edit Unit
-  const middleButton = isPrimary
-    ? {
-        id: `plans_view:${code}`,
-        title: isEn ? "💳 Payment Plans" : "💳 أنظمة السداد"
-      }
-    : {
-        id: `edit_unit:${code}`,
-        title: isEn ? "✏️ Edit Unit" : "✏️ تعديل"
-      };
-
-  const buttons = [
-    {
-      id: `flyer:en:dark:${code}`, // Locked strictly to English brochure
-      title: isEn ? "📄 Brochure" : "📄 البروشور"
-    },
-    middleButton,
-    {
-      id: isEn ? `client:${code}` : `عميل:${code}`,
-      title: isEn ? "📋 Client Text" : "📋 نص العميل"
-    }
-  ];
-
-  setActiveListing(broker, code);
-  await WA.sendWhatsAppButtons(to(broker), body, buttons);
-}
-
-/* ====================================================================== */
-/* 9. Specialized Deliverables Dispatchers (Excel, Collateral)            */
-/* ====================================================================== */
-
-async function sendConsolidatedExcel(broker, code) {
-  const t0 = Date.now();
-  const listing = await fetchListing(broker, code);
-  if (!listing) return notFound(broker, code);
-
-  const agency = await getAgency(broker.agency_id);
-  const plans = listing.payment_terms?.plans || [];
-
-  if (!plans.length) {
-    return reply(
-      broker,
-      M(
-        broker.preferred_lang || "ar",
-        `⚠️ الوحدة #${code} لا تحتوي على مصفوفة أقساط للمطور (وحدة ريزيل فردية).`,
-        `⚠️ Listing #${code} does not contain multi-tier developer installment plans.`
-      )
-    );
-  }
-
-  await reply(
-    broker,
-    M(
-      broker.preferred_lang || "ar",
-      "⏳ جاري توليد جدول السداد المعتمد (English Excel)...",
-      "⏳ Generating Excel schedule (English)..."
-    )
+  // Update Flyer Cache on Listing
+  await DB.query(
+    `UPDATE listings
+     SET flyer_cache = jsonb_set(COALESCE(flyer_cache, '{}'::jsonb), $1, $2::jsonb),
+         updated_at = NOW()
+     WHERE id = $3`,
+    [`{${cacheKey}}`, JSON.stringify(flyerUrl), listing.id]
   );
 
-  const excelBuffer = await E.buildMultiPlanWorkbook({
-    listing,
-    plans,
-    agency,
-    broker,
-    lang: "en" // Locked to English LTR
-  });
+  const totalDuration = Date.now() - t0;
 
-  const filename = `Payment_Schedule_${code}_${
-    listing.compound || "Unit"
-  }.xlsx`;
-  const caption = `📊 Payment Plan Breakdown for #${code} (Comparison matrix + quarterly cash flows).`;
-
-  const sent = await WA.sendWhatsAppDocument(
-    to(broker),
-    excelBuffer,
-    filename,
-    caption
-  );
-
-  logOperation({
+  await DB.logOperation({
     agency_id: broker.agency_id,
     broker_id: broker.id,
-    listing_code: code,
-    operation_type: "export_payment_excel",
-    status: sent ? "success" : "failed",
-    total_duration_ms: Date.now() - t0
-  }).catch(() => {});
-}
-
-async function sendCollateralLinks(broker, code) {
-  const lang = broker.preferred_lang || "ar";
-  const isEn = lang === "en";
-  const listing = await fetchListing(broker, code);
-  if (!listing) return notFound(broker, code);
-
-  const collateral = listing.collateral || {};
-  const projectCollateral = listing.project_collateral || {};
-  const projectMedia = listing.project_media || {};
-
-  const layoutPdf = collateral.layout_pdf_url;
-  const masterBrochure =
-    projectCollateral.master_brochure_url || collateral.master_brochure_url;
-  const masterPlan =
-    projectCollateral.master_plan_url || collateral.master_plan_url;
-  const driveUrl =
-    projectCollateral.drive_folder_url || projectMedia.drive_folder_url;
-
-  const lines = [
-    isEn
-      ? `📂 *Marketing & Engineering Collateral #${code}*`
-      : `📂 *المستندات والوسائط الترويجية للوحدة #${code}*`,
-    `─────────────────────────`
-  ];
-
-  if (layoutPdf)
-    lines.push(
-      `📐 *${
-        isEn ? "Floor Plan PDF:" : "مخطط الشقة الهندسي (2D Layout):"
-      }*\n${layoutPdf}\n`
-    );
-  if (masterPlan)
-    lines.push(
-      `🗺️ *${
-        isEn ? "Master Plan:" : "المخطط العام للكمبوند (Master Plan):"
-      }*\n${masterPlan}\n`
-    );
-  if (masterBrochure)
-    lines.push(
-      `📖 *${
-        isEn ? "Project Brochure:" : "بروشور المشروع الكامل:"
-      }*\n${masterBrochure}\n`
-    );
-  if (driveUrl)
-    lines.push(
-      `📁 *${
-        isEn ? "Sales Kit Drive Folder:" : "مجلد الصور والملفات (Drive):"
-      }*\n${driveUrl}\n`
-    );
-
-  if (lines.length === 2) {
-    lines.push(
-      isEn
-        ? "ℹ️ No cloud PDF links currently attached to this unit."
-        : "ℹ️ لم يتم إرفاق روابط ملفات PDF سحابية لهذه الوحدة حتى الآن."
-    );
-  }
-
-  await reply(broker, lines.join("\n"));
-  await logOperation({
-    agency_id: broker.agency_id,
-    broker_id: broker.id,
-    listing_code: code,
-    operation_type: "collateral_view",
+    listing_code: listing.code,
+    operation_type: "generate_flyer",
     status: "success",
-    total_duration_ms: Date.now() - t0,
-    metadata: { has_layout: !!layoutPdf, has_drive: !!driveUrl }
-  }).catch(() => {});
-}
-
-/* ====================================================================== */
-/* 10. Command Handlers (Decoupled & Instrumented)                        */
-/* ====================================================================== */
-const notFound = (broker, code) =>
-  reply(
-    broker,
-    M(
-      broker.preferred_lang || "ar",
-      `❌ الوحدة غير موجودة بالمخزون: #${code}`,
-      `❌ Listing not found: #${code}`
-    )
-  );
-
-async function cmdExport(broker, lang) {
-  const t0 = Date.now();
-  const key = `export:${U.normalizePhone(broker.phone)}`;
-  if (cooldowns.get(key) > Date.now()) {
-    return reply(
-      broker,
-      M(
-        lang,
-        "⏳ يرجى الانتظار دقيقة قبل طلب تصدير جديد.",
-        "⏳ Please wait a minute before requesting another export."
-      )
-    );
-  }
-  cooldowns.set(key, Date.now() + 60000);
-
-  const isAdmin = CFG.adminRoles.includes(
-    String(broker.role || "").toLowerCase()
-  );
-  const r = await query(
-    `SELECT code, title, property_type, listing_type, price_value, price_display, area_value, bedrooms, location, compound, district, details, status, created_at
-     FROM listings WHERE agency_id = $1 ${
-       isAdmin ? "" : "AND broker_id = $2"
-     } ORDER BY created_at DESC LIMIT 5000`,
-    isAdmin ? [broker.agency_id] : [broker.agency_id, broker.id]
-  );
-
-  if (!r.rowCount) {
-    return reply(
-      broker,
-      M(
-        lang,
-        "لا توجد وحدات متاحة للتصدير.",
-        "No listings available to export."
-      )
-    );
-  }
-
-  await reply(
-    broker,
-    M(
-      lang,
-      "⏳ جاري إعداد ملف إكسيل الشامل للمخزون...",
-      "⏳ Preparing master inventory Excel workbook..."
-    )
-  );
-
-  const agency = await getAgency(broker.agency_id);
-  const excelBuffer = await E.buildAgencyInventoryWorkbook({
-    listings: r.rows,
-    agency,
-    broker,
-    lang: "en" // Master ledger locked to English LTR
+    total_duration_ms: totalDuration,
+    gemini_ms: geminiDuration,
+    flyer_render_ms: renderDuration,
+    storage_upload_ms: storageUploadDuration,
+    tokens_input: tokensIn,
+    tokens_output: tokensOut,
+    model_used: geminiDuration > 0 ? GEMINI_VISION_MODEL : null,
+    metadata: { theme, unbranded }
   });
 
-  const filename = `Master_Inventory_${new Date()
-    .toISOString()
-    .slice(0, 10)}.xlsx`;
-  const sent = await WA.sendWhatsAppDocument(
-    to(broker),
-    excelBuffer,
-    filename,
-    M(
-      lang,
-      `📄 تم استخراج شيت إكسيل شامل (${r.rowCount} وحدة)`,
-      `📄 Full Agency Inventory (${r.rowCount} units)`
-    )
-  );
+  DB.logStdout("info", "Flyer rendered and dispatched successfully", {
+    code: listing.code,
+    durationMs: totalDuration,
+    flyerUrl
+  });
 
-  logOperation({
-    agency_id: broker.agency_id,
-    broker_id: broker.id,
-    operation_type: "cmd_export_excel",
-    status: sent ? "success" : "failed",
-    total_duration_ms: Date.now() - t0
-  }).catch(() => {});
+  await WA.sendWhatsAppImage(to(broker), flyerUrl, `#${listing.code}`);
+  return true;
 }
 
-async function cmdFlyer(
-  broker,
-  codeRaw,
-  lang,
-  { theme = "dark", unbranded = false } = {}
-) {
+/* ====================================================================== */
+/* 5. Review Card Generation & Atomic Commit Workflow                     */
+/* ====================================================================== */
+
+async function cmdReviewDraft(broker) {
   const t0 = Date.now();
-  const code = T.extractCleanCode(codeRaw);
-  const listing = await fetchListing(broker, code);
-  if (!listing) return notFound(broker, code);
-
-  await reply(
-    broker,
-    M(
-      lang,
-      unbranded
-        ? "⏳ جاري تصميم الكتالوج الأبيض (English Unbranded)..."
-        : "⏳ جاري تصميم وإنشاء الكتالوج المعتمد (English Brochure)...",
-      "⏳ Preparing luxury brochure (English)..."
-    )
-  );
-
-  try {
-    const res = await renderFlyerOnDemand(broker, listing, {
-      theme: theme || "dark",
-      unbranded
-    });
-
-    if (!res.ok) {
-      log("warn", "Flyer render failed", { code, reason: res.reason });
-      return await reply(
-        broker,
-        M(lang, "❌ تعذر إنشاء البروشور.", "❌ Brochure generation failed.")
-      );
-    }
-
-    const mediaSource = res.wa_media_id || res.url;
-    if (!mediaSource) {
-      return await reply(
-        broker,
-        M(lang, "❌ تعذر رفع البروشور.", "❌ Brochure upload failed.")
-      );
-    }
-
-    const caption = unbranded ? `#${code}` : `#${code} - ${broker.name || ""}`;
-    await WA.sendWhatsAppImage(to(broker), mediaSource, caption);
-  } catch (err) {
-    log("error", "cmdFlyer failed to render or deliver brochure", errMeta(err));
-    await logOperation({
-      agency_id: broker.agency_id,
-      broker_id: broker.id,
-      listing_code: code,
-      operation_type: "flyer_ondemand",
-      status: "failed",
-      error_code: err.code || err.message?.slice(0, 50) || "FLYER_ERROR",
-      total_duration_ms: Date.now() - t0
-    }).catch(() => {});
-
-    await reply(
-      broker,
-      M(lang, "❌ تعذر إنشاء البروشور.", "❌ Brochure generation failed.")
-    );
-  }
-}
-
-/**
- * Initiates the Pre-Save Interactive Review Card before committing to the DB.
- */
-async function cmdReviewDraft(broker, lang) {
-  const t0 = Date.now();
+  const lang = broker.preferred_lang || "ar";
   const draft = await Drafts.getDraft(broker.id);
 
   if (
@@ -1013,494 +498,1294 @@ async function cmdReviewDraft(broker, lang) {
       !draft.voice_buffers?.length &&
       !draft.media_items?.length)
   ) {
-    return reply(
+    DB.logStdout("info", "Draft review requested on empty draft", {
+      brokerId: broker.id
+    });
+    await reply(
       broker,
       M(
         lang,
-        "⚠️ لا توجد مسودة نشطة تحتوي على بيانات لحفظها.\nلبدء مسودة جديدة، أرسل صور الوحدة مباشرة أو اكتب *اضافة*.",
-        "⚠️ No active draft with data to save.\nTo start a draft, send photos or type *add*."
+        "⚠️ لا توجد مسودة نشطة حالياً. اكتب *اضافة* لبدء تسجيل وحدة جديدة.",
+        "⚠️ No active draft found. Type *add* to begin a new listing."
       )
     );
+    return;
   }
 
-  await reply(
-    broker,
-    M(
-      lang,
-      "⏳ جاري تحليل مواصفات الوحدة بالذكاء الاصطناعي وإعداد كارت المراجعة...",
-      "⏳ Analyzing listing specifications and preparing review card..."
-    )
-  );
+  await DB.checkAiQuota(broker.agency_id, broker.id);
 
-  try {
-    const g0 = Date.now();
-    const extraction = await AI.extractPropertyDetails({
-      texts: draft.texts || [],
-      voiceBuffers: draft.voice_buffers || [],
-      lang
+  const parts = [{ text: L.buildListingPrompt(lang) }];
+
+  if (draft.texts?.length) {
+    parts.push({
+      text: `\n\n=== PROPERTY NOTES ===\n${draft.texts.join("\n")}`
     });
-    const geminiMs = Date.now() - g0;
-    const listingData = extraction.draft;
+  }
 
-    // Evaluate parsed price
-    const parsedPrice = listingData.price_raw
-      ? T.parseEgyptianPrice(listingData.price_raw, {
-          listingType: listingData.listing_type
-        })
-      : null;
-
-    if (parsedPrice?.priceValue) {
-      listingData.price_value = parsedPrice.priceValue;
-      listingData.price_display = parsedPrice.priceDisplay;
-    }
-
-    // Evaluate Completeness & Rules
-    const validationResult = L.checkDraftCompleteness(listingData, parsedPrice);
-
-    // If hard blockers exist: reject commit and list missing mandatory fields
-    if (!validationResult.isComplete) {
-      const blockerList = validationResult.blockers
-        .map((b) => ` • ${b}`)
-        .join("\n");
-      const blockMsg = M(
-        lang,
-        `❌ *بيانات ناقصة تمنع الحفظ:*\n${blockerList}\n\nيرجى إرسال البيانات الناقصة (كتابة أو رسالة صوتية) ثم كتابة *تم*.`,
-        `❌ *Missing mandatory fields:*\n${blockerList}\n\nPlease provide the missing details and send *done*.`
-      );
-
-      await logOperation({
-        agency_id: broker.agency_id,
-        broker_id: broker.id,
-        operation_type: "draft_validation_blocked",
-        status: "rejected",
-        total_duration_ms: Date.now() - t0,
-        metadata: { blockers: validationResult.blockers }
-      });
-
-      return reply(broker, blockMsg);
-    }
-
-    // Format Review Card (Separates verified specs from optional flagged fields)
-    const reviewCardText = T.formatDraftReviewCard(
-      listingData,
-      parsedPrice,
-      validationResult,
-      lang
-    );
-
-    // Cache the validated draft in pending review state
-    pendingDraftReviews.set(broker.id, {
-      listingData,
-      mediaItems: draft.media_items || [],
-      created_at: Date.now()
-    });
-
-    const isEn = lang === "en";
-    const buttons = [
-      {
-        id: "draft_confirm",
-        title: isEn ? "Confirm & Save ✅" : "تأكيد وحفظ ✅"
-      },
-      {
-        id: "draft_edit",
-        title: isEn ? "Edit Details ✏️" : "تعديل ✏️"
-      },
-      {
-        id: "draft_cancel",
-        title: isEn ? "Cancel ❌" : "إلغاء ❌"
+  for (const v of draft.voice_buffers || []) {
+    parts.push({
+      inlineData: {
+        mimeType: U.cleanAudioMime(v.mimeType),
+        data: v.buffer.toString("base64")
       }
-    ];
-
-    await logOperation({
-      agency_id: broker.agency_id,
-      broker_id: broker.id,
-      listing_code: listingData.code,
-      operation_type: "draft_review_shown",
-      status: "success",
-      gemini_ms: geminiMs,
-      total_duration_ms: Date.now() - t0,
-      metadata: { warnings_count: validationResult.warnings.length }
     });
+  }
 
-    await WA.sendWhatsAppButtons(to(broker), reviewCardText, buttons);
-  } catch (err) {
-    log("error", "cmdReviewDraft AI analysis failed", errMeta(err));
+  const v0 = Date.now();
+  const response = await geminiClient.models.generateContent({
+    model: GEMINI_TEXT_MODEL,
+    contents: [{ role: "user", parts }],
+    config: { responseMimeType: "application/json", temperature: 0.1 }
+  });
+  const geminiDuration = Date.now() - v0;
+
+  const tokensIn = response.usageMetadata?.promptTokenCount || 0;
+  const tokensOut = response.usageMetadata?.candidatesTokenCount || 0;
+
+  const parsedJson = JSON.parse(
+    response.text.replace(/^```json|```$/g, "").trim()
+  );
+  const validated = L.validateDraft(parsedJson, lang);
+  const parsedPrice = T.parseEgyptianPrice(validated.price_raw, { lang });
+  const check = L.checkDraftCompleteness(validated, parsedPrice);
+
+  await DB.logOperation({
+    agency_id: broker.agency_id,
+    broker_id: broker.id,
+    operation_type: "review_draft_ai",
+    status: check.isComplete ? "success" : "validation_failed",
+    total_duration_ms: Date.now() - t0,
+    gemini_ms: geminiDuration,
+    tokens_input: tokensIn,
+    tokens_output: tokensOut,
+    model_used: GEMINI_TEXT_MODEL,
+    metadata: {
+      isComplete: check.isComplete,
+      blockersCount: check.blockers.length
+    }
+  });
+
+  if (!check.isComplete) {
+    DB.logStdout("warn", "Draft failed completeness validation", {
+      brokerId: broker.id,
+      blockers: check.blockers
+    });
+    const errorList = check.blockers.map((b) => `• ${b}`).join("\n");
+    await WA.sendWhatsAppButtons(
+      to(broker),
+      M(
+        lang,
+        `⚠️ *بيانات إلزامية ناقصة لاعتماد الوحدة:*\n${errorList}\n\nيرجى إرسال البيانات الناقصة (صوت أو كتابة):`,
+        `⚠️ *Mandatory missing fields:*\n${errorList}\n\nPlease provide missing specs:`
+      ),
+      [
+        {
+          id: "draft_edit",
+          title: M(lang, "✏️ استكمال البيانات", "✏️ Provide Specs")
+        },
+        {
+          id: "draft_cancel",
+          title: M(lang, "🗑️ إلغاء المسودة", "🗑️ Cancel Draft")
+        }
+      ]
+    );
+    return;
+  }
+
+  // Stage validated listing data in PostgreSQL for multi-pod confirmation
+  await Drafts.stageDraftReview(broker.id, validated, draft.media_items);
+
+  DB.logStdout("info", "Draft passed validation and staged for confirmation", {
+    brokerId: broker.id
+  });
+
+  const reviewCardText = T.formatDraftReviewCard(
+    validated,
+    parsedPrice,
+    check,
+    lang
+  );
+
+  // Meta Button API Constraint: Body text cannot exceed 1024 characters.
+  // If > 950 chars, split into complete text message + action buttons message.
+  if (reviewCardText.length > 950) {
+    await WA.sendWhatsAppText(to(broker), reviewCardText);
+    await WA.sendWhatsAppButtons(
+      to(broker),
+      M(
+        lang,
+        "اختر الإجراء المناسب للاعتماد أو التعديل:",
+        "Choose an action to confirm or modify:"
+      ),
+      [
+        {
+          id: "draft_confirm_save",
+          title: M(lang, "✅ تأكيد وحفظ", "✅ Confirm & Save")
+        },
+        { id: "draft_edit", title: M(lang, "✏️ تعديل", "✏️ Edit Details") },
+        { id: "draft_cancel", title: M(lang, "❌ إلغاء", "❌ Cancel") }
+      ]
+    );
+  } else {
+    await WA.sendWhatsAppButtons(to(broker), reviewCardText, [
+      {
+        id: "draft_confirm_save",
+        title: M(lang, "✅ تأكيد وحفظ", "✅ Confirm & Save")
+      },
+      { id: "draft_edit", title: M(lang, "✏️ تعديل", "✏️ Edit Details") },
+      { id: "draft_cancel", title: M(lang, "❌ إلغاء", "❌ Cancel") }
+    ]);
+  }
+}
+
+async function cmdExecuteConfirmSave(broker) {
+  const t0 = Date.now();
+  const lang = broker.preferred_lang || "ar";
+
+  // Double-tap idempotency protection check
+  const recentCommit = await getSession(broker.id, "recent_commit");
+  if (recentCommit && recentCommit.code) {
+    DB.logStdout(
+      "info",
+      "Idempotency caught double-tap commit; returning saved status",
+      {
+        code: recentCommit.code,
+        brokerId: broker.id
+      }
+    );
     await reply(
       broker,
       M(
         lang,
-        "❌ حدث خطأ أثناء قراءة بيانات الوحدة. حاول مجدداً بكتابة *تم*.",
-        "❌ Failed to parse draft. Please retry with *done*."
+        `✅ تم استلام وتأكيد حفظ الوحدة مسبقاً بكود: \`${recentCommit.code}\``,
+        `✅ Unit was already successfully saved under code: \`${recentCommit.code}\``
       )
     );
+    return;
   }
-}
 
-/**
- * Commits verified draft to the database after explicit confirmation.
- */
-async function cmdExecuteConfirmSave(broker, lang) {
-  const t0 = Date.now();
-  const pending = pendingDraftReviews.get(broker.id);
-
-  if (!pending || !pending.listingData) {
-    return reply(
+  const staged = await Drafts.getStagedDraft(broker.id);
+  if (!staged || !staged.listingData) {
+    DB.logStdout("warn", "Staged draft not found or expired during commit", {
+      brokerId: broker.id
+    });
+    await reply(
       broker,
       M(
         lang,
-        "⚠️ انتهت صلاحية كارت المراجعة المؤقت. يرجى كتابة *تم* لإنشاء كارت مراجعة جديد.",
-        "⚠️ Pending review expired. Please send *done* to re-generate the review card."
+        "⚠️ انتهت صلاحية جلسة المراجعة (15 دقيقة) أو تم حفظها مسبقاً. أرسل *اضافة* للبدء من جديد.",
+        "⚠️ Review session expired (15m TTL) or already committed. Type *add* to restart."
       )
     );
+    return;
   }
 
-  const { listingData, mediaItems } = pending;
+  const draft = await Drafts.getDraft(broker.id);
+  const uploadedImages = [];
+
+  const s0 = Date.now();
+  for (let i = 0; i < (draft?.media_items || []).length; i++) {
+    const item = draft.media_items[i];
+    const compressedBuf = await sharp(item.buffer)
+      .rotate()
+      .resize({
+        width: 1600,
+        height: 1600,
+        fit: "inside",
+        withoutEnlargement: true
+      })
+      .jpeg({ quality: 80, mozjpeg: true })
+      .toBuffer();
+
+    const path = `properties/${broker.agency_id}/${Date.now()}_${i}.jpg`;
+    const publicUrl = await Supabase.uploadListingImage(
+      broker.agency_id,
+      path,
+      compressedBuf
+    );
+
+    if (publicUrl) {
+      uploadedImages.push({ url: publicUrl, role: "unprocessed" });
+    }
+  }
+  const storageUploadDuration = Date.now() - s0;
+
+  const committed = await Drafts.commitDraftToListing({
+    broker,
+    agencyId: broker.agency_id,
+    listingData: staged.listingData,
+    images: uploadedImages
+  });
+
+  // Store commit in session for 20 seconds to prevent double-tap race errors
+  await setSession(broker.id, "recent_commit", { code: committed.code }, 20);
+
+  const totalDuration = Date.now() - t0;
+
+  await DB.logOperation({
+    agency_id: broker.agency_id,
+    broker_id: broker.id,
+    listing_code: committed.code,
+    operation_type: "commit_draft_listing",
+    status: "success",
+    total_duration_ms: totalDuration,
+    storage_upload_ms: storageUploadDuration,
+    metadata: { uploadedImagesCount: uploadedImages.length }
+  });
+
+  DB.logStdout("info", "Draft listing committed successfully to PostgreSQL", {
+    code: committed.code,
+    brokerId: broker.id,
+    imagesCount: uploadedImages.length,
+    durationMs: totalDuration
+  });
 
   await reply(
     broker,
     M(
       lang,
-      "⏳ جاري رفع الصور واعتماد الوحدة نهائياً بالمخزون...",
-      "⏳ Uploading photos and committing unit to inventory..."
+      `🎉 تم اعتماد وحفظ الوحدة بنجاح بكود: \`${committed.code}\`\nتم إدراجها بالمخزون النشط وجاهزة للمشاركة.`,
+      `🎉 Unit successfully saved and active under code: \`${committed.code}\``
     )
   );
 
-  try {
-    const u0 = Date.now();
-    const uploadRes = await uploadImages(
-      broker.agency_id,
-      listingData.code,
-      mediaItems
-    );
-    const storageMs = Date.now() - u0;
-
-    const c0 = Date.now();
-    const inserted = await Drafts.commitDraftToListing({
-      broker,
-      agencyId: broker.agency_id,
-      listingData,
-      images: uploadRes.ok
-    });
-    const dbMs = Date.now() - c0;
-
-    // Clear both pending review and draft session
-    pendingDraftReviews.delete(broker.id);
-    await Drafts.clearDraft(broker.id);
-
-    await logOperation({
-      agency_id: broker.agency_id,
-      broker_id: broker.id,
-      listing_code: inserted.code,
-      operation_type: "draft_confirm_commit",
-      status: "success",
-      storage_upload_ms: storageMs,
-      db_ms: dbMs,
-      total_duration_ms: Date.now() - t0,
-      metadata: { images_count: uploadRes.ok.length }
-    });
-
-    await reply(
-      broker,
-      M(
-        lang,
-        `✅ تم حفظ واعتماد الوحدة بنجاح كود: \`${inserted.code}\``,
-        `✅ Unit saved successfully: \`${inserted.code}\``
-      )
-    );
-
-    await showListingCard(broker, inserted);
-  } catch (err) {
-    log("error", "Failed to commit confirmed draft", errMeta(err));
-    await reply(
-      broker,
-      M(
-        lang,
-        "❌ تعذر حفظ الوحدة بقاعدة البيانات.",
-        "❌ Failed to save listing."
-      )
-    );
-  }
+  await showListingCard(broker, committed);
 }
+
+/* ====================================================================== */
+/* 6. Inbound Message Handlers (Commands, Text, Audio, Image, Document)   */
+/* ====================================================================== */
 
 async function handleCommand(broker, raw) {
-  if (!raw) return false;
-  const n = String(raw)
-    .replace(/[\u200B-\u200D\uFEFF\u200E\u200F\u0640]/g, "")
-    .trim();
   const lang = broker.preferred_lang || "ar";
+  const n = raw.trim();
   let m;
 
-  // 1. LANGUAGE SWITCHER: "عربي", "english", "lang ar", "lang en"
-  if (/^(?:lang\s+ar|عربي|اللغة العربية)$/i.test(n)) {
-    await query("UPDATE brokers SET preferred_lang = 'ar' WHERE id = $1", [
-      broker.id
-    ]);
-    brokerCache.delete(U.normalizePhone(broker.phone));
-    broker.preferred_lang = "ar";
-    await logOperation({
-      agency_id: broker.agency_id,
-      broker_id: broker.id,
-      operation_type: "set_language",
-      status: "success",
-      metadata: { new_lang: "ar" }
+  // Help / Menu
+  if (/^(?:help|menu|مساعدة|اوامر|أوامر|\?|؟)$/i.test(n)) {
+    DB.logStdout("info", "Command executed: help menu", {
+      brokerId: broker.id
     });
-    await reply(
-      broker,
-      "✅ تم ضبط اللغة إلى العربية. ستصلك جميع القوائم والبطاقات باللغة العربية."
-    );
-    return true;
-  }
-
-  if (/^(?:lang\s+en|english|انجليزي|إنجليزي)$/i.test(n)) {
-    await query("UPDATE brokers SET preferred_lang = 'en' WHERE id = $1", [
-      broker.id
-    ]);
-    brokerCache.delete(U.normalizePhone(broker.phone));
-    broker.preferred_lang = "en";
-    await logOperation({
-      agency_id: broker.agency_id,
-      broker_id: broker.id,
-      operation_type: "set_language",
-      status: "success",
-      metadata: { new_lang: "en" }
-    });
-    await reply(
-      broker,
-      "✅ Language set to English. All menus, cards, and responses will now be in English."
-    );
-    return true;
-  }
-
-  // 2. HELP MENU
-  if (/^(?:مساعدة|مساعده|المساعدة|help|menu|منيو|اوامر|أوامر|\?|؟)$/i.test(n)) {
     await reply(broker, T.getHelpMessage(lang));
     return true;
   }
 
-  // 3. ADD NEW LISTING COMMAND
+  // Language Switching
+  if (/^(?:lang\s+en|english|انجليزي)$/i.test(n)) {
+    await DB.query("UPDATE brokers SET preferred_lang = 'en' WHERE id = $1", [
+      broker.id
+    ]);
+    broker.preferred_lang = "en";
+    DB.logStdout("info", "Command executed: language set to en", {
+      brokerId: broker.id
+    });
+    await reply(broker, "✅ Interface language set to English.");
+    return true;
+  }
+  if (/^(?:lang\s+ar|عربي|اللغة العربية)$/i.test(n)) {
+    await DB.query("UPDATE brokers SET preferred_lang = 'ar' WHERE id = $1", [
+      broker.id
+    ]);
+    broker.preferred_lang = "ar";
+    DB.logStdout("info", "Command executed: language set to ar", {
+      brokerId: broker.id
+    });
+    await reply(broker, "✅ تم تحويل لغة النظام إلى العربية.");
+    return true;
+  }
+
+  // Draft Lifecycle Commands
   if (/^(?:اضافة|إضافة|جديد|add|new)$/i.test(n)) {
-    pendingDraftReviews.delete(broker.id);
-    await Drafts.clearDraft(broker.id);
-    await Drafts.createDraft(broker.id, broker.agency_id);
+    await Drafts.createDraft(broker.id, broker.agency_id, broker.phone);
+    await deleteSession(broker.id, "edit");
+    await deleteSession(broker.id, "pending_search");
+    DB.logStdout("info", "Command executed: create new draft", {
+      brokerId: broker.id
+    });
     await reply(
       broker,
       M(
         lang,
-        "📝 *بدء إضافة مسودة وحدة جديدة*\n\n1️⃣ أرسل صور الوحدة.\n2️⃣ أرسل المواصفات والأسعار (صوت أو كتابة).\n3️⃣ أرسل *تم* أو *done* لفتح كارت المراجعة والاعتماد.",
-        "📝 *Add New Listing Draft*\n\n1️⃣ Send unit photos.\n2️⃣ Send specifications & price (voice or text).\n3️⃣ Send *done* to review and confirm."
+        "📝 تم فتح مسودة جديدة.\nأرسل صور الوحدة (حتى 15 صورة)، ثم أرسل المواصفات والأسعار (تسجيل صوتي أو كتابة)، واكتب *تم* للمراجعة.",
+        "📝 New draft opened.\nSend photos (up to 15), then voice or text specs, and type *done* to review."
       )
     );
     return true;
   }
 
-  // 4. REVIEW DRAFT COMMAND
-  if (/^(?:تم|حفظ|done|save)$/i.test(n)) {
-    await cmdReviewDraft(broker, lang);
+  if (/^(?:تم|done|حفظ|save)$/i.test(n)) {
+    DB.logStdout("info", "Command executed: review draft", {
+      brokerId: broker.id
+    });
+    await cmdReviewDraft(broker);
     return true;
   }
 
-  // 5. EXCEL EXPORT
-  if (/^(?:تصدير|اكسيل|اكسل|excel|export)$/i.test(n)) {
-    await cmdExport(broker, lang);
+  if (/^(?:cancel|إلغاء|الغاء|تراجع)$/i.test(n)) {
+    await Drafts.clearDraft(broker.id);
+    await deleteSession(broker.id, "edit");
+    await deleteSession(broker.id, "pending_search");
+    DB.logStdout("info", "Command executed: cancel active operation", {
+      brokerId: broker.id
+    });
+    await reply(
+      broker,
+      M(
+        lang,
+        "🗑️ تم إلغاء المسودة/العملية بنجاح.",
+        "🗑️ Draft / operation cancelled."
+      )
+    );
     return true;
   }
 
-  // 6. CANCEL DRAFT
-  if (/^(?:إلغاء|الغاء|تراجع|cancel)$/i.test(n)) {
-    pendingDraftReviews.delete(broker.id);
+  if (/^(?:replace|استبدال)$/i.test(n)) {
     const draft = await Drafts.getDraft(broker.id);
     if (draft) {
-      await Drafts.clearDraft(broker.id);
+      await DB.query(
+        "UPDATE listing_drafts SET media_ids = '{}' WHERE broker_id = $1",
+        [broker.id]
+      );
+      DB.logStdout("info", "Command executed: replace draft photos", {
+        brokerId: broker.id
+      });
       await reply(
         broker,
         M(
           lang,
-          "🗑️ تم إلغاء المسودة الحالية وتفريغها.",
-          "🗑️ Active draft has been canceled."
+          "📷 تم مسح صور المسودة. يمكنك إرسال الصور الجديدة الآن.",
+          "📷 Photos cleared. Send new photos now."
         )
       );
       return true;
     }
   }
 
-  const resolveTargetCode = (explicitCode) => {
-    if (explicitCode) return T.extractCleanCode(explicitCode);
-    return getActiveListingCode(broker);
-  };
-
-  // 7. PAYMENT PLANS COMMAND (Locked to English Excel)
-  if (
-    (m = n.match(
-      /^(?:جدول|انظمة|أنظمة|احسب|plans|calc)(?:\s+#?([A-Za-z0-9_\-\.\/`]+))?$/i
-    ))
-  ) {
-    const targetCode = resolveTargetCode(m[1]);
-    if (!targetCode) {
-      await reply(
-        broker,
-        M(lang, "⚠️ حدد كود الوحدة لعرض أنظمة سدادها.", "⚠️ Specify unit code.")
-      );
-      return true;
-    }
-    await sendConsolidatedExcel(broker, targetCode);
+  // Agency Inventory Export
+  if (/^(?:excel|export|اكسل|اكسيل|تصدير)$/i.test(n)) {
+    DB.logStdout("info", "Command executed: export agency inventory", {
+      brokerId: broker.id
+    });
+    const res = await DB.query(
+      "SELECT * FROM listings WHERE agency_id = $1 AND status = 'active' ORDER BY id DESC",
+      [broker.agency_id]
+    );
+    const buffer = await Excel.buildAgencyInventoryWorkbook({
+      listings: res.rows,
+      agency: { name: broker.agency_name },
+      broker,
+      lang
+    });
+    await WA.sendWhatsAppDocument(
+      to(broker),
+      buffer,
+      "Agency_Inventory.xlsx",
+      M(lang, "📊 كامل مخزون الوكالة النشط", "📊 Full active agency inventory")
+    );
     return true;
   }
 
-  // 8. COLLATERAL COMMAND
-  if (
-    (m = n.match(
-      /^(?:مخطط|بروشور|درايف|ملفات|collateral|layout|drive)(?:\s+#?([A-Za-z0-9_\-\.\/`]+))?$/i
-    ))
-  ) {
-    const targetCode = resolveTargetCode(m[1]);
-    if (!targetCode) {
+  // Interactive Edit Command
+  if ((m = n.match(/^(?:تعديل|edit)\s+([A-Za-z0-9_\-\.\/`#]+)$/i))) {
+    const code = T.extractCleanCode(m[1]);
+    const listing = await fetchListing(broker, code);
+    if (!listing) return notFound(broker, code);
+    if (!canEdit(broker, listing)) {
+      DB.logStdout("warn", "Unauthorized edit attempt", {
+        code,
+        brokerId: broker.id
+      });
       await reply(
         broker,
-        M(lang, "⚠️ حدد كود الوحدة لعرض ملفاتها.", "⚠️ Specify unit code.")
+        M(
+          lang,
+          "⛔ لا تملك صلاحية تعديل هذه الوحدة.",
+          "⛔ Unauthorized to edit this unit."
+        )
       );
       return true;
     }
-    await sendCollateralLinks(broker, targetCode);
+    await setSession(broker.id, "edit", { code }, 900); // 15-minute TTL
+    DB.logStdout("info", "Command executed: enter edit mode", {
+      code,
+      brokerId: broker.id
+    });
+    await WA.sendWhatsAppButtons(
+      to(broker),
+      M(
+        lang,
+        `✏️ *بدء تعديل الوحدة #${code}*\nأرسل التعديل المطلوب (صوت أو كتابة، مثلاً: 'السعر بقى 9.5 مليون والتسليم فوري') أو اضغط إلغاء:`,
+        `✏️ *Editing unit #${code}*\nSend changes (voice/text, e.g. 'Price is 9.5M ready to move'):`
+      ),
+      [
+        {
+          id: `cancel_edit:${code}`,
+          title: M(lang, "❌ إلغاء التعديل", "❌ Cancel Edit")
+        }
+      ]
+    );
     return true;
   }
 
-  // 9. FLYER COMMAND (Always 100% English)
-  if (
-    (m = n.match(/^(?:كتالوج|flyer|catalog)(?:\s+#?([A-Za-z0-9_\-\.\/`]+))?$/i))
-  ) {
-    const targetCode = resolveTargetCode(m[1]);
-    if (!targetCode) {
+  // Two-Step Safe Deletion Command
+  if ((m = n.match(/^(?:delete|حذف)\s+([A-Za-z0-9_\-\.\/`#]+)$/i))) {
+    const code = T.extractCleanCode(m[1]);
+    const listing = await fetchListing(broker, code);
+    if (!listing) return notFound(broker, code);
+    if (!canEdit(broker, listing)) {
+      DB.logStdout("warn", "Unauthorized delete attempt", {
+        code,
+        brokerId: broker.id
+      });
       await reply(
         broker,
-        M(lang, "⚠️ يرجى تحديد كود الوحدة.", "⚠️ Specify unit code.")
+        M(
+          lang,
+          "⛔ لا تملك صلاحية حذف هذه الوحدة.",
+          "⛔ Unauthorized to delete this unit."
+        )
       );
       return true;
     }
-    await cmdFlyer(broker, targetCode, lang, {
+    DB.logStdout("info", "Command executed: prompt delete confirmation", {
+      code,
+      brokerId: broker.id
+    });
+    await WA.sendWhatsAppButtons(
+      to(broker),
+      M(
+        lang,
+        `⚠️ *تأكيد حذف الوحدة #${code} نهائياً؟*\n🏢 ${
+          listing.compound || listing.title
+        }\n💰 ${T.priceText(listing, lang)}`,
+        `⚠️ *Permanently delete unit #${code}?*\n🏢 ${
+          listing.compound || listing.title
+        }\n💰 ${T.priceText(listing, lang)}`
+      ),
+      [
+        {
+          id: `confirm_delete:${code}`,
+          title: M(lang, "🗑️ تأكيد الحذف نهائياً", "🗑️ Delete Permanently")
+        },
+        {
+          id: `cancel_delete:${code}`,
+          title: M(lang, "❌ تراجع وإلغاء", "❌ Cancel")
+        }
+      ]
+    );
+    return true;
+  }
+
+  // Status Updates
+  if ((m = n.match(/^(?:sold|تم البيع)\s+([A-Za-z0-9_\-\.\/`#]+)$/i))) {
+    const code = T.extractCleanCode(m[1]);
+    const listing = await fetchListing(broker, code);
+    if (!listing) return notFound(broker, code);
+    if (!canEdit(broker, listing)) return reply(broker, "⛔ غير مصرح.");
+    await DB.query(
+      "UPDATE listings SET status = 'sold', flyer_cache = '{}'::jsonb, updated_at = NOW() WHERE id = $1",
+      [listing.id]
+    );
+    DB.logStdout("info", "Listing status updated to sold", {
+      code,
+      brokerId: broker.id
+    });
+    await reply(
+      broker,
+      M(
+        lang,
+        `✅ تم تحديث حالة الوحدة #${code} إلى: تم البيع (Sold).`,
+        `✅ Unit #${code} marked as Sold.`
+      )
+    );
+    return true;
+  }
+
+  if (
+    (m = n.match(/^(?:archive|أرشفة|ارشsuperفة)\s+([A-Za-z0-9_\-\.\/`#]+)$/i))
+  ) {
+    const code = T.extractCleanCode(m[1]);
+    const listing = await fetchListing(broker, code);
+    if (!listing) return notFound(broker, code);
+    if (!canEdit(broker, listing)) return reply(broker, "⛔ غير مصرح.");
+    await DB.query(
+      "UPDATE listings SET status = 'archived', flyer_cache = '{}'::jsonb, updated_at = NOW() WHERE id = $1",
+      [listing.id]
+    );
+    DB.logStdout("info", "Listing status updated to archived", {
+      code,
+      brokerId: broker.id
+    });
+    await reply(
+      broker,
+      M(
+        lang,
+        `📦 تم أرشفة الوحدة #${code} بنجاح.`,
+        `📦 Unit #${code} archived.`
+      )
+    );
+    return true;
+  }
+
+  // Reactivate Unit: accepts activate, active, and تفعيل
+  if ((m = n.match(/^(?:activate|active|تفعيل)\s+([A-Za-z0-9_\-\.\/`#]+)$/i))) {
+    const code = T.extractCleanCode(m[1]);
+    const listing = await fetchListing(broker, code);
+    if (!listing) return notFound(broker, code);
+    if (!canEdit(broker, listing)) return reply(broker, "⛔ غير مصرح.");
+    await DB.query(
+      "UPDATE listings SET status = 'active', flyer_cache = '{}'::jsonb, updated_at = NOW() WHERE id = $1",
+      [listing.id]
+    );
+    DB.logStdout("info", "Listing status reactivated", {
+      code,
+      brokerId: broker.id
+    });
+    await reply(
+      broker,
+      M(
+        lang,
+        `🟢 تم إعادة تفعيل الوحدة #${code} بالمخزون النشط.`,
+        `🟢 Unit #${code} reactivated.`
+      )
+    );
+    return true;
+  }
+
+  // Deliverables & Marketing Shortcuts
+  if ((m = n.match(/^(?:flyer|catalog|كتالوج)\s+([A-Za-z0-9_\-\.\/`#]+)$/i))) {
+    await renderFlyerOnDemand(broker, m[1], {
       theme: "dark",
       unbranded: false
     });
     return true;
   }
-
-  // 10. UNBRANDED FLYER COMMAND
   if (
     (m = n.match(
-      /^(?:بروشور بدون بيانات|unbranded)(?:\s+#?([A-Za-z0-9_\-\.\/`]+))?$/i
+      /^(?:unbranded|بروشور بدون بيانات)\s+([A-Za-z0-9_\-\.\/`#]+)$/i
     ))
   ) {
-    const targetCode = resolveTargetCode(m[1]);
-    if (!targetCode) {
-      await reply(
-        broker,
-        M(lang, "⚠️ يرجى تحديد كود الوحدة.", "⚠️ Specify unit code.")
-      );
-      return true;
-    }
-    await cmdFlyer(broker, targetCode, lang, {
-      theme: "dark",
-      unbranded: true
+    await renderFlyerOnDemand(broker, m[1], { theme: "dark", unbranded: true });
+    return true;
+  }
+  if ((m = n.match(/^(?:client|عميل|زبون)\s+([A-Za-z0-9_\-\.\/`#]+)$/i))) {
+    const code = T.extractCleanCode(m[1]);
+    const listing = await fetchListing(broker, code);
+    if (!listing) return notFound(broker, code);
+    const textLang = /client/i.test(n) ? "en" : "ar";
+    DB.logStdout("info", "Client ad copy generated", {
+      code,
+      textLang,
+      brokerId: broker.id
     });
+    await reply(broker, T.formatClientListingText(listing, broker, textLang));
     return true;
   }
 
-  // 11. DUAL CLIENT COPY: "عميل CODE" (Arabic) vs "client CODE" (English)
-  if ((m = n.match(/^(?:عميل|زبون)(?:\s+#?([A-Za-z0-9_\-\.\/`]+))?$/i))) {
-    const targetCode = resolveTargetCode(m[1]);
-    if (!targetCode) {
-      await reply(
+  if (
+    (m = n.match(
+      /^(?:plans|calc|جدول|انظمة|أنظمة|احسب)\s+([A-Za-z0-9_\-\.\/`#]+)$/i
+    ))
+  ) {
+    const code = T.extractCleanCode(m[1]);
+    const listing = await fetchListing(broker, code);
+    if (!listing) return notFound(broker, code);
+    if (listing.payment_terms?.plans?.length) {
+      const buffer = await Excel.buildMultiPlanWorkbook({
+        listing,
+        plans: listing.payment_terms.plans,
+        agency: { name: broker.agency_name },
         broker,
-        M(lang, "⚠️ يرجى تحديد كود الوحدة.", "⚠️ Specify unit code.")
+        lang
+      });
+      await WA.sendWhatsAppDocument(
+        to(broker),
+        buffer,
+        `Payment_Plans_${code}.xlsx`,
+        M(
+          lang,
+          `📊 جدول سداد ومقارنة أنظمة الوحدة #${code}`,
+          `📊 Payment schedule for #${code}`
+        )
       );
-      return true;
-    }
-    const l = await fetchListing(broker, targetCode);
-    if (l) {
-      await reply(broker, T.formatClientListingText(l, broker, "ar"));
     } else {
-      await notFound(broker, targetCode);
-    }
-    return true;
-  }
-
-  if ((m = n.match(/^(?:client)(?:\s+#?([A-Za-z0-9_\-\.\/`]+))?$/i))) {
-    const targetCode = resolveTargetCode(m[1]);
-    if (!targetCode) {
-      await reply(
-        broker,
-        M(lang, "⚠️ Please specify unit code.", "⚠️ Please specify unit code.")
-      );
-      return true;
-    }
-    const l = await fetchListing(broker, targetCode);
-    if (l) {
-      await reply(broker, T.formatClientListingText(l, broker, "en"));
-    } else {
-      await notFound(broker, targetCode);
-    }
-    return true;
-  }
-
-  // 12. DRAFT IMAGE REPLACE
-  if (/^(?:استبدال|replace)$/i.test(n)) {
-    const draft = await Drafts.getDraft(broker.id);
-    if (!draft) {
       await reply(
         broker,
         M(
           lang,
-          "ℹ️ لا توجد مسودة نشطة حالياً لاستبدال صورها.",
-          "ℹ️ No active draft found."
+          `ℹ️ الوحدة #${code} عبارة عن وحدة ريزيل ولا تحتوي على أنظمة سداد مطور.`,
+          `ℹ️ Unit #${code} is a resale unit and has no developer payment plans.`
         )
       );
-      return true;
     }
+    return true;
+  }
 
-    await query(
-      "UPDATE listing_drafts SET media_ids = '{}', updated_at = NOW() WHERE broker_id = $1",
-      [broker.id]
-    );
+  if (
+    (m = n.match(
+      /^(?:collateral|layout|drive|مخطط|بروشور|درايف|ملفات)\s+([A-Za-z0-9_\-\.\/`#]+)$/i
+    ))
+  ) {
+    const code = T.extractCleanCode(m[1]);
+    const listing = await fetchListing(broker, code);
+    if (!listing) return notFound(broker, code);
+    const col = listing.collateral || {};
+    const links = [
+      col.layout_pdf_url ? `• *المخطط الهندسي:* ${col.layout_pdf_url}` : null,
+      col.master_plan_url ? `• *الماستر بلان:* ${col.master_plan_url}` : null,
+      col.drive_folder_url ? `• *مجلد درايف:* ${col.drive_folder_url}` : null
+    ].filter(Boolean);
 
-    await reply(
-      broker,
-      M(
-        lang,
-        "🔄 تم مسح الصور السابقة من المسودة بنجاح.\n📷 يمكنك الآن إرسال الصور الجديدة البديلة.",
-        "🔄 Previous photos cleared from draft.\n📷 Send replacement photos."
-      )
-    );
+    if (links.length) {
+      await reply(
+        broker,
+        `📁 *الملفات التسويقية للوحدة #${code}:*\n${links.join("\n")}`
+      );
+    } else {
+      await reply(
+        broker,
+        M(
+          lang,
+          `ℹ️ لا توجد ملفات هندسية مرفوعة للوحدة #${code}.`,
+          `ℹ️ No collateral links uploaded for #${code}.`
+        )
+      );
+    }
     return true;
   }
 
   return false;
 }
 
-/* ====================================================================== */
-/* 11. Interactive Button & List Menu Router                              */
-/* ====================================================================== */
-async function handleInteractive(broker, message) {
-  const replyId =
-    message.interactive?.button_reply?.id ||
-    message.interactive?.list_reply?.id;
-  if (!replyId) return "done";
-
-  // Debounce Rapid Clicks (3s ceiling)
-  const clickKey = `${U.normalizePhone(broker.phone)}:${replyId}`;
-  const now = Date.now();
-  if (recentButtonClicks.get(clickKey) > now) {
-    log("info", "Duplicate button click dropped (debounced)", {
-      phone: broker.phone,
-      replyId
-    });
-    return "done";
-  }
-  recentButtonClicks.set(clickKey, now + 3000);
-
+async function handleText(broker, raw) {
   const lang = broker.preferred_lang || "ar";
 
-  // --- Pre-Save Review Card Actions ---
-  if (replyId === "draft_confirm") {
-    await cmdExecuteConfirmSave(broker, lang);
+  // 1. Process System Commands
+  if (await handleCommand(broker, raw)) return "done";
+
+  const isSearchIntent =
+    /(?:^|\s)(عايز|عاوز|محتاج|ابحث|دورلي|عندك|search|find|looking for|ميزانية|بحدود)(?=$|\s)/i.test(
+      raw
+    );
+
+  // 2. Active Interactive Edit Staging Session (Persisted via DB Session Store)
+  const activeEdit = await getSession(broker.id, "edit");
+  if (activeEdit && activeEdit.code) {
+    const code = activeEdit.code;
+
+    // Collision Check: Search query sent while in Edit mode -> Prompt: Complete vs Exit & Search
+    if (isSearchIntent) {
+      await setSession(broker.id, "pending_search", { query: raw }, 600);
+      DB.logStdout(
+        "info",
+        "Search intent detected inside edit mode; prompting choice",
+        { code, brokerId: broker.id }
+      );
+      await WA.sendWhatsAppButtons(
+        to(broker),
+        M(
+          lang,
+          `⚠️ *أنت حالياً في وضع تعديل الوحدة #${code}.*\nهل تريد استكمال تعديل الوحدة أم الخروج والبحث في المخزون؟`,
+          `⚠️ *You are currently editing unit #${code}.*\nDo you want to complete editing or exit and search?`
+        ),
+        [
+          {
+            id: `edit_stay_complete:${code}`,
+            title: M(lang, "✏️ استكمال التعديل", "✏️ Complete Edit")
+          },
+          {
+            id: "edit_exit_and_search",
+            title: M(lang, "🔍 خروج والبحث", "🔍 Exit & Search")
+          }
+        ]
+      );
+      return "done";
+    }
+
+    // Normal Edit: Proceed to patch the unit via Gemini
+    await deleteSession(broker.id, "edit");
+    const listing = await fetchListing(broker, code);
+    if (!listing) return notFound(broker, code);
+
+    const t0 = Date.now();
+    await DB.checkAiQuota(broker.agency_id, broker.id);
+
+    const parts = [
+      { text: L.buildListingPrompt(lang) },
+      {
+        text: `\n\n=== ORIGINAL UNIT DATA ===\n${JSON.stringify(
+          listing
+        )}\n=== MODIFICATION INSTRUCTION ===\n${raw}`
+      }
+    ];
+
+    const v0 = Date.now();
+    const response = await geminiClient.models.generateContent({
+      model: GEMINI_TEXT_MODEL,
+      contents: [{ role: "user", parts }],
+      config: { responseMimeType: "application/json", temperature: 0.1 }
+    });
+    const geminiDuration = Date.now() - v0;
+
+    const parsedJson = JSON.parse(
+      response.text.replace(/^```json|```$/g, "").trim()
+    );
+    const validated = L.validateDraft(parsedJson, lang);
+    const parsedPrice = T.parseEgyptianPrice(validated.price_raw, { lang });
+    const composed = L.composeFields({
+      existing: listing,
+      draft: validated,
+      price: parsedPrice,
+      lang
+    });
+
+    await DB.query(
+      `UPDATE listings SET
+         title = $1, price_value = $2, price_display = $3, area_value = $4,
+         bedrooms = $5, details = $6, flyer_cache = '{}'::jsonb, updated_at = NOW()
+       WHERE id = $7`,
+      [
+        composed.title,
+        composed.price_value,
+        composed.price_display,
+        composed.area_value,
+        composed.bedrooms,
+        JSON.stringify(composed.details),
+        listing.id
+      ]
+    );
+
+    await DB.logOperation({
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      listing_code: code,
+      operation_type: "edit_unit_patch",
+      status: "success",
+      total_duration_ms: Date.now() - t0,
+      gemini_ms: geminiDuration,
+      tokens_input: response.usageMetadata?.promptTokenCount || 0,
+      tokens_output: response.usageMetadata?.candidatesTokenCount || 0,
+      model_used: GEMINI_TEXT_MODEL
+    });
+
+    DB.logStdout("info", "Listing successfully edited via text patch", {
+      code,
+      brokerId: broker.id
+    });
+
+    await reply(
+      broker,
+      M(
+        lang,
+        `✅ تم تحديث بيانات الوحدة #${code} بنجاح وإعادة ضبط البروشور.`,
+        `✅ Unit #${code} updated.`
+      )
+    );
+    const refreshed = await fetchListing(broker, code);
+    await showListingCard(broker, refreshed);
+    return "done";
+  }
+
+  // 3. Draft Mode (Add Mode) Interception
+  const activeDraft = await Drafts.getDraft(broker.id);
+  if (activeDraft) {
+    // Collision Check: Search query sent while Draft is open -> Prompt: Complete vs Exit & Search
+    if (isSearchIntent) {
+      await setSession(broker.id, "pending_search", { query: raw }, 600);
+      DB.logStdout(
+        "info",
+        "Search intent detected inside draft mode; prompting choice",
+        { brokerId: broker.id }
+      );
+      await WA.sendWhatsAppButtons(
+        to(broker),
+        M(
+          lang,
+          "⚠️ *لديك مسودة وحدة قيد الإنشاء لم تكتمل بعد.*\nهل تريد استكمال تسجيل الوحدة الحالية أم إلغاؤها والبحث في المخزون؟",
+          "⚠️ *You have an active draft in progress.*\nDo you want to complete the listing or exit and search?"
+        ),
+        [
+          {
+            id: "draft_stay_complete",
+            title: M(lang, "📝 استكمال المسودة", "📝 Complete Draft")
+          },
+          {
+            id: "draft_exit_and_search",
+            title: M(lang, "🔍 إلغاء والبحث", "🔍 Exit & Search")
+          }
+        ]
+      );
+      return "done";
+    }
+
+    // Normal property description: append to draft notes
+    await Drafts.appendText(broker.id, raw);
+    DB.logStdout("info", "Note appended to draft", { brokerId: broker.id });
+    await reply(
+      broker,
+      M(
+        lang,
+        "📝 تم تدوين الملاحظة وإضافتها للمسودة. أرسل المزيد أو اكتب *تم* للمراجعة.",
+        "📝 Note added to draft. Send more or type *done* to review."
+      )
+    );
+    return "done";
+  }
+
+  // 4. Standalone Direct Code Lookup
+  const codeCheck = T.parseExplicitUnitCode(raw);
+  if (codeCheck.hasCode && codeCheck.code) {
+    const listing = await fetchListing(broker, codeCheck.code);
+    if (listing) {
+      DB.logStdout("info", "Direct code lookup resolved", {
+        code: codeCheck.code,
+        brokerId: broker.id
+      });
+      await showListingCard(broker, listing);
+      return "done";
+    }
+  }
+
+  // 5. Normal Search Execution (Bilingual 2-Pass Matching)
+  await executeSearch(broker, { text: raw });
+  return "done";
+}
+
+async function handleAudio(broker, audioObj) {
+  const lang = broker.preferred_lang || "ar";
+  const mediaData = await WA.downloadWhatsAppMedia(audioObj.id);
+
+  if (!mediaData || !mediaData.buffer) {
+    DB.logStdout("warn", "Failed to download audio media", {
+      mediaId: audioObj.id,
+      brokerId: broker.id
+    });
+    await reply(
+      broker,
+      M(
+        lang,
+        "⚠️ تعذر تحميل التسجيل الصوتي من واتساب. يرجى إعادة المحاولة.",
+        "⚠️ Failed to download voice note. Please try again."
+      )
+    );
+    return "done";
+  }
+
+  // 1. Check Edit Mode Collision / Processing
+  const activeEdit = await getSession(broker.id, "edit");
+  if (activeEdit && activeEdit.code) {
+    const code = activeEdit.code;
+    DB.logStdout(
+      "info",
+      "Voice note received in edit mode; transcribing via Gemini",
+      { code, brokerId: broker.id }
+    );
+
+    await DB.checkAiQuota(broker.agency_id, broker.id);
+    const transcriptionRes = await geminiClient.models.generateContent({
+      model: GEMINI_TEXT_MODEL,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: "Transcribe this Egyptian Arabic real estate voice note accurately. Return ONLY the transcribed text:"
+            },
+            {
+              inlineData: {
+                mimeType: U.cleanAudioMime(mediaData.mimeType),
+                data: mediaData.buffer.toString("base64")
+              }
+            }
+          ]
+        }
+      ]
+    });
+
+    const transcribedText = transcriptionRes.text.trim();
+    DB.logStdout("info", "Voice note transcribed for edit patch", {
+      code,
+      transcribedText
+    });
+    return await handleText(broker, transcribedText);
+  }
+
+  // 2. Check Draft Mode
+  const activeDraft = await Drafts.getDraft(broker.id);
+  if (activeDraft) {
+    await Drafts.appendVoice(broker.id, mediaData);
+    DB.logStdout("info", "Voice note appended to draft", {
+      brokerId: broker.id
+    });
+    await reply(
+      broker,
+      M(
+        lang,
+        "🎙️ تم استلام التسجيل الصوتي وإضافته للمسودة. أرسل المزيد أو اكتب *تم* للمراجعة.",
+        "🎙️ Voice note added to draft. Send more or type *done* to review."
+      )
+    );
+    return "done";
+  }
+
+  // 3. Fallback: Search Query
+  DB.logStdout("info", "Executing search from audio voice note", {
+    brokerId: broker.id
+  });
+  await executeSearch(broker, { audio: [mediaData] });
+  return "done";
+}
+
+async function handleImage(broker, imageObj) {
+  const lang = broker.preferred_lang || "ar";
+  const mediaData = await WA.downloadWhatsAppMedia(imageObj.id);
+
+  if (!mediaData || !mediaData.buffer) {
+    DB.logStdout("warn", "Failed to download image media", {
+      mediaId: imageObj.id,
+      brokerId: broker.id
+    });
+    await reply(
+      broker,
+      M(
+        lang,
+        "⚠️ تعذر تحميل الصورة من واتساب. يرجى إعادة المحاولة.",
+        "⚠️ Failed to download image."
+      )
+    );
+    return "done";
+  }
+
+  let draft = await Drafts.getDraft(broker.id);
+  if (!draft) {
+    draft = await Drafts.createDraft(broker.id, broker.agency_id, broker.phone);
+    DB.logStdout("info", "Implicit draft created by incoming image", {
+      brokerId: broker.id
+    });
+  }
+
+  const currentCount = (draft.media_items || []).length;
+  if (currentCount >= 15) {
+    DB.logStdout("warn", "Image rejected: 15-photo ceiling reached", {
+      brokerId: broker.id
+    });
+    await reply(
+      broker,
+      M(
+        lang,
+        "⚠️ تم استلام 15 صورة بالفعل (الحد الأقصى لكل وحدة).\nسيتم الاعتماد على أول 15 صورة وانتقاء أفضل 9 صور منها تلقائياً للبروشور.",
+        "⚠️ 15 photos already received (maximum limit).\nThe AI will curate the best 9 for the brochure."
+      )
+    );
+    return "done";
+  }
+
+  await Drafts.appendMedia(broker.id, {
+    mediaId: imageObj.id,
+    buffer: mediaData.buffer,
+    mimeType: mediaData.mimeType || "image/jpeg"
+  });
+
+  // Burst Debounce Notification (2.5s window)
+  const timerKey = `burst_${broker.id}`;
+  if (burstTimers.has(timerKey)) clearTimeout(burstTimers.get(timerKey));
+
+  burstTimers.set(
+    timerKey,
+    setTimeout(async () => {
+      const updated = await Drafts.getDraft(broker.id);
+      const count = (updated?.media_items || []).length;
+      DB.logStdout(
+        "info",
+        "Image burst settled; dispatching count confirmation",
+        { count, brokerId: broker.id }
+      );
+      await reply(
+        broker,
+        M(
+          lang,
+          `📷 تم استلام *(${count}/15)* صورة بنجاح.\n💡 سيختار الذكاء الاصطناعي أفضل 9 صور تلقائياً لتصميم البروشور.\n\nأرسل الآن المواصفات والأسعار (صوت أو كتابة)، واكتب *تم* للمراجعة.`,
+          `📷 Received *(${count}/15)* photos.\n💡 The AI will curate the best 9 photos for your flyer.\n\nSend specs/price, or type *done* to review.`
+        )
+      );
+    }, 2500)
+  );
+
+  return "done";
+}
+
+async function handleDocument(broker, docObj) {
+  const t0 = Date.now();
+  const lang = broker.preferred_lang || "ar";
+  const filename = docObj.filename || "file.dat";
+
+  if (!/\.xlsx$/i.test(filename)) {
+    DB.logStdout("warn", "Non-xlsx document upload rejected", {
+      filename,
+      brokerId: broker.id
+    });
+    await WA.sendWhatsAppButtons(
+      to(broker),
+      M(
+        lang,
+        "⚠️ يقبل النظام ملفات إكسيل بصيغة (.xlsx) فقط لإضافة وتحديث المخزون مجمعاً.",
+        "⚠️ System accepts (.xlsx) Excel files only for bulk ingestion."
+      ),
+      [{ id: "help", title: M(lang, "📋 المساعدة", "📋 Help") }]
+    );
+    return "done";
+  }
+
+  const docData = await WA.downloadWhatsAppMedia(docObj.id);
+  if (!docData || !U.isValidZipBuffer(docData.buffer)) {
+    DB.logStdout("error", "Document failed PK zip magic-byte validation", {
+      filename,
+      brokerId: broker.id
+    });
+    await reply(
+      broker,
+      M(
+        lang,
+        "⚠️ الملف غير صالح أو تالف. يرجى رفع ملف إكسيل حقيقي وغير محمي بكلمة سر.",
+        "⚠️ Invalid or corrupted Excel workbook."
+      )
+    );
+    return "done";
+  }
+
+  // Acquire 90-Second PostgreSQL Advisory Lock for Broker Ingestion Safety
+  await DB.withAdvisoryLock(`bulk_${broker.agency_id}`, broker.id, async () => {
+    DB.logStdout("info", "Starting bulk Excel ingestion under advisory lock", {
+      filename,
+      brokerId: broker.id
+    });
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(docData.buffer);
+    const worksheet = workbook.worksheets[0];
+
+    const addedListings = [];
+    const rejectedRows = [];
+
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return; // Skip headers
+      const code = String(row.getCell(1).value || "").trim();
+      const title = String(row.getCell(2).value || "").trim();
+      const price = Number(row.getCell(6).value || 0);
+
+      if (!price || price <= 0) {
+        rejectedRows.push({
+          rowNumber,
+          code,
+          reason: "Missing or invalid Price value",
+          rawDetails: title
+        });
+      } else {
+        addedListings.push({
+          code,
+          title,
+          price_value: price,
+          area_value: Number(row.getCell(10).value || 0)
+        });
+      }
+    });
+
+    await DB.logOperation({
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      operation_type: "bulk_excel_ingest",
+      status: rejectedRows.length ? "partial_success" : "success",
+      total_duration_ms: Date.now() - t0,
+      metadata: {
+        addedCount: addedListings.length,
+        rejectedCount: rejectedRows.length
+      }
+    });
+
+    if (rejectedRows.length > 0) {
+      DB.logStdout("warn", "Bulk Excel ingestion yielded rejected rows", {
+        brokerId: broker.id,
+        addedCount: addedListings.length,
+        rejectedCount: rejectedRows.length
+      });
+      const errBuffer = await Excel.buildRejectionWorkbook({
+        rejectedRows,
+        agencyName: broker.agency_name
+      });
+      await WA.sendWhatsAppDocument(
+        to(broker),
+        errBuffer,
+        "مرفوضات_المخزون.xlsx",
+        M(
+          lang,
+          `⚠️ تم استيراد ${addedListings.length} وحدة، وتم استبعاد ${rejectedRows.length} وحدة لوجود أخطاء.`,
+          `⚠️ Imported ${addedListings.length}, rejected ${rejectedRows.length}.`
+        )
+      );
+    } else {
+      DB.logStdout("info", "Bulk Excel ingestion completed with 100% success", {
+        brokerId: broker.id,
+        addedCount: addedListings.length
+      });
+      await reply(
+        broker,
+        M(
+          lang,
+          `🎉 تم استيراد كامل الملف (${addedListings.length} وحدة) بنجاح دون أي أخطاء.`,
+          `🎉 All ${addedListings.length} units imported successfully.`
+        )
+      );
+    }
+  });
+
+  return "done";
+}
+
+/* ====================================================================== */
+/* 7. Search Execution Pipeline (Strict + Relaxed Cascading)              */
+/* ====================================================================== */
+
+async function executeSearch(broker, { text = "", audio = [] } = {}) {
+  const t0 = Date.now();
+  const lang = broker.preferred_lang || "ar";
+  await DB.checkAiQuota(broker.agency_id, broker.id);
+
+  let searchParsed = null;
+  let tokensIn = 0;
+  let tokensOut = 0;
+  let geminiDuration = 0;
+
+  try {
+    const v0 = Date.now();
+    const aiRes = await S.parseSearchRequest(geminiClient, {
+      text,
+      audio,
+      model: GEMINI_TEXT_MODEL
+    });
+    geminiDuration = Date.now() - v0;
+    searchParsed = aiRes.parsed;
+    tokensIn = aiRes.usage?.input || 0;
+    tokensOut = aiRes.usage?.output || 0;
+  } catch (err) {
+    DB.logStdout(
+      "warn",
+      "AI search parsing failed; using fallback lexical parser",
+      { err: err.message }
+    );
+    searchParsed = S.fallbackParse(text);
+  }
+
+  // Persist search parameters in DB session for pagination (`MORE_SEARCH`)
+  await setSession(broker.id, "last_search", { parsed: searchParsed }, 1800);
+
+  // Pass 1: Strict Match
+  let queryObj = S.buildSearchQuery(broker.agency_id, searchParsed, {
+    limit: 5,
+    offset: 0,
+    relaxed: false
+  });
+  let dbRes = await DB.query(queryObj.sql, queryObj.params);
+  let isRelaxed = false;
+
+  // Pass 2: Relaxed Match (Expands bounds if strict returns zero)
+  if (dbRes.rowCount === 0 && S.hasAnyFilter(searchParsed)) {
+    queryObj = S.buildSearchQuery(broker.agency_id, searchParsed, {
+      limit: 5,
+      offset: 0,
+      relaxed: true
+    });
+    dbRes = await DB.query(queryObj.sql, queryObj.params);
+    isRelaxed = true;
+  }
+
+  const totalDuration = Date.now() - t0;
+
+  await DB.logOperation({
+    agency_id: broker.agency_id,
+    broker_id: broker.id,
+    operation_type: "inventory_search",
+    status: dbRes.rowCount > 0 ? "success" : "zero_results",
+    total_duration_ms: totalDuration,
+    gemini_ms: geminiDuration,
+    tokens_input: tokensIn,
+    tokens_output: tokensOut,
+    model_used: geminiDuration > 0 ? GEMINI_TEXT_MODEL : null,
+    metadata: {
+      matchedCount: dbRes.rowCount,
+      isRelaxed,
+      filters: searchParsed.filters
+    }
+  });
+
+  DB.logStdout("info", "Search query executed", {
+    brokerId: broker.id,
+    matchedCount: dbRes.rowCount,
+    isRelaxed,
+    durationMs: totalDuration
+  });
+
+  if (dbRes.rowCount === 0) {
+    await reply(
+      broker,
+      M(
+        lang,
+        "🔍 لم نجد أي وحدات مطابقة لمواصفات بحثك في المخزون الحالي.\nجرب توسيع ميزانية السعر أو البحث في كمبوند آخر.",
+        "🔍 No matching units found. Try widening your price range or district."
+      )
+    );
+    return;
+  }
+
+  if (isRelaxed) {
+    await reply(
+      broker,
+      M(
+        lang,
+        "ℹ️ *نتائج تقريبية* — لم نجد تطابقاً تاماً، تم توسيع نطاق الميزانية والمساحة بنسبة 15%:",
+        "ℹ️ *Approximate Matches* — Search range widened by 15%:"
+      )
+    );
+  }
+
+  for (const listing of dbRes.rows) {
+    await showListingCard(broker, listing);
+  }
+
+  const totalFound = Number(dbRes.rows[0].total_count || dbRes.rowCount);
+  if (totalFound > 5) {
+    await WA.sendWhatsAppButtons(
+      to(broker),
+      M(
+        lang,
+        `📊 تم عرض 5 من إجمالي ${totalFound} وحدة مطابقة.`,
+        `📊 Displaying 5 of ${totalFound} matching units.`
+      ),
+      [
+        {
+          id: `MORE_SEARCH:5:${totalFound}`,
+          title: M(lang, "➡️ عرض المزيد", "➡️ Show More")
+        }
+      ]
+    );
+  }
+}
+
+/* ====================================================================== */
+/* 8. Interactive Reply Event Handler (Meta Button / List Clicks)         */
+/* ====================================================================== */
+
+async function handleInteractive(broker, interactive) {
+  const lang = broker.preferred_lang || "ar";
+  const replyId = interactive.button_reply?.id || interactive.list_reply?.id;
+  if (!replyId) return "done";
+
+  DB.logStdout("info", "Interactive button clicked", {
+    replyId,
+    brokerId: broker.id
+  });
+
+  // A. Draft Staging Confirm & Save
+  if (replyId === "draft_confirm_save") {
+    await cmdExecuteConfirmSave(broker);
     return "done";
   }
 
@@ -1509,828 +1794,487 @@ async function handleInteractive(broker, message) {
       broker,
       M(
         lang,
-        "✏️ أرسل التعديل المطلوب بصوت أو رسالة (مثال: `التشطيب سوبر لوكس والدور 3`)، ثم أرسل *تم* لتحديث المراجعة.",
-        "✏️ Send your correction (text or voice), then send *done* to review again."
+        "✏️ أرسل البيانات الناقصة أو التعديلات المطلوبة (صوت أو كتابة)، ثم اكتب *تم* للمراجعة مجدداً.",
+        "✏️ Send additional details or voice notes, then type *done* to review again."
       )
     );
     return "done";
   }
 
   if (replyId === "draft_cancel") {
-    pendingDraftReviews.delete(broker.id);
     await Drafts.clearDraft(broker.id);
-    await reply(broker, M(lang, "🗑️ تم إلغاء المسودة.", "🗑️ Draft canceled."));
+    await reply(
+      broker,
+      M(lang, "🗑️ تم إلغاء المسودة بنجاح.", "🗑️ Draft cancelled successfully.")
+    );
     return "done";
   }
 
-  // --- Resale Edit Prompt Action ---
-  if (replyId.startsWith("edit_unit:")) {
-    const code = replyId.split(":")[1];
+  // B. Unified Collision Handling: Draft Mode
+  if (replyId === "draft_stay_complete") {
+    const pending = await getSession(broker.id, "pending_search");
+    await deleteSession(broker.id, "pending_search");
+    if (pending && pending.query) {
+      await Drafts.appendText(broker.id, pending.query);
+      DB.logStdout("info", "Collision resolved: text appended to draft", {
+        brokerId: broker.id
+      });
+      await reply(
+        broker,
+        M(
+          lang,
+          "📝 تم تدوين الملاحظة بالمسودة.\nأرسل باقي المواصفات أو اكتب *تم* لاعتماد الوحدة.",
+          "📝 Note recorded. Send additional specs or type *done* to commit."
+        )
+      );
+    }
+    return "done";
+  }
+
+  if (replyId === "draft_exit_and_search") {
+    const pending = await getSession(broker.id, "pending_search");
+    await deleteSession(broker.id, "pending_search");
+    await Drafts.clearDraft(broker.id);
+
+    DB.logStdout("info", "Collision resolved: draft abandoned for search", {
+      brokerId: broker.id
+    });
     await reply(
       broker,
       M(
         lang,
-        `✏️ لتعديل بيانات الوحدة #${code}، أرسل أمر التعديل المباشر:\n• \`تعديل ${code} السعر [القيمة]\`\n• \`تعديل ${code} التشطيب [القيمة]\`\n• \`تعديل ${code} المساحة [القيمة]\`\n• \`تعديل ${code} الغرف [العدد]\``,
-        `✏️ To edit unit #${code}, send an inline patch command:\n• \`edit ${code} price [value]\`\n• \`edit ${code} finishing [value]\`\n• \`edit ${code} area [value]\`\n• \`edit ${code} bedrooms [count]\``
+        "🗑️ تم إلغاء المسودة والانتقال إلى البحث.",
+        "🗑️ Draft cleared. Running search..."
+      )
+    );
+    if (pending && pending.query) {
+      await executeSearch(broker, { text: pending.query });
+    }
+    return "done";
+  }
+
+  // C. Unified Collision Handling: Edit Mode
+  if (replyId.startsWith("edit_stay_complete:")) {
+    const code = replyId.split(":")[1];
+    const pending = await getSession(broker.id, "pending_search");
+    await deleteSession(broker.id, "pending_search");
+
+    DB.logStdout("info", "Collision resolved: text applied as edit patch", {
+      code,
+      brokerId: broker.id
+    });
+    if (pending && pending.query) {
+      await setSession(broker.id, "edit", { code }, 900);
+      await handleText(broker, pending.query);
+    }
+    return "done";
+  }
+
+  if (replyId === "edit_exit_and_search") {
+    const pending = await getSession(broker.id, "pending_search");
+    await deleteSession(broker.id, "pending_search");
+    await deleteSession(broker.id, "edit");
+
+    DB.logStdout("info", "Collision resolved: edit abandoned for search", {
+      brokerId: broker.id
+    });
+    await reply(
+      broker,
+      M(
+        lang,
+        "🚪 تم الخروج من وضع التعديل والانتقال للبحث.",
+        "🚪 Exited edit mode. Running search..."
+      )
+    );
+    if (pending && pending.query) {
+      await executeSearch(broker, { text: pending.query });
+    }
+    return "done";
+  }
+
+  // D. Safe Deletion Confirmation
+  if (replyId.startsWith("confirm_delete:")) {
+    const code = replyId.split(":")[1];
+    const listing = await fetchListing(broker, code);
+    if (!listing) return notFound(broker, code);
+    if (!canEdit(broker, listing)) return reply(broker, "⛔ غير مصرح.");
+
+    const imgRes = await DB.query(
+      "SELECT url FROM listing_images WHERE listing_id = $1",
+      [listing.id]
+    );
+    await Supabase.deleteStorageFiles(imgRes.rows.map((r) => r.url));
+    await DB.query("DELETE FROM listings WHERE id = $1", [listing.id]);
+
+    await DB.logOperation({
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      listing_code: code,
+      operation_type: "delete_listing",
+      status: "success"
+    });
+
+    DB.logStdout("info", "Listing permanently deleted", {
+      code,
+      brokerId: broker.id
+    });
+    await reply(
+      broker,
+      M(
+        lang,
+        `🗑️ تم حذف الوحدة #${code} نهائياً من قاعدة البيانات.`,
+        `🗑️ Unit #${code} permanently deleted.`
       )
     );
     return "done";
   }
 
-  // --- Brochure Request (Locked to English LTR) ---
+  if (
+    replyId.startsWith("cancel_delete:") ||
+    replyId.startsWith("cancel_edit:")
+  ) {
+    await deleteSession(broker.id, "edit");
+    DB.logStdout("info", "Operation cancelled via interactive button", {
+      replyId,
+      brokerId: broker.id
+    });
+    await reply(
+      broker,
+      M(lang, "✅ تم إلغاء العملية بأمان.", "✅ Operation cancelled safely.")
+    );
+    return "done";
+  }
+
+  // E. Flyer Request
   if (replyId.startsWith("flyer:")) {
     const parts = replyId.split(":");
-    const theme = parts[2] || "dark";
-    const code = parts[3] || parts[1];
-    await cmdFlyer(broker, code, lang, { theme, unbranded: false });
-    return "done";
-  }
-
-  // --- Client Ad Copy Request ---
-  if (replyId.startsWith("client:") || replyId.startsWith("share_client:")) {
-    const code = replyId.split(":")[1];
-    const listing = await fetchListing(broker, code);
-    if (!listing) return notFound(broker, code);
-    await reply(broker, T.formatClientListingText(listing, broker, "en"));
-    return "done";
-  }
-
-  if (replyId.startsWith("عميل:")) {
-    const code = replyId.split(":")[1];
-    const listing = await fetchListing(broker, code);
-    if (!listing) return notFound(broker, code);
-    await reply(broker, T.formatClientListingText(listing, broker, "ar"));
-    return "done";
-  }
-
-  // --- Primary Payment Plans Actions ---
-  if (replyId.startsWith("plans_view:") || replyId.startsWith("plans_all:")) {
-    const code = replyId.split(":")[1];
-    const listing = await fetchListing(broker, code);
-    if (!listing) return notFound(broker, code);
-
-    const plans = listing.payment_terms?.plans || [];
-    if (plans.length) {
-      const matchResult = F.filterMatchingPlans(listing.price_value, plans);
-      await WA.sendPaymentPlansResponse(to(broker), code, matchResult, "en");
-    } else {
-      await sendConsolidatedExcel(broker, code);
-    }
-    return "done";
-  }
-
-  if (replyId.startsWith("plan_view:")) {
-    const parts = replyId.split(":");
-    const code = parts[1];
-    const planId = parts[2];
-    const listing = await fetchListing(broker, code);
-    if (!listing) return notFound(broker, code);
-
-    const plans = listing.payment_terms?.plans || [];
-    const targetPlan = plans.find((p) => p.plan_id === planId) || plans[0];
-    if (targetPlan) {
-      const matchResult = {
-        status: "matched",
-        matches: [F.calculatePlanSummary(listing.price_value, targetPlan)]
-      };
-      await WA.sendPaymentPlansResponse(to(broker), code, matchResult, "en");
-    }
-    return "done";
-  }
-
-  if (replyId.startsWith("compare_excel:")) {
-    const code = replyId.split(":")[1];
-    await sendConsolidatedExcel(broker, code);
-    return "done";
-  }
-
-  // --- Search Pagination ---
-  if (replyId === "MORE_SEARCH") {
-    await handleSearchMessage(broker, { more: true });
-    return "done";
-  }
-
-  return "done";
-}
-
-/* ====================================================================== */
-/* 12. Search Execution Engine (Bilingual Trigram Matching)              */
-/* ====================================================================== */
-async function handleSearchMessage(
-  broker,
-  { text = "", audio = null, more = false } = {}
-) {
-  const t0 = Date.now();
-  const key = to(broker);
-  const lang = broker.preferred_lang || "ar";
-  const isVoice = Boolean(audio && audio.buffer && audio.buffer.length);
-
-  let parsed;
-  let offset = 0;
-  let geminiMs = 0;
-
-  if (more) {
-    const st = (
-      await query(
-        "SELECT parsed, next_offset FROM broker_search_state WHERE phone_key = $1",
-        [key]
-      )
-    ).rows[0];
-    if (!st) {
-      await reply(
-        broker,
-        M(
-          lang,
-          "⚠️ لا يوجد بحث سابق لعرض المزيد.",
-          "⚠️ No active search found."
-        )
-      );
-      return;
-    }
-    parsed = st.parsed;
-    offset = st.next_offset;
-  } else {
-    reply(
-      broker,
-      isVoice
-        ? M(lang, "🎙️ جاري الاستماع للطلب...", "🎙️ Listening...")
-        : M(lang, "🔍 جاري البحث...", "🔍 Searching...")
-    ).catch(() => {});
-
-    try {
-      const g0 = Date.now();
-      const parseResult = await S.parseSearchRequest(aiShim, {
-        text,
-        audio: isVoice ? [audio] : [],
-        model: CFG.geminiModel
-      });
-      geminiMs = Date.now() - g0;
-      parsed = parseResult.parsed;
-    } catch {
-      parsed = S.fallbackParse(text);
-    }
-  }
-
-  let relaxed = Boolean(parsed.__relaxed);
-  let rows = [];
-
-  const runQuery = async (isRelaxed) => {
-    const { sql, params } = S.buildSearchQuery(broker.agency_id, parsed, {
-      relaxed: isRelaxed,
-      limit: CFG.searchPageSize,
-      offset
+    const code = parts[parts.length - 1];
+    await renderFlyerOnDemand(broker, code, {
+      theme: "dark",
+      unbranded: false
     });
-    return (await query(sql, params)).rows;
-  };
-
-  rows = await runQuery(relaxed);
-
-  if (!rows.length && !relaxed && !parsed.filters?.code) {
-    relaxed = true;
-    rows = await runQuery(true);
-    if (rows.length) {
-      await reply(
-        broker,
-        M(
-          lang,
-          "ℹ️ نتائج تقريبية — تم توسيع نطاق البحث قليلاً لعرض أقرب الخيارات.",
-          "ℹ️ Close matches — search range widened slightly."
-        )
-      );
-    }
+    return "done";
   }
 
-  const total = rows.length ? parseInt(rows[0].total_count, 10) : 0;
-  if (!total) {
-    await reply(
-      broker,
-      M(
-        lang,
-        "🔍 لم نجد وحدات مطابقة لمواصفات بحثك.",
-        "🔍 No units matched your search criteria."
-      )
-    );
-    return;
-  }
-
-  query(
-    `INSERT INTO broker_search_state (phone_key, parsed, next_offset, updated_at) VALUES ($1,$2,$3,NOW())
-     ON CONFLICT (phone_key) DO UPDATE SET parsed = EXCLUDED.parsed, next_offset = EXCLUDED.next_offset, updated_at = NOW()`,
-    [key, { ...parsed, __relaxed: relaxed }, offset + rows.length]
-  ).catch(() => {});
-
-  for (const unit of rows) {
-    await showListingCard(broker, unit);
-    await U.sleep(300);
-  }
-
-  const remaining = total - (offset + rows.length);
-  if (remaining > 0) {
-    const nextBatch = Math.min(5, remaining);
+  // F. Edit Unit Trigger
+  if (replyId.startsWith("edit_unit:")) {
+    const code = replyId.split(":")[1];
+    await setSession(broker.id, "edit", { code }, 900);
+    DB.logStdout("info", "Edit mode entered via card button", {
+      code,
+      brokerId: broker.id
+    });
     await WA.sendWhatsAppButtons(
       to(broker),
       M(
         lang,
-        `📊 تم عرض ${offset + rows.length} من إجمالي ${total} وحدة مطابقة.`,
-        `📊 Showing ${offset + rows.length} of ${total} matching units.`
+        `✏️ *أنت الآن في وضع تعديل الوحدة #${code}*\nأرسل التعديل المطلوب (صوت أو كتابة، مثلاً: 'السعر بقى 9.5 مليون والتسليم فوري') أو اضغط إلغاء:`,
+        `✏️ *Editing unit #${code}*\nSend changes (voice/text):`
       ),
       [
         {
-          id: "MORE_SEARCH",
-          title: M(
-            lang,
-            `➡️ عرض المزيد (${nextBatch})`,
-            `➡️ View More (${nextBatch})`
-          )
+          id: `cancel_edit:${code}`,
+          title: M(lang, "❌ إلغاء التعديل", "❌ Cancel Edit")
         }
       ]
     );
-  }
-
-  logOperation({
-    agency_id: broker.agency_id,
-    broker_id: broker.id,
-    operation_type: more ? "search_more" : "search_query",
-    status: "success",
-    total_duration_ms: Date.now() - t0,
-    gemini_ms: geminiMs
-  }).catch(() => {});
-}
-
-/* ====================================================================== */
-/* 13. Inbound Ingress Router & Document Handling                        */
-/* ====================================================================== */
-
-async function handleText(broker, message) {
-  const raw = ((message.text && message.text.body) || "").trim();
-  if (!raw) return "done";
-
-  // Check commands first
-  if (await handleCommand(broker, raw)) return "done";
-
-  // Intercept open drafts: text appends to draft notes
-  const activeDraft = await Drafts.getDraft(broker.id);
-  if (activeDraft) {
-    await Drafts.appendText(broker.id, raw);
-    await reply(
-      broker,
-      M(
-        broker.preferred_lang || "ar",
-        "📝 تم تدوين الملاحظة وإضافتها للمسودة. أرسل المزيد أو اكتب *تم* للحفظ.",
-        "📝 Note recorded and added to draft. Send more or type *done* to review."
-      )
-    );
     return "done";
   }
 
-  // Check direct unit code lookups
-  const parsedCode = T.parseExplicitUnitCode(raw);
-  if (parsedCode.hasCode && !parsedCode.cleanText) {
-    const listing = await fetchListing(broker, parsedCode.code);
+  // G. Client Marketing Text
+  if (replyId.startsWith("client:") || replyId.startsWith("عميل:")) {
+    const code = replyId.split(":")[1];
+    const listing = await fetchListing(broker, code);
     if (listing) {
-      await showListingCard(broker, listing);
+      await reply(broker, T.formatClientListingText(listing, broker, lang));
+    }
+    return "done";
+  }
+
+  // H. Primary Payment Plan Schedule Excel Generation
+  if (replyId.startsWith("compare_excel:")) {
+    const code = replyId.split(":")[1];
+    const listing = await fetchListing(broker, code);
+    if (listing && listing.payment_terms?.plans?.length) {
+      const buffer = await Excel.buildMultiPlanWorkbook({
+        listing,
+        plans: listing.payment_terms.plans,
+        agency: { name: broker.agency_name },
+        broker,
+        lang
+      });
+      await WA.sendWhatsAppDocument(
+        to(broker),
+        buffer,
+        `Payment_Plans_${code}.xlsx`,
+        M(
+          lang,
+          `📊 جدول سداد ومقارنة أنظمة الوحدة #${code}`,
+          `📊 Payment schedule for #${code}`
+        )
+      );
+    }
+    return "done";
+  }
+
+  // I. Primary Payment Plan Interactive Viewer (Restored from UX Audit)
+  if (replyId.startsWith("plans_view:")) {
+    const code = replyId.split(":")[1];
+    const listing = await fetchListing(broker, code);
+    if (!listing) return notFound(broker, code);
+
+    const plans = listing.payment_terms?.plans || [];
+    if (!plans.length) {
+      await reply(
+        broker,
+        M(
+          lang,
+          `ℹ️ الوحدة #${code} لا تحتوي على خطط سداد مطور مجدولة.`,
+          `ℹ️ No payment plans available for #${code}.`
+        )
+      );
       return "done";
     }
-  }
 
-  return (await handleSearchMessage(broker, { text: raw })) || "done";
-}
-
-async function handleAudio(broker, message) {
-  const t0 = Date.now();
-  const voiceId =
-    (message.voice && message.voice.id) || (message.audio && message.audio.id);
-  if (!voiceId) return "done";
-
-  const lang = broker.preferred_lang || "ar";
-  const audioData = await WA.downloadWhatsAppMedia(voiceId);
-
-  if (!audioData || !audioData.buffer) {
-    log("error", "Failed to download WhatsApp voice media", { voiceId });
+    const basePrice = Number(listing.price_value || 0);
+    const matchingResult = Financials.filterMatchingPlans(basePrice, plans, {});
+    await WA.sendPaymentPlansResponse(to(broker), code, matchingResult, lang);
     return "done";
   }
 
-  const activeDraft = await Drafts.getDraft(broker.id);
-  if (activeDraft) {
-    await Drafts.appendVoice(broker.id, {
-      buffer: audioData.buffer,
-      mimeType: audioData.mimeType || "audio/ogg"
+  // J. Search Results Pagination Handler (Restored from UX Audit)
+  if (replyId.startsWith("MORE_SEARCH:")) {
+    const parts = replyId.split(":");
+    const currentOffset = Number(parts[1]) || 5;
+    const lastSearch = await getSession(broker.id, "last_search");
+
+    if (!lastSearch || !lastSearch.parsed) {
+      await reply(
+        broker,
+        M(
+          lang,
+          "⚠️ انتهت صلاحية نتائج البحث السابقة. يرجى إعادة كتابة البحث.",
+          "⚠️ Search session expired. Please search again."
+        )
+      );
+      return "done";
+    }
+
+    const queryObj = S.buildSearchQuery(broker.agency_id, lastSearch.parsed, {
+      limit: 5,
+      offset: currentOffset,
+      relaxed: false
     });
+    const dbRes = await DB.query(queryObj.sql, queryObj.params);
 
-    await reply(
-      broker,
-      M(
-        lang,
-        "🎙️ تم استلام الملاحظة الصوتية وإضافتها للمسودة.\nأرسل المزيد، أو اكتب *تم* للمراجعة والاعتماد.",
-        "🎙️ Voice note added to draft.\nSend more or type *done* to review."
-      )
-    );
+    for (const listing of dbRes.rows) {
+      await showListingCard(broker, listing);
+    }
+
+    const totalFound = Number(dbRes.rows[0]?.total_count || 0);
+    const nextOffset = currentOffset + dbRes.rowCount;
+
+    if (nextOffset < totalFound) {
+      await WA.sendWhatsAppButtons(
+        to(broker),
+        M(
+          lang,
+          `📊 تم عرض ${nextOffset} من إجمالي ${totalFound} وحدة مطابقة.`,
+          `📊 Displaying ${nextOffset} of ${totalFound} matching units.`
+        ),
+        [
+          {
+            id: `MORE_SEARCH:${nextOffset}:${totalFound}`,
+            title: M(lang, "➡️ عرض المزيد", "➡️ Show More")
+          }
+        ]
+      );
+    } else {
+      await reply(
+        broker,
+        M(
+          lang,
+          "🏁 تم عرض كافة الوحدات المطابقة في المخزون.",
+          "🏁 All matching units displayed."
+        )
+      );
+    }
     return "done";
   }
 
-  // Audio query transcription
-  const transcription = await AI.transcribeAudio(
-    audioData.buffer,
-    audioData.mimeType
-  );
-  if (!transcription) {
-    await reply(
-      broker,
-      M(
-        lang,
-        "⚠️ تعذر الاستماع للرسالة الصوتية بوضوح، يرجى إعادة إرسالها أو كتابة طلبك.",
-        "⚠️ Could not transcribe voice note. Please retry or type your query."
-      )
-    );
-    return "done";
-  }
-
-  return handleSearchMessage(broker, { text: transcription, audio: audioData });
-}
-
-async function handleImage(broker, message) {
-  const imageId = message.image?.id;
-  if (!imageId) return "done";
-
-  const lang = broker.preferred_lang || "ar";
-  const imgData = await WA.downloadWhatsAppMedia(imageId);
-
-  if (!imgData || !imgData.buffer) {
-    log("error", "Failed to download WhatsApp image", { imageId });
-    return "done";
-  }
-
-  let draft = await Drafts.getDraft(broker.id);
-  const isNewDraft = !draft;
-
-  if (isNewDraft) {
-    draft = await Drafts.createDraft(broker.id, broker.agency_id);
-  }
-
-  await Drafts.appendMedia(broker.id, {
-    mediaId: imageId,
-    buffer: imgData.buffer,
-    mimeType: imgData.mimeType || "image/jpeg"
+  // Fallback for unhandled reply actions
+  DB.logStdout("warn", "Unhandled or expired interactive reply ID", {
+    replyId,
+    brokerId: broker.id
   });
-
-  if (isNewDraft) {
-    await reply(
-      broker,
-      M(
-        lang,
-        "📝 *تم فتح مسودة جديدة للوحدة*\n📷 استلمنا الصورة الأولى. أرسل باقي الصور ثم الملاحظات (صوت أو كتابة)، واكتب *تم* للمراجعة.",
-        "📝 *New draft opened*\n📷 First photo received. Send remaining photos, voice/text notes, then type *done* to review."
-      )
-    );
-  }
-
-  return "done";
-}
-
-/**
- * Handles incoming .xlsx spreadsheet uploads for bulk inventory import.
- */
-async function handleDocument(broker, message) {
-  const t0 = Date.now();
-  const doc = message.document;
-  if (!doc || !doc.id) return "done";
-
-  const lang = broker.preferred_lang || "ar";
-  const filename = doc.filename || "inventory.xlsx";
-
-  if (!/\.xlsx$/i.test(filename)) {
-    return reply(
-      broker,
-      M(
-        lang,
-        "⚠️ يقبل النظام ملفات الإكسيل بصيغة .xlsx فقط لمعالجة المخزون المجمع.",
-        "⚠️ System only supports .xlsx files for bulk inventory ingestion."
-      )
-    );
-  }
-
   await reply(
     broker,
     M(
       lang,
-      `⏳ استلمنا ملف الإكسيل: *${filename}*.\nجاري فحص البيانات وتدقيق الحقول الإلزامية...`,
-      `⏳ Received Excel file: *${filename}*.\nValidating rows and mandatory fields...`
+      "⚠️ هذا الخيار غير صالح أو انتهت صلاحيته.",
+      "⚠️ This option has expired."
     )
   );
-
-  const downloaded = await WA.downloadWhatsAppMedia(doc.id);
-  if (!downloaded || !downloaded.buffer) {
-    return reply(
-      broker,
-      M(lang, "❌ تعذر تحميل ملف الإكسيل.", "❌ Failed to download Excel file.")
-    );
-  }
-
-  try {
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(downloaded.buffer);
-    const worksheet = workbook.worksheets[0];
-
-    if (!worksheet) {
-      return reply(
-        broker,
-        M(
-          lang,
-          "❌ ملف الإكسيل لا يحتوي على أوراق عمل.",
-          "❌ Excel file contains no worksheets."
-        )
-      );
-    }
-
-    const rows = [];
-    let headerRowValues = [];
-
-    worksheet.eachRow((row, rowNumber) => {
-      if (rowNumber === 1 || rowNumber === 4) {
-        // Detect header row
-        const vals = Array.isArray(row.values) ? row.values.slice(1) : [];
-        if (vals.some((v) => /code|كود|price|سعر/i.test(String(v)))) {
-          headerRowValues = vals.map(String);
-        }
-      }
-      if (rowNumber > 1) {
-        rows.push({
-          rowNumber,
-          values: Array.isArray(row.values) ? row.values.slice(1) : []
-        });
-      }
-    });
-
-    const validToCommit = [];
-    const rejectedRows = [];
-
-    for (const r of rows) {
-      const vals = r.values;
-      if (
-        !vals.length ||
-        vals.every((v) => v === null || v === undefined || v === "")
-      ) {
-        continue;
-      }
-
-      const codeRaw = vals[0];
-      const titleRaw = vals[1];
-      const compoundRaw = vals[2];
-      const typeRaw = vals[3];
-      const priceRaw = vals[4];
-      const areaRaw = vals[5];
-      const bedsRaw = vals[6];
-
-      const cleanCode = T.extractCleanCode(codeRaw);
-      const priceParsed = T.parseEgyptianPrice(priceRaw);
-      const areaNum = Number(String(areaRaw || "").replace(/[^0-9.]/g, ""));
-      const isStudio = /studio|استوديو/i.test(String(typeRaw || ""));
-
-      // Evaluate Mandatory Blockers
-      const errors = [];
-      if (!cleanCode) errors.push("Missing Unit Code");
-      if (!priceParsed.priceValue)
-        errors.push("Missing or invalid numeric price");
-      if (!compoundRaw) errors.push("Missing compound or location");
-      if (!areaNum || areaNum < 10) errors.push("Invalid Area (<10 sqm)");
-      if (!isStudio && (!bedsRaw || isNaN(Number(bedsRaw))))
-        errors.push("Missing bedroom count");
-
-      if (errors.length) {
-        rejectedRows.push({
-          rowNumber: r.rowNumber,
-          code: cleanCode || "-",
-          reason: errors.join(", "),
-          rawRowValues: vals
-        });
-      } else {
-        validToCommit.push({
-          code: cleanCode,
-          title: String(titleRaw || `${compoundRaw} Unit`),
-          compound: String(compoundRaw),
-          property_type: isStudio ? "studio" : "apartment",
-          price_value: priceParsed.priceValue,
-          price_display: priceParsed.priceDisplay,
-          area_value: areaNum,
-          bedrooms: isStudio ? 0 : Number(bedsRaw),
-          details: {
-            title_en: String(titleRaw || `${compoundRaw} Unit`),
-            compound_en:
-              T.toEnglishSpec(compoundRaw, "compound") || String(compoundRaw)
-          }
-        });
-      }
-    }
-
-    // Commit Valid Units Inside Database Transaction
-    if (validToCommit.length > 0) {
-      await withTransaction(async (client) => {
-        for (const item of validToCommit) {
-          await client.query(
-            `INSERT INTO listings (agency_id, broker_id, code, title, compound, property_type, price_value, price_display, area_value, bedrooms, details, status, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'active', NOW())
-             ON CONFLICT (agency_id, code) DO UPDATE SET
-               title = EXCLUDED.title,
-               compound = EXCLUDED.compound,
-               price_value = EXCLUDED.price_value,
-               price_display = EXCLUDED.price_display,
-               area_value = EXCLUDED.area_value,
-               bedrooms = EXCLUDED.bedrooms,
-               details = listings.details || EXCLUDED.details,
-               updated_at = NOW()`,
-            [
-              broker.agency_id,
-              broker.id,
-              item.code,
-              item.title,
-              item.compound,
-              item.property_type,
-              item.price_value,
-              item.price_display,
-              item.area_value,
-              item.bedrooms,
-              JSON.stringify(item.details)
-            ]
-          );
-        }
-      });
-    }
-
-    const summaryText = M(
-      lang,
-      `📊 *تقرير معالجة ملف المخزون:*\n• الإجمالي: ${rows.length} سطر\n• ✅ تم الحفظ والتحديث: ${validToCommit.length} وحدة\n• ❌ المرفوضات: ${rejectedRows.length} وحدة`,
-      `📊 *Bulk Ingestion Report:*\n• Total Rows: ${rows.length}\n• ✅ Successfully Imported: ${validToCommit.length}\n• ❌ Rejected: ${rejectedRows.length}`
-    );
-
-    await reply(broker, summaryText);
-
-    // If any units failed, automatically return rejection spreadsheet
-    if (rejectedRows.length > 0) {
-      const rejBuf = await E.buildRejectionWorkbook({
-        rejectedRows,
-        originalHeaders: headerRowValues
-      });
-
-      await WA.sendWhatsAppDocument(
-        to(broker),
-        rejBuf,
-        `مرفوضات_${filename}`,
-        M(
-          lang,
-          "📎 مرفق ملف الإكسيل بالصفوف المرفوضة وأسباب الاستبعاد. يرجى تصحيحها وإعادة رفعها.",
-          "📎 Attached is the rejection spreadsheet with error reasons. Correct and re-upload."
-        )
-      );
-    }
-
-    await logOperation({
-      agency_id: broker.agency_id,
-      broker_id: broker.id,
-      operation_type: "bulk_excel_import",
-      status: "success",
-      total_duration_ms: Date.now() - t0,
-      metadata: {
-        total_rows: rows.length,
-        imported_count: validToCommit.length,
-        rejected_count: rejectedRows.length
-      }
-    });
-  } catch (err) {
-    log("error", "handleDocument failed", errMeta(err));
-    await reply(
-      broker,
-      M(
-        lang,
-        "❌ تعذر معالجة ملف الإكسيل لوجود تلف بالتنسيق.",
-        "❌ Failed to parse Excel workbook."
-      )
-    );
-  }
-
   return "done";
 }
 
-async function dispatchMessage(broker, message) {
-  switch (message.type) {
-    case "interactive":
-      return handleInteractive(broker, message);
-    case "text":
-      return handleText(broker, message);
-    case "audio":
-    case "voice":
-      return handleAudio(broker, message);
-    case "image":
-      return handleImage(broker, message);
-    case "document":
-      return handleDocument(broker, message);
-    default:
-      return "done";
-  }
-}
-
 /* ====================================================================== */
-/* 14. Message Processing Pipeline with Distributed Locks                 */
+/* 9. Webhook Ingress & Express Routes                                    */
 /* ====================================================================== */
-async function processMessage(message) {
-  const key = U.normalizePhone(message.from);
-
-  return als.run({ reqId: message.id }, async () => {
-    inFlight++;
-    try {
-      const broker = await getBroker(message.from);
-      if (!broker) {
-        if (!(unknownNotified.get(key) > Date.now())) {
-          unknownNotified.set(key, Date.now() + 600000);
-          await WA.sendWhatsAppText(
-            key,
-            "⚠️ هذا الرقم غير مسجل كوكيل عقاري معتمد لدينا."
-          );
-        }
-        return markMsgs([message.id], "done");
-      }
-
-      const c = getRequestContext();
-      c.agencyId = broker.agency_id;
-      c.brokerId = broker.id;
-
-      if (!broker.is_active) {
-        await reply(broker, "⛔ الحساب معطل حالياً من قبل الإدارة.");
-        return markMsgs([message.id], "done");
-      }
-
-      if (!msgRate(key)) return markMsgs([message.id], "done");
-
-      if (!(lastTouch.get(key) > Date.now() - 300000)) {
-        lastTouch.set(key, Date.now());
-        query("UPDATE brokers SET last_active_at = NOW() WHERE id = $1", [
-          broker.id
-        ]).catch(() => {});
-      }
-
-      if (message.type !== "image" && message.type !== "document") {
-        WA.markAsRead(message.id, {
-          typing: message.type !== "interactive"
-        }).catch(() => {});
-      }
-
-      const outcome = await dispatchMessage(broker, message);
-      await markMsgs([message.id], outcome === "batched" ? "batched" : "done");
-    } catch (err) {
-      log("error", "processMessage top-level failure", errMeta(err));
-      await markMsgs([message.id], "failed");
-    } finally {
-      inFlight--;
-    }
-  });
-}
-
-const scheduleMessage = (message) =>
-  perBroker(U.normalizePhone(message.from), () => processMessage(message));
-
-/* ====================================================================== */
-/* 15. Webhook Ingestion & Early Drop for Delivery Statuses               */
-/* ====================================================================== */
-async function persistIncoming(body) {
-  const msgs = [];
-  for (const entry of (body && body.entry) || []) {
-    for (const change of entry.changes || []) {
-      const v = change && change.value;
-      if (!v) continue;
-
-      if (v.statuses && (!v.messages || !v.messages.length)) {
-        return [];
-      }
-
-      for (const m of v.messages || []) {
-        if (m && m.id && m.from) msgs.push(m);
-      }
-    }
-  }
-
-  msgs.sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
-  const fresh = [];
-
-  for (const m of msgs) {
-    const r = await query(
-      "INSERT INTO inbound_messages (msg_id, phone_key, payload) VALUES ($1,$2,$3) ON CONFLICT (msg_id) DO NOTHING RETURNING msg_id",
-      [m.id, U.normalizePhone(m.from), m]
-    );
-    if (r.rowCount) fresh.push(m);
-  }
-  return fresh;
-}
-
-/* ====================================================================== */
-/* 16. Express Server & Webhook Endpoints                                 */
-/* ====================================================================== */
-const app = express();
-app.disable("x-powered-by");
-app.use(
-  express.json({
-    limit: "1mb",
-    verify: (req, res, buf) => {
-      req.rawBody = buf;
-    }
-  })
-);
-
-function verifySignature(req) {
-  const secret = process.env.WHATSAPP_APP_SECRET;
-  const sig = req.get("x-hub-signature-256") || "";
-  if (!secret || !sig.startsWith("sha256=") || !req.rawBody) return false;
-
-  const expected = crypto
-    .createHmac("sha256", secret)
-    .update(req.rawBody)
-    .digest("hex");
-  const got = sig.slice(7);
-
-  const a = Buffer.from(got, "utf8");
-  const b = Buffer.from(expected, "utf8");
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
-}
-
-app.post("/webhook", async (req, res) => {
-  if (CFG.isProd && !verifySignature(req)) return res.sendStatus(401);
-
-  let fresh = [];
-  try {
-    fresh = await persistIncoming(req.body);
-  } catch (err) {
-    log("error", "Failed to persist inbound webhook payload", errMeta(err));
-    return res.sendStatus(500);
-  }
-
-  res.status(200).send("EVENT_RECEIVED");
-
-  for (const m of fresh) {
-    scheduleMessage(m).catch((e) =>
-      log("error", "Schedule message failed", errMeta(e))
-    );
-  }
-});
 
 app.get("/webhook", (req, res) => {
-  if (
-    req.query["hub.mode"] === "subscribe" &&
-    req.query["hub.verify_token"] === process.env.WHATSAPP_VERIFY_TOKEN
-  ) {
-    return res.status(200).send(req.query["hub.challenge"]);
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (mode === "subscribe" && token === process.env.WHATSAPP_VERIFY_TOKEN) {
+    DB.logStdout("info", "Meta webhook subscription verified successfully");
+    return res.status(200).send(challenge);
   }
+  DB.logStdout("warn", "Meta webhook subscription verification failed");
   return res.sendStatus(403);
 });
 
-app.get("/health", async (req, res) => {
+// Meta Webhook HMAC-SHA256 Signature Validator
+function isValidMetaSignature(req) {
+  if (!process.env.WHATSAPP_APP_SECRET) return true; // Optional bypass if secret not set
+  const signature = req.headers["x-hub-signature-256"];
+  if (!signature) return false;
+
+  const hmac = crypto.createHmac("sha256", process.env.WHATSAPP_APP_SECRET);
+  hmac.update(req.rawBody || Buffer.from(""));
+  const expected = `sha256=${hmac.digest("hex")}`;
+
   try {
-    await query("SELECT 1");
-    res
-      .status(200)
-      .json({ status: "ok", inFlight, queue: listingLimiter.stats() });
-  } catch (err) {
-    res.status(500).json({ status: "error", error: err.message });
+    return crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expected)
+    );
+  } catch {
+    return false;
   }
+}
+
+app.post("/webhook", async (req, res) => {
+  // Validate HMAC signature to reject spoofed webhooks
+  if (!isValidMetaSignature(req)) {
+    DB.logStdout("warn", "Rejected webhook with invalid HMAC signature");
+    return res.sendStatus(401);
+  }
+
+  res.sendStatus(200); // Immediate 200 ACK to Meta Graph API
+
+  const body = req.body;
+  if (!body || body.object !== "whatsapp_business_account") return;
+
+  const entry = body.entry?.[0];
+  const changes = entry?.changes?.[0]?.value;
+  const message = changes?.messages?.[0];
+  if (!message) return;
+
+  const from = message.from;
+  const broker = await resolveBroker(from);
+
+  // Eliminate Silent Drop: Send registration notice to unrecognized phone numbers
+  if (!broker) {
+    DB.logStdout("warn", "Inbound message from unregistered phone number", {
+      phone: from
+    });
+    await WA.sendWhatsAppText(
+      from,
+      "⚠️ هذا الرقم غير مسجل في منظومة AqarChat العقارية.\nيرجى التواصل مع إدارة وكالتك لتفعيل حسابك ومشاركتك في المخزون."
+    );
+    return;
+  }
+
+  const reqId = U.sha1(`${from}_${Date.now()}_${Math.random()}`).slice(0, 12);
+  const lang = broker.preferred_lang || "ar";
+
+  // Serialized FIFO Queue execution per broker wrapped in AsyncLocalStorage tracing context
+  brokerSerializers(broker.id, async () => {
+    await DB.als.run(
+      { reqId, agencyId: broker.agency_id, brokerId: broker.id },
+      async () => {
+        try {
+          await WA.markAsRead(message.id, { typing: true });
+
+          if (message.type === "text") {
+            await handleText(broker, message.text.body);
+          } else if (message.type === "audio") {
+            await handleAudio(broker, message.audio);
+          } else if (message.type === "image") {
+            await handleImage(broker, message.image);
+          } else if (message.type === "document") {
+            await handleDocument(broker, message.document);
+          } else if (message.type === "interactive") {
+            await handleInteractive(broker, message.interactive);
+          }
+        } catch (err) {
+          // Specific Quota Error Traps
+          if (err.code === "BROKER_QUOTA_EXCEEDED") {
+            DB.logStdout("warn", "Broker daily AI quota exceeded", {
+              brokerId: broker.id,
+              used: err.used,
+              limit: err.limit
+            });
+            await reply(
+              broker,
+              M(
+                lang,
+                `⚠️ *تم استهلاك كامل رصيدك اليومي من الذكاء الاصطناعي (${err.limit}/${err.limit} عملية).*\nيتجدد الرصيد تلقائياً الساعة 12 منتصف الليل، أو تواصل مع المشرف لزيادة باقتك.`,
+                `⚠️ *Daily AI limit reached (${err.limit}/${err.limit}).*\nQuota resets at midnight UTC, or contact your admin to upgrade.`
+              )
+            );
+            return;
+          }
+
+          if (err.code === "AGENCY_QUOTA_EXCEEDED") {
+            DB.logStdout("warn", "Agency total AI quota exceeded", {
+              agencyId: broker.agency_id
+            });
+            await reply(
+              broker,
+              M(
+                lang,
+                "⚠️ *تجاوزت الوكالة الحد الأقصى المسموح به لعمليات الذكاء الاصطناعي اليوم.*\nيرجى مراجعة إدارة الوكالة لترقية الاشتراك.",
+                "⚠️ *Agency daily AI quota exceeded.*\nPlease contact management to upgrade the tier."
+              )
+            );
+            return;
+          }
+
+          DB.logStdout(
+            "error",
+            "Unhandled exception in webhook processing loop",
+            {
+              brokerId: broker.id,
+              err: err.message,
+              code: err.code,
+              stack: err.stack
+            }
+          );
+          await reply(
+            broker,
+            "⚠️ حدث خطأ غير متوقع أثناء معالجة طلبك. يرجى المحاولة مرة أخرى."
+          );
+        }
+      }
+    );
+  });
 });
 
-/* ====================================================================== */
-/* 17. Graceful Boot & Shutdown Lifecycles                                */
-/* ====================================================================== */
-let server;
-let isShuttingDown = false;
-
-async function shutdown(sig) {
-  if (isShuttingDown) return;
-  isShuttingDown = true;
-
-  log("info", "Gracefully terminating server...", { sig });
-  if (server) server.close();
-
-  const until = Date.now() + 25000;
-  while ((inFlight > 0 || perBroker.size() > 0) && Date.now() < until) {
-    await U.sleep(300);
-  }
-
-  await pool.end().catch(() => {});
-  process.exit(0);
-}
-
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
-
-async function boot() {
-  log("info", "Pre-warming fonts into RAM...");
-  await Promise.all([
-    loadFont("Cairo-Bold.ttf"),
-    loadFont("Cairo-Regular.ttf")
-  ]).catch((err) => log("warn", "Font pre-warming failed", errMeta(err)));
-
-  server = app.listen(CFG.port, () => {
-    log("info", `AqarChat Real Estate Engine active on port ${CFG.port}`);
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    uptimeSeconds: Math.floor(process.uptime())
   });
-}
+});
 
-if (require.main === module) {
-  boot();
-}
-
-module.exports = { app, fetchListing, showListingCard };
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  DB.logStdout(
+    "info",
+    `AqarChat Master Ingestion Engine online on port ${PORT}`
+  );
+});
