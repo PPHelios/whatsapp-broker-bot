@@ -1415,12 +1415,7 @@ async function handleCommand(broker, raw) {
     }
     return true;
   }
-  // 2. EXCEL & STATS
-  if (/^(?:تصدير|اكسيل|اكسل|excel|export)$/i.test(n)) {
-    await cmdExport(broker, lang);
-    return true;
-  }
-// 1. HELP MENU
+  // 1. HELP MENU
   if (/^(?:مساعدة|مساعده|المساعدة|help|menu|منيو|اوامر|أوامر|\?|؟)$/i.test(n)) {
     await reply(broker, T.getHelpMessage(lang));
     return true;
@@ -1454,7 +1449,11 @@ async function handleCommand(broker, raw) {
 
       await reply(
         broker,
-        M(lang, "🗑️ تم إلغاء المسودة الحالية وتفريغها.", "🗑️ Active draft has been canceled.")
+        M(
+          lang,
+          "🗑️ تم إلغاء المسودة الحالية وتفريغها.",
+          "🗑️ Active draft has been canceled."
+        )
       );
       return true;
     }
@@ -1787,15 +1786,14 @@ async function handleInteractive(broker, message) {
       await WA.sendPaymentPlansResponse(to(broker), code, matchResult, lang);
     }
     await logOperation({
-        agency_id: broker.agency_id,
-        broker_id: broker.id,
-        listing_code: code,
-        operation_type: "view_plan_detail",
-        status: "success",
-        total_duration_ms: Date.now() - t0,
-        metadata: { plan_id: planId, years: targetPlan.years }
-      }).catch(() => {});
-    }
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      listing_code: code,
+      operation_type: "view_plan_detail",
+      status: "success",
+      total_duration_ms: Date.now() - t0,
+      metadata: { plan_id: planId, years: targetPlan.years }
+    }).catch(() => {});
     return "done";
   }
 

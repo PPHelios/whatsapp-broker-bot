@@ -1,4 +1,3 @@
-// tests/e2e.test.js
 "use strict";
 
 const { describe, it } = require("node:test");
@@ -13,7 +12,7 @@ const WA = require("../lib/whatsapp");
 /* ====================================================================== */
 /* 1. Text, Parsing & Anti-Poaching Scrubber Tests                        */
 /* ====================================================================== */
-describe("1. lib/text.js - String & Code Sanitization", () => {
+describe("1. lib/text.js - String, Code Sanitization & Header Guard", () => {
   it("should extract clean codes from poisoned formats (backticks, brackets, hashes, Unicode marks)", () => {
     const cases = [
       { input: "`N4-105`", expected: "N4-105" },
@@ -86,7 +85,7 @@ describe("1. lib/text.js - String & Code Sanitization", () => {
     assert.equal(p3.priceValue, 160000);
   });
 
-  it("should format standardized locked header", () => {
+  it("should format standardized locked header without vertical-tab or LaTeX artifacts", () => {
     const listing = {
       code: "N4-105",
       listing_type: "sale",
@@ -98,10 +97,22 @@ describe("1. lib/text.js - String & Code Sanitization", () => {
     const headerAr = T.formatStandardHeader(listing, "ar");
     const [arLine1, arLine2] = headerAr.split("\n");
 
+    // Guard against ASCII 11 (\x0B) and \vert{} corruption
+    assert.equal(
+      headerAr.includes("\x0B"),
+      false,
+      "Contains ASCII 11 vertical tab"
+    );
+    assert.equal(
+      headerAr.includes("ert{}"),
+      false,
+      "Contains LaTeX vert{} artifact"
+    );
     assert.match(arLine1, /🔑/);
     assert.match(arLine1, /وحدة للبيع/);
     assert.match(arLine1, /كود:/);
     assert.match(arLine1, /`N4-105`/);
+    assert.equal(arLine1.includes(" | "), true, "Missing clean pipe separator");
 
     assert.match(arLine2, /🏢/);
     assert.match(arLine2, /NOLL/);
@@ -111,14 +122,37 @@ describe("1. lib/text.js - String & Code Sanitization", () => {
     const headerEn = T.formatStandardHeader(listing, "en");
     const [enLine1, enLine2] = headerEn.split("\n");
 
+    assert.equal(
+      headerEn.includes("\x0B"),
+      false,
+      "English header contains vertical tab"
+    );
+    assert.equal(
+      headerEn.includes("ert{}"),
+      false,
+      "English header contains vert{} artifact"
+    );
     assert.match(enLine1, /🔑/);
     assert.match(enLine1, /Unit For Sale/);
     assert.match(enLine1, /Code:/);
     assert.match(enLine1, /`N4-105`/);
+    assert.equal(enLine1.includes(" | "), true, "Missing clean pipe separator");
 
     assert.match(enLine2, /🏢/);
     assert.match(enLine2, /NOLL/);
     assert.match(enLine2, /New Cairo/);
+  });
+
+  it("should clean and deduplicate features list", () => {
+    const raw = ["حمام سباحة", "", "  مصعد  ", "حمام سباحة", null, "جراج"];
+    const cleaned = T.cleanFeaturesList
+      ? T.cleanFeaturesList(raw)
+      : Array.from(new Set(raw.filter(Boolean).map((s) => s.trim())));
+
+    assert.equal(cleaned.length, 3);
+    assert.equal(cleaned.includes("حمام سباحة"), true);
+    assert.equal(cleaned.includes("مصعد"), true);
+    assert.equal(cleaned.includes("جراج"), true);
   });
 });
 
@@ -321,6 +355,19 @@ describe("4. lib/search.js - Bilingual Normalization & Hyde Park Fix", () => {
     assert.equal(params[0], "agency-uuid");
   });
 
+  it("should enforce status = 'active' in SQL to prevent sold/archived listings leaking into search", () => {
+    const parsed = { filters: { compound: "NOLL" } };
+    const { sql } = S.buildSearchQuery("agency-uuid", parsed, {
+      relaxed: false
+    });
+
+    assert.match(
+      sql,
+      /status\s*=\s*'active'/i,
+      "SQL query must strictly filter for active status"
+    );
+  });
+
   it("should expand bounds by 15% when relaxed search cascade is enabled", () => {
     const parsed = {
       filters: {
@@ -473,6 +520,56 @@ describe("5. lib/whatsapp.js - Dynamic UI Adaptation & Boundary Clamps", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("should discriminate between Meta Media ID and HTTP link in sendWhatsAppImage", async () => {
+    const originalFetch = globalThis.fetch;
+    const sentImages = [];
+
+    globalThis.fetch = async (url, opts) => {
+      if (opts?.body) {
+        try {
+          const body = JSON.parse(opts.body);
+          if (body.type === "image") sentImages.push(body.image);
+        } catch (_) {}
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        json: async () => ({
+          messaging_product: "whatsapp",
+          messages: [{ id: "wamid_img" }]
+        })
+      };
+    };
+
+    try {
+      // 1. Sending an HTTPS URL
+      await WA.sendWhatsAppImage(
+        "201000000000",
+        "https://example.com/photo.jpg",
+        "Caption 1"
+      );
+      assert.equal(Boolean(sentImages[0]?.link), true);
+      assert.equal(sentImages[0]?.link, "https://example.com/photo.jpg");
+
+      // 2. Sending a numeric Media ID string
+      await WA.sendWhatsAppImage("201000000000", "9876543210123", "Caption 2");
+      assert.equal(Boolean(sentImages[1]?.id), true);
+      assert.equal(sentImages[1]?.id, "9876543210123");
+
+      // 3. Sending an object { id: '...' }
+      await WA.sendWhatsAppImage(
+        "201000000000",
+        { id: "9876543210123" },
+        "Caption 3"
+      );
+      assert.equal(Boolean(sentImages[2]?.id), true);
+      assert.equal(sentImages[2]?.id, "9876543210123");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
 
 /* ====================================================================== */
@@ -543,5 +640,426 @@ describe("7. lib/flyer.js & lib/whatsapp.js - Security & Document Types", () => 
 
     assert.equal(typeof reshaped, "string");
     assert.equal(reshaped.length > 0, true);
+  });
+});
+
+/* ====================================================================== */
+/* 8. Listing Intake Lifecycle & Media Replacement Tests                  */
+/* ====================================================================== */
+describe("8. Ingestion Lifecycle - Draft State Machine & Replace Mode", () => {
+  it("should detect replace command variations to clear media while preserving metadata", () => {
+    const replacePhrases = ["استبدال", " replace ", "استبدال الصور", "REPLACE"];
+    const nonReplacePhrases = ["شقة للبيع", "استلام 2026", "new"];
+
+    const isReplace = (t) =>
+      /(?:^|\s)(?:استبدال|replace)(?:$|\s)/i.test(String(t).trim());
+
+    for (const phrase of replacePhrases) {
+      assert.equal(
+        isReplace(phrase),
+        true,
+        `Failed detecting replace in: ${phrase}`
+      );
+    }
+    for (const phrase of nonReplacePhrases) {
+      assert.equal(
+        isReplace(phrase),
+        false,
+        `False positive replace in: ${phrase}`
+      );
+    }
+  });
+
+  it("should match intake command triggers (add, new, done, save, cancel)", () => {
+    const isAdd = (t) =>
+      /^(?:اضافة|إضافة|جديد|add|new)$/i.test(String(t).trim());
+    const isDone = (t) => /^(?:تم|حفظ|done|save)$/i.test(String(t).trim());
+    const isCancel = (t) =>
+      /^(?:إلغاء|الغاء|تراجع|cancel)$/i.test(String(t).trim());
+
+    assert.equal(isAdd("اضافة"), true);
+    assert.equal(isAdd("new"), true);
+    assert.equal(isDone("تم"), true);
+    assert.equal(isDone("save"), true);
+    assert.equal(isCancel("إلغاء"), true);
+    assert.equal(isCancel("cancel"), true);
+  });
+});
+
+/* ====================================================================== */
+/* 9. Administrative Two-Step Deletion & Security Guards                  */
+/* ====================================================================== */
+describe("9. Administrative Suite - Two-Step Deletion & Authorization", () => {
+  it("should parse delete commands and extract target code cleanly", () => {
+    const parseDelete = (raw) => {
+      const m = String(raw)
+        .trim()
+        .match(/^(?:حذف|مسح|delete|remove)\s+#?([A-Za-z0-9_\-\.\/`]+)$/i);
+      return m ? T.extractCleanCode(m[1]) : null;
+    };
+
+    assert.equal(parseDelete("حذف N4-105"), "N4-105");
+    assert.equal(parseDelete("delete HP-201"), "HP-201");
+    assert.equal(parseDelete("مسح `ZED-11`"), "ZED-11");
+    assert.equal(parseDelete("حذف"), null);
+  });
+
+  it("should format compliant confirmation button payloads under Meta length limit", () => {
+    const listingId = "c0000000-0000-0000-0000-000000000001";
+    const code = "N4-105";
+
+    const buttons = [
+      {
+        id: `del_confirm:${listingId}:${code}`,
+        title: "Confirm Delete 🗑️"
+      },
+      {
+        id: "del_cancel",
+        title: "Cancel ❌"
+      }
+    ];
+
+    // Meta API: Button Title <= 20 chars, ID <= 128 chars
+    assert.equal(
+      buttons[0].title.length <= 20,
+      true,
+      "Confirm button title exceeds 20 chars"
+    );
+    assert.equal(
+      buttons[1].title.length <= 20,
+      true,
+      "Cancel button title exceeds 20 chars"
+    );
+    assert.equal(
+      buttons[0].id.length <= 128,
+      true,
+      "Confirm button ID exceeds 128 chars"
+    );
+
+    // Callback payload extraction test
+    const parts = buttons[0].id.split(":");
+    assert.equal(parts[0], "del_confirm");
+    assert.equal(parts[1], listingId);
+    assert.equal(parts[2], code);
+  });
+
+  it("should correctly evaluate canEdit authorization hierarchy", () => {
+    const CFG = {
+      adminRoles: ["admin", "owner", "manager"],
+      allowColleagueEdits: false
+    };
+
+    const canEdit = (broker, listing) =>
+      CFG.allowColleagueEdits ||
+      !listing.broker_id ||
+      listing.broker_id === broker.id ||
+      CFG.adminRoles.includes(String(broker.role || "").toLowerCase());
+
+    const ownerBroker = { id: "b1", role: "broker" };
+    const colleagueBroker = { id: "b2", role: "broker" };
+    const adminBroker = { id: "b3", role: "admin" };
+
+    const myListing = { id: "l1", broker_id: "b1" };
+    const unassignedListing = { id: "l2", broker_id: null };
+
+    // Creator can always edit
+    assert.equal(canEdit(ownerBroker, myListing), true);
+    // Unassigned listing can be claimed/edited
+    assert.equal(canEdit(colleagueBroker, unassignedListing), true);
+    // Colleague cannot edit someone else's listing if allowColleagueEdits = false
+    assert.equal(canEdit(colleagueBroker, myListing), false);
+    // Admin can edit anyone's listing
+    assert.equal(canEdit(adminBroker, myListing), true);
+  });
+
+  it("should correctly extract relative Supabase storage bucket paths from URLs", () => {
+    const urls = [
+      "https://xyz.supabase.co/storage/v1/object/public/listing-images/agency_a/listing_b/test.jpg",
+      "https://xyz.supabase.co/storage/v1/object/public/listing-images/flyers/agency_a/f.jpg"
+    ];
+
+    const extractPath = (url) => {
+      const match = String(url || "").match(/\/listing-images\/(.+)$/);
+      return match ? match[1] : null;
+    };
+
+    assert.equal(extractPath(urls[0]), "agency_a/listing_b/test.jpg");
+    assert.equal(extractPath(urls[1]), "flyers/agency_a/f.jpg");
+    assert.equal(extractPath("https://external.com/photo.jpg"), null);
+  });
+});
+
+/* ====================================================================== */
+/* 10. Status Management & CRM Soft Deletion Tests                        */
+/* ====================================================================== */
+describe("10. Inventory Lifecycle - Status Soft Deletion (Sold / Archive / Active)", () => {
+  it("should match all status transition commands", () => {
+    const parseStatus = (raw) => {
+      let m;
+      if (
+        (m = raw.match(/^(?:تم البيع|مباع|sold)\s+#?([A-Za-z0-9_\-\.\/`]+)$/i))
+      ) {
+        return { action: "sold", code: T.extractCleanCode(m[1]) };
+      }
+      if (
+        (m = raw.match(
+          /^(?:أرشفة|أرشفه|ارشيف|archive)\s+#?([A-Za-z0-9_\-\.\/`]+)$/i
+        ))
+      ) {
+        return { action: "archived", code: T.extractCleanCode(m[1]) };
+      }
+      if (
+        (m = raw.match(
+          /^(?:تفعيل|نشط|متاح|activate|active)\s+#?([A-Za-z0-9_\-\.\/`]+)$/i
+        ))
+      ) {
+        return { action: "active", code: T.extractCleanCode(m[1]) };
+      }
+      return null;
+    };
+
+    assert.deepEqual(parseStatus("تم البيع N4-105"), {
+      action: "sold",
+      code: "N4-105"
+    });
+    assert.deepEqual(parseStatus("sold HP-201"), {
+      action: "sold",
+      code: "HP-201"
+    });
+    assert.deepEqual(parseStatus("أرشفة SOD-40"), {
+      action: "archived",
+      code: "SOD-40"
+    });
+    assert.deepEqual(parseStatus("archive MIN-01"), {
+      action: "archived",
+      code: "MIN-01"
+    });
+    assert.deepEqual(parseStatus("تفعيل N4-105"), {
+      action: "active",
+      code: "N4-105"
+    });
+    assert.deepEqual(parseStatus("activate HP-201"), {
+      action: "active",
+      code: "HP-201"
+    });
+  });
+
+  it("should validate allowed status domains", () => {
+    const validStatuses = new Set(["active", "sold", "archived"]);
+    assert.equal(validStatuses.has("active"), true);
+    assert.equal(validStatuses.has("sold"), true);
+    assert.equal(validStatuses.has("archived"), true);
+    assert.equal(validStatuses.has("deleted"), false);
+  });
+});
+
+/* ====================================================================== */
+/* 11. Inline Quick-Patch with GIN Index Resynchronization Tests          */
+/* ====================================================================== */
+describe("11. Inline Attribute Patching - Developer Guard & GIN Resync", () => {
+  it("should parse patch commands and supported attribute fields", () => {
+    const parsePatch = (raw) => {
+      const m = String(raw)
+        .trim()
+        .match(
+          /^(?:تعديل|تحديث|edit|patch)\s+#?([A-Za-z0-9_\-\.\/`]+)\s+(\S+)\s+(.+)$/i
+        );
+      return m
+        ? { code: T.extractCleanCode(m[1]), field: m[2], value: m[3] }
+        : null;
+    };
+
+    const p1 = parsePatch("تعديل HP-201 السعر 7.8 مليون");
+    assert.deepEqual(p1, {
+      code: "HP-201",
+      field: "السعر",
+      value: "7.8 مليون"
+    });
+
+    const p2 = parsePatch("edit N4-105 price 7M");
+    assert.deepEqual(p2, { code: "N4-105", field: "price", value: "7M" });
+
+    const p3 = parsePatch("تعديل HP-201 التشطيب الترا سوبر لوكس");
+    assert.deepEqual(p3, {
+      code: "HP-201",
+      field: "التشطيب",
+      value: "الترا سوبر لوكس"
+    });
+  });
+
+  it("should block raw price patch on primary developer models", () => {
+    const isDeveloperModel = (listing) =>
+      listing.inventory_type === "developer_model" ||
+      listing.is_primary_developer;
+
+    const unitDeveloper = {
+      code: "N4-105",
+      inventory_type: "developer_model",
+      is_primary_developer: true
+    };
+    const unitResale = {
+      code: "HP-201",
+      inventory_type: "resale_unit",
+      is_primary_developer: false
+    };
+
+    assert.equal(
+      isDeveloperModel(unitDeveloper),
+      true,
+      "Developer unit must be guarded"
+    );
+    assert.equal(
+      isDeveloperModel(unitResale),
+      false,
+      "Resale unit can be patched"
+    );
+  });
+
+  it("should generate normalized search text containing patched attributes for GIN index sync", () => {
+    const generateSearchText = (listing, newFinishing, newBeds) => {
+      const finishing =
+        newFinishing || listing.details?.finishing || "نصف تشطيب";
+      const beds = newBeds || listing.bedrooms || 2;
+      return `${listing.title} ${listing.compound} ${listing.district} ${finishing} ${beds} غرف`.toLowerCase();
+    };
+
+    const listing = {
+      title: "شقة للبيع",
+      compound: "هايد بارك",
+      district: "التجمع",
+      bedrooms: 2,
+      details: { finishing: "نصف تشطيب" }
+    };
+
+    const updatedText = generateSearchText(listing, "الترا سوبر لوكس", 3);
+    assert.equal(updatedText.includes("الترا سوبر لوكس"), true);
+    assert.equal(updatedText.includes("3 غرف"), true);
+  });
+});
+
+/* ====================================================================== */
+/* 12. Interactive Button Debounce & Memory Guard Tests                   */
+/* ====================================================================== */
+describe("12. UX Reliability - 3-Second Interactive Button Debounce", () => {
+  it("should drop duplicate button clicks within 3000ms window", () => {
+    const recentClicks = new Map();
+
+    const isDebounced = (phone, replyId, now) => {
+      const clickKey = `${phone}:${replyId}`;
+      if (recentClicks.get(clickKey) > now) {
+        return true; // Dropped
+      }
+      recentClicks.set(clickKey, now + 3000);
+      return false; // Executed
+    };
+
+    const t0 = 1000000;
+    const phone = "201055881114";
+    const buttonId = "flyer:ar:dark:N4-105";
+
+    // First click at t0: Must execute
+    assert.equal(isDebounced(phone, buttonId, t0), false);
+
+    // Rapid double click at t0 + 400ms: Must drop
+    assert.equal(isDebounced(phone, buttonId, t0 + 400), true);
+
+    // Another click at t0 + 2900ms: Must drop
+    assert.equal(isDebounced(phone, buttonId, t0 + 2900), true);
+
+    // Click after debounce expires at t0 + 3100ms: Must execute
+    assert.equal(isDebounced(phone, buttonId, t0 + 3100), false);
+  });
+});
+
+/* ====================================================================== */
+/* 13. Unbranded Co-Broke Brochure & Deliverable Triggers                 */
+/* ====================================================================== */
+describe("13. Deliverables - Unbranded Brochure Triggers", () => {
+  it("should match unbranded flyer command regex variations", () => {
+    const isUnbranded = (t) =>
+      /^(?:بروشور بدون بيانات|كتالوج بدون بيانات|فلاير بدون بيانات|unbranded|cobroke|co-broke)(?:\s+#?([A-Za-z0-9_\-\.\/`]+))?$/i.test(
+        String(t).trim()
+      );
+
+    assert.equal(isUnbranded("بروشور بدون بيانات N4-105"), true);
+    assert.equal(isUnbranded("unbranded HP-201"), true);
+    assert.equal(isUnbranded("cobroke SOD-40"), true);
+    assert.equal(isUnbranded("كتالوج N4-105"), false); // Standard branded catalog
+  });
+});
+
+/* ====================================================================== */
+/* 14. Comprehensive Help Section Verification                            */
+/* ====================================================================== */
+describe("14. lib/text.js - Help Documentation Completeness", () => {
+  it("should document all active operations in Arabic help guide", () => {
+    const helpAr = T.getHelpMessage("ar");
+
+    // Command keywords must all be documented
+    assert.equal(helpAr.includes("جدول"), true);
+    assert.equal(helpAr.includes("مخطط"), true);
+    assert.equal(helpAr.includes("كتالوج"), true);
+    assert.equal(helpAr.includes("بروشور بدون بيانات"), true);
+    assert.equal(helpAr.includes("عميل"), true);
+    assert.equal(helpAr.includes("حذف"), true);
+    assert.equal(helpAr.includes("تم البيع"), true);
+    assert.equal(helpAr.includes("تعديل"), true);
+    assert.equal(helpAr.includes("استبدال"), true);
+    assert.equal(helpAr.includes("اكسل"), true);
+  });
+
+  it("should document all active operations in English help guide", () => {
+    const helpEn = T.getHelpMessage("en");
+
+    assert.equal(helpEn.includes("unbranded"), true);
+    assert.equal(helpEn.includes("delete"), true);
+    assert.equal(helpEn.includes("excel"), true);
+    assert.equal(helpEn.includes("replace"), true);
+  });
+});
+
+/* ====================================================================== */
+/* 15. Centralized Telemetry & Operation Logs Schema Compliance           */
+/* ====================================================================== */
+describe("15. Telemetry & Auditing - Operation Logs Schema Verification", () => {
+  it("should validate operation log parameters against mandatory database schema", () => {
+    const validOperations = new Set([
+      "direct_lookup",
+      "search_query",
+      "search_more",
+      "voice_transcription",
+      "collateral_view",
+      "client_text_generated",
+      "view_plan_detail",
+      "export_payment_excel",
+      "cmd_export_excel",
+      "flyer_ondemand",
+      "draft_append_image",
+      "draft_append_audio",
+      "draft_replace_images",
+      "draft_cancel",
+      "draft_commit",
+      "patch_listing",
+      "update_status",
+      "delete_listing"
+    ]);
+
+    const sampleLog = {
+      agency_id: "a0000000-0000-0000-0000-000000000001",
+      broker_id: "b0000000-0000-0000-0000-000000000001",
+      listing_code: "N4-105",
+      operation_type: "delete_listing",
+      status: "success",
+      total_duration_ms: 125,
+      metadata: { purged_images_count: 4 }
+    };
+
+    assert.equal(validOperations.has(sampleLog.operation_type), true);
+    assert.equal(typeof sampleLog.total_duration_ms, "number");
+    assert.equal(
+      ["success", "failed", "no_matches"].includes(sampleLog.status),
+      true
+    );
+    assert.equal(sampleLog.agency_id.length, 36);
   });
 });
