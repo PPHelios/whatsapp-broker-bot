@@ -1135,6 +1135,15 @@ async function sendCollateralLinks(broker, code) {
   }
 
   await reply(broker, lines.join("\n"));
+  await logOperation({
+    agency_id: broker.agency_id,
+    broker_id: broker.id,
+    listing_code: code,
+    operation_type: "collateral_view",
+    status: "success",
+    total_duration_ms: Date.now() - t0,
+    metadata: { has_layout: !!layoutPdf, has_drive: !!driveUrl }
+  }).catch(() => {});
 }
 
 /* ====================================================================== */
@@ -1307,12 +1316,150 @@ async function handleCommand(broker, raw) {
     await reply(broker, T.getHelpMessage(lang));
     return true;
   }
+  // 1. ADD NEW LISTING COMMAND: "اضافة", "جديد", "add", "new"
+  if (/^(?:اضافة|إضافة|جديد|add|new)$/i.test(n)) {
+    await Drafts.clearDraft(broker.id);
+    await Drafts.createDraft(broker.id, broker.agency_id);
+    await reply(
+      broker,
+      M(
+        lang,
+        "📝 *بدء إضافة وحدة جديدة*\n\n1️⃣ أرسل صور الوحدة.\n2️⃣ أرسل التفاصيل (كتابة أو رسالة صوتية).\n3️⃣ أرسل *تم* أو *done* لحفظ الوحدة بالمخزون.",
+        "📝 *Add New Listing*\n\n1️⃣ Send unit photos.\n2️⃣ Send details (text or voice).\n3️⃣ Send *done* to save to inventory."
+      )
+    );
+    return true;
+  }
+
+  // 2. FINALIZE LISTING COMMAND: "تم", "حفظ", "done", "save"
+  if (/^(?:تم|حفظ|done|save)$/i.test(n)) {
+    await cmdCommitDraft(broker, lang);
+    return true;
+  }
+
+  // FINALIZE AND SAVE LISTING: "تم", "done", "حفظ", "save"
+  if (/^(?:تم|حفظ|done|save)$/i.test(n)) {
+    const draft = await Drafts.getDraft(broker.id);
+    if (
+      !draft ||
+      (!draft.texts?.length &&
+        !draft.voice_buffers?.length &&
+        !draft.media_items?.length)
+    ) {
+      await reply(
+        broker,
+        M(
+          lang,
+          "⚠️ لا توجد مسودة نشطة تحتوي على بيانات لحفظها.",
+          "⚠️ No active draft with data to save."
+        )
+      );
+      return true;
+    }
+
+    await reply(
+      broker,
+      M(
+        lang,
+        "⏳ جاري استخراج البيانات ورفع الصور وتأكيد الوحدة...",
+        "⏳ Processing and saving listing..."
+      )
+    );
+
+    try {
+      // 1. AI Extraction using Gemini
+      const extraction = await AI.extractPropertyDetails({
+        texts: draft.texts || [],
+        voiceBuffers: draft.voice_buffers || [],
+        lang
+      });
+      const listingData = extraction.draft;
+
+      // 2. Upload images to Supabase Storage
+      const uploadRes = await uploadImages(
+        broker.agency_id,
+        listingData.code,
+        draft.media_items || []
+      );
+
+      // 3. Insert into Database
+      const inserted = await Drafts.commitDraftToListing({
+        broker,
+        agencyId: broker.agency_id,
+        listingData,
+        images: uploadRes.ok
+      });
+
+      // 4. Clear the draft
+      await Drafts.clearDraft(broker.id);
+
+      await reply(
+        broker,
+        M(
+          lang,
+          `✅ تم اعتماد الوحدة بنجاح كود: \`${inserted.code}\``,
+          `✅ Listing saved: \`${inserted.code}\``
+        )
+      );
+      await showListingCard(broker, inserted);
+    } catch (err) {
+      log("error", "Failed to commit draft to listing", errMeta(err));
+      await reply(
+        broker,
+        M(
+          lang,
+          "❌ حدث خطأ أثناء حفظ الوحدة، يرجى المحاولة لاحقاً.",
+          "❌ Failed to save listing."
+        )
+      );
+    }
+    return true;
+  }
+  // 2. EXCEL & STATS
+  if (/^(?:تصدير|اكسيل|اكسل|excel|export)$/i.test(n)) {
+    await cmdExport(broker, lang);
+    return true;
+  }
+// 1. HELP MENU
+  if (/^(?:مساعدة|مساعده|المساعدة|help|menu|منيو|اوامر|أوامر|\?|؟)$/i.test(n)) {
+    await reply(broker, T.getHelpMessage(lang));
+    return true;
+  }
 
   // 2. EXCEL & STATS
   if (/^(?:تصدير|اكسيل|اكسل|excel|export)$/i.test(n)) {
     await cmdExport(broker, lang);
     return true;
   }
+
+  // ◄── PLACE DRAFT CANCELLATION HERE ──────────────────────────────
+  if (/^(?:إلغاء|الغاء|تراجع|cancel)$/i.test(n)) {
+    const t0 = Date.now();
+    const draft = await Drafts.getDraft(broker.id);
+
+    if (draft) {
+      await Drafts.clearDraft(broker.id);
+
+      await logOperation({
+        agency_id: broker.agency_id,
+        broker_id: broker.id,
+        operation_type: "draft_cancel",
+        status: "success",
+        total_duration_ms: Date.now() - t0,
+        metadata: {
+          had_images: (draft.media_items || []).length,
+          had_text: (draft.texts || []).length
+        }
+      }).catch(() => {});
+
+      await reply(
+        broker,
+        M(lang, "🗑️ تم إلغاء المسودة الحالية وتفريغها.", "🗑️ Active draft has been canceled.")
+      );
+      return true;
+    }
+  }
+  // ────────────────────────────────────────────────────────────────
 
   const resolveTargetCode = (explicitCode) => {
     if (explicitCode) return T.extractCleanCode(explicitCode);
@@ -1639,6 +1786,16 @@ async function handleInteractive(broker, message) {
       };
       await WA.sendPaymentPlansResponse(to(broker), code, matchResult, lang);
     }
+    await logOperation({
+        agency_id: broker.agency_id,
+        broker_id: broker.id,
+        listing_code: code,
+        operation_type: "view_plan_detail",
+        status: "success",
+        total_duration_ms: Date.now() - t0,
+        metadata: { plan_id: planId, years: targetPlan.years }
+      }).catch(() => {});
+    }
     return "done";
   }
 
@@ -1658,6 +1815,14 @@ async function handleInteractive(broker, message) {
     const listing = await fetchListing(broker, code);
     if (!listing) return notFound(broker, code);
     await reply(broker, T.formatClientListingText(listing, broker, lang));
+    await logOperation({
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      listing_code: code,
+      operation_type: "client_text_generated",
+      status: "success",
+      total_duration_ms: Date.now() - t0
+    }).catch(() => {});
     return "done";
   }
 
@@ -1755,6 +1920,16 @@ async function handleSearchMessage(
 
   const total = rows.length ? parseInt(rows[0].total_count, 10) : 0;
   if (!total) {
+    await logOperation({
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      operation_type: more ? "search_more" : "search_query",
+      status: "no_matches",
+      total_duration_ms: Date.now() - t0,
+      gemini_ms: geminiMs,
+      metadata: { parsed_query: parsed }
+    }).catch(() => {});
+
     await reply(
       broker,
       M(
@@ -1817,8 +1992,23 @@ async function handleText(broker, message) {
   const raw = ((message.text && message.text.body) || "").trim();
   if (!raw) return "done";
 
-  // Check commands first (Help, Excel, Stats, Plans, Collateral)
+  // Check commands first (Help, Excel, Add, Done, Replace, Cancel, Delete, etc.)
   if (await handleCommand(broker, raw)) return "done";
+
+  // Intercept open drafts: text appends to draft notes rather than searching
+  const activeDraft = await Drafts.getDraft(broker.id);
+  if (activeDraft) {
+    await Drafts.appendText(broker.id, raw);
+    await reply(
+      broker,
+      M(
+        broker.preferred_lang || "ar",
+        "📝 تم تدوين الملاحظة وإضافتها للمسودة. أرسل المزيد أو اكتب *تم* للحفظ.",
+        "📝 Note recorded and added to draft. Send more or type *done* to save."
+      )
+    );
+    return "done";
+  }
 
   // Check direct unit code lookups: `N4-105`, [N4-105], #N4-105
   const parsedCode = T.parseExplicitUnitCode(raw);
@@ -1833,21 +2023,159 @@ async function handleText(broker, message) {
   return (await handleSearchMessage(broker, { text: raw })) || "done";
 }
 
+/**
+ * 13. Context-Aware Audio Handler (Draft Recording vs. Property Search)
+ */
+/**
+ * 13. Context-Aware Audio Handler (Draft Recording vs. Property Search)
+ */
 async function handleAudio(broker, message) {
+  const t0 = Date.now();
   const voiceId =
     (message.voice && message.voice.id) || (message.audio && message.audio.id);
   if (!voiceId) return "done";
 
-  const audioData = await WA.downloadWhatsAppMedia(voiceId);
-  if (!audioData) return "done";
+  const lang = broker.preferred_lang || "ar";
 
+  // 1. Download voice audio buffer from Meta Graph API
+  const dl0 = Date.now();
+  const audioData = await WA.downloadWhatsAppMedia(voiceId);
+  const mediaDownloadMs = Date.now() - dl0;
+
+  if (!audioData || !audioData.buffer) {
+    log("error", "Failed to download WhatsApp voice media", { voiceId });
+    return "done";
+  }
+
+  // 2. CHECK ACTIVE DRAFT: If the broker has an open draft, append voice note to it!
+  const activeDraft = await Drafts.getDraft(broker.id);
+  if (activeDraft) {
+    await Drafts.appendVoice(broker.id, {
+      buffer: audioData.buffer,
+      mimeType: audioData.mimeType || "audio/ogg"
+    });
+
+    await logOperation({
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      operation_type: "draft_append_audio",
+      status: "success",
+      media_download_ms: mediaDownloadMs,
+      total_duration_ms: Date.now() - t0,
+      metadata: {
+        voice_id: voiceId,
+        bytes: audioData.buffer.length,
+        mime: audioData.mimeType
+      }
+    });
+
+    await reply(
+      broker,
+      M(
+        lang,
+        "🎙️ تم استلام الملاحظة الصوتية وإضافتها للمسودة.\nأرسل المزيد من التفاصيل، أو اكتب *تم* لاعتماد وحفظ الوحدة.",
+        "🎙️ Voice note added to draft.\nSend more details or type *done* to finalize."
+      )
+    );
+    return "done";
+  }
+
+  // 3. NO ACTIVE DRAFT: Transcribe via Gemini Audio Pipeline for property search
+  const g0 = Date.now();
   const transcription = await AI.transcribeAudio(
     audioData.buffer,
     audioData.mimeType
   );
-  if (!transcription) return "done";
+  const geminiMs = Date.now() - g0;
 
-  return handleSearchMessage(broker, { text: transcription });
+  if (!transcription) {
+    await reply(
+      broker,
+      M(
+        lang,
+        "⚠️ تعذر الاستماع للرسالة الصوتية بوضوح، يرجى إعادة إرسالها أو كتابة طلبك.",
+        "⚠️ Could not transcribe voice note. Please re-send or type your query."
+      )
+    );
+    return "done";
+  }
+
+  await logOperation({
+    agency_id: broker.agency_id,
+    broker_id: broker.id,
+    operation_type: "voice_transcription",
+    status: "success",
+    media_download_ms: mediaDownloadMs,
+    gemini_ms: geminiMs,
+    total_duration_ms: Date.now() - t0,
+    metadata: { transcription_preview: transcription.slice(0, 100) }
+  });
+
+  // Execute search using the transcribed text
+  return handleSearchMessage(broker, {
+    text: transcription,
+    audio: audioData
+  });
+}
+
+/**
+ * 14. Image Ingress Handler: Collects photos into the broker's active draft
+ */
+async function handleImage(broker, message) {
+  const t0 = Date.now();
+  const imageId = message.image?.id;
+  if (!imageId) return "done";
+
+  const lang = broker.preferred_lang || "ar";
+
+  // 1. Download image from Meta
+  const dl0 = Date.now();
+  const imgData = await WA.downloadWhatsAppMedia(imageId);
+  const mediaDownloadMs = Date.now() - dl0;
+
+  if (!imgData || !imgData.buffer) {
+    log("error", "Failed to download WhatsApp image", { imageId });
+    return "done";
+  }
+
+  // 2. Fetch or create draft
+  let draft = await Drafts.getDraft(broker.id);
+  const isNewDraft = !draft;
+
+  if (isNewDraft) {
+    draft = await Drafts.createDraft(broker.id, broker.agency_id);
+  }
+
+  // 3. Append image buffer to draft
+  await Drafts.appendMedia(broker.id, {
+    mediaId: imageId,
+    buffer: imgData.buffer,
+    mimeType: imgData.mimeType || "image/jpeg"
+  });
+
+  await logOperation({
+    agency_id: broker.agency_id,
+    broker_id: broker.id,
+    operation_type: "draft_append_image",
+    status: "success",
+    media_download_ms: mediaDownloadMs,
+    total_duration_ms: Date.now() - t0,
+    metadata: { image_id: imageId, bytes: imgData.buffer.length }
+  });
+
+  // Notify broker on first photo; stay quiet on subsequent photos in batch
+  if (isNewDraft) {
+    await reply(
+      broker,
+      M(
+        lang,
+        "📝 *تم فتح مسودة جديدة للوحدة*\n📷 استلمنا الصورة الأولى. أرسل باقي الصور ثم الملاحظات (صوت أو كتابة)، واكتب *تم* للحفظ.",
+        "📝 *New draft opened*\n📷 First photo received. Send remaining photos, voice/text notes, then type *done* to save."
+      )
+    );
+  }
+
+  return "done";
 }
 
 async function dispatchMessage(broker, message) {
@@ -1859,6 +2187,8 @@ async function dispatchMessage(broker, message) {
     case "audio":
     case "voice":
       return handleAudio(broker, message);
+    case "image":
+      return handleImage(broker, message);
     default:
       return "done";
   }
@@ -1956,7 +2286,124 @@ async function persistIncoming(body) {
   }
   return fresh;
 }
+/**
+ * 15. Finalizes active draft: Runs Gemini extraction, uploads images, commits to database
+ */
+async function cmdCommitDraft(broker, lang) {
+  const t0 = Date.now();
+  const draft = await Drafts.getDraft(broker.id);
 
+  if (
+    !draft ||
+    (!draft.texts?.length &&
+      !draft.voice_buffers?.length &&
+      !draft.media_items?.length)
+  ) {
+    return reply(
+      broker,
+      M(
+        lang,
+        "⚠️ لا توجد مسودة نشطة تحتوي على بيانات لحفظها.\nلبدء مسودة جديدة، أرسل صور الوحدة مباشرة أو اكتب *اضافة*.",
+        "⚠️ No active draft with data to save.\nTo start a draft, send photos or type *add*."
+      )
+    );
+  }
+
+  await reply(
+    broker,
+    M(
+      lang,
+      "⏳ جاري تحليل بيانات الوحدة بواسطة الذكاء الاصطناعي ورفع الصور للمخزون...",
+      "⏳ Analyzing listing with AI and uploading media..."
+    )
+  );
+
+  try {
+    // 1. Multimodal AI Extraction via Gemini
+    const g0 = Date.now();
+    const extraction = await AI.extractPropertyDetails({
+      texts: draft.texts || [],
+      voiceBuffers: draft.voice_buffers || [],
+      lang
+    });
+    const geminiMs = Date.now() - g0;
+    const listingData = extraction.draft;
+
+    // 2. Upload images to Supabase Storage
+    const u0 = Date.now();
+    const uploadRes = await uploadImages(
+      broker.agency_id,
+      listingData.code,
+      draft.media_items || []
+    );
+    const storageMs = Date.now() - u0;
+
+    // 3. Atomic Database Commit
+    const c0 = Date.now();
+    const inserted = await Drafts.commitDraftToListing({
+      broker,
+      agencyId: broker.agency_id,
+      listingData,
+      images: uploadRes.ok
+    });
+    const dbMs = Date.now() - c0;
+
+    // 4. Clear the active draft session
+    await Drafts.clearDraft(broker.id);
+
+    // 5. Write comprehensive audit log
+    await logOperation({
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      listing_code: inserted.code,
+      operation_type: "draft_commit",
+      status: "success",
+      gemini_ms: geminiMs,
+      storage_upload_ms: storageMs,
+      db_ms: dbMs,
+      tokens_input: extraction.usage?.input || 0,
+      tokens_output: extraction.usage?.output || 0,
+      model_used: extraction.model,
+      total_duration_ms: Date.now() - t0,
+      metadata: {
+        images_count: uploadRes.ok.length,
+        images_failed: uploadRes.failed
+      }
+    });
+
+    await reply(
+      broker,
+      M(
+        lang,
+        `✅ تم حفظ واعتماد الوحدة بنجاح كود: \`${inserted.code}\``,
+        `✅ Listing saved successfully: \`${inserted.code}\``
+      )
+    );
+
+    // Display the unit card immediately to verify
+    await showListingCard(broker, inserted);
+  } catch (err) {
+    log("error", "Failed to commit draft to listing", errMeta(err));
+
+    await logOperation({
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      operation_type: "draft_commit",
+      status: "failed",
+      error_code: err.code || err.message?.slice(0, 50) || "COMMIT_FAILED",
+      total_duration_ms: Date.now() - t0
+    });
+
+    await reply(
+      broker,
+      M(
+        lang,
+        "❌ حدث خطأ أثناء حفظ الوحدة، مسودتك محفوظة كما هي. حاول مرة أخرى بكتابة *تم*.",
+        "❌ Failed to save listing. Your draft is preserved; please retry with *done*."
+      )
+    );
+  }
+}
 /* ====================================================================== */
 /* 16. Express Server & Webhook Verification Endpoints                    */
 /* ====================================================================== */
