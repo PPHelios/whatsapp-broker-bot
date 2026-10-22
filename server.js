@@ -76,6 +76,317 @@ sharp.cache({ items: 20, memory: 64 });
 /* ====================================================================== */
 /* 2. Structured Tracing & Telemetry                                      */
 /* ====================================================================== */
+/**
+ * Step 1: Initiates deletion by sending a confirmation prompt with action buttons.
+ */
+async function cmdRequestDelete(broker, codeRaw, lang) {
+  const code = T.extractCleanCode(codeRaw);
+  const listing = await fetchListing(broker, code);
+  if (!listing) return notFound(broker, code);
+
+  if (!canEdit(broker, listing)) {
+    return reply(
+      broker,
+      M(
+        lang,
+        "⛔ ليس لديك صلاحية لحذف هذه الوحدة.",
+        "⛔ You do not have permission to delete this listing."
+      )
+    );
+  }
+
+  const isEn = lang === "en";
+  const title = listing.title || listing.compound || code;
+  const priceStr =
+    listing.price_display ||
+    (listing.price_value ? T.formatPrice(listing.price_value, lang) : "-");
+
+  const promptText = isEn
+    ? `⚠️ *Are you sure you want to delete unit \`${code}\`?*\n\n• *Property:* ${title}\n• *Price:* ${priceStr}\n\nThis will permanently delete the unit and all associated images.`
+    : `⚠️ *هل أنت متأكد من حذف الوحدة \`${code}\` نهائياً؟*\n\n• *العقار:* ${title}\n• *السعر:* ${priceStr}\n\nسيتم حذف بيانات الوحدة وجميع الصور والوسائط الخاصة بها تماماً.`;
+
+  // Enforce <= 20 chars for Meta API button title ceiling
+  const buttons = [
+    {
+      id: `del_confirm:${listing.id}:${code}`,
+      title: isEn ? "Confirm Delete 🗑️" : "تأكيد الحذف 🗑️"
+    },
+    {
+      id: "del_cancel",
+      title: isEn ? "Cancel ❌" : "تراجع ❌"
+    }
+  ];
+
+  await WA.sendWhatsAppButtons(to(broker), promptText, buttons);
+}
+
+/**
+ * Updates listing status (Soft Delete / Sold / Archive / Active).
+ */
+async function cmdUpdateStatus(broker, codeRaw, newStatus, lang) {
+  const t0 = Date.now();
+  const code = T.extractCleanCode(codeRaw);
+  const listing = await fetchListing(broker, code);
+  if (!listing) return notFound(broker, code);
+
+  if (!canEdit(broker, listing)) {
+    return reply(
+      broker,
+      M(
+        lang,
+        "⛔ ليس لديك صلاحية لتعديل حالة هذه الوحدة.",
+        "⛔ You do not have permission to update this listing."
+      )
+    );
+  }
+
+  const validStatuses = ["active", "sold", "archived"];
+  if (!validStatuses.includes(newStatus)) return false;
+
+  try {
+    await query(
+      "UPDATE listings SET status = $1, updated_at = NOW() WHERE id = $2 AND agency_id = $3",
+      [newStatus, listing.id, broker.agency_id]
+    );
+
+    await logOperation({
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      listing_code: code,
+      operation_type: "update_status",
+      status: "success",
+      total_duration_ms: Date.now() - t0,
+      metadata: { old_status: listing.status, new_status: newStatus }
+    });
+
+    const statusLabels = {
+      active: { ar: "نشطة (متاحة للبحث)", en: "Active (Available in search)" },
+      sold: {
+        ar: "تم البيع (محجوبة من البحث)",
+        en: "Sold (Hidden from search)"
+      },
+      archived: {
+        ar: "مؤرشفة (محجوبة من البحث)",
+        en: "Archived (Hidden from search)"
+      }
+    };
+
+    const label = statusLabels[newStatus] || { ar: newStatus, en: newStatus };
+    await reply(
+      broker,
+      M(
+        lang,
+        `✅ تم تحديث حالة الوحدة \`${code}\` إلى: *${label.ar}*`,
+        `✅ Unit \`${code}\` status updated to: *${label.en}*`
+      )
+    );
+    return true;
+  } catch (err) {
+    log("error", "cmdUpdateStatus failed", errMeta(err));
+    await logOperation({
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      listing_code: code,
+      operation_type: "update_status",
+      status: "failed",
+      error_code: err.code || "DB_ERROR",
+      total_duration_ms: Date.now() - t0
+    });
+    await reply(
+      broker,
+      M(lang, "❌ تعذر تعديل حالة الوحدة.", "❌ Failed to update status.")
+    );
+    return true;
+  }
+}
+
+/**
+ * Executes direct inline attribute patches with GIN trigram index resync.
+ */
+async function cmdPatchListing(broker, codeRaw, fieldRaw, valueRaw, lang) {
+  const t0 = Date.now();
+  const code = T.extractCleanCode(codeRaw);
+  const listing = await fetchListing(broker, code);
+  if (!listing) return notFound(broker, code);
+
+  if (!canEdit(broker, listing)) {
+    return reply(
+      broker,
+      M(
+        lang,
+        "⛔ ليس لديك صلاحية لتعديل هذه الوحدة.",
+        "⛔ You do not have permission to edit this listing."
+      )
+    );
+  }
+
+  // Guard against corrupting primary developer models
+  if (
+    (listing.inventory_type === "developer_model" ||
+      listing.is_primary_developer) &&
+    /^(?:سعر|السعر|price)$/i.test(fieldRaw)
+  ) {
+    return reply(
+      broker,
+      M(
+        lang,
+        "⚠️ لا يمكن تعديل سعر وحدات المشاريع المطورة مباشرة لاحتوائها على مصفوفة أقساط وخصومات معتمدة.",
+        "⚠️ Cannot directly patch base price on developer models with staged installment matrices."
+      )
+    );
+  }
+
+  const field = String(fieldRaw || "")
+    .toLowerCase()
+    .trim();
+  const val = String(valueRaw || "").trim();
+  if (!val) {
+    return reply(
+      broker,
+      M(
+        lang,
+        "⚠️ يرجى تحديد القيمة الجديدة المطلوب تعديلها.",
+        "⚠️ Please specify the new value."
+      )
+    );
+  }
+
+  let updateQuery = "";
+  let params = [];
+  let changeMsg = "";
+
+  if (/^(?:سعر|السعر|price)$/i.test(field)) {
+    const parsed = T.parseEgyptianPrice(val, {
+      listingType: listing.listing_type
+    });
+    const newPrice = parsed.priceValue || Number(val.replace(/[^0-9.]/g, ""));
+    if (!newPrice || isNaN(newPrice) || newPrice <= 0) {
+      return reply(
+        broker,
+        M(
+          lang,
+          "⚠️ لم نتمكن من قراءة السعر الجديد. مثال: `تعديل N4-105 السعر 7.5 مليون`",
+          "⚠️ Invalid price format."
+        )
+      );
+    }
+    const newDisplay = parsed.priceDisplay || T.formatPrice(newPrice, lang);
+    updateQuery = `
+      UPDATE listings
+      SET price_value = $1, price_display = $2, flyer_cache = '{}'::jsonb, updated_at = NOW()
+      WHERE id = $3 RETURNING *`;
+    params = [newPrice, newDisplay, listing.id];
+    changeMsg = M(
+      lang,
+      `تم تعديل السعر إلى: *${newDisplay}*`,
+      `Price updated to: *${newDisplay}*`
+    );
+  } else if (/^(?:تشطيب|التشطيب|finishing)$/i.test(field)) {
+    updateQuery = `
+      UPDATE listings
+      SET details = jsonb_set(COALESCE(details, '{}'::jsonb), '{finishing}', to_jsonb($1::text)),
+          search_text_normalized = public.clean_arabic_text(title || ' ' || compound || ' ' || district || ' ' || $1 || ' ' || COALESCE(bedrooms::text, '') || ' غرف'),
+          flyer_cache = '{}'::jsonb,
+          updated_at = NOW()
+      WHERE id = $2 RETURNING *`;
+    params = [val, listing.id];
+    changeMsg = M(
+      lang,
+      `تم تعديل التشطيب إلى: *${val}*`,
+      `Finishing updated to: *${val}*`
+    );
+  } else if (/^(?:مساحة|المساحة|مساحه|المساحه|area)$/i.test(field)) {
+    const newArea = Number(val.replace(/[^0-9.]/g, ""));
+    if (!newArea || isNaN(newArea) || newArea < 10) {
+      return reply(
+        broker,
+        M(
+          lang,
+          "⚠️ يرجى إدخال مساحة رقمية صحيحة بالمتر المربع.",
+          "⚠️ Invalid area number."
+        )
+      );
+    }
+    updateQuery = `
+      UPDATE listings
+      SET area_value = $1, flyer_cache = '{}'::jsonb, updated_at = NOW()
+      WHERE id = $2 RETURNING *`;
+    params = [newArea, listing.id];
+    changeMsg = M(
+      lang,
+      `تم تعديل المساحة إلى: *${newArea} م²*`,
+      `Area updated to: *${newArea} sqm*`
+    );
+  } else if (/^(?:غرف|الغرف|نوم|bedrooms|beds)$/i.test(field)) {
+    const newBeds = parseInt(val.replace(/[^0-9]/g, ""), 10);
+    if (!newBeds || isNaN(newBeds) || newBeds < 1 || newBeds > 30) {
+      return reply(
+        broker,
+        M(lang, "⚠️ يرجى إدخال عدد غرف صحيح.", "⚠️ Invalid bedroom count.")
+      );
+    }
+    updateQuery = `
+      UPDATE listings
+      SET bedrooms = $1,
+          search_text_normalized = public.clean_arabic_text(title || ' ' || compound || ' ' || district || ' ' || COALESCE(details->>'finishing', '') || ' ' || $1 || ' غرف'),
+          flyer_cache = '{}'::jsonb,
+          updated_at = NOW()
+      WHERE id = $2 RETURNING *`;
+    params = [newBeds, listing.id];
+    changeMsg = M(
+      lang,
+      `تم تعديل عدد الغرف إلى: *${newBeds}*`,
+      `Bedrooms updated to: *${newBeds}*`
+    );
+  } else {
+    return reply(
+      broker,
+      M(
+        lang,
+        "⚠️ الحقل غير مدعوم للتعديل السريع. الحقول المتاحة: (السعر، التشطيب، المساحة، الغرف).\nمثال: `تعديل N4-105 السعر 7 مليون`",
+        "⚠️ Unsupported field. Available: (price, finishing, area, bedrooms).\nExample: `edit N4-105 price 7M`"
+      )
+    );
+  }
+
+  try {
+    const updatedRes = await query(updateQuery, params);
+    const updatedListing = updatedRes.rows[0];
+
+    await logOperation({
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      listing_code: code,
+      operation_type: "patch_listing",
+      status: "success",
+      total_duration_ms: Date.now() - t0,
+      metadata: { field, new_val: val }
+    });
+
+    await reply(broker, `✅ ${changeMsg}`);
+    if (updatedListing) {
+      await showListingCard(broker, updatedListing);
+    }
+    return true;
+  } catch (err) {
+    log("error", "cmdPatchListing query failed", errMeta(err));
+    await logOperation({
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      listing_code: code,
+      operation_type: "patch_listing",
+      status: "failed",
+      error_code: err.code || "DB_ERROR",
+      total_duration_ms: Date.now() - t0
+    });
+    await reply(
+      broker,
+      M(lang, "❌ تعذر إتمام التعديل.", "❌ Failed to apply edits.")
+    );
+    return true;
+  }
+}
+
 function log(level, msg, meta = {}) {
   const c = getRequestContext();
   const line = JSON.stringify({
@@ -148,14 +459,12 @@ async function reply(broker, text, opts = {}) {
 /* 3. Concurrency, Ephemeral States & Serialization                       */
 /* ====================================================================== */
 const recentBrokerListings = new Map();
-const brokerEditSessions = new Map();
-const brokerPatchPreviews = new Map();
 const brokerCache = new Map();
 const agencyCache = new Map();
 const unknownNotified = new Map();
 const lastTouch = new Map();
 const cooldowns = new Map();
-
+const recentButtonClicks = new Map();
 const perBroker = U.createSerializer();
 const listingLimiter = U.createLimiter(2, { maxQueue: 40 });
 const uploadLimiter = U.createLimiter(4);
@@ -643,8 +952,9 @@ async function showListingCard(broker, listing) {
   let priceSection = "";
   if (isPrimary && listing.payment_terms?.plans?.length) {
     const plans = listing.payment_terms.plans;
-    const bestCash = plans.find((p) => p.years === 0 || p.discount_pct >= 35);
-    const bestInst = plans.find((p) => p.years > 0);
+    const maxYears = Math.max(...plans.map((p) => p.years || 0));
+    const minDownPct = Math.min(...plans.map((p) => p.down_payment_pct ?? 100));
+    const bestCash = plans.find((p) => p.years === 0 || p.discount_pct >= 25);
 
     priceSection = isEn
       ? `💰 *Pricing Options:*\n` +
@@ -654,8 +964,8 @@ async function showListingCard(broker, listing) {
               "en"
             )}\n`
           : "") +
-        (bestInst
-          ? ` • Installments: Up to ${bestInst.years} Years (Down from ${bestInst.down_payment_pct}%)`
+        (maxYears > 0
+          ? ` • Installments: Up to ${maxYears} Years (Down from ${minDownPct}%)`
           : "")
       : `💰 *خيارات السعر والتقسيط:*\n` +
         (bestCash
@@ -664,14 +974,9 @@ async function showListingCard(broker, listing) {
               "ar"
             )}\n`
           : "") +
-        (bestInst
-          ? ` • التقسيط: حتى ${bestInst.years} سنوات (مقدم يبدأ من ${bestInst.down_payment_pct}%)`
+        (maxYears > 0
+          ? ` • التقسيط: حتى ${maxYears} سنوات (مقدم يبدأ من ${minDownPct}%)`
           : "");
-  } else {
-    priceSection = `💰 *${isEn ? "Price:" : "السعر:"}* ${T.priceText(
-      listing,
-      lang
-    )}`;
   }
 
   const body = `${header}\n─────────────────────────\n${specs}\n${priceSection}\n📅 *${
@@ -929,9 +1234,10 @@ async function cmdFlyer(
   { flyerLang = "ar", theme = "dark", unbranded = false } = {}
 ) {
   const code = T.extractCleanCode(codeRaw);
-  const l = await fetchListing(broker, code);
-  if (!l) return notFound(broker, code);
+  const listing = await fetchListing(broker, code);
+  if (!listing) return notFound(broker, code);
 
+  // إشعار فوري للوسيط ببدء التجهيز
   reply(
     broker,
     M(
@@ -941,15 +1247,84 @@ async function cmdFlyer(
     )
   ).catch(() => {});
 
-  const res = await renderFlyerOnDemand(broker, l, {
-    lang: flyerLang,
-    theme,
-    unbranded
-  });
+  try {
+    // 1. جلب صور الوحدة من قاعدة البيانات مرتبة حسب position
+    const imgRes = await pool.query(
+      "SELECT url FROM listing_images WHERE listing_id = $1 ORDER BY position ASC",
+      [listing.id]
+    );
+    const images = imgRes.rows.map((r) => r.url);
 
-  if (res.ok && res.wa_media_id) {
-    await WA.sendWhatsAppImage(to(broker), res.wa_media_id, `#${code}`);
-  } else {
+    // التحقق من حالة الوحدات بدون صور (مثل MIN-01)
+    if (!images.length) {
+      log("warn", "Flyer requested for listing with zero images", { code });
+      return await reply(
+        broker,
+        M(lang, "❌ تعذر إنشاء البروشور.", "❌ Brochure generation failed.")
+      );
+    }
+
+    // 2. جلب بيانات الوكالة أو استخدام الكاش
+    let agency = agencyCache.get(broker.agency_id);
+    if (!agency) {
+      const aRes = await pool.query(
+        "SELECT id, name, logo_url, primary_color, secondary_color, flyer_theme FROM agencies WHERE id = $1",
+        [broker.agency_id]
+      );
+      agency = aRes.rows[0] || {};
+      agencyCache.set(broker.agency_id, agency);
+    }
+
+    // 3. استدعاء محرك الرسم والتصميم المعتمد generateFlyerBuffer
+    const buffer = await Flyer.generateFlyerBuffer({
+      listing,
+      agency,
+      images,
+      theme: theme || agency.flyer_theme || "dark",
+      unbranded,
+      lang: flyerLang || lang || "ar"
+    });
+
+    // 4. رفع الصورة إلى Meta Media API
+    let mediaId = null;
+    try {
+      const uploadRes = await WA.uploadWhatsAppMedia(
+        buffer,
+        "image/jpeg",
+        `flyer_${code}.jpg`
+      );
+      mediaId =
+        typeof uploadRes === "object" && uploadRes?.id
+          ? uploadRes.id
+          : uploadRes;
+    } catch (upErr) {
+      log(
+        "warn",
+        "WA media upload failed, falling back to Supabase...",
+        errMeta(upErr)
+      );
+    }
+
+    // 5. الإرسال لواتساب (مع بديل الرفع على Supabase إذا تعذر الرفع المباشر)
+    if (mediaId) {
+      await WA.sendWhatsAppImage(to(broker), mediaId, `#${code}`);
+    } else {
+      const storagePath = `flyers/${
+        broker.agency_id
+      }/${code}_${Date.now()}.jpg`;
+      const pubUrl = await Supabase.uploadFlyerImage(
+        broker.agency_id,
+        storagePath,
+        buffer
+      );
+      if (pubUrl) {
+        await WA.sendWhatsAppImage(to(broker), pubUrl, `#${code}`);
+      } else {
+        throw new Error("Both WhatsApp upload and Supabase fallback failed");
+      }
+    }
+  } catch (err) {
+    log("error", "cmdFlyer failed to render or deliver brochure", errMeta(err));
     await reply(
       broker,
       M(lang, "❌ تعذر إنشاء البروشور.", "❌ Brochure generation failed.")
@@ -1057,7 +1432,46 @@ async function handleCommand(broker, raw) {
     }
     return true;
   }
+  // DRAFT IMAGE REPLACE (استبدال / replace) with telemetry
+  if (/^(?:استبدال|replace)$/i.test(n)) {
+    const t0 = Date.now();
+    const draft = await Drafts.getDraft(broker.id);
+    if (!draft) {
+      await reply(
+        broker,
+        M(
+          lang,
+          "ℹ️ لا توجد مسودة نشطة حالياً لاستبدال صورها.",
+          "ℹ️ No active draft found to replace images."
+        )
+      );
+      return true;
+    }
 
+    await query(
+      "UPDATE listing_drafts SET media_ids = '{}', updated_at = NOW() WHERE broker_id = $1",
+      [broker.id]
+    );
+
+    await logOperation({
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      operation_type: "draft_replace_images",
+      status: "success",
+      total_duration_ms: Date.now() - t0,
+      metadata: { cleared_images_count: (draft.media_ids || []).length }
+    });
+
+    await reply(
+      broker,
+      M(
+        lang,
+        "🔄 تم مسح الصور السابقة من المسودة بنجاح.\n📷 يمكنك الآن إرسال الصور الجديدة البديلة.",
+        "🔄 Previous photos cleared from draft.\n📷 You can now send replacement photos."
+      )
+    );
+    return true;
+  }
   return false;
 }
 
@@ -1070,7 +1484,148 @@ async function handleInteractive(broker, message) {
     message.interactive?.list_reply?.id;
   if (!replyId) return "done";
 
+  // 1. RAPID BUTTON CLICK DROP (3-Second Debounce per broker & button)
+  const clickKey = `${U.normalizePhone(broker.phone)}:${replyId}`;
+  const now = Date.now();
+  if (recentButtonClicks.get(clickKey) > now) {
+    log("info", "Duplicate button click dropped (debounced)", {
+      phone: broker.phone,
+      replyId
+    });
+    return "done";
+  }
+  recentButtonClicks.set(clickKey, now + 3000);
+
+  // Lazy memory cleanup for debounce cache
+  if (recentButtonClicks.size > 1000) {
+    for (const [k, exp] of recentButtonClicks.entries()) {
+      if (exp < now) recentButtonClicks.delete(k);
+    }
+  }
+  // --- Deletion Execution & Cancellation Handlers ---
+  if (replyId.startsWith("del_confirm:")) {
+    const t0 = Date.now();
+    const [, listingId, code] = replyId.split(":");
+    let storagePaths = [];
+
+    try {
+      // 1. Database Transaction Boundary (Locks, re-verifies auth, cascades DB rows)
+      await withTransaction(async (client) => {
+        // Re-verify existence and ownership under lock
+        const lRes = await client.query(
+          "SELECT id, broker_id FROM listings WHERE id = $1 AND agency_id = $2 FOR UPDATE",
+          [listingId, broker.agency_id]
+        );
+        const listing = lRes.rows[0];
+        if (!listing) {
+          throw new Error("NOT_FOUND_OR_UNAUTHORIZED");
+        }
+
+        // Re-verify authorization
+        if (!canEdit(broker, listing)) {
+          throw new Error("PERMISSION_DENIED");
+        }
+
+        // Collect storage paths before cascade deletion
+        const imgRes = await client.query(
+          "SELECT url FROM listing_images WHERE listing_id = $1",
+          [listingId]
+        );
+
+        storagePaths = imgRes.rows
+          .map((r) => {
+            const match = String(r.url || "").match(/\/listing-images\/(.+)$/);
+            return match ? match[1] : null;
+          })
+          .filter(Boolean);
+
+        // Delete row (listing_images cascades automatically via foreign key)
+        await client.query("DELETE FROM listings WHERE id = $1", [listingId]);
+      });
+
+      // 2. Storage Purge (Outside the database transaction to prevent locking DB pool)
+      if (storagePaths.length > 0) {
+        deleteStorageFiles(storagePaths).catch((err) => {
+          log("warn", "Non-blocking storage file purge failed", {
+            paths: storagePaths,
+            ...errMeta(err)
+          });
+        });
+      }
+
+      // 3. Write Success Audit Log
+      await logOperation({
+        agency_id: broker.agency_id,
+        broker_id: broker.id,
+        listing_code: code,
+        operation_type: "delete_listing",
+        status: "success",
+        total_duration_ms: Date.now() - t0,
+        metadata: {
+          listing_id: listingId,
+          purged_images_count: storagePaths.length
+        }
+      });
+
+      await reply(
+        broker,
+        M(
+          lang,
+          `🗑️ تم حذف الوحدة \`${code}\` ومسح جميع وسائطها المرفقة بنجاح.`,
+          `🗑️ Unit \`${code}\` and its media files have been permanently deleted.`
+        )
+      );
+    } catch (err) {
+      log("error", "Listing deletion failed", errMeta(err));
+
+      await logOperation({
+        agency_id: broker.agency_id,
+        broker_id: broker.id,
+        listing_code: code,
+        operation_type: "delete_listing",
+        status: "failed",
+        error_code:
+          err.message === "PERMISSION_DENIED"
+            ? "FORBIDDEN"
+            : err.code || "DB_ERROR",
+        total_duration_ms: Date.now() - t0
+      });
+
+      const errText =
+        err.message === "PERMISSION_DENIED"
+          ? M(
+              lang,
+              "⛔ ليس لديك صلاحية لحذف هذه الوحدة.",
+              "⛔ Permission denied."
+            )
+          : M(
+              lang,
+              "❌ تعذر إتمام عملية الحذف.",
+              "❌ Failed to delete listing."
+            );
+      await reply(broker, errText);
+    }
+    return "done";
+  }
+
+  if (replyId === "del_cancel") {
+    await reply(
+      broker,
+      M(
+        lang,
+        "↩️ تم إلغاء عملية الحذف. لم يتم تعديل أي بيانات.",
+        "↩️ Deletion canceled. No changes were made."
+      )
+    );
+    return "done";
+  }
   const lang = broker.preferred_lang || "ar";
+
+  // Pagination Handler ("عرض المزيد")
+  if (replyId === "MORE_SEARCH") {
+    await handleSearchMessage(broker, { more: true });
+    return "done";
+  }
 
   // Dynamic Excel Export Action
   if (
@@ -1089,8 +1644,8 @@ async function handleInteractive(broker, message) {
     return "done";
   }
 
-  // Payment Plans Breakdown View
-  if (replyId.startsWith("plans_view:")) {
+  // Payment Plans Breakdown View (List Modal or Action Buttons)
+  if (replyId.startsWith("plans_view:") || replyId.startsWith("plans_all:")) {
     const code = replyId.split(":")[1];
     const listing = await fetchListing(broker, code);
     if (!listing) return notFound(broker, code);
@@ -1101,6 +1656,26 @@ async function handleInteractive(broker, message) {
       await WA.sendPaymentPlansResponse(to(broker), code, matchResult, lang);
     } else {
       await sendConsolidatedExcel(broker, code);
+    }
+    return "done";
+  }
+
+  // Detailed Plan View from Modal List / Dual Buttons
+  if (replyId.startsWith("plan_view:")) {
+    const parts = replyId.split(":");
+    const code = parts[1];
+    const planId = parts[2];
+    const listing = await fetchListing(broker, code);
+    if (!listing) return notFound(broker, code);
+
+    const plans = listing.payment_terms?.plans || [];
+    const targetPlan = plans.find((p) => p.plan_id === planId) || plans[0];
+    if (targetPlan) {
+      const matchResult = {
+        status: "matched",
+        matches: [F.calculatePlanSummary(listing.price_value, targetPlan)]
+      };
+      await WA.sendPaymentPlansResponse(to(broker), code, matchResult, lang);
     }
     return "done";
   }
@@ -1116,7 +1691,7 @@ async function handleInteractive(broker, message) {
   }
 
   // Client Text Request
-  if (replyId.startsWith("client:")) {
+  if (replyId.startsWith("client:") || replyId.startsWith("share_client:")) {
     const code = replyId.split(":")[1];
     const listing = await fetchListing(broker, code);
     if (!listing) return notFound(broker, code);
@@ -1168,7 +1743,7 @@ async function handleSearchMessage(
       broker,
       isVoice
         ? M(lang, "🎙️ جاري الاستماع للطلب...", "🎙️ Listening...")
-        : M(lang, "🔍 جاري البحث في المخزون...", "🔍 Searching...")
+        : M(lang, "🔍 جاري البحث...", "🔍 Searching...")
     ).catch(() => {});
 
     try {
