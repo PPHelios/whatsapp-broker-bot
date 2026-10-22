@@ -1,206 +1,214 @@
--- schema.sql
--- Run once in Supabase / PostgreSQL 14+
--- Make sure a public storage bucket named "listing-images" exists in Supabase.
+-- ============================================================
+-- AqarChat Master Schema Definition
+-- Compatible with PostgreSQL 15+ / Supabase
+-- ============================================================
 
-create extension if not exists pgcrypto;
-create extension if not exists pg_trgm;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
--- ---------------------------------------------------------------------------
--- Pure Immutable Arabic Normalization Function (Enables GIN Trigram Search)
--- ---------------------------------------------------------------------------
-create or replace function normalize_arabic(t text) returns text language sql immutable as $$
-  select regexp_replace(
-    regexp_replace(
-      translate(
-        lower(coalesce(t, '')),
-        'أإآٱىةؤئ٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹',
-        'اااايھووي01234567890123456789'
-      ),
-      '[\u064B-\u065F\u0670\u0640]', '', 'g'
-    ),
-    '[^a-z0-9\u0600-\u06FF\s-]', ' ', 'g'
-  );
-$$;
+-- ------------------------------------------------------------
+-- 1. IMMUTABLE ARABIC NORMALIZER FUNCTION
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.clean_arabic_text(input_text TEXT)
+RETURNS TEXT AS $$
+BEGIN
+    IF input_text IS NULL THEN
+        RETURN '';
+    END IF;
 
--- ---------------------------------------------------------------------------
--- 1. Agencies (Tenants)
--- ---------------------------------------------------------------------------
-create table if not exists agencies (
-  id              uuid primary key default gen_random_uuid(),
-  name            text not null,
-  logo_url        text,
-  primary_color   text not null default '#0B132B',
-  secondary_color text not null default '#D4AF37',
-  logo_bg         text not null default '#FFFFFF',
-  flyer_theme     text not null default 'dark' check (flyer_theme in ('dark', 'light')),
-  created_at      timestamptz not null default now()
+    -- Remove Tashkeel
+    input_text := regexp_replace(input_text, '[\u064B-\u065F\u0670]', '', 'g');
+    -- Remove Tatweel
+    input_text := regexp_replace(input_text, '\u0640', '', 'g');
+    -- Normalize Alef
+    input_text := regexp_replace(input_text, '[إأآٱ]', 'ا', 'g');
+    -- Normalize Yaa
+    input_text := regexp_replace(input_text, 'ى', 'ي', 'g');
+    -- Normalize Taa Marbouta
+    input_text := regexp_replace(input_text, 'ة', 'ه', 'g');
+    -- Lowercase and collapse spaces
+    RETURN lower(trim(regexp_replace(input_text, '\s+', ' ', 'g')));
+END;
+$$ LANGUAGE plpgsql IMMUTABLE STRICT;
+
+-- ------------------------------------------------------------
+-- 2. CORE TENANCY TABLES
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.agencies (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    logo_url TEXT,
+    brand_color TEXT NOT NULL DEFAULT '#0f172a',
+    accent_color TEXT NOT NULL DEFAULT '#38bdf8',
+    primary_color VARCHAR DEFAULT '#0B132B',
+    secondary_color VARCHAR DEFAULT '#D4AF37',
+    flyer_theme TEXT NOT NULL DEFAULT 'dark',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
 );
 
--- ---------------------------------------------------------------------------
--- 2. Brokers (Agents)
--- ---------------------------------------------------------------------------
-create table if not exists brokers (
-  id               uuid primary key default gen_random_uuid(),
-  agency_id        uuid not null references agencies(id) on delete cascade,
-  name             text not null,
-  phone            text not null,
-  phone_normalized text not null unique,
-  contact_phone    text,
-  role             text not null default 'agent' check (role in ('agent', 'broker', 'admin', 'owner', 'manager')),
-  is_active        boolean not null default true,
-  preferred_lang   text not null default 'ar' check (preferred_lang in ('ar', 'en')),
-  last_active_at   timestamptz default now(),
-  created_at       timestamptz not null default now()
-);
-create index if not exists brokers_agency_idx on brokers(agency_id);
-create index if not exists brokers_phone_idx on brokers(phone_normalized);
-
--- ---------------------------------------------------------------------------
--- 3. Listings
--- ---------------------------------------------------------------------------
-create table if not exists listings (
-  id                uuid primary key default gen_random_uuid(),
-  agency_id         uuid not null references agencies(id) on delete cascade,
-  broker_id         uuid references brokers(id) on delete set null,
-  code              text not null,
-  title             text,
-  property_type     text,
-  listing_type      text not null default 'sale' check (listing_type in ('sale', 'rent')),
-  price_value       numeric,
-  price_display     text,
-  area_value        numeric,
-  bedrooms          int,
-  location          text,
-  compound          text,
-  district          text,
-  city              text,
-  location_keywords text[] not null default '{}',
-  details           jsonb not null default '{}'::jsonb,
-  flyer_cache       jsonb not null default '{}'::jsonb,
-  status            text not null default 'active' check (status in ('active', 'sold', 'archived', 'draft')),
-  created_at        timestamptz not null default now(),
-  updated_at        timestamptz not null default now(),
-
-  -- Generated searchable text column indexed via trigrams
-  search_text_normalized text generated always as (
-    normalize_arabic(
-      coalesce(title, '') || ' ' ||
-      coalesce(location, '') || ' ' ||
-      coalesce(compound, '') || ' ' ||
-      coalesce(district, '') || ' ' ||
-      coalesce(city, '') || ' ' ||
-      array_to_string(location_keywords, ' ') || ' ' ||
-      coalesce(details::text, '')
-    )
-  ) stored,
-
-  constraint listings_agency_code_unique unique (agency_id, code)
+CREATE TABLE IF NOT EXISTS public.brokers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    agency_id UUID NOT NULL REFERENCES public.agencies(id) ON DELETE CASCADE,
+    phone TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    contact_phone TEXT,
+    role TEXT NOT NULL DEFAULT 'broker',
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    preferred_lang VARCHAR DEFAULT 'ar',
+    phone_normalized TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    last_active_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
-create index if not exists listings_agency_status_idx on listings(agency_id, status);
-create index if not exists listings_search_trgm_idx on listings using gin (search_text_normalized gin_trgm_ops);
-create index if not exists listings_agency_code_lookup_idx on listings(agency_id, code);
-
--- ---------------------------------------------------------------------------
--- 4. Listing Images
--- ---------------------------------------------------------------------------
-create table if not exists listing_images (
-  id          uuid primary key default gen_random_uuid(),
-  listing_id  uuid not null references listings(id) on delete cascade,
-  agency_id   uuid not null references agencies(id) on delete cascade,
-  url         text not null,
-  position    int not null default 0,
-  role        text,
-  created_at  timestamptz not null default now()
-);
-create index if not exists listing_images_listing_idx on listing_images(listing_id, position);
-create index if not exists listing_images_agency_idx on listing_images(agency_id);
-
--- ---------------------------------------------------------------------------
--- 5. Persistent Listing Drafts (Multi-turn Ingestion Buffer)
--- ---------------------------------------------------------------------------
-create table if not exists listing_drafts (
-  broker_id    uuid primary key references brokers(id) on delete cascade,
-  agency_id    uuid not null references agencies(id) on delete cascade,
-  broker_phone text not null,
-  media_ids    text[] not null default '{}',
-  voice_ids    text[] not null default '{}',
-  texts        text[] not null default '{}',
-  custom_code  text,
-  updated_at   timestamptz not null default now()
-);
-create index if not exists listing_drafts_updated_idx on listing_drafts(updated_at);
-
--- ---------------------------------------------------------------------------
--- 6. Operation Logs (Two-tier Observability & Quota Metering)
--- ---------------------------------------------------------------------------
-create table if not exists operation_logs (
-  id                 bigserial primary key,
-  agency_id          uuid references agencies(id) on delete cascade,
-  broker_id          uuid references brokers(id) on delete set null,
-  listing_code       text,
-  operation_type     text not null,
-  status             text not null default 'success',
-  error_code         text,
-  total_duration_ms  int default 0,
-  gemini_ms          int default 0,
-  media_download_ms  int default 0,
-  image_process_ms   int default 0,
-  flyer_render_ms    int default 0,
-  storage_upload_ms  int default 0,
-  db_ms              int default 0,
-  tokens_input       int default 0,
-  tokens_output      int default 0,
-  model_used         text,
-  estimated_cost_usd numeric(10, 6) default 0,
-  created_at         timestamptz not null default now()
-);
-create index if not exists op_logs_agency_daily_idx on operation_logs(agency_id, created_at desc) where tokens_input > 0;
-create index if not exists op_logs_broker_daily_idx on operation_logs(broker_id, created_at desc) where tokens_input > 0;
-
--- ---------------------------------------------------------------------------
--- 7. Durable Webhook Inbound Message Queue & Crash Recovery
--- ---------------------------------------------------------------------------
-create table if not exists inbound_messages (
-  msg_id      text primary key,
-  phone_key   text not null,
-  payload     jsonb not null,
-  status      text not null default 'new' check (status in ('new', 'batched', 'done', 'failed')),
-  attempts    int not null default 0,
-  received_at timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
-);
-create index if not exists inbound_recovery_idx on inbound_messages(status, received_at) where status in ('new', 'batched');
-
--- ---------------------------------------------------------------------------
--- 8. Broker Search State (Pagination Storage)
--- ---------------------------------------------------------------------------
-create table if not exists broker_search_state (
-  phone_key   text primary key,
-  parsed      jsonb not null,
-  next_offset int not null default 0,
-  updated_at  timestamptz not null default now()
+-- ------------------------------------------------------------
+-- 3. PRIMARY DEVELOPER PROJECTS (Master Collateral Entity)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.projects (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    agency_id UUID NOT NULL REFERENCES public.agencies(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    developer_name TEXT,
+    district TEXT,
+    city TEXT,
+    delivery_year INTEGER,
+    maintenance_pct NUMERIC DEFAULT 8.0,
+    collateral JSONB NOT NULL DEFAULT '{}'::jsonb,
+    media JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT uq_agency_project_name UNIQUE (agency_id, name)
 );
 
--- ---------------------------------------------------------------------------
--- 9. Processed Batches (Idempotent Save Guard)
--- ---------------------------------------------------------------------------
-create table if not exists processed_batches (
-  batch_key    text primary key,
-  agency_id    uuid not null references agencies(id) on delete cascade,
-  listing_code text not null,
-  created_at   timestamptz not null default now()
+-- ------------------------------------------------------------
+-- 4. LISTINGS (Resale Units & Developer Typologies)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.listings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    agency_id UUID NOT NULL REFERENCES public.agencies(id) ON DELETE CASCADE,
+    broker_id UUID NOT NULL REFERENCES public.brokers(id) ON DELETE RESTRICT,
+    project_id UUID REFERENCES public.projects(id) ON DELETE SET NULL,
+
+    code TEXT NOT NULL UNIQUE,
+    developer_unit_code TEXT,
+    inventory_type TEXT NOT NULL DEFAULT 'resale_unit',
+    status TEXT NOT NULL DEFAULT 'draft',
+
+    title TEXT,
+    property_type TEXT,
+    listing_type TEXT,
+
+    -- Financials & Pricing Matrix
+    price_value NUMERIC,
+    price_display TEXT,
+    is_primary_developer BOOLEAN NOT NULL DEFAULT false,
+    down_payment_value NUMERIC,
+    installment_years INTEGER,
+    installment_value NUMERIC,
+    payment_frequency TEXT DEFAULT 'quarterly',
+    maintenance_pct NUMERIC DEFAULT 8,
+    payment_terms JSONB NOT NULL DEFAULT '{}'::jsonb,
+
+    -- Physical Specs & Location
+    area_value NUMERIC,
+    bedrooms INTEGER,
+    compound TEXT,
+    district TEXT,
+    city TEXT,
+    location TEXT,
+    location_name TEXT,
+    location_keywords TEXT[] NOT NULL DEFAULT '{}',
+    lat DOUBLE PRECISION,
+    lng DOUBLE PRECISION,
+    delivery_date TEXT,
+
+    -- Descriptive & Normalized Search
+    features TEXT[] NOT NULL DEFAULT '{}',
+    language TEXT NOT NULL DEFAULT 'ar',
+    raw_text TEXT,
+    details JSONB NOT NULL DEFAULT '{}'::jsonb,
+    search_text TEXT NOT NULL DEFAULT '',
+    search_text_normalized TEXT,
+
+    -- Assets & Deliverables
+    collateral JSONB NOT NULL DEFAULT '{}'::jsonb,
+    flyer_url TEXT,
+    hero_position INTEGER NOT NULL DEFAULT 0,
+    flyer_wa_media_id TEXT,
+    flyer_wa_media_at TIMESTAMP WITH TIME ZONE,
+    flyer_cache JSONB DEFAULT '{}'::jsonb,
+
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
 );
 
--- ---------------------------------------------------------------------------
--- Security: Row Level Security (RLS)
--- ---------------------------------------------------------------------------
-alter table agencies            enable row level security;
-alter table brokers             enable row level security;
-alter table listings            enable row level security;
-alter table listing_images      enable row level security;
-alter table listing_drafts      enable row level security;
-alter table operation_logs      enable row level security;
-alter table inbound_messages    enable row level security;
-alter table broker_search_state enable row level security;
-alter table processed_batches   enable row level security;
+-- ------------------------------------------------------------
+-- 5. LISTING IMAGES
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.listing_images (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    listing_id UUID NOT NULL REFERENCES public.listings(id) ON DELETE CASCADE,
+    agency_id UUID NOT NULL REFERENCES public.agencies(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    url TEXT NOT NULL,
+    phash BIT(64),
+    role TEXT
+);
+
+-- ------------------------------------------------------------
+-- 6. BROKER STATE & DRAFT WORKFLOWS
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.listing_drafts (
+    broker_id UUID PRIMARY KEY REFERENCES public.brokers(id) ON DELETE CASCADE,
+    agency_id UUID NOT NULL REFERENCES public.agencies(id) ON DELETE CASCADE,
+    broker_phone VARCHAR NOT NULL,
+    media_ids TEXT[] DEFAULT '{}',
+    voice_ids TEXT[] DEFAULT '{}',
+    texts TEXT[] DEFAULT '{}',
+    custom_code VARCHAR,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.broker_search_state (
+    phone_key TEXT PRIMARY KEY,
+    parsed JSONB NOT NULL,
+    next_offset INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.inbound_messages (
+    msg_id TEXT PRIMARY KEY,
+    phone_key TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    status TEXT NOT NULL DEFAULT 'new',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    received_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.operation_logs (
+    id BIGSERIAL PRIMARY KEY,
+    agency_id UUID,
+    broker_id UUID,
+    listing_code TEXT,
+    operation_type TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'success',
+    error_code TEXT,
+    total_duration_ms INTEGER DEFAULT 0,
+    gemini_ms INTEGER DEFAULT 0,
+    media_download_ms INTEGER DEFAULT 0,
+    image_process_ms INTEGER DEFAULT 0
+);
+
+-- ------------------------------------------------------------
+-- 7. SEARCH & ACCESS INDEXES
+-- ------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_listings_search_trgm
+ON public.listings
+USING gin (public.clean_arabic_text(COALESCE(search_text_normalized, search_text, '')) gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS idx_listings_agency_code
+ON public.listings (agency_id, code);
+
+CREATE INDEX IF NOT EXISTS idx_listings_dev_code
+ON public.listings (agency_id, developer_unit_code)
+WHERE developer_unit_code IS NOT NULL;
