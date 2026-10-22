@@ -1,6 +1,6 @@
 ﻿// server.js — Core WhatsApp Ingestion Router, State Machine & Orchestration Engine
 "use strict";
-
+require("dotenv").config();
 const express = require("express");
 const crypto = require("crypto");
 const sharp = require("sharp");
