@@ -1233,98 +1233,60 @@ async function cmdFlyer(
   lang,
   { flyerLang = "ar", theme = "dark", unbranded = false } = {}
 ) {
+  const t0 = Date.now();
   const code = T.extractCleanCode(codeRaw);
   const listing = await fetchListing(broker, code);
   if (!listing) return notFound(broker, code);
 
-  // إشعار فوري للوسيط ببدء التجهيز
-  reply(
+  await reply(
     broker,
     M(
       lang,
-      "⏳ جاري تصميم وإنشاء الكتالوج المعتمد للوحدة...",
+      unbranded
+        ? "⏳ جاري تصميم الكتالوج الأبيض (بدون بيانات الوكالة)..."
+        : "⏳ جاري تصميم وإنشاء الكتالوج المعتمد للوحدة...",
       "⏳ Preparing brochure..."
     )
-  ).catch(() => {});
+  );
 
   try {
-    // 1. جلب صور الوحدة من قاعدة البيانات مرتبة حسب position
-    const imgRes = await pool.query(
-      "SELECT url FROM listing_images WHERE listing_id = $1 ORDER BY position ASC",
-      [listing.id]
-    );
-    const images = imgRes.rows.map((r) => r.url);
+    const res = await renderFlyerOnDemand(broker, listing, {
+      lang: flyerLang || lang || "ar",
+      theme: theme || "dark",
+      unbranded
+    });
 
-    // التحقق من حالة الوحدات بدون صور (مثل MIN-01)
-    if (!images.length) {
-      log("warn", "Flyer requested for listing with zero images", { code });
+    if (!res.ok) {
+      log("warn", "Flyer render failed", { code, reason: res.reason });
       return await reply(
         broker,
         M(lang, "❌ تعذر إنشاء البروشور.", "❌ Brochure generation failed.")
       );
     }
 
-    // 2. جلب بيانات الوكالة أو استخدام الكاش
-    let agency = agencyCache.get(broker.agency_id);
-    if (!agency) {
-      const aRes = await pool.query(
-        "SELECT id, name, logo_url, primary_color, secondary_color, flyer_theme FROM agencies WHERE id = $1",
-        [broker.agency_id]
-      );
-      agency = aRes.rows[0] || {};
-      agencyCache.set(broker.agency_id, agency);
-    }
-
-    // 3. استدعاء محرك الرسم والتصميم المعتمد generateFlyerBuffer
-    const buffer = await Flyer.generateFlyerBuffer({
-      listing,
-      agency,
-      images,
-      theme: theme || agency.flyer_theme || "dark",
-      unbranded,
-      lang: flyerLang || lang || "ar"
-    });
-
-    // 4. رفع الصورة إلى Meta Media API
-    let mediaId = null;
-    try {
-      const uploadRes = await WA.uploadWhatsAppMedia(
-        buffer,
-        "image/jpeg",
-        `flyer_${code}.jpg`
-      );
-      mediaId =
-        typeof uploadRes === "object" && uploadRes?.id
-          ? uploadRes.id
-          : uploadRes;
-    } catch (upErr) {
-      log(
-        "warn",
-        "WA media upload failed, falling back to Supabase...",
-        errMeta(upErr)
+    const mediaSource = res.wa_media_id || res.url;
+    if (!mediaSource) {
+      return await reply(
+        broker,
+        M(lang, "❌ تعذر رفع البروشور.", "❌ Brochure upload failed.")
       );
     }
 
-    // 5. الإرسال لواتساب (مع بديل الرفع على Supabase إذا تعذر الرفع المباشر)
-    if (mediaId) {
-      await WA.sendWhatsAppImage(to(broker), mediaId, `#${code}`);
-    } else {
-      const storagePath = `flyers/${
-        broker.agency_id
-      }/${code}_${Date.now()}.jpg`;
-      const pubUrl = await Supabase.uploadFlyerImage(
-        broker.agency_id,
-        storagePath,
-        buffer
-      );
-      if (pubUrl) {
-        await WA.sendWhatsAppImage(to(broker), pubUrl, `#${code}`);
-      } else {
-        throw new Error("Both WhatsApp upload and Supabase fallback failed");
-      }
-    }
+    const caption = unbranded ? `#${code}` : `#${code} - ${broker.name || ""}`;
+    await WA.sendWhatsAppImage(to(broker), mediaSource, caption);
   } catch (err) {
     log("error", "cmdFlyer failed to render or deliver brochure", errMeta(err));
+
+    await logOperation({
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      listing_code: code,
+      operation_type: "flyer_ondemand",
+      status: "failed",
+      error_code: err.code || err.message?.slice(0, 50) || "FLYER_ERROR",
+      total_duration_ms: Date.now() - t0
+    }).catch(() => {});
+
     await reply(
       broker,
       M(lang, "❌ تعذر إنشاء البروشور.", "❌ Brochure generation failed.")
