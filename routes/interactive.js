@@ -1,3 +1,4 @@
+// routes/interactive.js — Interactive Button & List Menu Callbacks Router
 "use strict";
 
 const WA = require("../lib/whatsapp");
@@ -132,7 +133,7 @@ async function handleInteractive(broker, message, ctx) {
         : "⏳ جاري حفظ الوحدة، رفع الصور، وتحديث سجلات المخزون..."
     );
 
-    // Dynamic commit execution
+    // Dynamic commit execution with built-in double-tap protection
     const Drafts = require("../lib/drafts");
     return await Drafts.commitDraftToDatabase(broker, draft, ctx);
   }
@@ -149,7 +150,7 @@ async function handleInteractive(broker, message, ctx) {
     try {
       await client.query("BEGIN");
 
-      // SEC-03: Acquire 64-bit transactional advisory lock on agency_id + listing_code
+      // SEC-03: Acquire 64-bit transactional advisory lock matching ARCHITECTURE_MANIFEST invariant
       await client.query(
         "SELECT pg_advisory_xact_lock(('x' || substr(md5($1 || ':' || $2), 1, 16))::bit(64)::bigint)",
         [String(broker.agency_id), listingCode]

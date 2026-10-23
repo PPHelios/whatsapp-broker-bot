@@ -4,6 +4,7 @@
 const sharp = require("sharp");
 const WA = require("../lib/whatsapp");
 const U = require("../lib/util");
+const Drafts = require("../lib/drafts");
 const { reply, replyButtons } = require("../lib/dispatcher");
 
 // Constrain Sharp concurrency and memory for Render containers
@@ -39,25 +40,22 @@ async function handleImage(broker, message, ctx) {
     return "done";
   }
 
-  // 1. Fetch active draft session from distributed broker_sessions
-  const { rows: sessionRows } = await pool.query(
-    "SELECT session_data, expires_at FROM broker_sessions WHERE broker_id = $1 AND session_type = 'draft'",
-    [broker.id]
-  );
-
-  let draftData = { media_items: [], text_notes: [], voice_buffers: [] };
-  const hasActiveSession =
-    sessionRows.length > 0 && new Date(sessionRows[0].expires_at) > new Date();
-
-  if (hasActiveSession) {
-    draftData = sessionRows[0].session_data || draftData;
-    if (!Array.isArray(draftData.media_items)) draftData.media_items = [];
-    if (!Array.isArray(draftData.text_notes)) draftData.text_notes = [];
-    if (!Array.isArray(draftData.voice_buffers)) draftData.voice_buffers = [];
+  // 1. Ensure active draft session exists, creating one if needed atomically
+  let draft = await Drafts.getDraft(pool, broker.id, "draft");
+  if (!draft) {
+    draft = await Drafts.createDraft(
+      pool,
+      broker.id,
+      broker.agency_id,
+      broker.phone_normalized || broker.phone_number,
+      "draft"
+    );
   }
 
+  const currentMediaCount = (draft.media_items || []).length;
+
   // 2. Enforce 15-photo ceiling (ING-01) with conversational action buttons (Anti-Dead-End)
-  if (draftData.media_items.length >= 15) {
+  if (currentMediaCount >= 15) {
     const warningBody =
       lang === "en"
         ? "⚠️ Maximum image limit reached (15 photos per listing). Additional photos were dropped. Tap below to review or cancel:"
@@ -106,32 +104,43 @@ async function handleImage(broker, message, ctx) {
     return "done";
   }
 
-  // 5. Stage in draftData (base64 string in session JSONB)
-  draftData.media_items.push({
-    mimeType: "image/jpeg",
-    base64: compressedBuffer.toString("base64")
-  });
+  // 5. Atomically append media using Drafts.appendMedia (JSONB operators)
+  const mediaResult = await Drafts.appendMedia(
+    pool,
+    broker.id,
+    {
+      mediaId: imageObj.id,
+      buffer: compressedBuffer,
+      mimeType: "image/jpeg"
+    },
+    "draft"
+  );
 
-  // If the broker attached a text caption to the image, preserve it in text_notes
+  if (mediaResult.limitReached && currentMediaCount >= 15) {
+    const warningBody =
+      lang === "en"
+        ? "⚠️ Maximum image limit reached (15 photos per listing). Additional photos were dropped."
+        : "⚠️ تم الوصول للحد الأقصى المسموح به (15 صورة) للوحدة. تم تجاهل الصور الزائدة.";
+
+    await replyButtons(broker, warningBody, [
+      {
+        id: "DRAFT_SAVE",
+        title: lang === "en" ? "Done (Save) ✅" : "تم (حفظ) ✅"
+      },
+      { id: "DRAFT_CANCEL", title: lang === "en" ? "Cancel ❌" : "إلغاء ❌" }
+    ]);
+    return "done";
+  }
+
+  // If the broker attached a text caption to the image, preserve it atomically in text_notes
   if (imageObj.caption && typeof imageObj.caption === "string") {
     const cleanCaption = imageObj.caption.trim();
-    if (cleanCaption && !draftData.text_notes.includes(cleanCaption)) {
-      draftData.text_notes.push(cleanCaption);
+    if (cleanCaption) {
+      await Drafts.appendText(pool, broker.id, cleanCaption, "draft");
     }
   }
 
-  const photoCount = draftData.media_items.length;
-
-  // 6. Update session with 15-minute sliding TTL (Strict Schema Compliance: NO updated_at column)
-  await pool.query(
-    `INSERT INTO broker_sessions (broker_id, session_type, session_data, expires_at)
-     VALUES ($1, 'draft', $2, NOW() + INTERVAL '15 minutes')
-     ON CONFLICT (broker_id, session_type)
-     DO UPDATE SET
-       session_data = EXCLUDED.session_data,
-       expires_at = NOW() + INTERVAL '15 minutes'`,
-    [broker.id, draftData]
-  );
+  const photoCount = mediaResult.count || currentMediaCount + 1;
 
   const promptBody =
     lang === "en"
@@ -197,25 +206,19 @@ async function handleAudio(broker, message, ctx) {
     return "done";
   }
 
-  // 3. Scenario A: Append to active draft session (ING-02 / ING-03)
+  // 3. Scenario A: Append to active draft session (ING-02 / ING-03) atomically
   if (activeDraft) {
-    const draftData = activeDraft.session_data || { voice_buffers: [] };
-    if (!Array.isArray(draftData.voice_buffers)) draftData.voice_buffers = [];
-
-    draftData.voice_buffers.push({
-      mimeType: U.cleanAudioMime(audioData.mimeType || "audio/ogg"),
-      base64: audioData.buffer.toString("base64")
-    });
-
-    // Strict Schema Compliance: NO updated_at column
-    await pool.query(
-      `UPDATE broker_sessions
-       SET session_data = $1, expires_at = NOW() + INTERVAL '15 minutes'
-       WHERE broker_id = $2 AND session_type = 'draft'`,
-      [draftData, broker.id]
+    const updatedDraft = await Drafts.appendVoice(
+      pool,
+      broker.id,
+      {
+        buffer: audioData.buffer,
+        mimeType: U.cleanAudioMime(audioData.mimeType || "audio/ogg")
+      },
+      "draft"
     );
 
-    const recordingCount = draftData.voice_buffers.length;
+    const recordingCount = (updatedDraft?.voice_buffers || []).length;
     await replyButtons(
       broker,
       lang === "en"
@@ -232,7 +235,7 @@ async function handleAudio(broker, message, ctx) {
     return "done";
   }
 
-  // 4. Scenario B: Append to active edit session (EDT-02)
+  // 4. Scenario B: Append to active edit session (EDT-02) atomically
   if (activeEdit) {
     const editData = activeEdit.session_data || { voice_buffers: [] };
     if (!Array.isArray(editData.voice_buffers)) editData.voice_buffers = [];
@@ -242,7 +245,6 @@ async function handleAudio(broker, message, ctx) {
       base64: audioData.buffer.toString("base64")
     });
 
-    // Strict Schema Compliance: NO updated_at column
     await pool.query(
       `UPDATE broker_sessions
        SET session_data = $1, expires_at = NOW() + INTERVAL '15 minutes'

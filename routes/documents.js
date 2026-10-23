@@ -1,3 +1,4 @@
+// routes/documents.js — Bulk Excel Inventory Ingestion & Atomic Batch Commit
 "use strict";
 
 const ExcelJS = require("exceljs");
@@ -107,243 +108,285 @@ async function handleDocument(broker, message, ctx) {
     return "done";
   }
 
-  // Parse Excel in-memory (Ephemeral Filesystem Rule)
-  const workbook = new ExcelJS.Workbook();
-  try {
-    await workbook.xlsx.load(buffer);
-  } catch (err) {
-    console.error("ExcelJS parse failure:", err);
-    cooldowns.delete(agencyCooldownKey);
-    await reply(
-      broker,
-      lang === "en"
-        ? "❌ Corrupted Excel structure. Could not parse worksheets."
-        : "❌ هيكل ملف الإكسيل تالف أو غير صالح للقراءة. يرجى التأكد من صحة الملف."
-    );
-    return "done";
-  }
+  // Compute SHA-256 hash of the uploaded buffer for batch idempotency check (Duplicate File Guard)
+  const crypto = require("crypto");
+  const fileHash = crypto.createHash("sha256").update(buffer).digest("hex");
+  const batchKey = `${broker.agency_id}:${fileHash}`;
 
-  const worksheet = workbook.worksheets[0];
-  if (!worksheet || worksheet.rowCount < 2) {
-    cooldowns.delete(agencyCooldownKey);
-    await reply(
-      broker,
-      lang === "en"
-        ? "⚠️ The uploaded spreadsheet is empty or has no data rows."
-        : "⚠️ ملف الإكسيل المرفوع فارغ ولا يحتوي على صفوف بيانات."
-    );
-    return "done";
-  }
-
-  // Extract original headers for rejection workbook alignment
-  const originalHeaders = [];
-  const headerRow = worksheet.getRow(1);
-  headerRow.eachCell({ includeEmpty: false }, (cell) => {
-    originalHeaders.push(String(cell.value || "").trim());
-  });
-
-  // Pre-Flight Dry Run Partitioning & Formula Injection Sanitization
-  const validToCommit = [];
-  const rejectedRows = [];
-
-  worksheet.eachRow((row, rowNumber) => {
-    if (rowNumber === 1) return; // Skip headers
-
-    const rawCode = Excel.sanitizeCellValue(row.getCell(1).text);
-    const rawPrice = row.getCell(2).value;
-    const rawArea = row.getCell(3).value;
-    const rawCompound = Excel.sanitizeCellValue(row.getCell(4).text);
-    const rawType = Excel.sanitizeCellValue(row.getCell(5).text) || "apartment";
-    const rawBeds = row.getCell(6).value;
-
-    const parsedPrice = T.parseEgyptianPrice(String(rawPrice || ""));
-    const price = parsedPrice?.priceValue || 0;
-    const area = parseFloat(String(rawArea || "").replace(/[^0-9.]/g, ""));
-    const beds = parseInt(String(rawBeds || "1"), 10);
-
-    // Collect all raw cell string values for audit workbook
-    const rawRowValues = [];
-    row.eachCell({ includeEmpty: true }, (cell) => {
-      rawRowValues.push(String(cell.value || ""));
-    });
-
-    // Validate Unit Code formatting (ING-04)
-    let code = rawCode ? rawCode.toUpperCase().replace(/\s+/g, "-") : null;
-    if (!code) {
-      code = `UNT-${Date.now().toString(36).toUpperCase()}-${rowNumber}`;
-    }
-
-    // Validation Rules
-    if (!price || price <= 0) {
-      rejectedRows.push({
-        rowNumber,
-        code,
-        price: rawPrice,
-        area: rawArea,
-        compound: rawCompound,
-        reason: "Missing or invalid price",
-        rawRowValues
-      });
-      return;
-    }
-
-    if (!area || area < 10) {
-      rejectedRows.push({
-        rowNumber,
-        code,
-        price: rawPrice,
-        area: rawArea,
-        compound: rawCompound,
-        reason: "Area missing or < 10 sqm",
-        rawRowValues
-      });
-      return;
-    }
-
-    if (!rawCompound || rawCompound.trim().length === 0) {
-      rejectedRows.push({
-        rowNumber,
-        code,
-        price: rawPrice,
-        area: rawArea,
-        compound: rawCompound,
-        reason: "Compound/Location missing",
-        rawRowValues
-      });
-      return;
-    }
-
-    validToCommit.push({
-      code,
-      price,
-      currency: parsedPrice.currency || "EGP",
-      area,
-      compound: rawCompound.trim(),
-      propertyType: rawType,
-      bedrooms: isNaN(beds) ? 1 : beds,
-      rowNumber
-    });
-  });
-
-  // Database Batch Commit inside Transaction (XLS-02)
   const client = await pool.connect();
-  let committedCount = 0;
-
   try {
-    await client.query("BEGIN");
-
-    // Acquire agency-wide lock for atomic catalog insertion
-    await client.query(
-      "SELECT pg_advisory_xact_lock(('x' || substr(md5($1 || ':bulk_import'), 1, 16))::bit(64)::bigint)",
-      [String(broker.agency_id)]
+    // Check if this exact file batch was already successfully committed
+    const { rows: existingBatch } = await client.query(
+      "SELECT batch_key FROM processed_batches WHERE batch_key = $1",
+      [batchKey]
     );
 
-    for (const item of validToCommit) {
-      const priceDisplay = T.formatAbbreviatedPrice(
-        item.price,
-        item.currency,
-        lang,
-        "sale"
+    if (existingBatch.length > 0) {
+      cooldowns.delete(agencyCooldownKey);
+      await reply(
+        broker,
+        lang === "en"
+          ? "⚠️ This exact inventory spreadsheet has already been imported successfully. Duplicate upload ignored."
+          : "⚠️ تم استيراد ملف المخزون هذا مسبقاً بنجاح. تم تجاهل إعادة رفع نفس الملف لتجنب التكرار."
       );
-      const titleAr = `${item.propertyType} ${item.area}م² في ${item.compound} - ${priceDisplay}`;
-      const searchCorpus = `${item.code} ${titleAr} ${item.compound}`;
-
-      const insertQuery = `
-        INSERT INTO listings (
-          agency_id, broker_id, code, title, property_type, price_value, price_display,
-          area_value, bedrooms, compound, search_text_normalized, status, updated_at
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, clean_arabic_text($11), 'active', NOW())
-        ON CONFLICT (agency_id, code)
-        DO UPDATE SET
-          price_value = EXCLUDED.price_value,
-          price_display = EXCLUDED.price_display,
-          area_value = EXCLUDED.area_value,
-          bedrooms = EXCLUDED.bedrooms,
-          compound = EXCLUDED.compound,
-          search_text_normalized = EXCLUDED.search_text_normalized,
-          flyer_cache = '{}'::jsonb,
-          status = 'active',
-          updated_at = NOW()
-      `;
-
-      await client.query(insertQuery, [
-        broker.agency_id,
-        broker.id,
-        item.code,
-        titleAr,
-        item.propertyType,
-        item.price,
-        priceDisplay,
-        item.area,
-        item.bedrooms,
-        item.compound,
-        searchCorpus
-      ]);
-
-      committedCount++;
+      return "done";
     }
 
-    await client.query("COMMIT");
+    // Parse Excel in-memory (Ephemeral Filesystem Rule)
+    const workbook = new ExcelJS.Workbook();
+    try {
+      await workbook.xlsx.load(buffer);
+    } catch (err) {
+      console.error("ExcelJS parse failure:", err);
+      cooldowns.delete(agencyCooldownKey);
+      await reply(
+        broker,
+        lang === "en"
+          ? "❌ Corrupted Excel structure. Could not parse worksheets."
+          : "❌ هيكل ملف الإكسيل تالف أو غير صالح للقراءة. يرجى التأكد من صحة الملف."
+      );
+      return "done";
+    }
+
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet || worksheet.rowCount < 2) {
+      cooldowns.delete(agencyCooldownKey);
+      await reply(
+        broker,
+        lang === "en"
+          ? "⚠️ The uploaded spreadsheet is empty or has no data rows."
+          : "⚠️ ملف الإكسيل المرفوع فارغ ولا يحتوي على صفوف بيانات."
+      );
+      return "done";
+    }
+
+    // Extract original headers for rejection workbook alignment
+    const originalHeaders = [];
+    const headerRow = worksheet.getRow(1);
+    headerRow.eachCell({ includeEmpty: false }, (cell) => {
+      originalHeaders.push(String(cell.value || "").trim());
+    });
+
+    // Pre-Flight Dry Run Partitioning & Formula Injection Sanitization
+    const validToCommit = [];
+    const rejectedRows = [];
+
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return; // Skip headers
+
+      const rawCode = Excel.sanitizeCellValue(row.getCell(1).text);
+      const rawPrice = row.getCell(2).value;
+      const rawArea = row.getCell(3).value;
+      const rawCompound = Excel.sanitizeCellValue(row.getCell(4).text);
+      const rawType =
+        Excel.sanitizeCellValue(row.getCell(5).text) || "apartment";
+      const rawBeds = row.getCell(6).value;
+
+      const parsedPrice = T.parseEgyptianPrice(String(rawPrice || ""));
+      const price = parsedPrice?.priceValue || 0;
+      const area = parseFloat(String(rawArea || "").replace(/[^0-9.]/g, ""));
+      const beds = parseInt(String(rawBeds || "1"), 10);
+
+      // Collect all raw cell string values for audit workbook
+      const rawRowValues = [];
+      row.eachCell({ includeEmpty: true }, (cell) => {
+        rawRowValues.push(String(cell.value || ""));
+      });
+
+      // Validate Unit Code formatting (ING-04)
+      let code = rawCode ? rawCode.toUpperCase().replace(/\s+/g, "-") : null;
+      if (!code) {
+        code = `UNT-${Date.now().toString(36).toUpperCase()}-${rowNumber}`;
+      }
+
+      // Validation Rules
+      if (!price || price <= 0) {
+        rejectedRows.push({
+          rowNumber,
+          code,
+          price: rawPrice,
+          area: rawArea,
+          compound: rawCompound,
+          reason: "Missing or invalid price",
+          rawRowValues
+        });
+        return;
+      }
+
+      if (!area || area < 10) {
+        rejectedRows.push({
+          rowNumber,
+          code,
+          price: rawPrice,
+          area: rawArea,
+          compound: rawCompound,
+          reason: "Area missing or < 10 sqm",
+          rawRowValues
+        });
+        return;
+      }
+
+      if (!rawCompound || rawCompound.trim().length === 0) {
+        rejectedRows.push({
+          rowNumber,
+          code,
+          price: rawPrice,
+          area: rawArea,
+          compound: rawCompound,
+          reason: "Compound/Location missing",
+          rawRowValues
+        });
+        return;
+      }
+
+      validToCommit.push({
+        code,
+        price,
+        currency: parsedPrice.currency || "EGP",
+        area,
+        compound: rawCompound.trim(),
+        propertyType: rawType,
+        bedrooms: isNaN(beds) ? 1 : beds,
+        rowNumber
+      });
+    });
+
+    // Database Batch Commit inside Transaction (XLS-02) with Advisory Lock & Idempotency Registration
+    let committedCount = 0;
+
+    try {
+      await client.query("BEGIN");
+
+      // Acquire agency-wide advisory lock using hashtext for transactional safety
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtext($1), hashtext('bulk_import'))",
+        [String(broker.agency_id)]
+      );
+
+      for (const item of validToCommit) {
+        const priceDisplay = T.formatAbbreviatedPrice(
+          item.price,
+          item.currency,
+          lang,
+          "sale"
+        );
+        const titleAr = `${item.propertyType} ${item.area}م² في ${item.compound} - ${priceDisplay}`;
+        const searchCorpus = `${item.code} ${titleAr} ${item.compound}`;
+
+        const insertQuery = `
+          INSERT INTO listings (
+            agency_id, broker_id, code, title, property_type, price_value, price_display,
+            area_value, bedrooms, compound, search_text_normalized, status, updated_at
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, clean_arabic_text($11), 'active', NOW())
+          ON CONFLICT (agency_id, code)
+          DO UPDATE SET
+            price_value = EXCLUDED.price_value,
+            price_display = EXCLUDED.price_display,
+            area_value = EXCLUDED.area_value,
+            bedrooms = EXCLUDED.bedrooms,
+            compound = EXCLUDED.compound,
+            search_text_normalized = EXCLUDED.search_text_normalized,
+            flyer_cache = '{}'::jsonb,
+            status = 'active',
+            updated_at = NOW()
+        `;
+
+        await client.query(insertQuery, [
+          broker.agency_id,
+          broker.id,
+          item.code,
+          titleAr,
+          item.propertyType,
+          item.price,
+          priceDisplay,
+          item.area,
+          item.bedrooms,
+          item.compound,
+          searchCorpus
+        ]);
+
+        committedCount++;
+      }
+
+      // Record batch in processed_batches to guarantee idempotency on multi-tap uploads
+      await client.query(
+        `INSERT INTO processed_batches (batch_key, agency_id, listing_code, created_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (batch_key) DO NOTHING`,
+        [batchKey, broker.agency_id, "BULK_IMPORT"]
+      );
+
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      cooldowns.delete(agencyCooldownKey);
+      console.error("Batch commit failed:", err);
+      await reply(
+        broker,
+        lang === "en"
+          ? "❌ Database error during import. No rows were committed."
+          : "❌ حدث خطأ بقاعدة البيانات أثناء حفظ الوحدات. لم يتم اعتماد الشيت للحفاظ على اتساق البيانات."
+      );
+      return "done";
+    }
+
+    // Final Symmetrical Response & Rejection Document Dispatch (XLS-03)
+    const totalRows = worksheet.rowCount - 1;
+    const rejectedCount = rejectedRows.length;
+
+    if (rejectedCount === 0) {
+      await reply(
+        broker,
+        lang === "en"
+          ? `✅ *Inventory Successfully Imported:*\n• Total Rows: ${totalRows}\n• ✅ Committed: ${committedCount} units\n• All units are active and searchable.`
+          : `✅ *تم استيراد المخزون بنجاح:*\n• إجمالي السطور: ${totalRows}\n• ✅ تم الاعتماد والتحديث: ${committedCount} وحدة\n• جميع الوحدات نشطة ومتاحة في البحث الفوري الآن.`
+      );
+    } else {
+      const summaryMsg =
+        lang === "en"
+          ? `📊 *Inventory Processing Report:*\n• Total Rows: ${totalRows}\n• ✅ Committed: ${committedCount} units\n• ❌ Rejected: ${rejectedCount} units\n📎 Attached is a detailed report of rejected rows for review.`
+          : `📊 *تقرير معالجة ملف المخزون:*\n• الإجمالي: ${totalRows} سطر\n• ✅ تم الاعتماد والتحديث: ${committedCount} وحدة\n• ❌ تم الاستبعاد: ${rejectedCount} وحدة\n📎 مرفق شيت تفصيلي بالأخطاء لتصحيحها وإعادة رفعها.`;
+
+      await reply(broker, summaryMsg);
+
+      // Send Rejection Document via WhatsApp using centralized Excel library
+      try {
+        const { rows: agencyRows } = await pool.query(
+          "SELECT name FROM agencies WHERE id = $1",
+          [broker.agency_id]
+        );
+        const agencyName = agencyRows[0]?.name || "Aqar Real Estate";
+
+        const rejectionBuffer = await Excel.buildRejectionWorkbook({
+          rejectedRows,
+          originalHeaders,
+          agencyName
+        });
+
+        await WA.sendWhatsAppDocument(
+          broker.phone_normalized,
+          rejectionBuffer,
+          `مرفوضات_${filename}`,
+          lang === "en"
+            ? "⚠️ Rejected Rows Report"
+            : "⚠️ شيت الوحدات المستبعدة مع الأسباب"
+        );
+      } catch (docErr) {
+        console.error("Failed to send rejection document:", docErr);
+      }
+    }
   } catch (err) {
-    await client.query("ROLLBACK");
+    console.error("Document handler transaction error:", err);
     cooldowns.delete(agencyCooldownKey);
-    console.error("Batch commit failed:", err);
     await reply(
       broker,
       lang === "en"
-        ? "❌ Database error during import. No rows were committed."
-        : "❌ حدث خطأ بقاعدة البيانات أثناء حفظ الوحدات. لم يتم اعتماد الشيت للحفاظ على اتساق البيانات."
+        ? "❌ A temporary error occurred while processing your inventory file."
+        : "❌ حدث خطأ فني أثناء معالجة ملف المخزون المرفوع."
     );
-    return "done";
   } finally {
     client.release();
-  }
-
-  // Final Symmetrical Response & Rejection Document Dispatch (XLS-03)
-  const totalRows = worksheet.rowCount - 1;
-  const rejectedCount = rejectedRows.length;
-
-  if (rejectedCount === 0) {
-    await reply(
-      broker,
-      lang === "en"
-        ? `✅ *Inventory Successfully Imported:*\n• Total Rows: ${totalRows}\n• ✅ Committed: ${committedCount} units\n• All units are active and searchable.`
-        : `✅ *تم استيراد المخزون بنجاح:*\n• إجمالي السطور: ${totalRows}\n• ✅ تم الاعتماد والتحديث: ${committedCount} وحدة\n• جميع الوحدات نشطة ومتاحة في البحث الفوري الآن.`
-    );
-  } else {
-    const summaryMsg =
-      lang === "en"
-        ? `📊 *Inventory Processing Report:*\n• Total Rows: ${totalRows}\n• ✅ Committed: ${committedCount} units\n• ❌ Rejected: ${rejectedCount} units\n📎 Attached is a detailed report of rejected rows for review.`
-        : `📊 *تقرير معالجة ملف المخزون:*\n• الإجمالي: ${totalRows} سطر\n• ✅ تم الاعتماد والتحديث: ${committedCount} وحدة\n• ❌ تم الاستبعاد: ${rejectedCount} وحدة\n📎 مرفق شيت تفصيلي بالأخطاء لتصحيحها وإعادة رفعها.`;
-
-    await reply(broker, summaryMsg);
-
-    // Send Rejection Document via WhatsApp using centralized Excel library
-    try {
-      const { rows: agencyRows } = await pool.query(
-        "SELECT name FROM agencies WHERE id = $1",
-        [broker.agency_id]
-      );
-      const agencyName = agencyRows[0]?.name || "Aqar Real Estate";
-
-      const rejectionBuffer = await Excel.buildRejectionWorkbook({
-        rejectedRows,
-        originalHeaders,
-        agencyName
-      });
-
-      await WA.sendWhatsAppDocument(
-        broker.phone_normalized,
-        rejectionBuffer,
-        `مرفوضات_${filename}`,
-        lang === "en"
-          ? "⚠️ Rejected Rows Report"
-          : "⚠️ شيت الوحدات المستبعدة مع الأسباب"
-      );
-    } catch (docErr) {
-      console.error("Failed to send rejection document:", docErr);
-    }
   }
 
   return "done";

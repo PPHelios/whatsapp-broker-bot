@@ -3,7 +3,8 @@
 const WA = require("../lib/whatsapp");
 const T = require("../lib/text");
 const U = require("../lib/util");
-const { reply } = require("../lib/dispatcher");
+const Drafts = require("../lib/drafts");
+const { reply, replyButtons } = require("../lib/dispatcher");
 
 /**
  * Validates whether the broker has permission to mutate a listing.
@@ -17,7 +18,7 @@ function canEdit(broker, listing) {
  * Text Commands Controller
  */
 async function handleCommand(broker, text, ctx) {
-  const { pool, lang, recentBrokerListings, cooldowns } = ctx;
+  const { pool, lang, recentBrokerListings, cooldowns, AI } = ctx;
   const raw = text.trim();
   const lower = raw.toLowerCase();
 
@@ -34,7 +35,107 @@ async function handleCommand(broker, text, ctx) {
     return true;
   }
 
-  // 2. EXPORT INVENTORY (EXCEL) (DEL-06)
+  // 2. DRAFT PRE-SAVE VALIDATION / FINALIZATION (DRF-02, ING-05)
+  if (/^(تم|حفظ|done|save)$/i.test(lower)) {
+    const { rows: drafts } = await pool.query(
+      "SELECT session_data, expires_at FROM broker_sessions WHERE broker_id = $1 AND session_type = 'draft'",
+      [broker.id]
+    );
+
+    if (drafts.length === 0 || new Date(drafts[0].expires_at) <= new Date()) {
+      return false; // No active draft, let fallthrough
+    }
+
+    const draft = drafts[0].session_data || {};
+    const mediaCount = (draft.media_items || []).length;
+    const voiceCount = (draft.voice_buffers || []).length;
+    const textCount = (draft.text_notes || []).length;
+
+    // ING-05: Image-only draft blocker
+    if (mediaCount > 0 && voiceCount === 0 && textCount === 0) {
+      await replyButtons(
+        broker,
+        lang === "en"
+          ? `⚠️ Listing cannot be registered with photos only (${mediaCount} photos). Please send a voice note or message containing price and location.`
+          : `⚠️ لا يمكن تسجيل الوحدة بالصور فقط (${mediaCount} صور). يرجى إرسال فويس نوت أو رسالة تحتوي على السعر والمشروع.`,
+        [
+          {
+            id: "draft_cancel",
+            title: lang === "en" ? "Cancel ❌" : "إلغاء المسودة ❌"
+          }
+        ]
+      );
+      return true;
+    }
+
+    // Process draft through AI extraction cascade
+    await reply(
+      broker,
+      lang === "en"
+        ? "⏳ Reviewing unit specifications and analyzing inputs..."
+        : "⏳ جاري مراجعة مواصفات الوحدة وتحليل المدخلات..."
+    );
+
+    try {
+      const Listing = require("../lib/listing");
+      const validationResult = await Listing.validateDraft(draft, lang, {
+        AI,
+        pool
+      });
+
+      if (!validationResult.valid) {
+        let msg =
+          lang === "en"
+            ? "⚠️ The following required details are missing to complete registration:\n"
+            : "⚠️ البيانات التالية مطلوبة لإتمام تسجيل الوحدة:\n";
+        for (const missing of validationResult.missingFields) {
+          msg += `• ${missing}\n`;
+        }
+        msg +=
+          lang === "en"
+            ? "\nPlease send the missing info, then type *done*."
+            : "\nيرجى إرسال البيانات الناقصة ثم كتابة *«تم»*.";
+
+        await reply(broker, msg);
+        return true;
+      }
+
+      // Stage review card with quick reply actions
+      const card = T.formatDraftReviewCard(
+        validationResult.extracted,
+        validationResult.extracted.price_value,
+        validationResult,
+        lang
+      );
+
+      await replyButtons(broker, card, [
+        {
+          id: "draft_confirm",
+          title: lang === "en" ? "Confirm & Save ✅" : "تأكيد وحفظ ✅"
+        },
+        {
+          id: "draft_edit",
+          title: lang === "en" ? "Edit ✏️" : "تعديل ✏️"
+        },
+        {
+          id: "draft_cancel",
+          title: lang === "en" ? "Cancel ❌" : "إلغاء ❌"
+        }
+      ]);
+      return true;
+    } catch (err) {
+      console.error("Draft extraction error:", err);
+      await reply(
+        broker,
+        lang === "en"
+          ? "❌ Failed to parse draft specs. Please send unit details clearly in text."
+          : "❌ حدث خطأ أثناء تحليل مواصفات المسودة. يرجى كتابة البيانات الأساسية في رسالة نصية."
+      );
+      return true;
+    }
+  }
+
+  // 3. EXPORT INVENTORY (EXCEL) (DEL-06)
   if (/^(تصدير|export|excel|شيت)$/i.test(lower)) {
     const cooldownKey = `export:${broker.id}`;
     const now = Date.now();
@@ -102,7 +203,7 @@ async function handleCommand(broker, text, ctx) {
     return true;
   }
 
-  // 3. LIFECYCLE: STATUS UPDATES (Sold, Archived, Reactivate) (LFC-01, LFC-02, LFC-03)
+  // 4. LIFECYCLE: STATUS UPDATES (Sold, Archived, Reactivate) (LFC-01, LFC-02, LFC-03)
   const statusMatch = raw.match(
     /^(تم البيع|مباع|sold|ارشفة|أرشفة|archive|تفعيل|نشط|active)(?:\s+(.+))?$/i
   );
@@ -190,7 +291,7 @@ async function handleCommand(broker, text, ctx) {
     return true;
   }
 
-  // 4. DELETION: REQUEST WITH ADVISORY & ROW-LOCKING (DEL-01)
+  // 5. DELETION: REQUEST WITH ADVISORY & ROW-LOCKING (DEL-01)
   const deleteMatch = raw.match(/^(حذف|delete|مسح)(?:\s+(.+))?$/i);
   if (deleteMatch) {
     const targetCode = resolveTargetCode(deleteMatch[2]);
@@ -268,7 +369,7 @@ async function handleCommand(broker, text, ctx) {
     return true;
   }
 
-  // 5. INLINE DIRECT PRICE EDIT (EDT-03, EDT-04, EDT-05)
+  // 6. INLINE DIRECT PRICE EDIT (EDT-03, EDT-04, EDT-05)
   const priceEditMatch = raw.match(
     /^(?:تعديل\s+)?(?:سعر|price)\s+([A-Za-z0-9_-]+)\s+(?:الى|إلى|to\s+)?(.+)$/i
   );
