@@ -1,4 +1,5 @@
-﻿"use strict";
+﻿// server.js — Webhook Ingress, Routing Dispatcher & Render Lifecycle Supervisor
+"use strict";
 
 const express = require("express");
 const crypto = require("crypto");
@@ -9,7 +10,7 @@ const U = require("./lib/util");
 const S = require("./lib/search");
 const AI = require("./lib/ai");
 const Flyer = require("./lib/flyer");
-const { executeGuardedTurn, reply } = require("./lib/dispatcher");
+const { executeGuardedTurn, reply, replyButtons } = require("./lib/dispatcher");
 
 // Modular Route Controllers
 const { handleCommand } = require("./routes/commands");
@@ -147,7 +148,7 @@ async function dispatchMessage(broker, message, ctx) {
               ? "⚠️ You have an active listing draft in progress. Would you like to discard it and perform your search?"
               : "⚠️ لديك مسودة وحدة قيد الإضافة حالياً. هل تريد إلغاء المسودة والبحث في المخزون بدلاً من ذلك؟";
 
-          await WA.sendWhatsAppButtons(broker.phone_normalized, promptBody, [
+          await replyButtons(broker, promptBody, [
             {
               id: `cancel_and_search:${encodedQuery}`,
               title: lang === "en" ? "Search 🔍" : "إلغاء والبحث 🔍"

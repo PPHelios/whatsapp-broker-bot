@@ -1,9 +1,10 @@
+// routes/media.js — Photo Ingress (15-Ceiling) & Audio Note Context Routing
 "use strict";
 
 const sharp = require("sharp");
 const WA = require("../lib/whatsapp");
 const U = require("../lib/util");
-const { reply } = require("../lib/dispatcher");
+const { reply, replyButtons } = require("../lib/dispatcher");
 
 // Constrain Sharp concurrency and memory for Render containers
 sharp.concurrency(1);
@@ -51,6 +52,8 @@ async function handleImage(broker, message, ctx) {
   if (hasActiveSession) {
     draftData = sessionRows[0].session_data || draftData;
     if (!Array.isArray(draftData.media_items)) draftData.media_items = [];
+    if (!Array.isArray(draftData.text_notes)) draftData.text_notes = [];
+    if (!Array.isArray(draftData.voice_buffers)) draftData.voice_buffers = [];
   }
 
   // 2. Enforce 15-photo ceiling (ING-01) with conversational action buttons (Anti-Dead-End)
@@ -60,7 +63,7 @@ async function handleImage(broker, message, ctx) {
         ? "⚠️ Maximum image limit reached (15 photos per listing). Additional photos were dropped. Tap below to review or cancel:"
         : "⚠️ تم الوصول للحد الأقصى المسموح به (15 صورة) للوحدة. تم تجاهل الصور الزائدة. اضغط أدناه للاعتماد أو الإلغاء:";
 
-    await WA.sendWhatsAppButtons(broker.phone_normalized, warningBody, [
+    await replyButtons(broker, warningBody, [
       {
         id: "DRAFT_SAVE",
         title: lang === "en" ? "Done (Save) ✅" : "تم (حفظ) ✅"
@@ -109,6 +112,14 @@ async function handleImage(broker, message, ctx) {
     base64: compressedBuffer.toString("base64")
   });
 
+  // If the broker attached a text caption to the image, preserve it in text_notes
+  if (imageObj.caption && typeof imageObj.caption === "string") {
+    const cleanCaption = imageObj.caption.trim();
+    if (cleanCaption && !draftData.text_notes.includes(cleanCaption)) {
+      draftData.text_notes.push(cleanCaption);
+    }
+  }
+
   const photoCount = draftData.media_items.length;
 
   // 6. Update session with 15-minute sliding TTL (Strict Schema Compliance: NO updated_at column)
@@ -127,7 +138,7 @@ async function handleImage(broker, message, ctx) {
       ? `📸 Photo received (${photoCount}/15). Send remaining photos, voice notes, or text specs, then type *done* to review.`
       : `📸 تم استلام الصورة (${photoCount}/15). أرسل باقي الصور أو فويس نوت بالمواصفات، ثم اكتب *«تم»* للمراجعة.`;
 
-  await WA.sendWhatsAppButtons(broker.phone_normalized, promptBody, [
+  await replyButtons(broker, promptBody, [
     {
       id: "DRAFT_SAVE",
       title: lang === "en" ? "Done (Save) ✅" : "تم (حفظ) ✅"
@@ -204,11 +215,12 @@ async function handleAudio(broker, message, ctx) {
       [draftData, broker.id]
     );
 
-    await WA.sendWhatsAppButtons(
-      broker.phone_normalized,
+    const recordingCount = draftData.voice_buffers.length;
+    await replyButtons(
+      broker,
       lang === "en"
-        ? `🎙️ Voice note added to draft (${draftData.voice_buffers.length} recordings). Tap below when finished:`
-        : `🎙️ تم استلام الملاحظة الصوتية وإضافتها للمسودة (${draftData.voice_buffers.length} تسجيلات). اضغط أدناه عند الانتهاء:`,
+        ? `🎙️ Voice note added to draft (${recordingCount} recordings). Tap below when finished:`
+        : `🎙️ تم استلام الملاحظة الصوتية وإضافتها للمسودة (${recordingCount} تسجيلات). اضغط أدناه عند الانتهاء:`,
       [
         {
           id: "DRAFT_SAVE",
