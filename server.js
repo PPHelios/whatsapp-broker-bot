@@ -10,6 +10,7 @@ const U = require("./lib/util");
 const S = require("./lib/search");
 const AI = require("./lib/ai");
 const Flyer = require("./lib/flyer");
+const Drafts = require("./lib/drafts");
 const { executeGuardedTurn, reply, replyButtons } = require("./lib/dispatcher");
 
 // Modular Route Controllers
@@ -114,8 +115,30 @@ async function dispatchMessage(broker, message, ctx) {
     case "voice":
       return await handleAudio(broker, message, ctx);
 
-    case "document":
+    case "document": {
+      const doc = message.document;
+      const isImageDoc =
+        Boolean(doc) &&
+        ((doc.mime_type && doc.mime_type.startsWith("image/")) ||
+          /\.(jpe?g|png|webp|heic)$/i.test(doc.filename || ""));
+
+      // ING-01 Adapter: If broker sent an uncompressed photo as a WhatsApp Document,
+      // route seamlessly into the image draft ingestion pipeline.
+      if (isImageDoc) {
+        const adaptedImageMessage = {
+          ...message,
+          type: "image",
+          image: {
+            id: doc.id,
+            mime_type: doc.mime_type || "image/jpeg",
+            caption: doc.caption || message.caption || ""
+          }
+        };
+        return await handleImage(broker, adaptedImageMessage, ctx);
+      }
+
       return await handleDocument(broker, message, ctx);
+    }
 
     case "text": {
       const text = message.text?.body?.trim() || "";
@@ -136,12 +159,13 @@ async function dispatchMessage(broker, message, ctx) {
 
       if (hasActiveDraft) {
         const lower = text.toLowerCase();
-        const hasSearchIntent =
-          /(?:^|\s)(عايز|عاوز|محتاج|ابحث|دورلي|عندك|search|find|looking for|شقة|فيلا|دوبلكس|مطلوب)(?=$|\s)/i.test(
+        // Strict explicit search intent check (excluding property types so specs aren't mistaken for search queries)
+        const hasExplicitSearchIntent =
+          /(?:^|\s)(عايز|عاوز|محتاج|ابحث|دورلي|عندك|search|find|looking for|مطلوب)(?=$|\s)/i.test(
             lower
           );
 
-        if (hasSearchIntent) {
+        if (hasExplicitSearchIntent) {
           const encodedQuery = Buffer.from(text).toString("base64");
           const promptBody =
             lang === "en"
@@ -160,6 +184,25 @@ async function dispatchMessage(broker, message, ctx) {
           ]);
           return "done";
         }
+
+        // Invariant: Non-search text sent while a draft is active represents unit specifications
+        await Drafts.appendText(pool, broker.id, text, "draft");
+        const promptBody =
+          lang === "en"
+            ? "📝 Specifications added to draft. Send remaining details, voice notes, or photos, then type *done* to review."
+            : "📝 تم إضافة المواصفات إلى المسودة. أرسل باقي التفاصيل أو الصور أو الفويس نوت، ثم اكتب *«تم»* للمراجعة.";
+
+        await replyButtons(broker, promptBody, [
+          {
+            id: "DRAFT_SAVE",
+            title: lang === "en" ? "Done (Save) ✅" : "تم (حفظ) ✅"
+          },
+          {
+            id: "DRAFT_CANCEL",
+            title: lang === "en" ? "Cancel ❌" : "إلغاء ❌"
+          }
+        ]);
+        return "done";
       }
 
       // 3. Delegate to search & natural language engine
@@ -170,8 +213,8 @@ async function dispatchMessage(broker, message, ctx) {
       await reply(
         broker,
         lang === "en"
-          ? "📍 Location pin received. To add location coordinates, please include the compound or district name in your draft."
-          : "📍 تم استلام الموقع الجغرافي. لإدراج الموقع، يرجى كتابة اسم الكمبوند أو الحي السكني داخل مسودة الوحدة."
+          ? "⚠️ Location pins are not processed by the bot. Please manually type the compound name, district, or landmark in your draft text or voice note."
+          : "⚠️ إرسال اللوكيشن غير مدعوم ولا يتم تسجيله تلقائياً. يرجى كتابة اسم الكمبوند، الحي، أو المنطقة يدوياً في رسالة أو تسجيل صوتي داخل المسودة."
       );
       return "done";
 
@@ -188,8 +231,8 @@ async function dispatchMessage(broker, message, ctx) {
       await reply(
         broker,
         lang === "en"
-          ? "👤 Contact received. To attach owner details, write the contact notes into the listing specifications."
-          : "👤 تم استلام جهة الاتصال. لتسجيل بيانات المالك، يرجى كتابتها مباشرة في تفاصيل الوحدة."
+          ? "⚠️ Shared contact cards are not processed by the bot. Please manually type the owner's name and contact number into the listing notes."
+          : "⚠️ جهات الاتصال المرسلة (Contact Cards) غير مدعومة ولا يتم سحبها تلقائياً. يرجى كتابة اسم ورقم المالك يدوياً نصاً داخل ملاحظات الوحدة."
       );
       return "done";
 

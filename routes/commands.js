@@ -4,6 +4,7 @@
 const WA = require("../lib/whatsapp");
 const T = require("../lib/text");
 const U = require("../lib/util");
+const Flyer = require("../lib/flyer");
 const Drafts = require("../lib/drafts");
 const { reply, replyButtons } = require("../lib/dispatcher");
 
@@ -18,6 +19,9 @@ function canEdit(broker, listing) {
 /**
  * Text Commands Controller
  */
+/**
+ * Text Commands Controller
+ */
 async function handleCommand(broker, text, ctx) {
   const { pool, lang, recentBrokerListings, cooldowns, AI } = ctx;
   const raw = text.trim();
@@ -25,7 +29,7 @@ async function handleCommand(broker, text, ctx) {
 
   // Helper to resolve code explicitly or fallback to recent session
   const resolveTargetCode = (explicitCode) => {
-    if (explicitCode) return explicitCode.toUpperCase().replace(/^#/, "");
+    if (explicitCode) return T.extractCleanCode(explicitCode);
     return recentBrokerListings.get(broker.id) || null;
   };
 
@@ -91,7 +95,7 @@ async function handleCommand(broker, text, ctx) {
 
   // 5. EDIT SESSION / PATCH (EDT-01, EDT-02)
   const editMatch = raw.match(
-    /^(تعديل|edit)(?:\s+([A-Za-z0-9_-]+))?(?:\s+(.+))?$/i
+    /^(تعديل|edit)(?:\s+([A-Za-z0-9_\-\.\/]+))?(?:\s+(.+))?$/i
   );
   if (editMatch) {
     const targetCode = resolveTargetCode(editMatch[2]);
@@ -111,12 +115,14 @@ async function handleCommand(broker, text, ctx) {
     try {
       await client.query("BEGIN");
       await client.query(
-        "SELECT pg_advisory_xact_lock(('x' || substr(md5($1 || ':' || $2), 1, 16))::bit(64)::bigint)",
+        "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
         [String(broker.agency_id), targetCode]
       );
 
       const { rows } = await client.query(
-        "SELECT * FROM listings WHERE agency_id = $1 AND UPPER(code) = $2 FOR UPDATE",
+        `SELECT * FROM listings
+         WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+         FOR UPDATE`,
         [broker.agency_id, targetCode]
       );
 
@@ -330,7 +336,143 @@ async function handleCommand(broker, text, ctx) {
     }
   }
 
-  // 7. EXPORT INVENTORY (EXCEL) (DEL-06)
+  // 7. INVENTORY SUMMARY & STATS (STATS-01)
+  if (
+    /^(مخزون|المخزون|تقرير المخزون|احصائيات|إحصائيات|stats|inventory stats|summary)$/i.test(
+      lower
+    )
+  ) {
+    try {
+      const statsQuery = `
+        SELECT
+          COUNT(*)::integer AS total_count,
+          COUNT(*) FILTER (WHERE status = 'active')::integer AS active_count,
+          COUNT(*) FILTER (WHERE status = 'sold')::integer AS sold_count,
+          COUNT(*) FILTER (WHERE status = 'archived')::integer AS archived_count,
+          COUNT(*) FILTER (WHERE inventory_type = 'resale_unit' AND status = 'active')::integer AS resale_count,
+          COUNT(*) FILTER (WHERE inventory_type != 'resale_unit' AND status = 'active')::integer AS developer_count,
+          COALESCE(SUM(price_value) FILTER (WHERE status = 'active'), 0)::numeric AS total_active_value,
+          COALESCE(AVG(price_value) FILTER (WHERE status = 'active' AND price_value > 0), 0)::numeric AS avg_active_price
+        FROM listings
+        WHERE agency_id = $1
+      `;
+
+      const topAreasQuery = `
+        SELECT COALESCE(compound, district, city, 'أخرى') AS area_name, COUNT(*)::integer AS unit_count
+        FROM listings
+        WHERE agency_id = $1 AND status = 'active' AND (compound IS NOT NULL OR district IS NOT NULL OR city IS NOT NULL)
+        GROUP BY 1
+        ORDER BY unit_count DESC
+        LIMIT 3
+      `;
+
+      const [statsResult, areasResult] = await Promise.all([
+        pool.query(statsQuery, [broker.agency_id]),
+        pool.query(topAreasQuery, [broker.agency_id])
+      ]);
+
+      const s = statsResult.rows[0] || {
+        total_count: 0,
+        active_count: 0,
+        sold_count: 0,
+        archived_count: 0,
+        resale_count: 0,
+        developer_count: 0,
+        total_active_value: 0,
+        avg_active_price: 0
+      };
+
+      const topAreas = areasResult.rows || [];
+
+      let statsMsg = "";
+      if (lang === "en") {
+        statsMsg =
+          `📊 *Agency Inventory Summary*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `• *Total Units:* ${s.total_count}\n` +
+          `• 🟢 *Active & Searchable:* ${s.active_count}\n` +
+          `• 🔴 *Sold:* ${s.sold_count}\n` +
+          `• 📁 *Archived:* ${s.archived_count}\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `• *Resale Units:* ${s.resale_count}\n` +
+          `• *Primary Developer:* ${s.developer_count}\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `• *Active Portfolio Value:* ${T.formatPrice(
+            s.total_active_value,
+            "en",
+            "EGP"
+          )}\n` +
+          `• *Average Unit Price:* ${T.formatPrice(
+            s.avg_active_price,
+            "en",
+            "EGP"
+          )}`;
+
+        if (topAreas.length > 0) {
+          statsMsg += `\n━━━━━━━━━━━━━━━━━━━━\n📍 *Top Hubs by Inventory:*`;
+          topAreas.forEach((area, idx) => {
+            statsMsg += `\n  ${idx + 1}. *${area.area_name}*: ${
+              area.unit_count
+            } units`;
+          });
+        }
+      } else {
+        statsMsg =
+          `📊 *تقرير وملخص مخزون الوكالة*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `• *إجمالي الوحدات المسجلة:* ${s.total_count}\n` +
+          `• 🟢 *نشط ومتاح للبحث:* ${s.active_count}\n` +
+          `• 🔴 *تم البيع:* ${s.sold_count}\n` +
+          `• 📁 *مؤرشف:* ${s.archived_count}\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `• *وحدات إعادة البيع (Resale):* ${s.resale_count}\n` +
+          `• *مشاريع المطورين:* ${s.developer_count}\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `• *إجمالي قيمة المحفظة النشطة:* ${T.formatPrice(
+            s.total_active_value,
+            "ar",
+            "EGP"
+          )}\n` +
+          `• *متوسط سعر الوحدة:* ${T.formatPrice(
+            s.avg_active_price,
+            "ar",
+            "EGP"
+          )}`;
+
+        if (topAreas.length > 0) {
+          statsMsg += `\n━━━━━━━━━━━━━━━━━━━━\n📍 *أعلى المناطق تواجداً:*`;
+          topAreas.forEach((area, idx) => {
+            statsMsg += `\n  ${idx + 1}. *${area.area_name}*: ${
+              area.unit_count
+            } وحدة`;
+          });
+        }
+      }
+
+      await replyButtons(broker, statsMsg, [
+        {
+          id: "cmd:export",
+          title: lang === "en" ? "Export Excel 📊" : "تصدير الإكسيل 📊"
+        },
+        {
+          id: "cmd:add",
+          title: lang === "en" ? "New Unit 📝" : "إضافة وحدة 📝"
+        }
+      ]);
+      return true;
+    } catch (err) {
+      console.error("Inventory stats summary failure:", err);
+      await reply(
+        broker,
+        lang === "en"
+          ? "❌ Could not calculate inventory statistics. Please try again later."
+          : "❌ تعذر استخراج إحصائيات المخزون حالياً. يرجى المحاولة لاحقاً."
+      );
+      return true;
+    }
+  }
+
+  // 8. EXPORT INVENTORY (EXCEL) (DEL-06)
   if (/^(تصدير|export|excel|شيت)$/i.test(lower)) {
     const cooldownKey = `export:${broker.id}`;
     const now = Date.now();
@@ -356,7 +498,6 @@ async function handleCommand(broker, text, ctx) {
         : "⏳ جاري استخراج شيت إكسيل بمخزون الوكالة... سيتم إرسال الملف مباشرة."
     );
 
-    // Asynchronously generate and send
     setImmediate(async () => {
       try {
         const { rows: listings } = await pool.query(
@@ -385,7 +526,7 @@ async function handleCommand(broker, text, ctx) {
         );
       } catch (err) {
         console.error("Export failure:", err);
-        cooldowns.delete(cooldownKey); // UX: Release cooldown on crash
+        cooldowns.delete(cooldownKey);
         await reply(
           broker,
           lang === "en"
@@ -398,7 +539,7 @@ async function handleCommand(broker, text, ctx) {
     return true;
   }
 
-  // 8. LIFECYCLE: STATUS UPDATES (Sold, Archived, Reactivate) (LFC-01, LFC-02, LFC-03)
+  // 9. LIFECYCLE: STATUS UPDATES (Sold, Archived, Reactivate) (LFC-01, LFC-02, LFC-03)
   const statusMatch = raw.match(
     /^(تم البيع|مباع|sold|ارشفة|أرشفة|archive|تفعيل|نشط|active)(?:\s+(.+))?$/i
   );
@@ -425,12 +566,14 @@ async function handleCommand(broker, text, ctx) {
     try {
       await client.query("BEGIN");
       await client.query(
-        "SELECT pg_advisory_xact_lock(('x' || substr(md5($1 || ':' || $2), 1, 16))::bit(64)::bigint)",
+        "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
         [String(broker.agency_id), targetCode]
       );
 
       const { rows } = await client.query(
-        "SELECT id, broker_id, code, status FROM listings WHERE agency_id = $1 AND UPPER(code) = $2 FOR UPDATE",
+        `SELECT id, broker_id, code, status FROM listings
+         WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+         FOR UPDATE`,
         [broker.agency_id, targetCode]
       );
 
@@ -486,7 +629,7 @@ async function handleCommand(broker, text, ctx) {
     return true;
   }
 
-  // 9. DELETION: REQUEST WITH ADVISORY & ROW-LOCKING (DEL-01)
+  // 10. DELETION: REQUEST WITH ADVISORY & ROW-LOCKING (DEL-01)
   const deleteMatch = raw.match(/^(حذف|delete|مسح)(?:\s+(.+))?$/i);
   if (deleteMatch) {
     const targetCode = resolveTargetCode(deleteMatch[2]);
@@ -504,12 +647,14 @@ async function handleCommand(broker, text, ctx) {
     try {
       await client.query("BEGIN");
       await client.query(
-        "SELECT pg_advisory_xact_lock(('x' || substr(md5($1 || ':' || $2), 1, 16))::bit(64)::bigint)",
+        "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
         [String(broker.agency_id), targetCode]
       );
 
       const { rows } = await client.query(
-        "SELECT id, broker_id, code FROM listings WHERE agency_id = $1 AND UPPER(code) = $2 FOR UPDATE",
+        `SELECT id, broker_id, code FROM listings
+         WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+         FOR UPDATE`,
         [broker.agency_id, targetCode]
       );
 
@@ -538,7 +683,6 @@ async function handleCommand(broker, text, ctx) {
 
       await client.query("COMMIT");
 
-      // Interactive prompt with strictly <= 20 char button titles
       const promptBody =
         lang === "en"
           ? `⚠️ Are you sure you want to permanently delete unit #${listing.code}? Media and brochures will be unlinked.`
@@ -564,12 +708,12 @@ async function handleCommand(broker, text, ctx) {
     return true;
   }
 
-  // 10. INLINE DIRECT PRICE EDIT (EDT-03, EDT-04, EDT-05)
+  // 11. INLINE DIRECT PRICE EDIT (EDT-03, EDT-04, EDT-05)
   const priceEditMatch = raw.match(
-    /^(?:تعديل\s+)?(?:سعر|price)\s+([A-Za-z0-9_-]+)\s+(?:الى|إلى|to\s+)?(.+)$/i
+    /^(?:تعديل\s+)?(?:سعر|price)\s+([A-Za-z0-9_\-\.\/]+)\s+(?:الى|إلى|to\s+)?(.+)$/i
   );
   if (priceEditMatch) {
-    const targetCode = priceEditMatch[1].toUpperCase();
+    const targetCode = T.extractCleanCode(priceEditMatch[1]);
     const rawPrice = priceEditMatch[2];
 
     const parsedPriceResult = T.parseEgyptianPrice(rawPrice);
@@ -589,12 +733,14 @@ async function handleCommand(broker, text, ctx) {
     try {
       await client.query("BEGIN");
       await client.query(
-        "SELECT pg_advisory_xact_lock(('x' || substr(md5($1 || ':' || $2), 1, 16))::bit(64)::bigint)",
+        "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
         [String(broker.agency_id), targetCode]
       );
 
       const { rows } = await client.query(
-        "SELECT * FROM listings WHERE agency_id = $1 AND UPPER(code) = $2 FOR UPDATE",
+        `SELECT * FROM listings
+         WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+         FOR UPDATE`,
         [broker.agency_id, targetCode]
       );
 
@@ -621,7 +767,6 @@ async function handleCommand(broker, text, ctx) {
         return true;
       }
 
-      // EDT-04: DEVELOPER MODEL GUARD
       if (
         listing.is_primary_developer ||
         listing.inventory_type === "developer_model"
@@ -636,7 +781,6 @@ async function handleCommand(broker, text, ctx) {
         return true;
       }
 
-      // EDT-05: FULL CASCADE MUTATION
       const formattedPriceDisplay = T.formatAbbreviatedPrice(
         numericPrice,
         parsedPriceResult.currency || "EGP",
@@ -650,7 +794,6 @@ async function handleCommand(broker, text, ctx) {
           parsedPriceResult.currency || listing.details?.currency || "EGP"
       };
 
-      // Re-synthesize Titles & Trigram
       const newArTitle = `${listing.property_type || "وحدة"} ${
         listing.area_value || ""
       }م² في ${
@@ -703,6 +846,417 @@ async function handleCommand(broker, text, ctx) {
     }
 
     return true;
+  }
+
+  // 12. DELIVERABLE: LUXURY FLYER / BROCHURE (DEL-01)
+  const flyerMatch = raw.match(
+    /^(?:flyer|كتالوج|بروشور|unbranded|بدون بيانات)(?:\s+([A-Za-z0-9_\-\.\/]+))?$/i
+  );
+  if (flyerMatch) {
+    const isUnbranded = /unbranded|بدون بيانات/i.test(flyerMatch[0]);
+    const targetCode = resolveTargetCode(flyerMatch[1]);
+
+    if (!targetCode) {
+      await reply(
+        broker,
+        lang === "en"
+          ? "⚠️ Please specify the unit code (e.g. `flyer NOLL-101` or `كتالوج NOLL-101`)."
+          : "⚠️ يرجى كتابة كود الوحدة (مثال: `كتالوج NOLL-101` أو `بروشور NOLL-101`)."
+      );
+      return true;
+    }
+
+    const { rows } = await pool.query(
+      `SELECT * FROM listings
+       WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+       LIMIT 1`,
+      [broker.agency_id, targetCode]
+    );
+
+    if (rows.length === 0) {
+      await reply(
+        broker,
+        lang === "en"
+          ? `🔍 Unit #${targetCode} was not found.`
+          : `🔍 لم يتم العثور على الوحدة #${targetCode}.`
+      );
+      return true;
+    }
+
+    const listing = rows[0];
+    recentBrokerListings.set(broker.id, listing.code);
+
+    // Cooldown Guard (20s on brochure rendering)
+    const flyerCooldownKey = `flyer:${broker.id}`;
+    const now = Date.now();
+    if (cooldowns.get(flyerCooldownKey) > now) {
+      const waitSec = Math.ceil((cooldowns.get(flyerCooldownKey) - now) / 1000);
+      await reply(
+        broker,
+        lang === "en"
+          ? `⏳ Brochure generation is cooling down. Please wait ${waitSec}s.`
+          : `⏳ جاري معالجة طلب سابق. يرجى الانتظار ${waitSec} ثانية.`
+      );
+      return true;
+    }
+    cooldowns.set(flyerCooldownKey, now + 20000);
+
+    // Fast-path: Check flyer_cache in listings
+    const cacheKey = isUnbranded ? "unbranded" : "branded";
+    const cachedUrl = listing.flyer_cache?.[cacheKey];
+
+    if (cachedUrl) {
+      const caption =
+        lang === "en"
+          ? `📄 Luxury Brochure for #${listing.code} (${
+              isUnbranded ? "White-Label" : "Agency Branded"
+            })`
+          : `📄 كتالوج الوحدة #${listing.code} (${
+              isUnbranded ? "بدون بيانات" : "معتمد بالبيانات"
+            })`;
+      await WA.sendWhatsAppImage(
+        broker.phone_normalized || broker.phone_number,
+        cachedUrl,
+        caption
+      );
+      return true;
+    }
+
+    // Dynamic ETA acknowledgment
+    await reply(
+      broker,
+      lang === "en"
+        ? `🎨 Generating luxury brochure for #${listing.code} (100% English)...\n⏱️ Estimated time: ~4 to 8 seconds.`
+        : `🎨 جاري تصميم واعتماد الكتالوج عالي الجودة للوحدة #${listing.code} (إنجليزي 100%)...\n⏱️ الوقت المتوقع: ~4 إلى 8 ثوانٍ.`
+    );
+
+    setImmediate(async () => {
+      try {
+        const { rows: agencyRows } = await pool.query(
+          "SELECT * FROM agencies WHERE id = $1 LIMIT 1",
+          [broker.agency_id]
+        );
+        const agency = agencyRows[0] || {};
+
+        const flyerBuffer = await Flyer.generateFlyerBuffer({
+          listing,
+          agency,
+          broker: isUnbranded ? null : broker,
+          lang: "en",
+          unbranded: isUnbranded
+        });
+
+        if (!flyerBuffer) {
+          throw new Error("Flyer buffer output was empty");
+        }
+
+        const Supabase = require("../lib/supabase");
+        const storagePath = `flyers/${broker.agency_id}/${listing.id}/${
+          isUnbranded ? "unbranded" : "branded"
+        }_${Date.now()}.png`;
+
+        const publicUrl = await Supabase.uploadFlyerImage(
+          broker.agency_id,
+          storagePath,
+          flyerBuffer
+        );
+
+        // Update flyer_cache in listings
+        const updatedCache = {
+          ...(listing.flyer_cache || {}),
+          [cacheKey]: publicUrl
+        };
+        await pool.query(
+          "UPDATE listings SET flyer_cache = $1, updated_at = NOW() WHERE id = $2",
+          [JSON.stringify(updatedCache), listing.id]
+        );
+
+        const caption =
+          lang === "en"
+            ? `📄 Luxury Brochure for #${listing.code}`
+            : `📄 كتالوج الوحدة #${listing.code}`;
+
+        await WA.sendWhatsAppImage(
+          broker.phone_normalized || broker.phone_number,
+          publicUrl || flyerBuffer,
+          caption
+        );
+      } catch (err) {
+        console.error("Flyer render failure:", err);
+        cooldowns.delete(flyerCooldownKey);
+        await reply(
+          broker,
+          lang === "en"
+            ? `❌ Could not generate flyer for #${listing.code}. Please ensure unit photos are uploaded.`
+            : `❌ تعذر إنشاء الكتالوج للوحدة #${listing.code}. يرجى التأكد من رفع صور كافية للوحدة.`
+        );
+      }
+    });
+
+    return true;
+  }
+
+  // 13. DELIVERABLE: CLIENT MARKETING AD COPY (DEL-02)
+  const clientCopyMatch = raw.match(
+    /^(?:client|عميل)(?:\s+([A-Za-z0-9_\-\.\/]+))?$/i
+  );
+  if (clientCopyMatch) {
+    const isEn = /^client/i.test(clientCopyMatch[0]);
+    const targetCode = resolveTargetCode(clientCopyMatch[1]);
+
+    if (!targetCode) {
+      await reply(
+        broker,
+        lang === "en"
+          ? "⚠️ Please specify the unit code (e.g., `client NOLL-101` or `عميل NOLL-101`)."
+          : "⚠️ يرجى تحديد كود الوحدة (مثال: `عميل NOLL-101` أو `client NOLL-101`)."
+      );
+      return true;
+    }
+
+    const { rows } = await pool.query(
+      `SELECT * FROM listings
+       WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+       LIMIT 1`,
+      [broker.agency_id, targetCode]
+    );
+
+    if (rows.length === 0) {
+      await reply(
+        broker,
+        lang === "en"
+          ? `🔍 Unit #${targetCode} was not found.`
+          : `🔍 لم يتم العثور على الوحدة #${targetCode}.`
+      );
+      return true;
+    }
+
+    const listing = rows[0];
+    recentBrokerListings.set(broker.id, listing.code);
+
+    const clientCopy = T.formatClientListingText(
+      listing,
+      broker,
+      isEn ? "en" : "ar"
+    );
+    await reply(broker, clientCopy);
+    return true;
+  }
+
+  // 14. DELIVERABLE: PAYMENT MATRIX / PLANS (DEL-03)
+  const plansMatch = raw.match(
+    /^(?:plans|جدول|انظمة السداد|سداد)(?:\s+([A-Za-z0-9_\-\.\/]+))?$/i
+  );
+  if (plansMatch) {
+    const targetCode = resolveTargetCode(plansMatch[1]);
+
+    if (!targetCode) {
+      await reply(
+        broker,
+        lang === "en"
+          ? "⚠️ Please specify the unit code (e.g. `plans NOLL-101` or `جدول NOLL-101`)."
+          : "⚠️ يرجى تحديد كود الوحدة (مثال: `جدول NOLL-101` أو `انظمة السداد NOLL-101`)."
+      );
+      return true;
+    }
+
+    const { rows } = await pool.query(
+      `SELECT * FROM listings
+       WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+       LIMIT 1`,
+      [broker.agency_id, targetCode]
+    );
+
+    if (rows.length === 0) {
+      await reply(
+        broker,
+        lang === "en"
+          ? `🔍 Unit #${targetCode} was not found.`
+          : `🔍 الوحدة #${targetCode} غير موجودة.`
+      );
+      return true;
+    }
+
+    const listing = rows[0];
+    recentBrokerListings.set(broker.id, listing.code);
+
+    const plans = listing.payment_terms?.plans || [];
+    if (!plans.length) {
+      await reply(
+        broker,
+        lang === "en"
+          ? `ℹ️ Unit #${listing.code} is a resale listing with cash/upfront breakdown. No developer matrix is attached.`
+          : `ℹ️ الوحدة #${listing.code} تابعة للريزيل ولا يوجد لها جدول أنظمة سداد مطورين.`
+      );
+      return true;
+    }
+
+    let planMsg =
+      lang === "en"
+        ? `💳 *Available Payment Plans for #${listing.code}*\n`
+        : `💳 *أنظمة السداد المتاحة للوحدة #${listing.code}*\n`;
+
+    plans.forEach((p, idx) => {
+      planMsg += `\n*${idx + 1}. ${p.name || `${p.years} Years`}*`;
+      planMsg += `\n  • ${lang === "en" ? "Down Payment" : "المقدم"}: ${
+        p.down_payment_pct
+      }%`;
+      if (p.quarterly_amount) {
+        planMsg += `\n  • ${
+          lang === "en" ? "Quarterly Installment" : "القسط الربع سنوي"
+        }: ${T.formatPrice(p.quarterly_amount, lang, "EGP")}`;
+      }
+      if (p.delivery_pct) {
+        planMsg += `\n  • ${
+          lang === "en" ? "Upon Delivery" : "دفعة الاستلام"
+        }: ${p.delivery_pct}%`;
+      }
+    });
+
+    await replyButtons(broker, planMsg, [
+      {
+        id: `flyer:en:dark:${listing.code}`,
+        title: lang === "en" ? "Flyer 📄" : "الكتالوج 📄"
+      },
+      {
+        id: `client:${listing.code}`,
+        title: lang === "en" ? "Client Pitch 📱" : "نص العميل 📱"
+      }
+    ]);
+    return true;
+  }
+
+  // 15. DELIVERABLE: MARKETING COLLATERAL / LAYOUT (DEL-05)
+  const collateralMatch = raw.match(
+    /^(?:layout|مخطط|collateral|ملفات)(?:\s+([A-Za-z0-9_\-\.\/]+))?$/i
+  );
+  if (collateralMatch) {
+    const targetCode = resolveTargetCode(collateralMatch[1]);
+
+    if (!targetCode) {
+      await reply(
+        broker,
+        lang === "en"
+          ? "⚠️ Please specify the unit code (e.g. `layout NOLL-101`)."
+          : "⚠️ يرجى تحديد كود الوحدة (مثال: `مخطط NOLL-101`)."
+      );
+      return true;
+    }
+
+    const { rows } = await pool.query(
+      `SELECT * FROM listings
+       WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+       LIMIT 1`,
+      [broker.agency_id, targetCode]
+    );
+
+    if (rows.length === 0) {
+      await reply(
+        broker,
+        lang === "en"
+          ? `🔍 Unit #${targetCode} was not found.`
+          : `🔍 لم يتم العثور على الوحدة #${targetCode}.`
+      );
+      return true;
+    }
+
+    const listing = rows[0];
+    recentBrokerListings.set(broker.id, listing.code);
+
+    const collateral = listing.collateral || {};
+    const links = [];
+
+    if (collateral.layout_pdf_url) {
+      links.push(
+        `📐 *${lang === "en" ? "2D Layout Plan" : "المخطط الهندسي"}:* ${
+          collateral.layout_pdf_url
+        }`
+      );
+    }
+    if (collateral.master_plan_url) {
+      links.push(
+        `🗺️ *${lang === "en" ? "Master Plan" : "المخطط العام"}:* ${
+          collateral.master_plan_url
+        }`
+      );
+    }
+    if (collateral.drive_folder_url) {
+      links.push(
+        `📁 *${lang === "en" ? "Drive Sales Kit" : "ملفات درايف"}:* ${
+          collateral.drive_folder_url
+        }`
+      );
+    }
+    if (collateral.project_brochure_url) {
+      links.push(
+        `📖 *${lang === "en" ? "Project Brochure" : "بروشور المشروع"}:* ${
+          collateral.project_brochure_url
+        }`
+      );
+    }
+
+    if (!links.length) {
+      await reply(
+        broker,
+        lang === "en"
+          ? `ℹ️ No external collateral or floor plans are currently linked to #${listing.code}.`
+          : `ℹ️ لا توجد روابط مخططات أو ملفات درايف مسجلة للوحدة #${listing.code}.`
+      );
+      return true;
+    }
+
+    const header =
+      lang === "en"
+        ? `📁 *Sales Collateral for #${listing.code}:*\n\n`
+        : `📁 *ملفات ومخططات الوحدة #${listing.code}:*\n\n`;
+
+    await reply(broker, header + links.join("\n\n"));
+    return true;
+  }
+
+  // 16. DIRECT UNIT CODE LOOKUP (ING-04)
+  const codeParseResult = T.parseExplicitUnitCode(raw);
+  if (codeParseResult.hasCode && codeParseResult.code) {
+    const targetCode = T.extractCleanCode(codeParseResult.code);
+
+    const { rows } = await pool.query(
+      `SELECT * FROM listings
+       WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+       LIMIT 1`,
+      [broker.agency_id, targetCode]
+    );
+
+    if (rows.length > 0) {
+      const listing = rows[0];
+      recentBrokerListings.set(broker.id, listing.code);
+
+      const detailsCard = T.formatInternalListingDetails(listing, lang);
+      const isResale = listing.inventory_type === "resale_unit";
+
+      const buttons = [
+        {
+          id: `flyer:en:dark:${listing.code}`,
+          title: lang === "en" ? "Flyer 📄" : "الكتالوج 📄"
+        },
+        {
+          id: `client:${listing.code}`,
+          title: lang === "en" ? "Client Copy 📱" : "نص العميل 📱"
+        },
+        {
+          id: isResale ? `edit:${listing.code}` : `plans_view:${listing.code}`,
+          title: isResale
+            ? lang === "en"
+              ? "Edit ✏️"
+              : "تعديل ✏️"
+            : lang === "en"
+            ? "Plans 💳"
+            : "جدول الأقساط 💳"
+        }
+      ];
+
+      await replyButtons(broker, detailsCard, buttons);
+      return true;
+    }
   }
 
   // Not handled by commands router; fallthrough to search/text pipeline

@@ -25,6 +25,7 @@ async function normalizeImageBuffer(rawBuffer) {
 
 /**
  * Handles incoming WhatsApp photos (ING-01).
+ * Adopts silent reaction acknowledgment (Solution 2) to eliminate chat flooding.
  */
 async function handleImage(broker, message, ctx) {
   const { pool, lang } = ctx;
@@ -140,20 +141,16 @@ async function handleImage(broker, message, ctx) {
     }
   }
 
-  const photoCount = mediaResult.count || currentMediaCount + 1;
-
-  const promptBody =
-    lang === "en"
-      ? `📸 Photo received (${photoCount}/15). Send remaining photos, voice notes, or text specs, then type *done* to review.`
-      : `📸 تم استلام الصورة (${photoCount}/15). أرسل باقي الصور أو فويس نوت بالمواصفات، ثم اكتب *«تم»* للمراجعة.`;
-
-  await replyButtons(broker, promptBody, [
-    {
-      id: "DRAFT_SAVE",
-      title: lang === "en" ? "Done (Save) ✅" : "تم (حفظ) ✅"
-    },
-    { id: "DRAFT_CANCEL", title: lang === "en" ? "Cancel ❌" : "إلغاء ❌" }
-  ]);
+  // 6. Solution 2: Send non-intrusive reaction directly on the photo message bubble
+  // Prevents notification flooding and jumping buttons during multi-image batch ingress
+  const recipient = broker.phone_normalized || broker.phone_number;
+  if (message.id && recipient) {
+    try {
+      await WA.sendWhatsAppReaction(recipient, message.id, "📸");
+    } catch (reactionErr) {
+      console.warn("WhatsApp reaction delivery warning:", reactionErr.message);
+    }
+  }
 
   return "done";
 }

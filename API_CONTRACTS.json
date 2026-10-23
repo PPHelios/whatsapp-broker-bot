@@ -81,7 +81,6 @@
       "formatInternalListingDetails": ["listing", "lang"],
       "formatSearchResults": ["rows", "opts"],
       "listingsToCsv": ["rows"],
-      "formatArabicForSatori": ["text"],
       "getHelpMessage": ["lang"],
       "toEnglishSpec": ["value", "category"]
     },
