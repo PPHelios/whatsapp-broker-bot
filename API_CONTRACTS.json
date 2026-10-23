@@ -1,0 +1,164 @@
+{
+  "libraries": {
+    "lib/whatsapp.js": {
+      "sendWhatsAppText": ["recipient", "text", "opts"],
+      "sendWhatsAppButtons": ["recipient", "body", "buttons"],
+      "sendWhatsAppList": ["recipient", "body", "buttonText", "sections"],
+      "sendWhatsAppImage": ["recipient", "mediaIdOrUrl", "caption"],
+      "sendWhatsAppDocument": ["recipient", "buffer", "filename", "caption"],
+      "downloadWhatsAppMedia": ["mediaId"],
+      "uploadWhatsAppMedia": ["buffer", "opts"],
+      "markAsRead": ["msgId", "opts"],
+      "safeTruncate": ["str", "maxChars"]
+    },
+    "lib/ai.js": {
+      "getGenAI": [],
+      "generateWithCascade": ["params"],
+      "transcribeAudio": ["audioBuffer", "mimeType", "ctx"]
+    },
+    "lib/vision.js": {
+      "createVisionThumbnail": ["buffer"],
+      "analyzePhotosWithGemini": ["images", "ctx"],
+      "ensureListingImagesCurated": ["listingId", "ctx"]
+    },
+    "lib/financials.js": {
+      "addMonths": ["date", "months"],
+      "formatDate": ["d"],
+      "calculatePlanSummary": ["basePrice", "plan"],
+      "calculateDeveloperPaymentPlans": [
+        "basePrice",
+        "plans",
+        "maintenancePct"
+      ],
+      "filterMatchingPlans": ["basePrice", "plans", "constraints"],
+      "generateDetailedSchedule": ["basePrice", "plan", "startDate"],
+      "reconcileResaleBalance": ["params"],
+      "calculateResaleFinancials": ["listing"],
+      "formatSinglePlanAdCopy": [
+        "listing",
+        "broker",
+        "selectedPlanIdOrYears",
+        "lang"
+      ]
+    },
+    "lib/util.js": {
+      "normalizePhone": ["phone"],
+      "cleanAudioMime": ["mimeType"],
+      "withTimeout": ["promise", "ms", "label"],
+      "sleep": ["ms"],
+      "hashListingCode": ["code"],
+      "sha1": ["str"],
+      "createSerializer": [],
+      "createLimiter": ["maxConcurrency", "opts"],
+      "createRateGate": ["rpm"],
+      "createCounter": ["windowMs", "max"],
+      "isValidZipBuffer": ["buf"]
+    },
+    "lib/text.js": {
+      "normalizeDigits": ["str"],
+      "extractCleanCode": ["rawCode"],
+      "parseExplicitUnitCode": ["text"],
+      "cleanArabicText": ["inputText"],
+      "normalizeAr": ["input"],
+      "stripMarketingFluff": ["rawText"],
+      "cleanFeaturesList": ["features"],
+      "detectCurrency": ["text"],
+      "normalizePriceInput": ["str"],
+      "parseMoney": ["raw", "opts"],
+      "formatAbbreviatedPrice": ["val", "currency", "lang", "listingType"],
+      "parseEgyptianPrice": ["rawText", "opts"],
+      "parsePrice": ["raw", "opts"],
+      "formatPrice": ["n", "lang", "currency"],
+      "priceText": ["listing", "lang"],
+      "formatStandardHeader": ["listing", "lang"],
+      "formatClientListingText": ["listing", "broker", "lang"],
+      "formatDraftReviewCard": [
+        "draft",
+        "parsedPrice",
+        "validationResult",
+        "lang"
+      ],
+      "formatInternalListingDetails": ["listing", "lang"],
+      "formatSearchResults": ["rows", "opts"],
+      "listingsToCsv": ["rows"],
+      "formatArabicForSatori": ["text"],
+      "getHelpMessage": ["lang"],
+      "toEnglishSpec": ["value", "category"]
+    },
+    "lib/search.js": {
+      "parseSearchRequest": ["aiShim", "params"],
+      "buildSearchQuery": ["agencyId", "parsed", "opts"],
+      "fallbackParse": ["text"],
+      "enrichLocation": ["aiShim", "params"],
+      "normalizeKeywords": ["keywords", "max"],
+      "normalizeTerm": ["t"],
+      "normalizeParsed": ["raw"],
+      "hasAnyFilter": ["p"],
+      "formatInterpretation": ["p"],
+      "estimateCostUsd": ["usage", "opts"],
+      "expandAmenitySynonyms": ["term"]
+    },
+    "lib/listing.js": {
+      "normalizeArabicDigits": ["str"],
+      "parseExplicitUnitCode": ["text"],
+      "extractExplicitUnitCode": ["text"],
+      "isLikelyListingMetadata": ["text"],
+      "detectLang": ["text", "fallback"],
+      "isReplaceMode": ["text"],
+      "generateListingCode": ["customCode", "propertyType"],
+      "buildListingPrompt": ["targetLang", "fenceToken"],
+      "buildVisionPrompt": [],
+      "validateDraft": ["inputDraft", "lang"],
+      "checkDraftCompleteness": ["draft", "parsedContext"],
+      "validateVisionDraft": ["raw", "nImages"],
+      "composeFields": ["params"]
+    },
+    "lib/flyer.js": {
+      "generateFlyerBuffer": ["params"],
+      "renderFlyerOnDemand": ["broker", "code", "flyerLang", "theme", "ctx"],
+      "loadFont": ["filename"]
+    },
+    "lib/excel.js": {
+      "buildAgencyInventoryWorkbook": ["params"],
+      "buildMultiPlanWorkbook": ["params"],
+      "buildRejectionWorkbook": ["params"],
+      "buildBulkIngestionReport": ["params"],
+      "sanitizeCellValue": ["val"]
+    },
+    "lib/supabase.js": {
+      "uploadListingImage": ["agencyId", "storagePath", "buffer"],
+      "uploadFlyerImage": ["agencyId", "storagePath", "buffer"],
+      "deleteStorageFiles": ["paths"]
+    },
+    "lib/dispatcher.js": {
+      "reply": ["broker", "text", "opts"],
+      "allowSilentDrop": ["reason"],
+      "executeGuardedTurn": ["broker", "message", "handlerFn"]
+    },
+    "lib/drafts.js": {
+      "getDraft": ["pool", "brokerId", "sessionType"],
+      "createDraft": [
+        "pool",
+        "brokerId",
+        "agencyId",
+        "brokerPhoneNormalized",
+        "sessionType"
+      ],
+      "clearDraft": ["pool", "brokerId", "sessionType"],
+      "appendText": ["pool", "brokerId", "text", "sessionType"],
+      "appendVoice": ["pool", "brokerId", "params", "sessionType"],
+      "appendMedia": ["pool", "brokerId", "params", "sessionType"],
+      "stageDraftReview": ["pool", "brokerId", "reviewPayload"],
+      "getStagedReview": ["pool", "brokerId"],
+      "commitDraftToDatabase": ["broker", "draft", "ctx"],
+      "commitDraftToListing": ["broker", "draft", "ctx"],
+      "appendToDraft": ["pool", "broker", "params"]
+    }
+  },
+  "invariant_variable_names": {
+    "broker_phone": "Must use 'broker.phone_number' or 'broker.phone_normalized'. NEVER 'broker.phone' or 'broker.whatsapp_id'",
+    "listing_code": "Must use 'listing.code'",
+    "agency_id": "Must use 'agency_id' in all SQL queries",
+    "details_json": "Must use 'listings.details' and 'details->>'field''"
+  }
+}

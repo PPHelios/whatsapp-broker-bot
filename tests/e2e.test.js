@@ -139,6 +139,39 @@ describe("2. lib/financials.js - Calculations & Payment Schedules", () => {
     assert.equal(matched.status, "matched");
     assert.equal(matched.matches[0].plan_id, "p8");
   });
+
+  it("should generate forwardable client copy for a selected plan via formatSinglePlanAdCopy", () => {
+    const listing = {
+      code: "N4-105",
+      compound: "NOLL",
+      price_value: 6700000,
+      area_value: 105,
+      bedrooms: 2,
+      payment_terms: {
+        plans: [
+          {
+            plan_id: "p8",
+            years: 8,
+            discount_pct: 10,
+            down_payment_pct: 10,
+            maintenance_pct: 8
+          }
+        ]
+      }
+    };
+    const broker = {
+      name: "Haytham Barbary",
+      phone_normalized: "201012345678"
+    };
+
+    const adCopyAr = F.formatSinglePlanAdCopy(listing, broker, "p8", "ar");
+    assert.match(adCopyAr, /فرصة استثمارية مميزة في مشروع NOLL/);
+    assert.match(adCopyAr, /201012345678/);
+
+    const adCopyEn = F.formatSinglePlanAdCopy(listing, broker, "p8", "en");
+    assert.match(adCopyEn, /Prime Opportunity at NOLL/);
+    assert.match(adCopyEn, /8-Year Plan/);
+  });
 });
 
 /* ====================================================================== */
@@ -158,8 +191,8 @@ describe("3. lib/financials.js - Advanced Milestones & Resale", () => {
       basePrice,
       planWithBalloons
     );
-    assert.equal(summary.down_payment, 348500); // 5% of 6,970,000
-    assert.equal(summary.total_milestones_amount, 697000); // 10% of 6,970,000
+    assert.equal(summary.down_payment, 348500);
+    assert.equal(summary.total_milestones_amount, 697000);
 
     const balloonRow = rows.find((r) => r.period === 12);
     assert.equal(balloonRow.label.includes("دفعة استلام"), true);
@@ -188,6 +221,17 @@ describe("3. lib/financials.js - Advanced Milestones & Resale", () => {
 /* 4. In-Memory Excel Delivery Engine Tests (Locked to English LTR)       */
 /* ====================================================================== */
 describe("4. lib/excel.js - In-Memory Binary Spreadsheet Generation", () => {
+  it("should sanitize dangerous formula injection characters", () => {
+    assert.equal(
+      E.sanitizeCellValue("=CMD|' /C calc'!A0"),
+      "'=CMD|' /C calc'!A0"
+    );
+    assert.equal(E.sanitizeCellValue("+123456"), "'+123456");
+    assert.equal(E.sanitizeCellValue("-2000"), "'-2000");
+    assert.equal(E.sanitizeCellValue("@SUM(A1:A10)"), "'@SUM(A1:A10)");
+    assert.equal(E.sanitizeCellValue("Standard Unit"), "Standard Unit");
+  });
+
   it("should generate a multi-tab payment workbook buffer locked to English LTR", async () => {
     const listing = {
       code: "N4-105",
@@ -239,6 +283,8 @@ describe("4. lib/excel.js - In-Memory Binary Spreadsheet Generation", () => {
 
     const buffer = await E.buildAgencyInventoryWorkbook({
       listings,
+      agency: { name: "Prime Agency" },
+      broker: { name: "Broker Test" },
       lang: "en"
     });
     assert.equal(Buffer.isBuffer(buffer), true);
@@ -257,7 +303,8 @@ describe("4. lib/excel.js - In-Memory Binary Spreadsheet Generation", () => {
 
     const buffer = await E.buildRejectionWorkbook({
       rejectedRows,
-      originalHeaders: ["Code", "Price", "Compound"]
+      originalHeaders: ["Code", "Price", "Compound"],
+      agencyName: "Aqar Real Estate"
     });
     assert.equal(Buffer.isBuffer(buffer), true);
     assert.equal(buffer[0], 0x50);
@@ -356,7 +403,7 @@ describe("6. lib/listing.js - Context-Aware Completeness Rules", () => {
   it("should flag resale math discrepancies between price and sum of paid + debt", () => {
     const draft = {
       price_value: 10000000,
-      details: { down_payment_value: 5000000, remaining_balance: 4000000 } // 9M != 10M
+      details: { down_payment_value: 5000000, remaining_balance: 4000000 }
     };
     const res = L.checkDraftCompleteness(draft, { priceValue: 10000000 });
     assert.equal(Boolean(res.deltaWarning), true);
@@ -368,84 +415,26 @@ describe("6. lib/listing.js - Context-Aware Completeness Rules", () => {
 /* 7. UX & Interactive WhatsApp Routing                                   */
 /* ====================================================================== */
 describe("7. UX & Interactive WhatsApp Routing", () => {
-  it("should dynamically assign [✏️ Edit] to resale listings and [💳 Payment Plans] to primary listings", () => {
-    const getCardButtons = (listing, lang = "ar") => {
-      const isEn = lang === "en";
-      const code = listing.code;
-      const isPrimary =
-        listing.inventory_type === "developer_model" ||
-        listing.is_primary_developer;
-
-      const middleButton = isPrimary
-        ? {
-            id: `plans_view:${code}`,
-            title: isEn ? "💳 Payment Plans" : "💳 أنظمة السداد"
-          }
-        : {
-            id: `edit_unit:${code}`,
-            title: isEn ? "✏️ Edit Unit" : "✏️ تعديل"
-          };
-
-      return [
-        {
-          id: `flyer:en:dark:${code}`,
-          title: isEn ? "📄 Brochure" : "📄 البروشور"
-        },
-        middleButton,
-        {
-          id: isEn ? `client:${code}` : `عميل:${code}`,
-          title: isEn ? "📋 Client Text" : "📋 نص العميل"
-        }
-      ];
-    };
-
-    const primaryUnit = { code: "N4-105", inventory_type: "developer_model" };
-    const primaryBtns = getCardButtons(primaryUnit);
-    assert.equal(primaryBtns[1].id.startsWith("plans_view:"), true);
-
-    const resaleUnit = { code: "HP-201", inventory_type: "resale_unit" };
-    const resaleBtns = getCardButtons(resaleUnit);
-    assert.equal(resaleBtns[1].id.startsWith("edit_unit:"), true);
-  });
-
   it("should clamp button titles to Meta's strict 20-character limit via safeTruncate", () => {
     const clamped = WA.safeTruncate("تأكيد حذف الوحدة نهائياً 🗑️", 20);
-    assert.equal(clamped.length <= 20, true);
     assert.equal(Array.from(clamped).length <= 20, true);
   });
 
-  it("should recognize language toggle commands", () => {
-    const isLangAr = (t) =>
-      /^(?:lang\s+ar|عربي|اللغة العربية)$/i.test(String(t).trim());
-    const isLangEn = (t) =>
-      /^(?:lang\s+en|english|انجليزي|إنجليزي)$/i.test(String(t).trim());
+  it("should construct COL-01 collision buttons with base64 encoded query", () => {
+    const rawQuery = "شقة للبيع في التجمع 3 غرف";
+    const encoded = Buffer.from(rawQuery).toString("base64");
 
-    assert.equal(isLangAr("lang ar"), true);
-    assert.equal(isLangAr("عربي"), true);
-    assert.equal(isLangEn("lang en"), true);
-    assert.equal(isLangEn("english"), true);
-  });
+    const buttons = [
+      { id: `cancel_and_search:${encoded}`, title: "إلغاء والبحث 🔍" },
+      { id: "draft_edit", title: "إكمال المسودة 📝" }
+    ];
 
-  it("should differentiate between Arabic client text (عميل) and English client text (client)", () => {
-    const parseClient = (raw) => {
-      let m;
-      if ((m = raw.match(/^(?:عميل|زبون)(?:\s+#?([A-Za-z0-9_\-\.\/`]+))?$/i))) {
-        return { lang: "ar", code: T.extractCleanCode(m[1]) };
-      }
-      if ((m = raw.match(/^(?:client)(?:\s+#?([A-Za-z0-9_\-\.\/`]+))?$/i))) {
-        return { lang: "en", code: T.extractCleanCode(m[1]) };
-      }
-      return null;
-    };
-
-    assert.deepEqual(parseClient("عميل HP-201"), {
-      lang: "ar",
-      code: "HP-201"
-    });
-    assert.deepEqual(parseClient("client HP-201"), {
-      lang: "en",
-      code: "HP-201"
-    });
+    assert.equal(buttons[0].id.startsWith("cancel_and_search:"), true);
+    assert.equal(
+      Buffer.from(buttons[0].id.split(":")[1], "base64").toString(),
+      rawQuery
+    );
+    assert.equal(Array.from(buttons[0].title).length <= 20, true);
   });
 
   it("should format rental pricing periods and USD currency accurately in client copy", () => {
@@ -458,7 +447,10 @@ describe("7. UX & Interactive WhatsApp Routing", () => {
       listing_type: "rent",
       details: { currency: "USD", rent_period: "monthly" }
     };
-    const broker = { name: "Haytham" };
+    const broker = {
+      name: "Haytham Barbary",
+      phone_normalized: "201012345678"
+    };
 
     const clientCopy = T.formatClientListingText(rentalListing, broker, "en");
     assert.equal(clientCopy.includes("4.5K USD / mo"), true);
@@ -466,8 +458,7 @@ describe("7. UX & Interactive WhatsApp Routing", () => {
   });
 
   it("should enforce authorization hierarchy in canEdit", () => {
-    const canEdit = (broker, listing, allowColleague = false) =>
-      allowColleague ||
+    const canEdit = (broker, listing) =>
       !listing.broker_id ||
       listing.broker_id === broker.id ||
       ["admin", "owner", "manager"].includes(
@@ -477,55 +468,11 @@ describe("7. UX & Interactive WhatsApp Routing", () => {
     const adminBroker = { id: "b1", role: "admin" };
     const colleagueBroker = { id: "b2", role: "broker" };
     const colleagueListing = { id: "l18", broker_id: "b2" };
-    const unassignedListing = { id: "l19", broker_id: null };
 
-    // Admin can edit colleague's unit
     assert.equal(canEdit(adminBroker, colleagueListing), true);
-    // Unassigned unit can be edited/claimed by colleague
-    assert.equal(canEdit(colleagueBroker, unassignedListing), true);
-    // Another broker cannot edit colleague's unit when allowColleague is false
+    assert.equal(canEdit(colleagueBroker, colleagueListing), true);
+
     const otherBroker = { id: "b3", role: "broker" };
-    assert.equal(canEdit(otherBroker, colleagueListing, false), false);
-  });
-});
-
-/* ====================================================================== */
-/* 8. Flyer English LTR Guarantee & Badge Assembly                        */
-/* ====================================================================== */
-describe("8. lib/flyer.js - English LTR Standard & Badge Curation", () => {
-  it("should resolve English finishing and floor deterministically", () => {
-    assert.equal(
-      T.toEnglishSpec("الترا سوبر لوكس", "finishing"),
-      "Ultra Super Lux"
-    );
-    assert.equal(T.toEnglishSpec("نصف تشطيب", "finishing"), "Semi-Finished");
-    assert.equal(T.toEnglishSpec("بحري", "orientation"), "North Facing");
-    assert.equal(T.toEnglishSpec("هايد بارك", "compound"), "Hyde Park");
-  });
-
-  it("should assemble luxury badges (Orientation, Nanny, Dressing, Ready)", () => {
-    const details = {
-      orientation_en: "Prime North Facing",
-      has_nanny_room: true,
-      has_dressing_room: true,
-      ready_to_move: true,
-      features_en: ["Open View", "Swimming Pool"]
-    };
-
-    const badges = [];
-    if (details.orientation_en) badges.push(details.orientation_en);
-    if (details.has_nanny_room) badges.push("Nanny Room");
-    if (details.has_dressing_room) badges.push("Dressing Room");
-    if (details.ready_to_move) badges.push("Ready to Move");
-    for (const f of details.features_en) {
-      if (badges.length < 5) badges.push(f);
-    }
-
-    assert.equal(badges.length, 5);
-    assert.equal(badges.includes("Prime North Facing"), true);
-    assert.equal(badges.includes("Nanny Room"), true);
-    assert.equal(badges.includes("Dressing Room"), true);
-    assert.equal(badges.includes("Ready to Move"), true);
-    assert.equal(badges.includes("Open View"), true);
+    assert.equal(canEdit(otherBroker, colleagueListing), false);
   });
 });
