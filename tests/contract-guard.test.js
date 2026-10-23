@@ -4,7 +4,7 @@
 const fs = require("fs");
 const path = require("path");
 
-describe("API Contract & Variable Naming Guardians", () => {
+describe("API Contract, Database Schema & Variable Naming Guardians", () => {
   const root = path.join(__dirname, "..");
   const scanDirs = ["routes", "lib"];
   const jsFiles = [];
@@ -35,7 +35,7 @@ describe("API Contract & Variable Naming Guardians", () => {
     jsFiles.push(serverPath);
   }
 
-  // 1. Mandatory Schema Naming Rules
+  // 1. Mandatory Schema Naming & Column Reference Rules
   test("Never reference legacy, non-existent, or forbidden column names", () => {
     expect(jsFiles.length).toBeGreaterThan(0);
 
@@ -54,6 +54,7 @@ describe("API Contract & Variable Naming Guardians", () => {
 
       // GUARD 3: broker_sessions must NOT reference non-existent updated_at or id
       expect(code).not.toMatch(/broker_sessions[^;]*\bupdated_at\b/i);
+      expect(code).not.toMatch(/broker_sessions[^;]*\bbroker_sessions\.id\b/i);
 
       // GUARD 4: Forbidden legacy whatsapp_id
       expect(code).not.toMatch(/\bwhatsapp_id\b/);
@@ -62,57 +63,167 @@ describe("API Contract & Variable Naming Guardians", () => {
       expect(code).not.toMatch(
         /SELECT\s+[^;]*\bphone\b(?!\s*AS|\s*,\s*phone_number|\s*,\s*phone_normalized)[^;]*FROM\s+brokers/i
       );
+
+      // GUARD 6: Non-existent listing_drafts table
+      expect(code).not.toMatch(/\blisting_drafts\b/i);
+
+      // GUARD 7: Deprecated arabic-persian-reshaper library is strictly banned
+      expect(code).not.toMatch(/arabic-persian-reshaper/i);
     });
   });
 
-  // 2. Export Contract Verification
-  test("Core libraries must export exact historical function names", () => {
-    const expectedExports = {
+  // 2. Export Contract Verification against API_CONTRACTS.json
+  test("Core libraries must export all canonical function names", () => {
+    const contractsPath = path.join(root, "API_CONTRACTS.json");
+    let contracts = null;
+
+    if (fs.existsSync(contractsPath)) {
+      try {
+        contracts = JSON.parse(fs.readFileSync(contractsPath, "utf8"));
+      } catch (e) {
+        console.warn(
+          "Could not read API_CONTRACTS.json for automated export check:",
+          e.message
+        );
+      }
+    }
+
+    const fallbackExpectedExports = {
       "lib/whatsapp.js": [
         "sendWhatsAppText",
         "sendWhatsAppButtons",
+        "sendWhatsAppList",
         "sendWhatsAppImage",
+        "sendWhatsAppReaction",
+        "sendWhatsAppDocument",
         "uploadWhatsAppMedia",
-        "downloadWhatsAppMedia"
+        "downloadWhatsAppMedia",
+        "markAsRead",
+        "safeTruncate"
       ],
       "lib/util.js": [
         "normalizePhone",
         "cleanAudioMime",
         "withTimeout",
         "sleep",
+        "hashListingCode",
+        "sha1",
+        "isValidZipBuffer",
         "createSerializer",
         "createLimiter",
         "createRateGate"
       ],
       "lib/text.js": [
-        "formatAbbreviatedPrice",
-        "formatClientListingText",
-        "parseEgyptianPrice",
-        "cleanFeaturesList",
+        "normalizeDigits",
+        "extractCleanCode",
+        "parseExplicitUnitCode",
         "cleanArabicText",
-        "getHelpMessage"
+        "normalizeAr",
+        "stripMarketingFluff",
+        "cleanFeaturesList",
+        "detectCurrency",
+        "normalizePriceInput",
+        "parseMoney",
+        "formatAbbreviatedPrice",
+        "parseEgyptianPrice",
+        "parsePrice",
+        "formatPrice",
+        "priceText",
+        "formatStandardHeader",
+        "formatClientListingText",
+        "formatDraftReviewCard",
+        "formatInternalListingDetails",
+        "formatSearchResults",
+        "listingsToCsv",
+        "getHelpMessage",
+        "toEnglishSpec",
+        "isVillaTypology",
+        "isStudioTypology"
       ],
       "lib/search.js": [
         "parseSearchRequest",
         "buildSearchQuery",
         "fallbackParse",
-        "enrichLocation"
+        "enrichLocation",
+        "formatInterpretation",
+        "estimateCostUsd",
+        "expandAmenitySynonyms",
+        "normalizeKeywords",
+        "normalizeTerm",
+        "handleSearchMessage"
       ],
       "lib/listing.js": [
-        "composeFields",
+        "normalizeArabicDigits",
+        "parseExplicitUnitCode",
+        "extractExplicitUnitCode",
+        "isLikelyListingMetadata",
+        "detectLang",
+        "isReplaceMode",
         "generateListingCode",
+        "buildListingPrompt",
+        "buildVisionPrompt",
         "validateDraft",
-        "buildListingPrompt"
+        "checkDraftCompleteness",
+        "validateVisionDraft",
+        "composeFields",
+        "isVillaTypology",
+        "isStudioTypology"
+      ],
+      "lib/vision.js": [
+        "createVisionThumbnail",
+        "analyzePhotosWithGemini",
+        "ensureListingImagesCurated"
+      ],
+      "lib/drafts.js": [
+        "getDraft",
+        "createDraft",
+        "clearDraft",
+        "appendText",
+        "appendVoice",
+        "appendMedia",
+        "commitDraftToDatabase"
+      ],
+      "lib/flyer.js": [
+        "generateFlyerBuffer",
+        "renderFlyerOnDemand",
+        "loadFont"
+      ],
+      "lib/excel.js": [
+        "buildAgencyInventoryWorkbook",
+        "buildMultiPlanWorkbook",
+        "buildRejectionWorkbook",
+        "sanitizeCellValue"
+      ],
+      "lib/financials.js": ["formatSinglePlanAdCopy"],
+      "lib/supabase.js": [
+        "uploadListingImage",
+        "uploadFlyerImage",
+        "deleteStorageFiles"
+      ],
+      "lib/dispatcher.js": [
+        "reply",
+        "replyButtons",
+        "allowSilentDrop",
+        "executeGuardedTurn"
       ]
     };
 
-    Object.entries(expectedExports).forEach(([relPath, fns]) => {
+    const targetMap = contracts?.libraries || fallbackExpectedExports;
+
+    Object.entries(targetMap).forEach(([relPath, expected]) => {
       const fullPath = path.join(root, relPath);
       if (!fs.existsSync(fullPath)) return;
       const mod = require(fullPath);
-      fns.forEach((fn) => {
-        expect(typeof mod[fn]).toBe("function");
-      });
+
+      if (Array.isArray(expected)) {
+        expected.forEach((fn) => {
+          expect(typeof mod[fn]).toBe("function");
+        });
+      } else if (typeof expected === "object") {
+        Object.keys(expected).forEach((key) => {
+          expect(mod[key]).toBeDefined();
+        });
+      }
     });
   });
 
@@ -123,5 +234,31 @@ describe("API Contract & Variable Naming Guardians", () => {
     const content = fs.readFileSync(aiPath, "utf8");
     expect(content).not.toMatch(/require\(["']@google\/genai["']\)/);
     expect(content).toMatch(/import\(["']@google\/genai["']\)/);
+  });
+
+  // 4. Distributed Multi-Pod Advisory Locking Guard
+  test("Listing mutations in routes/ must use 64-bit transactional advisory locks", () => {
+    const commandPath = path.join(root, "routes/commands.js");
+    const interactivePath = path.join(root, "routes/interactive.js");
+
+    [commandPath, interactivePath].forEach((filePath) => {
+      if (!fs.existsSync(filePath)) return;
+      const content = fs.readFileSync(filePath, "utf8");
+      expect(content).toMatch(/pg_advisory_xact_lock/);
+    });
+  });
+
+  // 5. Ephemeral Disk Guard (/tmp disk writes forbidden)
+  test("Production routes and libraries must never write to /tmp or local filesystem", () => {
+    jsFiles.forEach((file) => {
+      const rawCode = fs.readFileSync(file, "utf8");
+      const code = rawCode
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/\/\/.*$/gm, "");
+
+      expect(code).not.toMatch(/fs\.writeFileSync/);
+      expect(code).not.toMatch(/fs\.writeFile\(/);
+      expect(code).not.toMatch(/["']\/tmp\//);
+    });
   });
 });

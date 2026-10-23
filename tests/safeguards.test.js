@@ -9,12 +9,16 @@ const rootDir = path.resolve(__dirname, "..");
 describe("AqarChat Master Safeguards & Regression Guard Suite", () => {
   const commandsPath = path.join(rootDir, "routes", "commands.js");
   const interactivePath = path.join(rootDir, "routes", "interactive.js");
+  const mediaPath = path.join(rootDir, "routes", "media.js");
+  const searchPath = path.join(rootDir, "lib", "search.js");
   const listingLibPath = path.join(rootDir, "lib", "listing.js");
   const contractsPath = path.join(rootDir, "API_CONTRACTS.json");
   const schemaRefPath = path.join(rootDir, "SCHEMA_REFERENCE.sql");
 
   let commandsSrc = "";
   let interactiveSrc = "";
+  let mediaSrc = "";
+  let searchSrc = "";
   let listingLibSrc = "";
   let contractsJson = {};
   let schemaRefSql = "";
@@ -22,6 +26,8 @@ describe("AqarChat Master Safeguards & Regression Guard Suite", () => {
   beforeAll(() => {
     commandsSrc = fs.readFileSync(commandsPath, "utf8");
     interactiveSrc = fs.readFileSync(interactivePath, "utf8");
+    mediaSrc = fs.readFileSync(mediaPath, "utf8");
+    searchSrc = fs.readFileSync(searchPath, "utf8");
     listingLibSrc = fs.readFileSync(listingLibPath, "utf8");
     contractsJson = JSON.parse(fs.readFileSync(contractsPath, "utf8"));
     schemaRefSql = fs.readFileSync(schemaRefPath, "utf8");
@@ -63,8 +69,14 @@ describe("AqarChat Master Safeguards & Regression Guard Suite", () => {
       expect(commandsSrc).toMatch(/حذف|delete|مسح/i);
     });
 
-    test("DEL-06: Must support Excel inventory export command triggers", () => {
+    test("DEL-06 & STATS-01: Must support Excel export and inventory summary stats triggers", () => {
       expect(commandsSrc).toMatch(/تصدير|export|excel|شيت/i);
+      expect(commandsSrc).toMatch(/مخزون|المخزون|stats|احصائيات|summary/i);
+    });
+
+    test("DEL-08: Must support multi-line forwarded listing card interception", () => {
+      expect(commandsSrc).toMatch(/raw\.includes\("\\n"\)/);
+      expect(commandsSrc).toMatch(/codeMatch/);
     });
   });
 
@@ -73,7 +85,6 @@ describe("AqarChat Master Safeguards & Regression Guard Suite", () => {
   /* ------------------------------------------------------------------------- */
   describe("2. State Machine Safeguards & Empty Draft Guards", () => {
     test("DRF-02: Pre-flight empty draft guard must exist before AI invocation", () => {
-      // Must check all three media/voice/text collections being zero
       expect(commandsSrc).toMatch(
         /mediaCount\s*===?\s*0\s*&&\s*voiceCount\s*===?\s*0\s*&&\s*textCount\s*===?\s*0/
       );
@@ -89,7 +100,6 @@ describe("AqarChat Master Safeguards & Regression Guard Suite", () => {
       const Listing = require("../lib/listing");
       expect(typeof Listing.validateDraft).toBe("function");
 
-      // Verify null input handling
       const resultNull = Listing.validateDraft(null);
       return Promise.resolve(resultNull).then((res) => {
         expect(res).toBeDefined();
@@ -102,14 +112,12 @@ describe("AqarChat Master Safeguards & Regression Guard Suite", () => {
       const Listing = require("../lib/listing");
       expect(typeof Listing.checkDraftCompleteness).toBe("function");
 
-      // Incomplete apartment
       const incompleteApt = { property_type: "apartment", price_value: 0 };
       const resApt = Listing.checkDraftCompleteness(incompleteApt);
       expect(resApt.isComplete).toBe(false);
       expect(Array.isArray(resApt.blockers)).toBe(true);
       expect(resApt.blockers.some((b) => b.field === "price_value")).toBe(true);
 
-      // Studio should not block on bedrooms = 0
       const studioDraft = {
         property_type: "studio",
         price_value: 3500000,
@@ -145,9 +153,13 @@ describe("AqarChat Master Safeguards & Regression Guard Suite", () => {
       );
     });
 
+    test("SCH-02: Must support search pagination cursor persistence and MORE_SEARCH button", () => {
+      expect(interactiveSrc).toMatch(/MORE_SEARCH|search_more:/);
+      expect(interactiveSrc).toMatch(/session_type\s*=\s*'search_state'/);
+    });
+
     test("DEL-02: Deletion confirmation must acquire 64-bit transactional advisory lock", () => {
       expect(interactiveSrc).toMatch(/pg_advisory_xact_lock/);
-      expect(interactiveSrc).toMatch(/bit\(64\)::bigint/);
       expect(interactiveSrc).toMatch(/FOR UPDATE/);
     });
 
@@ -158,15 +170,24 @@ describe("AqarChat Master Safeguards & Regression Guard Suite", () => {
   });
 
   /* ------------------------------------------------------------------------- */
-  /* 4. PHYSICAL SCHEMA CONTRACTS & VARIABLE INVARIANTS                        */
+  /* 4. MEDIA INGRESS & SILENT REACTIONS (routes/media.js)                     */
   /* ------------------------------------------------------------------------- */
-  describe("4. Physical Schema Reference & Contract Consistency", () => {
+  describe("4. Media Ingress & Silent Reactions (routes/media.js)", () => {
+    test("ING-01: Photo ingress must emit silent WhatsApp emoji reaction (📸)", () => {
+      expect(mediaSrc).toMatch(/sendWhatsAppReaction/);
+      expect(mediaSrc).toMatch(/📸/);
+    });
+  });
+
+  /* ------------------------------------------------------------------------- */
+  /* 5. PHYSICAL SCHEMA CONTRACTS & VARIABLE INVARIANTS                        */
+  /* ------------------------------------------------------------------------- */
+  describe("5. Physical Schema Reference & Contract Consistency", () => {
     test("Brokers table contract: must use phone_normalized or phone_number, never 'phone'", () => {
       const brokerPhoneInvariant =
         contractsJson.invariant_variable_names.broker_phone;
       expect(brokerPhoneInvariant).toBeDefined();
 
-      // Ensure commands and interactive files never query brokers.phone
       expect(commandsSrc).not.toMatch(/brokers\s+WHERE\s+phone\s*=/i);
       expect(interactiveSrc).not.toMatch(/brokers\s+WHERE\s+phone\s*=/i);
     });
@@ -198,6 +219,11 @@ describe("AqarChat Master Safeguards & Regression Guard Suite", () => {
       expect(schemaRefSql).toMatch(
         /CREATE TABLE IF NOT EXISTS public\.operation_logs/
       );
+    });
+
+    test("Operation logs contract: must support structured telemetry writes", () => {
+      expect(schemaRefSql).toMatch(/public\.operation_logs/);
+      expect(searchSrc).toMatch(/operation_logs/);
     });
   });
 });

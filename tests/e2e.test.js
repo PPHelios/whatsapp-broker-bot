@@ -1,4 +1,4 @@
-// tests/e2e.test.js
+// tests/e2e.test.js — End-to-End Test Suite for Core Engine Modules
 "use strict";
 
 const { describe, it } = require("node:test");
@@ -38,6 +38,24 @@ describe("1. lib/text.js - String, Code Sanitization & Header Guard", () => {
         `Incorrect code extracted from: ${c.input}`
       );
     }
+  });
+
+  it("should extract embedded unit codes from multi-line forwarded cards (DEL-08)", () => {
+    const multiLineCard = `
+وحدة للبيع | كود: N4-105
+نول | Golden Square
+─────────────────────────
+الكود الداخلي: N4-105
+النوع: apartment (بيع)
+الحالة: نشط
+السعر: 6.7 مليون ج.م
+المساحة: 105م²
+جدول الأقساط 💳
+    `;
+
+    const parsed = T.parseExplicitUnitCode(multiLineCard);
+    assert.equal(parsed.hasCode, true);
+    assert.equal(parsed.code, "N4-105");
   });
 
   it("should strip developer hotlines, mobile numbers, URLs, and marketing fluff", () => {
@@ -91,6 +109,61 @@ describe("1. lib/text.js - String, Code Sanitization & Header Guard", () => {
     assert.equal(headerEn.includes("\x0B"), false);
     assert.match(headerEn, /🔑 Unit For Sale \| Code: `N4-105`/);
     assert.match(headerEn, /🏢 NOLL \| New Cairo/);
+  });
+
+  it("should enforce typology rules: suppress floor for villas and elevate BUA/Land", () => {
+    const villa = {
+      code: "VIL-901",
+      property_type: "villa",
+      listing_type: "sale",
+      compound: "Villette",
+      district: "New Cairo",
+      price_value: 25000000,
+      area_value: 350,
+      bedrooms: 5,
+      bathrooms: 6,
+      details: {
+        bua: 350,
+        land_area: 500,
+        garden_area: 200,
+        roof_area: 80,
+        floor: "3 Floors"
+      }
+    };
+    const broker = { name: "Haytham", phone_normalized: "201012345678" };
+
+    const cardAr = T.formatClientListingText(villa, broker, "ar");
+    assert.equal(cardAr.includes("الدور"), false);
+    assert.equal(cardAr.includes("مساحة المباني (BUA):"), true);
+    assert.equal(cardAr.includes("مساحة الأرض:"), true);
+
+    const cardEn = T.formatClientListingText(villa, broker, "en");
+    assert.equal(cardEn.includes("Floor:"), false);
+    assert.equal(cardEn.includes("Built-Up Area (BUA): 350 sqm"), true);
+    assert.equal(cardEn.includes("Land Area: 500 sqm"), true);
+  });
+
+  it("should format studios cleanly as 'Studio (Open Concept)' / 'استوديو مفتوح'", () => {
+    const studio = {
+      code: "STU-01",
+      property_type: "studio",
+      listing_type: "sale",
+      compound: "Badya",
+      price_value: 3500000,
+      area_value: 60,
+      bedrooms: 0,
+      bathrooms: 1,
+      details: {}
+    };
+    const broker = { name: "Haytham", phone_normalized: "201012345678" };
+
+    const cardAr = T.formatClientListingText(studio, broker, "ar");
+    assert.equal(cardAr.includes("0 غرف"), false);
+    assert.equal(cardAr.includes("استوديو مفتوح"), true);
+
+    const cardEn = T.formatClientListingText(studio, broker, "en");
+    assert.equal(cardEn.includes("0 Beds"), false);
+    assert.equal(cardEn.includes("Studio (Open Concept)"), true);
   });
 });
 
@@ -258,7 +331,7 @@ describe("4. lib/excel.js - In-Memory Binary Spreadsheet Generation", () => {
     });
 
     assert.equal(Buffer.isBuffer(buffer), true);
-    assert.equal(buffer[0], 0x50); // PK header
+    assert.equal(buffer[0], 0x50); // PK zip header
     assert.equal(buffer[1], 0x4b);
   });
 
@@ -340,6 +413,19 @@ describe("5. lib/search.js - Bilingual Normalization & Negative Status Guards", 
     assert.equal(sql.includes("LIMIT $"), true);
     assert.equal(sql.includes("OFFSET $"), true);
     assert.equal(params.includes(5), true);
+  });
+
+  it("should allow studios with bedrooms = 0 via nonNegInt without converting to null", () => {
+    const parsed = S.fallbackParse("استوديو في نول");
+    assert.equal(parsed.filters.bedrooms_min, 0);
+    assert.equal(parsed.filters.bedrooms_max, 0);
+    assert.equal(parsed.filters.property_types.includes("studio"), true);
+
+    const { sql } = S.buildSearchQuery("agency-id", parsed, {
+      limit: 5,
+      offset: 0
+    });
+    assert.match(sql, /\(l\.bedrooms = 0 OR l\.property_type = 'studio'\)/);
   });
 });
 

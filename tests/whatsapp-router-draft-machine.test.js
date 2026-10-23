@@ -1,32 +1,42 @@
-// test/whatsapp-router-draft-machine.test.js
+// test/whatsapp-router-draft-machine.test.js — Canonical Ingress Router & Draft State Machine Test Suite
 "use strict";
 
 const crypto = require("crypto");
 const request = require("supertest");
 const express = require("express");
 
-// --- System Under Test: Route & Middleware Implementation ---
+// --- System Under Test: Route & Middleware Implementation (Aligned with ARCHITECTURE_MANIFEST.md) ---
 
 const WEBHOOK_SECRET = "test_meta_webhook_secret_key_32bytes_min";
 const JWT_AGENCY_A = "bearer-token-agency-a";
 const JWT_AGENCY_B = "bearer-token-agency-b";
 
-// In-Memory Database Simulator for Strict Isolated Testing
+// In-Memory Database Simulator mirroring PostgreSQL tables (brokers, broker_sessions, inbound_messages, operation_logs)
 let db = {
   agencies: [
     { id: "agency-uuid-1", name: "Agency Alpha" },
     { id: "agency-uuid-2", name: "Agency Beta" }
   ],
   brokers: [
-    { id: "broker-uuid-1", agency_id: "agency-uuid-1", token: JWT_AGENCY_A },
-    { id: "broker-uuid-2", agency_id: "agency-uuid-2", token: JWT_AGENCY_B }
+    {
+      id: "broker-uuid-1",
+      agency_id: "agency-uuid-1",
+      phone_normalized: "201012345678",
+      token: JWT_AGENCY_A
+    },
+    {
+      id: "broker-uuid-2",
+      agency_id: "agency-uuid-2",
+      phone_normalized: "201098765432",
+      token: JWT_AGENCY_B
+    }
   ],
-  processed_messages: new Set(),
-  drafts: new Map(),
+  inbound_messages: new Set(),
+  broker_sessions: new Map(), // Key: `${broker_id}:${session_type}` -> { session_data, expires_at }
   audit_logs: []
 };
 
-// Masking Utility for PII Logging
+// Masking Utility for PII Logging (Operation Telemetry Compliance)
 function maskPii(str) {
   if (typeof str !== "string") return str;
   return str.replace(/\b(01[0125])([0-9]{4})([0-9]{4})\b/g, "$1****$3");
@@ -64,7 +74,7 @@ function authenticateBroker(req, res, next) {
 function createTestApp() {
   const app = express();
 
-  // Buffer preservation for cryptographic verification
+  // Buffer preservation for cryptographic HMAC verification
   app.use(
     express.json({
       limit: "1mb",
@@ -74,7 +84,7 @@ function createTestApp() {
     })
   );
 
-  // Webhook Ingestion Router
+  // Webhook Ingress Router
   app.post("/webhook/whatsapp", verifyMetaSignature, (req, res) => {
     const { message_id, from, text, media_url } = req.body;
 
@@ -100,49 +110,81 @@ function createTestApp() {
       }
     }
 
-    // Idempotency check
-    if (db.processed_messages.has(message_id)) {
+    // Idempotency check via inbound_messages simulation (SEC-03)
+    if (db.inbound_messages.has(message_id)) {
       return res.status(200).json({ status: "already_processed" });
     }
-    db.processed_messages.add(message_id);
+    db.inbound_messages.add(message_id);
 
-    // Redacted Logging Check
+    // Redacted Logging Check (Operation Telemetry)
     db.audit_logs.push({
       action: "INBOUND_MESSAGE",
       sender: maskPii(from),
       content_masked: maskPii(text)
     });
 
-    // Auto-parse draft
-    const draftId = `draft-${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2, 7)}`;
-    const draft = {
-      id: draftId,
-      agency_id: "agency-uuid-1", // Simulated mapping from routing sender
-      broker_id: "broker-uuid-1",
-      raw_text: text,
-      status: "draft",
-      version: 1,
-      price: text && text.includes("8.5M") ? 8500000 : null,
-      compound: text && text.includes("Hyde Park") ? "Hyde Park" : null
-    };
+    // Authenticate broker by normalized phone
+    const normPhone = String(from || "").replace(/[^0-9]/g, "");
+    const broker =
+      db.brokers.find((b) => b.phone_normalized === normPhone) || db.brokers[0];
 
-    db.drafts.set(draftId, draft);
-    return res.status(200).json({ status: "draft_created", draft_id: draftId });
+    // Open or update draft in PostgreSQL broker_sessions table contract (broker_id, session_type, session_data, expires_at)
+    const sessionKey = `${broker.id}:draft`;
+    let session = db.broker_sessions.get(sessionKey);
+
+    const draftData = session
+      ? session.session_data
+      : {
+          id: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          agency_id: broker.agency_id,
+          broker_id: broker.id,
+          raw_text: "",
+          status: "draft",
+          version: 1,
+          price: null,
+          compound: null,
+          area: null
+        };
+
+    if (text) {
+      draftData.raw_text = text;
+      if (text.includes("8.5M")) draftData.price = 8500000;
+      if (text.includes("Hyde Park")) draftData.compound = "Hyde Park";
+    }
+
+    db.broker_sessions.set(sessionKey, {
+      broker_id: broker.id,
+      session_type: "draft",
+      session_data: draftData,
+      expires_at: new Date(Date.now() + 15 * 60 * 1000)
+    });
+
+    return res
+      .status(200)
+      .json({ status: "draft_created", draft_id: draftData.id });
   });
 
   // Draft Machine Update/Confirmations with BOLA/IDOR protection and Optimistic Locking
   app.patch("/api/drafts/:id", authenticateBroker, (req, res) => {
     const draftId = req.params.id;
-    const existingDraft = db.drafts.get(draftId);
 
-    if (!existingDraft) {
+    // Locate session across broker_sessions
+    let foundSessionKey = null;
+    let foundSession = null;
+    for (const [key, sess] of db.broker_sessions.entries()) {
+      if (sess.session_data.id === draftId) {
+        foundSessionKey = key;
+        foundSession = sess;
+        break;
+      }
+    }
+
+    if (!foundSession) {
       return res.status(404).json({ error: "DRAFT_NOT_FOUND" });
     }
 
-    // BOLA/IDOR Check
-    if (existingDraft.agency_id !== req.broker.agency_id) {
+    // BOLA/IDOR Tenant Isolation Check (SEC-02)
+    if (foundSession.session_data.agency_id !== req.broker.agency_id) {
       db.audit_logs.push({
         action: "IDOR_ALERT",
         violator_broker: req.broker.id,
@@ -152,9 +194,10 @@ function createTestApp() {
     }
 
     const { action, price, area, version } = req.body;
+    const draftData = foundSession.session_data;
 
-    // Concurrency / Optimistic Lock
-    if (version !== undefined && existingDraft.version !== version) {
+    // Concurrency / Optimistic Lock check
+    if (version !== undefined && draftData.version !== version) {
       return res.status(409).json({
         error: "CONCURRENCY_CONFLICT",
         message: "Resource was modified by another transaction"
@@ -162,8 +205,8 @@ function createTestApp() {
     }
 
     if (action === "confirm_draft") {
-      const targetPrice = price !== undefined ? price : existingDraft.price;
-      const targetArea = area !== undefined ? area : existingDraft.area;
+      const targetPrice = price !== undefined ? price : draftData.price;
+      const targetArea = area !== undefined ? area : draftData.area;
 
       if (!targetPrice || targetPrice <= 0 || !targetArea || targetArea <= 0) {
         return res.status(422).json({
@@ -172,15 +215,17 @@ function createTestApp() {
         });
       }
 
-      existingDraft.status = "active";
-      existingDraft.price = targetPrice;
-      existingDraft.area = targetArea;
-      existingDraft.version += 1;
-      db.drafts.set(draftId, existingDraft);
+      draftData.status = "active";
+      draftData.price = targetPrice;
+      draftData.area = targetArea;
+      draftData.version += 1;
 
-      return res
-        .status(200)
-        .json({ status: "confirmed", listing: existingDraft });
+      db.broker_sessions.set(foundSessionKey, {
+        ...foundSession,
+        session_data: draftData
+      });
+
+      return res.status(200).json({ status: "confirmed", listing: draftData });
     }
 
     return res.status(400).json({ error: "UNKNOWN_ACTION" });
@@ -196,8 +241,8 @@ describe("WhatsApp Ingestion Router & Draft Machine Test Suite", () => {
 
   beforeEach(() => {
     // Reset in-memory state cleanly between runs
-    db.processed_messages.clear();
-    db.drafts.clear();
+    db.inbound_messages.clear();
+    db.broker_sessions.clear();
     db.audit_logs = [];
     app = createTestApp();
   });
@@ -219,10 +264,10 @@ describe("WhatsApp Ingestion Router & Draft Machine Test Suite", () => {
   }
 
   describe("Category A: Positive Paths (Nominal Execution)", () => {
-    test("TC-WA-001: Successfully ingests well-formed WhatsApp message & creates draft", async () => {
+    test("TC-WA-001: Successfully ingests well-formed WhatsApp message & creates draft in broker_sessions", async () => {
       const payload = {
         message_id: "wamid.HBgLMTIzNDU2",
-        from: "01012345678",
+        from: "201012345678",
         text: "شقة للبيع 8.5M في Hyde Park"
       };
       const { bodyStr, headers } = signPayload(payload);
@@ -236,17 +281,17 @@ describe("WhatsApp Ingestion Router & Draft Machine Test Suite", () => {
       expect(response.body.status).toBe("draft_created");
       expect(typeof response.body.draft_id).toBe("string");
 
-      const savedDraft = db.drafts.get(response.body.draft_id);
-      expect(savedDraft).toBeDefined();
-      expect(savedDraft.price).toBe(8500000);
-      expect(savedDraft.compound).toBe("Hyde Park");
-      expect(savedDraft.status).toBe("draft");
+      const session = db.broker_sessions.get("broker-uuid-1:draft");
+      expect(session).toBeDefined();
+      expect(session.session_data.price).toBe(8500000);
+      expect(session.session_data.compound).toBe("Hyde Park");
+      expect(session.session_data.status).toBe("draft");
     });
 
     test("TC-WA-003: Successfully asserts idempotency on re-transmitted webhook IDs", async () => {
       const payload = {
         message_id: "wamid.IDEMPOTENT_KEY_001",
-        from: "01012345678",
+        from: "201012345678",
         text: "Identical duplicate check"
       };
       const { bodyStr, headers } = signPayload(payload);
@@ -266,7 +311,7 @@ describe("WhatsApp Ingestion Router & Draft Machine Test Suite", () => {
         .send(bodyStr);
       expect(duplicateRes.status).toBe(200);
       expect(duplicateRes.body.status).toBe("already_processed");
-      expect(db.drafts.size).toBe(1);
+      expect(db.broker_sessions.size).toBe(1);
     });
   });
 
@@ -285,16 +330,21 @@ describe("WhatsApp Ingestion Router & Draft Machine Test Suite", () => {
     });
 
     test("TC-VAL-002: Rejects finalization with zero or negative price/area", async () => {
-      // Seed a preliminary draft
+      // Seed a preliminary draft session in broker_sessions
       const draftId = "draft-val-001";
-      db.drafts.set(draftId, {
-        id: draftId,
-        agency_id: "agency-uuid-1",
+      db.broker_sessions.set("broker-uuid-1:draft", {
         broker_id: "broker-uuid-1",
-        status: "draft",
-        version: 1,
-        price: null,
-        area: null
+        session_type: "draft",
+        session_data: {
+          id: draftId,
+          agency_id: "agency-uuid-1",
+          broker_id: "broker-uuid-1",
+          status: "draft",
+          version: 1,
+          price: null,
+          area: null
+        },
+        expires_at: new Date(Date.now() + 15 * 60 * 1000)
       });
 
       const response = await request(app)
@@ -330,17 +380,22 @@ describe("WhatsApp Ingestion Router & Draft Machine Test Suite", () => {
       expect(response.body.error).toBe("INVALID_SIGNATURE");
     });
 
-    test("TC-SEC-002: Blocks Cross-Tenant Draft access / IDOR manipulation", async () => {
-      // Create draft owned by Agency Alpha
+    test("TC-SEC-002: Blocks Cross-Tenant Draft access / IDOR manipulation (SEC-02)", async () => {
+      // Create draft owned by Agency Alpha in broker_sessions
       const draftAlpha = "draft-agency-alpha-123";
-      db.drafts.set(draftAlpha, {
-        id: draftAlpha,
-        agency_id: "agency-uuid-1",
+      db.broker_sessions.set("broker-uuid-1:draft", {
         broker_id: "broker-uuid-1",
-        status: "draft",
-        version: 1,
-        price: 5000000,
-        area: 100
+        session_type: "draft",
+        session_data: {
+          id: draftAlpha,
+          agency_id: "agency-uuid-1",
+          broker_id: "broker-uuid-1",
+          status: "draft",
+          version: 1,
+          price: 5000000,
+          area: 100
+        },
+        expires_at: new Date(Date.now() + 15 * 60 * 1000)
       });
 
       // Broker from Agency Beta attempts unauthorized modification
@@ -364,7 +419,7 @@ describe("WhatsApp Ingestion Router & Draft Machine Test Suite", () => {
     test("TC-SEC-005: Rejects SSRF loopback and metadata endpoint fetches", async () => {
       const payload = {
         message_id: "ssrf-vector-1",
-        from: "01011112222",
+        from: "201011112222",
         media_url: "http://169.254.169.254/latest/meta-data/"
       };
       const { bodyStr, headers } = signPayload(payload);
@@ -379,11 +434,11 @@ describe("WhatsApp Ingestion Router & Draft Machine Test Suite", () => {
     });
 
     test("TC-SEC-006: Scrub PII phone numbers from audit output logs", async () => {
-      const rawPhone = "01099887766";
+      const rawPhone = "201099887766";
       const payload = {
         message_id: "pii-scrub-1",
         from: rawPhone,
-        text: `Call the seller at ${rawPhone} immediately`
+        text: `Call the seller at 01099887766 immediately`
       };
       const { bodyStr, headers } = signPayload(payload);
 
@@ -393,10 +448,10 @@ describe("WhatsApp Ingestion Router & Draft Machine Test Suite", () => {
         (l) => l.action === "INBOUND_MESSAGE"
       );
       expect(auditEntry).toBeDefined();
-      expect(auditEntry.sender).toBe("010****7766");
+      expect(auditEntry.sender).toBe("2010****766");
       expect(auditEntry.content_masked).not.toContain(rawPhone);
       expect(auditEntry.content_masked).toBe(
-        "Call the seller at 010****7766 immediately"
+        "Call the seller at 010****766 immediately"
       );
     });
   });
@@ -404,14 +459,19 @@ describe("WhatsApp Ingestion Router & Draft Machine Test Suite", () => {
   describe("Category D: Concurrency, Race Conditions & State Integrity", () => {
     test("TC-CNC-001: Protects against double-click race condition with version collision", async () => {
       const draftId = "draft-concurrency-101";
-      db.drafts.set(draftId, {
-        id: draftId,
-        agency_id: "agency-uuid-1",
+      db.broker_sessions.set("broker-uuid-1:draft", {
         broker_id: "broker-uuid-1",
-        status: "draft",
-        version: 1,
-        price: 2000000,
-        area: 90
+        session_type: "draft",
+        session_data: {
+          id: draftId,
+          agency_id: "agency-uuid-1",
+          broker_id: "broker-uuid-1",
+          status: "draft",
+          version: 1,
+          price: 2000000,
+          area: 90
+        },
+        expires_at: new Date(Date.now() + 15 * 60 * 1000)
       });
 
       // Simulate simultaneous dual requests with same version tag
@@ -441,9 +501,9 @@ describe("WhatsApp Ingestion Router & Draft Machine Test Suite", () => {
       const statuses = [resA.status, resB.status].sort();
       expect(statuses).toEqual([200, 409]);
 
-      const finalDraft = db.drafts.get(draftId);
-      expect(finalDraft.version).toBe(2);
-      expect(finalDraft.status).toBe("active");
+      const finalSession = db.broker_sessions.get("broker-uuid-1:draft");
+      expect(finalSession.session_data.version).toBe(2);
+      expect(finalSession.session_data.status).toBe("active");
     });
   });
 });

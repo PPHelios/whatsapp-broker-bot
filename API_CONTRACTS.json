@@ -5,6 +5,7 @@
       "sendWhatsAppButtons": ["recipient", "body", "buttons"],
       "sendWhatsAppList": ["recipient", "body", "buttonText", "sections"],
       "sendWhatsAppImage": ["recipient", "mediaIdOrUrl", "caption"],
+      "sendWhatsAppReaction": ["recipient", "messageId", "emoji"],
       "sendWhatsAppDocument": ["recipient", "buffer", "filename", "caption"],
       "downloadWhatsAppMedia": ["mediaId"],
       "uploadWhatsAppMedia": ["buffer", "opts"],
@@ -48,11 +49,11 @@
       "sleep": ["ms"],
       "hashListingCode": ["code"],
       "sha1": ["str"],
+      "isValidZipBuffer": ["buf"],
       "createSerializer": [],
       "createLimiter": ["maxConcurrency", "opts"],
       "createRateGate": ["rpm"],
-      "createCounter": ["windowMs", "max"],
-      "isValidZipBuffer": ["buf"]
+      "createCounter": ["windowMs", "max"]
     },
     "lib/text.js": {
       "normalizeDigits": ["str"],
@@ -82,20 +83,31 @@
       "formatSearchResults": ["rows", "opts"],
       "listingsToCsv": ["rows"],
       "getHelpMessage": ["lang"],
-      "toEnglishSpec": ["value", "category"]
+      "toEnglishSpec": ["value", "category"],
+      "isVillaTypology": ["propertyType"],
+      "isStudioTypology": ["propertyType", "bedrooms"],
+      "COMPOUND_MAP": "Object",
+      "FINISHING_MAP": "Object",
+      "ORIENTATION_MAP": "Object",
+      "PROPERTY_TYPE_MAP": "Object"
     },
     "lib/search.js": {
       "parseSearchRequest": ["aiShim", "params"],
       "buildSearchQuery": ["agencyId", "parsed", "opts"],
       "fallbackParse": ["text"],
       "enrichLocation": ["aiShim", "params"],
-      "normalizeKeywords": ["keywords", "max"],
+      "normalizeKeywords": ["list", "max"],
       "normalizeTerm": ["t"],
       "normalizeParsed": ["raw"],
       "hasAnyFilter": ["p"],
-      "formatInterpretation": ["p"],
-      "estimateCostUsd": ["usage", "opts"],
-      "expandAmenitySynonyms": ["term"]
+      "formatInterpretation": ["parsed"],
+      "estimateCostUsd": ["usage", "rates"],
+      "expandAmenitySynonyms": ["term"],
+      "handleSearchMessage": ["broker", "text", "ctx"],
+      "PROPERTY_TYPES": "Array",
+      "TYPE_AR": "Object",
+      "SEARCH_PROMPT": "String",
+      "ENRICH_PROMPT": "String"
     },
     "lib/listing.js": {
       "normalizeArabicDigits": ["str"],
@@ -107,10 +119,14 @@
       "generateListingCode": ["customCode", "propertyType"],
       "buildListingPrompt": ["targetLang", "fenceToken"],
       "buildVisionPrompt": [],
-      "validateDraft": ["inputDraft", "lang"],
+      "validateDraft": ["inputDraft", "lang", "ctx"],
       "checkDraftCompleteness": ["draft", "parsedContext"],
       "validateVisionDraft": ["raw", "nImages"],
-      "composeFields": ["params"]
+      "composeFields": ["params"],
+      "isVillaTypology": ["propertyType"],
+      "isStudioTypology": ["propertyType", "bedrooms"],
+      "ROLES": "Array",
+      "ALL_TYPES": "Array"
     },
     "lib/flyer.js": {
       "generateFlyerBuffer": ["params"],
@@ -131,6 +147,7 @@
     },
     "lib/dispatcher.js": {
       "reply": ["broker", "text", "opts"],
+      "replyButtons": ["broker", "body", "buttons"],
       "allowSilentDrop": ["reason"],
       "executeGuardedTurn": ["broker", "message", "handlerFn"]
     },
@@ -145,19 +162,24 @@
       ],
       "clearDraft": ["pool", "brokerId", "sessionType"],
       "appendText": ["pool", "brokerId", "text", "sessionType"],
-      "appendVoice": ["pool", "brokerId", "params", "sessionType"],
-      "appendMedia": ["pool", "brokerId", "params", "sessionType"],
+      "appendVoice": ["pool", "brokerId", "voiceData", "sessionType"],
+      "appendMedia": ["pool", "brokerId", "mediaData", "sessionType"],
       "stageDraftReview": ["pool", "brokerId", "reviewPayload"],
       "getStagedReview": ["pool", "brokerId"],
       "commitDraftToDatabase": ["broker", "draft", "ctx"],
       "commitDraftToListing": ["broker", "draft", "ctx"],
-      "appendToDraft": ["pool", "broker", "params"]
+      "appendToDraft": ["pool", "broker", "params"],
+      "MAX_IMAGES": "Number",
+      "DRAFT_TTL_MS": "Number"
     }
   },
   "invariant_variable_names": {
     "broker_phone": "Must use 'broker.phone_number' or 'broker.phone_normalized'. NEVER 'broker.phone' or 'broker.whatsapp_id'",
     "listing_code": "Must use 'listing.code'",
-    "agency_id": "Must use 'agency_id' in all SQL queries",
-    "details_json": "Must use 'listings.details' and 'details->>'field''"
+    "agency_id": "Must use 'agency_id' in all SQL queries (SEC-02)",
+    "details_json": "Must use 'listings.details' and 'details->>'field''",
+    "advisory_lock": "Must use 'SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))' with [String(agency_id), String(code).toUpperCase()]",
+    "session_table": "Must use 'public.broker_sessions' with composite key (broker_id, session_type)",
+    "telemetry_table": "Must use 'public.operation_logs' for structured operational telemetry"
   }
 }
