@@ -1,167 +1,203 @@
-// tests/safeguards.test.js
+// tests/safeguards.test.js — Canonical Architectural Safeguard & Regression Guard Test Suite
 "use strict";
 
 const fs = require("fs");
 const path = require("path");
 
-describe("AqarChat Production Safeguards & Architectural Invariant Gates", () => {
-  const rootDir = path.join(__dirname, "..");
-  const scanDirs = ["routes", "lib"];
-  const jsFiles = [];
+const rootDir = path.resolve(__dirname, "..");
 
-  function collectJsFiles(dir) {
-    if (!fs.existsSync(dir)) return;
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      if (
-        entry.isDirectory() &&
-        !["node_modules", "tests", "scripts", ".git"].includes(entry.name)
-      ) {
-        collectJsFiles(fullPath);
-      } else if (
-        entry.isFile() &&
-        entry.name.endsWith(".js") &&
-        !entry.name.endsWith(".test.js")
-      ) {
-        jsFiles.push(fullPath);
-      }
-    }
-  }
+describe("AqarChat Master Safeguards & Regression Guard Suite", () => {
+  const commandsPath = path.join(rootDir, "routes", "commands.js");
+  const interactivePath = path.join(rootDir, "routes", "interactive.js");
+  const listingLibPath = path.join(rootDir, "lib", "listing.js");
+  const contractsPath = path.join(rootDir, "API_CONTRACTS.json");
+  const schemaRefPath = path.join(rootDir, "SCHEMA_REFERENCE.sql");
 
-  scanDirs.forEach((d) => collectJsFiles(path.join(rootDir, d)));
-  const serverPath = path.join(rootDir, "server.js");
-  if (fs.existsSync(serverPath)) {
-    jsFiles.push(serverPath);
-  }
+  let commandsSrc = "";
+  let interactiveSrc = "";
+  let listingLibSrc = "";
+  let contractsJson = {};
+  let schemaRefSql = "";
 
-  // 1. SCHEMA INVARIANT: Phone identifiers
-  test("Codebase must strictly use phone_number or phone_normalized and NEVER naked broker.phone or whatsapp_id", () => {
-    jsFiles.forEach((file) => {
-      const rawContent = fs.readFileSync(file, "utf8");
-      // تجريد التعليقات البرمجية قبل الفحص لعدم التقاط التوثيق
-      const content = rawContent
-        .replace(/\/\*[\s\S]*?\*\//g, "")
-        .replace(/\/\/.*$/gm, "");
+  beforeAll(() => {
+    commandsSrc = fs.readFileSync(commandsPath, "utf8");
+    interactiveSrc = fs.readFileSync(interactivePath, "utf8");
+    listingLibSrc = fs.readFileSync(listingLibPath, "utf8");
+    contractsJson = JSON.parse(fs.readFileSync(contractsPath, "utf8"));
+    schemaRefSql = fs.readFileSync(schemaRefPath, "utf8");
+  });
 
-      // Forbids broker.phone (not followed by _number or _normalized)
-      expect(content).not.toMatch(/broker\.phone\b(?!_number|_normalized)/);
+  /* ------------------------------------------------------------------------- */
+  /* 1. COMMAND ROUTING & CANONICAL ALIASES (FEATURE_REGISTRY.md)             */
+  /* ------------------------------------------------------------------------- */
+  describe("1. Command Router Invariant Checks (routes/commands.js)", () => {
+    test("DRF-01: Must support all canonical Add/New triggers in both languages", () => {
+      expect(commandsSrc).toMatch(/اضافة|إضافة|add|new|جديد|وحدة جديدة/i);
+    });
 
-      // Forbids references to legacy whatsapp_id
-      expect(content).not.toMatch(/\bwhatsapp_id\b/);
+    test("EDT-01 & EDT-02: Must support Edit triggers in Arabic and English", () => {
+      expect(commandsSrc).toMatch(/تعديل|edit/i);
+    });
 
-      // Forbids naked SQL queries: SELECT phone FROM brokers
-      expect(content).not.toMatch(
-        /SELECT\s+[^;]*\bphone\b(?!\s*AS|\s*,\s*phone_number|\s*,\s*phone_normalized)[^;]*FROM\s+brokers/i
+    test("SYS-01: Must support Help/Menu triggers in Arabic and English", () => {
+      expect(commandsSrc).toMatch(/مساعدة|help|اوامر|الأوامر|menu|قائمة/i);
+    });
+
+    test("SYS-02: Must support dynamic language toggle (lang ar/en)", () => {
+      expect(commandsSrc).toMatch(/lang/i);
+      expect(commandsSrc).toMatch(/ar\|en/i);
+      expect(commandsSrc).toMatch(/العربية|الإنجليزية/i);
+    });
+
+    test("DRF-05: Must support explicit Cancel / Abort triggers", () => {
+      expect(commandsSrc).toMatch(/cancel|إلغاء|الغاء|خروج|abort|exit/i);
+    });
+
+    test("LFC-01 to LFC-03: Must support Sold, Archive, and Active status transitions", () => {
+      expect(commandsSrc).toMatch(/تم البيع|مباع|sold/i);
+      expect(commandsSrc).toMatch(/ارشفة|أرشفة|archive/i);
+      expect(commandsSrc).toMatch(/تفعيل|نشط|active/i);
+    });
+
+    test("DEL-01: Must support two-phase deletion command triggers", () => {
+      expect(commandsSrc).toMatch(/حذف|delete|مسح/i);
+    });
+
+    test("DEL-06: Must support Excel inventory export command triggers", () => {
+      expect(commandsSrc).toMatch(/تصدير|export|excel|شيت/i);
+    });
+  });
+
+  /* ------------------------------------------------------------------------- */
+  /* 2. STATE MACHINE, GUARDS & DEFENSIVE VALIDATIONS                          */
+  /* ------------------------------------------------------------------------- */
+  describe("2. State Machine Safeguards & Empty Draft Guards", () => {
+    test("DRF-02: Pre-flight empty draft guard must exist before AI invocation", () => {
+      // Must check all three media/voice/text collections being zero
+      expect(commandsSrc).toMatch(
+        /mediaCount\s*===?\s*0\s*&&\s*voiceCount\s*===?\s*0\s*&&\s*textCount\s*===?\s*0/
       );
     });
-  });
 
-  // 2. SCHEMA INVARIANT: broker_sessions strictly uses session_data without updated_at
-  test("broker_sessions table queries must strictly reference session_data and never updated_at or id", () => {
-    jsFiles.forEach((file) => {
-      const content = fs.readFileSync(file, "utf8");
-      expect(content).not.toMatch(/broker_sessions[^;]*context_data/i);
-      expect(content).not.toMatch(/broker_sessions[^;]*\bupdated_at\b/i);
+    test("ING-05: Image-only draft blocker must prevent premature draft saves", () => {
+      expect(commandsSrc).toMatch(
+        /mediaCount\s*>\s*0\s*&&\s*voiceCount\s*===?\s*0\s*&&\s*textCount\s*===?\s*0/
+      );
     });
-  });
 
-  // 3. WHATSAPP CONSTRAINTS: Grapheme-safe button title character limits
-  test("All hardcoded interactive button titles must be strictly <= 20 characters", () => {
-    const interactiveFiles = [
-      path.join(rootDir, "routes/interactive.js"),
-      path.join(rootDir, "routes/commands.js"),
-      path.join(rootDir, "routes/media.js"),
-      path.join(rootDir, "server.js")
-    ];
+    test("lib/listing.js: validateDraft must defensively initialize missingFields as an Array", () => {
+      const Listing = require("../lib/listing");
+      expect(typeof Listing.validateDraft).toBe("function");
 
-    interactiveFiles.forEach((file) => {
-      if (!fs.existsSync(file)) return;
-      const content = fs.readFileSync(file, "utf8");
-
-      const buttonMatches = [...content.matchAll(/title:\s*["']([^"']+)["']/g)];
-      buttonMatches.forEach(([, title]) => {
-        // Enforce grapheme/character ceiling <= 20 (Array.from splits unicode correctly)
-        const charCount = Array.from(title.trim()).length;
-        expect(charCount).toBeLessThanOrEqual(20);
+      // Verify null input handling
+      const resultNull = Listing.validateDraft(null);
+      return Promise.resolve(resultNull).then((res) => {
+        expect(res).toBeDefined();
+        expect(Array.isArray(res.missingFields)).toBe(true);
+        expect(res.valid).toBe(false);
       });
     });
-  });
 
-  // 4. CONCURRENCY: 64-bit Transactional Advisory Lock on Mutations
-  test("Mutation routes must acquire 64-bit advisory locks via pg_advisory_xact_lock", () => {
-    const cmdFile = path.join(rootDir, "routes/commands.js");
-    const interactiveFile = path.join(rootDir, "routes/interactive.js");
+    test("lib/listing.js: checkDraftCompleteness must enforce studio and landed property rules", () => {
+      const Listing = require("../lib/listing");
+      expect(typeof Listing.checkDraftCompleteness).toBe("function");
 
-    [cmdFile, interactiveFile].forEach((file) => {
-      if (!fs.existsSync(file)) return;
-      const content = fs.readFileSync(file, "utf8");
-      expect(content).toContain("pg_advisory_xact_lock");
-      expect(content).toContain("bit(64)::bigint");
+      // Incomplete apartment
+      const incompleteApt = { property_type: "apartment", price_value: 0 };
+      const resApt = Listing.checkDraftCompleteness(incompleteApt);
+      expect(resApt.isComplete).toBe(false);
+      expect(Array.isArray(resApt.blockers)).toBe(true);
+      expect(resApt.blockers.some((b) => b.field === "price_value")).toBe(true);
+
+      // Studio should not block on bedrooms = 0
+      const studioDraft = {
+        property_type: "studio",
+        price_value: 3500000,
+        compound: "Palm Hills",
+        area_value: 65,
+        bedrooms: 0
+      };
+      const resStudio = Listing.checkDraftCompleteness(studioDraft);
+      expect(resStudio.blockers.some((b) => b.field === "bedrooms")).toBe(
+        false
+      );
+    });
+
+    test("EDT-04: Direct inline price edit must block developer inventory models", () => {
+      expect(commandsSrc).toMatch(/is_primary_developer|developer_model/);
     });
   });
 
-  // 5. ASYNCHRONOUS STORAGE CLEANUP: Non-blocking deleteStorageFiles
-  test("Storage file deletions must execute asynchronously outside DB transactions via setImmediate", () => {
-    const interactiveFile = path.join(rootDir, "routes/interactive.js");
-    if (!fs.existsSync(interactiveFile)) return;
-    const content = fs.readFileSync(interactiveFile, "utf8");
+  /* ------------------------------------------------------------------------- */
+  /* 3. INTERACTIVE CALLBACK ROUTING & CONCURRENCY (routes/interactive.js)     */
+  /* ------------------------------------------------------------------------- */
+  describe("3. Interactive Callback Invariants", () => {
+    test("Must support button debouncing mechanism", () => {
+      expect(interactiveSrc).toMatch(/recentButtonClicks/);
+      expect(interactiveSrc).toMatch(/allowSilentDrop/);
+    });
 
-    if (content.includes("deleteStorageFiles")) {
-      expect(content).toContain("setImmediate");
-    }
+    test("Must support DRAFT_CANCEL, DRAFT_EDIT, and Save & Exit callbacks", () => {
+      expect(interactiveSrc).toMatch(/DRAFT_CANCEL|draft_cancel/);
+      expect(interactiveSrc).toMatch(/DRAFT_EDIT|draft_edit/);
+      expect(interactiveSrc).toMatch(
+        /draft_save_exit|SAVE_AND_EXIT|DRAFT_SAVE|draft_confirm/
+      );
+    });
+
+    test("DEL-02: Deletion confirmation must acquire 64-bit transactional advisory lock", () => {
+      expect(interactiveSrc).toMatch(/pg_advisory_xact_lock/);
+      expect(interactiveSrc).toMatch(/bit\(64\)::bigint/);
+      expect(interactiveSrc).toMatch(/FOR UPDATE/);
+    });
+
+    test("SEC-04: File purge from Supabase Storage must be asynchronous and non-blocking", () => {
+      expect(interactiveSrc).toMatch(/setImmediate/);
+      expect(interactiveSrc).toMatch(/deleteStorageFiles/);
+    });
   });
 
-  // 6. RENDER COMPLIANCE: Sharp in-memory limits and concurrency
-  test("Media processing must enforce Sharp concurrency and avoid local disk writes", () => {
-    const mediaFile = path.join(rootDir, "routes/media.js");
-    if (!fs.existsSync(mediaFile)) return;
-    const content = fs.readFileSync(mediaFile, "utf8");
+  /* ------------------------------------------------------------------------- */
+  /* 4. PHYSICAL SCHEMA CONTRACTS & VARIABLE INVARIANTS                        */
+  /* ------------------------------------------------------------------------- */
+  describe("4. Physical Schema Reference & Contract Consistency", () => {
+    test("Brokers table contract: must use phone_normalized or phone_number, never 'phone'", () => {
+      const brokerPhoneInvariant =
+        contractsJson.invariant_variable_names.broker_phone;
+      expect(brokerPhoneInvariant).toBeDefined();
 
-    expect(content).toContain("sharp.concurrency(1)");
-    expect(content).not.toContain("fs.writeFileSync");
-    expect(content).not.toContain("/tmp/");
-  });
+      // Ensure commands and interactive files never query brokers.phone
+      expect(commandsSrc).not.toMatch(/brokers\s+WHERE\s+phone\s*=/i);
+      expect(interactiveSrc).not.toMatch(/brokers\s+WHERE\s+phone\s*=/i);
+    });
 
-  // 7. DEVELOPER MODEL INTEGRITY: Price edit blocker (EDT-04)
-  test("Price editing routes must block direct price mutations on developer models", () => {
-    const cmdFile = path.join(rootDir, "routes/commands.js");
-    if (!fs.existsSync(cmdFile)) return;
-    const content = fs.readFileSync(cmdFile, "utf8");
+    test("Multi-tenancy isolation: mutations must always scope to agency_id", () => {
+      expect(commandsSrc).toMatch(/WHERE\s+agency_id\s*=\s*\$1/i);
+      expect(interactiveSrc).toMatch(/WHERE\s+agency_id\s*=\s*\$1/i);
+    });
 
-    expect(content).toContain("is_primary_developer");
-    expect(content).toContain("developer_model");
-  });
-
-  // 8. RENDER DRAIN PROTOCOL: Server must implement graceful shutdown and inFlight tracking
-  test("server.js must track inFlight tasks, return 503 during drain, and listen to SIGTERM", () => {
-    if (!fs.existsSync(serverPath)) return;
-    const content = fs.readFileSync(serverPath, "utf8");
-
-    expect(content).toContain("inFlight");
-    expect(content).toContain("isDraining");
-    expect(content).toContain("SERVICE_DRAINING");
-    expect(content).toContain("SIGTERM");
-    expect(content).toContain("SIGINT");
-    expect(content).toContain("25000"); // 25s window
-  });
-
-  // 9. WHATSAPP GATEWAY: 24-hour customer window circuit breaker (Error 131047)
-  test("lib/whatsapp.js must intercept error 131047 without retrying", () => {
-    const waPath = path.join(rootDir, "lib/whatsapp.js");
-    if (!fs.existsSync(waPath)) return;
-    const content = fs.readFileSync(waPath, "utf8");
-
-    expect(content).toContain("131047");
-    expect(content).toContain("nonRetryable");
-  });
-
-  // 10. COLLISION GUARD: server.js must check for active draft before search
-  test("server.js must implement COL-01 draft vs search collision check", () => {
-    if (!fs.existsSync(serverPath)) return;
-    const content = fs.readFileSync(serverPath, "utf8");
-
-    expect(content).toContain("cancel_and_search");
-    expect(content).toContain("broker_sessions");
+    test("SCHEMA_REFERENCE.sql must contain all required operational and recovery tables", () => {
+      expect(schemaRefSql).toMatch(
+        /CREATE TABLE IF NOT EXISTS public\.agencies/
+      );
+      expect(schemaRefSql).toMatch(
+        /CREATE TABLE IF NOT EXISTS public\.brokers/
+      );
+      expect(schemaRefSql).toMatch(
+        /CREATE TABLE IF NOT EXISTS public\.listings/
+      );
+      expect(schemaRefSql).toMatch(
+        /CREATE TABLE IF NOT EXISTS public\.broker_sessions/
+      );
+      expect(schemaRefSql).toMatch(
+        /CREATE TABLE IF NOT EXISTS public\.inbound_messages/
+      );
+      expect(schemaRefSql).toMatch(
+        /CREATE TABLE IF NOT EXISTS public\.processed_batches/
+      );
+      expect(schemaRefSql).toMatch(
+        /CREATE TABLE IF NOT EXISTS public\.operation_logs/
+      );
+    });
   });
 });

@@ -203,6 +203,23 @@ async function handleCommand(broker, text, ctx) {
     const voiceCount = (draft.voice_buffers || []).length;
     const textCount = (draft.text_notes || []).length;
 
+    // Pre-flight guard: Completely empty draft blocker
+    if (mediaCount === 0 && voiceCount === 0 && textCount === 0) {
+      await replyButtons(
+        broker,
+        lang === "en"
+          ? "⚠️ Your listing draft is empty. Please send photos, voice notes, or text details, or tap cancel to abort."
+          : "⚠️ مسودة الوحدة فارغة تماماً. يرجى إرسال الصور أو الملاحظات الصوتية أو التفاصيل، أو الضغط على إلغاء.",
+        [
+          {
+            id: "draft_cancel",
+            title: lang === "en" ? "Cancel ❌" : "إلغاء ❌"
+          }
+        ]
+      );
+      return true;
+    }
+
     // ING-05: Image-only draft blocker
     if (mediaCount > 0 && voiceCount === 0 && textCount === 0) {
       await replyButtons(
@@ -244,13 +261,24 @@ async function handleCommand(broker, text, ctx) {
           lang === "en"
             ? "⚠️ The following required details are missing to complete registration:\n"
             : "⚠️ البيانات التالية مطلوبة لإتمام تسجيل الوحدة:\n";
-        for (const missing of validationResult.missingFields) {
-          msg += `• ${missing}\n`;
+
+        const missingList = Array.isArray(validationResult?.missingFields)
+          ? validationResult.missingFields
+          : Array.isArray(validationResult?.blockers)
+          ? validationResult.blockers.map((b) => b.message)
+          : Object.values(validationResult?.missingFields || {});
+
+        for (const missing of missingList) {
+          msg += `• ${
+            typeof missing === "string"
+              ? missing
+              : missing.message || JSON.stringify(missing)
+          }\n`;
         }
         msg +=
           lang === "en"
             ? "\nPlease send the missing info, or type *cancel* to abort."
-            : "\nيرجى إرسال البيانات الناقصة، أو اكتب *«إلغاء»* لتراجع عن المسودة.";
+            : "\nيرجى إرسال البيانات الناقصة، أو اكتب *«إلغاء»* للتراجع عن المسودة.";
 
         await replyButtons(broker, msg, [
           {
