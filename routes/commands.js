@@ -1,3 +1,4 @@
+// routes/commands.js — Text Commands Controller & Lifecycle Handlers
 "use strict";
 
 const WA = require("../lib/whatsapp");
@@ -35,7 +36,123 @@ async function handleCommand(broker, text, ctx) {
     return true;
   }
 
-  // 2. DRAFT PRE-SAVE VALIDATION / FINALIZATION (DRF-02, ING-05)
+  // 2. OPEN NEW DRAFT (DRF-01)
+  if (/^(اضافة|إضافة|add|new|جديد|وحدة جديدة)$/i.test(lower)) {
+    await Drafts.createDraft(
+      pool,
+      broker.id,
+      broker.agency_id,
+      broker.phone_normalized || broker.phone_number,
+      "draft"
+    );
+    await reply(
+      broker,
+      lang === "en"
+        ? "📝 New listing draft opened. Send photos, voice notes, or details, and type *done* when finished."
+        : "📝 تم فتح مسودة وحدة جديدة. أرسل الصور، التسجيلات الصوتية، أو التفاصيل واكتب «تم» عند الانتهاء."
+    );
+    return true;
+  }
+
+  // 3. EDIT SESSION / PATCH (EDT-01, EDT-02)
+  const editMatch = raw.match(
+    /^(تعديل|edit)(?:\s+([A-Za-z0-9_-]+))?(?:\s+(.+))?$/i
+  );
+  if (editMatch) {
+    const targetCode = resolveTargetCode(editMatch[2]);
+    const instructions = editMatch[3];
+
+    if (!targetCode) {
+      await reply(
+        broker,
+        lang === "en"
+          ? "⚠️ Please specify the unit code to edit (e.g., `edit NOLL-101` or `تعديل NOLL-101 السعر 9M`)."
+          : "⚠️ يرجى تحديد كود الوحدة للتعديل (مثال: `تعديل NOLL-101` أو `تعديل NOLL-101 السعر 9 مليون`)."
+      );
+      return true;
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "SELECT pg_advisory_xact_lock(('x' || substr(md5($1 || ':' || $2), 1, 16))::bit(64)::bigint)",
+        [String(broker.agency_id), targetCode]
+      );
+
+      const { rows } = await client.query(
+        "SELECT * FROM listings WHERE agency_id = $1 AND UPPER(code) = $2 FOR UPDATE",
+        [broker.agency_id, targetCode]
+      );
+
+      if (rows.length === 0) {
+        await client.query("ROLLBACK");
+        await reply(
+          broker,
+          lang === "en"
+            ? `🔍 Unit #${targetCode} not found.`
+            : `🔍 الوحدة #${targetCode} غير موجودة.`
+        );
+        return true;
+      }
+
+      const listing = rows[0];
+      if (!canEdit(broker, listing)) {
+        await client.query("ROLLBACK");
+        await reply(
+          broker,
+          lang === "en"
+            ? "⛔ Not authorized to edit this listing."
+            : "⛔ ليس لديك صلاحية لتعديل هذه الوحدة."
+        );
+        return true;
+      }
+
+      if (instructions) {
+        await client.query("COMMIT");
+        await reply(
+          broker,
+          lang === "en"
+            ? `✏️ Processing update instructions for unit #${listing.code}...`
+            : `✏️ جاري تنفيذ تعليمات التعديل للوحدة #${listing.code}...`
+        );
+      } else {
+        await client.query(
+          `INSERT INTO broker_sessions (broker_id, session_type, session_data, expires_at)
+           VALUES ($1::uuid, 'edit', $2::jsonb, NOW() + INTERVAL '15 minutes')
+           ON CONFLICT (broker_id, session_type) DO UPDATE SET
+             session_data = EXCLUDED.session_data,
+             expires_at = NOW() + INTERVAL '15 minutes'`,
+          [
+            broker.id,
+            JSON.stringify({
+              listing_id: listing.id,
+              code: listing.code,
+              voice_buffers: [],
+              text_notes: []
+            })
+          ]
+        );
+        await client.query("COMMIT");
+
+        recentBrokerListings.set(broker.id, listing.code);
+        await reply(
+          broker,
+          lang === "en"
+            ? `✏️ Edit mode active for unit #${listing.code}. Send your modifications (voice or text), then type *done*.`
+            : `✏️ وضع التعديل نشط للوحدة #${listing.code}. أرسل تعديلاتك (صوت أو كتابة) واكتب «تم» عند الانتهاء.`
+        );
+      }
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+    return true;
+  }
+
+  // 4. DRAFT PRE-SAVE VALIDATION / FINALIZATION (DRF-02, ING-05)
   if (/^(تم|حفظ|done|save)$/i.test(lower)) {
     const { rows: drafts } = await pool.query(
       "SELECT session_data, expires_at FROM broker_sessions WHERE broker_id = $1 AND session_type = 'draft'",
@@ -135,7 +252,7 @@ async function handleCommand(broker, text, ctx) {
     }
   }
 
-  // 3. EXPORT INVENTORY (EXCEL) (DEL-06)
+  // 5. EXPORT INVENTORY (EXCEL) (DEL-06)
   if (/^(تصدير|export|excel|شيت)$/i.test(lower)) {
     const cooldownKey = `export:${broker.id}`;
     const now = Date.now();
@@ -203,7 +320,7 @@ async function handleCommand(broker, text, ctx) {
     return true;
   }
 
-  // 4. LIFECYCLE: STATUS UPDATES (Sold, Archived, Reactivate) (LFC-01, LFC-02, LFC-03)
+  // 6. LIFECYCLE: STATUS UPDATES (Sold, Archived, Reactivate) (LFC-01, LFC-02, LFC-03)
   const statusMatch = raw.match(
     /^(تم البيع|مباع|sold|ارشفة|أرشفة|archive|تفعيل|نشط|active)(?:\s+(.+))?$/i
   );
@@ -291,7 +408,7 @@ async function handleCommand(broker, text, ctx) {
     return true;
   }
 
-  // 5. DELETION: REQUEST WITH ADVISORY & ROW-LOCKING (DEL-01)
+  // 7. DELETION: REQUEST WITH ADVISORY & ROW-LOCKING (DEL-01)
   const deleteMatch = raw.match(/^(حذف|delete|مسح)(?:\s+(.+))?$/i);
   if (deleteMatch) {
     const targetCode = resolveTargetCode(deleteMatch[2]);
@@ -369,7 +486,7 @@ async function handleCommand(broker, text, ctx) {
     return true;
   }
 
-  // 6. INLINE DIRECT PRICE EDIT (EDT-03, EDT-04, EDT-05)
+  // 8. INLINE DIRECT PRICE EDIT (EDT-03, EDT-04, EDT-05)
   const priceEditMatch = raw.match(
     /^(?:تعديل\s+)?(?:سعر|price)\s+([A-Za-z0-9_-]+)\s+(?:الى|إلى|to\s+)?(.+)$/i
   );
