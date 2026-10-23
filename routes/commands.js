@@ -36,7 +36,42 @@ async function handleCommand(broker, text, ctx) {
     return true;
   }
 
-  // 2. OPEN NEW DRAFT (DRF-01)
+  // 2. LANGUAGE PREFERENCE TOGGLE (SYS-02)
+  const langMatch = raw.match(/^lang\s+(ar|en)|^(العربية|الإنجليزية)$/i);
+  if (langMatch) {
+    const newLang =
+      (langMatch[1] || langMatch[2]) === "en" || langMatch[2] === "الإنجليزية"
+        ? "en"
+        : "ar";
+    await pool.query("UPDATE brokers SET preferred_lang = $1 WHERE id = $2", [
+      newLang,
+      broker.id
+    ]);
+    await reply(
+      broker,
+      newLang === "en"
+        ? "✅ Language preference updated to English."
+        : "✅ تم تغيير لغة التفاعل إلى اللغة العربية بنجاح."
+    );
+    return true;
+  }
+
+  // 3. CANCEL / ABORT DRAFT (DRF-05)
+  if (/^(cancel|إلغاء|الغاء|خروج|abort|exit|قفل)$/i.test(lower)) {
+    await pool.query(
+      "DELETE FROM broker_sessions WHERE broker_id = $1 AND session_type IN ('draft', 'edit')",
+      [broker.id]
+    );
+    await reply(
+      broker,
+      lang === "en"
+        ? "🗑️ Draft session cancelled and cleared successfully."
+        : "🗑️ تم إلغاء المسودة وتفريغ البيانات بنجاح."
+    );
+    return true;
+  }
+
+  // 4. OPEN NEW DRAFT (DRF-01)
   if (/^(اضافة|إضافة|add|new|جديد|وحدة جديدة)$/i.test(lower)) {
     await Drafts.createDraft(
       pool,
@@ -54,7 +89,7 @@ async function handleCommand(broker, text, ctx) {
     return true;
   }
 
-  // 3. EDIT SESSION / PATCH (EDT-01, EDT-02)
+  // 5. EDIT SESSION / PATCH (EDT-01, EDT-02)
   const editMatch = raw.match(
     /^(تعديل|edit)(?:\s+([A-Za-z0-9_-]+))?(?:\s+(.+))?$/i
   );
@@ -152,7 +187,7 @@ async function handleCommand(broker, text, ctx) {
     return true;
   }
 
-  // 4. DRAFT PRE-SAVE VALIDATION / FINALIZATION (DRF-02, ING-05)
+  // 6. DRAFT PRE-SAVE VALIDATION / FINALIZATION (DRF-02, ING-05)
   if (/^(تم|حفظ|done|save)$/i.test(lower)) {
     const { rows: drafts } = await pool.query(
       "SELECT session_data, expires_at FROM broker_sessions WHERE broker_id = $1 AND session_type = 'draft'",
@@ -177,8 +212,12 @@ async function handleCommand(broker, text, ctx) {
           : `⚠️ لا يمكن تسجيل الوحدة بالصور فقط (${mediaCount} صور). يرجى إرسال فويس نوت أو رسالة تحتوي على السعر والمشروع.`,
         [
           {
+            id: "draft_save_exit",
+            title: lang === "en" ? "Save & Exit ✅" : "حفظ وخروج ✅"
+          },
+          {
             id: "draft_cancel",
-            title: lang === "en" ? "Cancel ❌" : "إلغاء المسودة ❌"
+            title: lang === "en" ? "Cancel ❌" : "إلغاء ❌"
           }
         ]
       );
@@ -210,10 +249,15 @@ async function handleCommand(broker, text, ctx) {
         }
         msg +=
           lang === "en"
-            ? "\nPlease send the missing info, then type *done*."
-            : "\nيرجى إرسال البيانات الناقصة ثم كتابة *«تم»*.";
+            ? "\nPlease send the missing info, or type *cancel* to abort."
+            : "\nيرجى إرسال البيانات الناقصة، أو اكتب *«إلغاء»* لتراجع عن المسودة.";
 
-        await reply(broker, msg);
+        await replyButtons(broker, msg, [
+          {
+            id: "draft_cancel",
+            title: lang === "en" ? "Cancel ❌" : "إلغاء ❌"
+          }
+        ]);
         return true;
       }
 
@@ -242,17 +286,23 @@ async function handleCommand(broker, text, ctx) {
       return true;
     } catch (err) {
       console.error("Draft extraction error:", err);
-      await reply(
+      await replyButtons(
         broker,
         lang === "en"
-          ? "❌ Failed to parse draft specs. Please send unit details clearly in text."
-          : "❌ حدث خطأ أثناء تحليل مواصفات المسودة. يرجى كتابة البيانات الأساسية في رسالة نصية."
+          ? "❌ Failed to parse draft specs. Please send unit details clearly in text or cancel."
+          : "❌ حدث خطأ أثناء تحليل مواصفات المسودة. يرجى كتابة البيانات الأساسية في رسالة نصية أو إلغاء المسودة.",
+        [
+          {
+            id: "draft_cancel",
+            title: lang === "en" ? "Cancel ❌" : "إلغاء ❌"
+          }
+        ]
       );
       return true;
     }
   }
 
-  // 5. EXPORT INVENTORY (EXCEL) (DEL-06)
+  // 7. EXPORT INVENTORY (EXCEL) (DEL-06)
   if (/^(تصدير|export|excel|شيت)$/i.test(lower)) {
     const cooldownKey = `export:${broker.id}`;
     const now = Date.now();
@@ -320,7 +370,7 @@ async function handleCommand(broker, text, ctx) {
     return true;
   }
 
-  // 6. LIFECYCLE: STATUS UPDATES (Sold, Archived, Reactivate) (LFC-01, LFC-02, LFC-03)
+  // 8. LIFECYCLE: STATUS UPDATES (Sold, Archived, Reactivate) (LFC-01, LFC-02, LFC-03)
   const statusMatch = raw.match(
     /^(تم البيع|مباع|sold|ارشفة|أرشفة|archive|تفعيل|نشط|active)(?:\s+(.+))?$/i
   );
@@ -408,7 +458,7 @@ async function handleCommand(broker, text, ctx) {
     return true;
   }
 
-  // 7. DELETION: REQUEST WITH ADVISORY & ROW-LOCKING (DEL-01)
+  // 9. DELETION: REQUEST WITH ADVISORY & ROW-LOCKING (DEL-01)
   const deleteMatch = raw.match(/^(حذف|delete|مسح)(?:\s+(.+))?$/i);
   if (deleteMatch) {
     const targetCode = resolveTargetCode(deleteMatch[2]);
@@ -486,7 +536,7 @@ async function handleCommand(broker, text, ctx) {
     return true;
   }
 
-  // 8. INLINE DIRECT PRICE EDIT (EDT-03, EDT-04, EDT-05)
+  // 10. INLINE DIRECT PRICE EDIT (EDT-03, EDT-04, EDT-05)
   const priceEditMatch = raw.match(
     /^(?:تعديل\s+)?(?:سعر|price)\s+([A-Za-z0-9_-]+)\s+(?:الى|إلى|to\s+)?(.+)$/i
   );
