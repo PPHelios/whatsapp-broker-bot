@@ -5,7 +5,6 @@ const express = require("express");
 const crypto = require("crypto");
 const sharp = require("sharp");
 const ExcelJS = require("exceljs");
-const { GoogleGenAI } = require("@google/genai");
 
 // Internal Library Modules
 const DB = require("./lib/db");
@@ -37,10 +36,23 @@ const burstTimers = new Map();
 const brokerSerializers = U.createSerializer();
 
 // Google Gemini AI Client Initialization
-const geminiClient = process.env.GEMINI_API_KEY
-  ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
-  : null;
+let geminiClient = null;
 
+async function getGeminiClient() {
+  if (geminiClient) return geminiClient;
+  if (!process.env.GEMINI_API_KEY) return null;
+
+  try {
+    const { GoogleGenAI } = await import("@google/genai");
+    geminiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    return geminiClient;
+  } catch (err) {
+    DB.logStdout("error", "Failed to load @google/genai ESM module", {
+      err: err.message
+    });
+    return null;
+  }
+}
 const GEMINI_TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || "gemini-2.5-flash";
 const GEMINI_VISION_MODEL =
   process.env.GEMINI_VISION_MODEL || "gemini-2.5-flash";
@@ -85,19 +97,26 @@ async function resolveBroker(phone) {
   const cleanPhone = U.normalizePhone(phone);
   if (!cleanPhone) return null;
 
+  // Handles international (+2010...), local (010...), and unadorned digits (2010...)
   const res = await DB.query(
     `SELECT b.*, a.name AS agency_name, a.logo_url AS agency_logo,
             a.primary_color, a.secondary_color, a.phone AS agency_phone
      FROM brokers b
      JOIN agencies a ON b.agency_id = a.id
-     WHERE b.phone = $1 OR b.whatsapp_id = $1
+     WHERE b.phone_number = $1
+        OR b.phone_normalized = $1
+        OR b.phone_normalized = ('+' || $1)
+        OR b.phone_number = regexp_replace($1, '^\\+?20', '0')
+        OR b.contact_phone = $1
      LIMIT 1`,
     [cleanPhone]
   );
   return res.rows[0] || null;
 }
 
-const to = (broker) => broker.whatsapp_id || broker.phone;
+// Fixed recipient phone accessor aligned with database schema
+const to = (broker) =>
+  broker.phone_number || broker.phone_normalized || broker.contact_phone;
 const M = (lang, ar, en) => (lang === "en" ? en : ar);
 
 async function reply(broker, text) {
@@ -157,8 +176,10 @@ async function showListingCard(broker, listing) {
       isEn ? "sqm" : "م²"
     }`,
     `🛏️ *${isEn ? "Beds:" : "الغرف:"}* ${listing.bedrooms ?? "-"}`,
-    listing.details?.bathrooms
-      ? `🛁 *${isEn ? "Baths:" : "الحمامات:"}* ${listing.details.bathrooms}`
+    listing.details?.bathrooms || listing.bathrooms
+      ? `🛁 *${isEn ? "Baths:" : "الحمامات:"}* ${
+          listing.details?.bathrooms || listing.bathrooms
+        }`
       : null,
     listing.details?.orientation
       ? `🧭 *${isEn ? "Orientation:" : "الوجهة:"}* ${
@@ -263,10 +284,11 @@ async function renderFlyerOnDemand(
     return true;
   }
 
+  // Quoted "position" to avoid reserved keyword collision
   const imgRes = await DB.query(
     `SELECT * FROM listing_images
      WHERE listing_id = $1
-     ORDER BY position ASC`,
+     ORDER BY "position" ASC`,
     [listing.id]
   );
   let images = imgRes.rows;
@@ -358,15 +380,15 @@ async function renderFlyerOnDemand(
           }
         });
 
-        // 1. Update kept images in DB with designated roles and sequential positions (0 to 8)
+        // 1. Update kept images in DB with designated roles and sequential positions
         for (const kept of keptImages) {
           await DB.query(
-            "UPDATE listing_images SET position = $1, role = $2 WHERE id = $3",
+            `UPDATE listing_images SET "position" = $1, role = $2 WHERE id = $3`,
             [kept.position, kept.role, kept.id]
           );
         }
 
-        // 2. PRUNING: Permanently delete excess rejected images (10 to 15) from Supabase Storage & DB
+        // 2. PRUNING: Permanently delete excess rejected images from Supabase Storage & DB
         if (rejectedImages.length > 0) {
           const pathsToDelete = rejectedImages.map((img) => img.url);
           await Supabase.deleteStorageFiles(pathsToDelete);
@@ -517,9 +539,7 @@ async function cmdReviewDraft(broker) {
   const parts = [{ text: L.buildListingPrompt(lang) }];
 
   if (draft.texts?.length) {
-    parts.push({
-      text: `\n\n=== PROPERTY NOTES ===\n${draft.texts.join("\n")}`
-    });
+    parts.push({ text: `=== PROPERTY NOTES ===\n${draft.texts.join("\n")}` });
   }
 
   for (const v of draft.voice_buffers || []) {
@@ -606,8 +626,7 @@ async function cmdReviewDraft(broker) {
     lang
   );
 
-  // Meta Button API Constraint: Body text cannot exceed 1024 characters.
-  // If > 950 chars, split into complete text message + action buttons message.
+  // Meta Button API Constraint: Body text cannot exceed 1024 characters
   if (reviewCardText.length > 950) {
     await WA.sendWhatsAppText(to(broker), reviewCardText);
     await WA.sendWhatsAppButtons(
@@ -794,9 +813,9 @@ async function handleCommand(broker, raw) {
     return true;
   }
 
-  // Draft Lifecycle Commands
+  // Draft Lifecycle Commands (using valid broker.phone_number)
   if (/^(?:اضافة|إضافة|جديد|add|new)$/i.test(n)) {
-    await Drafts.createDraft(broker.id, broker.agency_id, broker.phone);
+    await Drafts.createDraft(broker.id, broker.agency_id, broker.phone_number);
     await deleteSession(broker.id, "edit");
     await deleteSession(broker.id, "pending_search");
     DB.logStdout("info", "Command executed: create new draft", {
@@ -861,13 +880,13 @@ async function handleCommand(broker, raw) {
     }
   }
 
-  // Agency Inventory Export
+  // Agency Inventory Export (Optimized to use idx_listings_agency_status_created)
   if (/^(?:excel|export|اكسل|اكسيل|تصدير)$/i.test(n)) {
     DB.logStdout("info", "Command executed: export agency inventory", {
       brokerId: broker.id
     });
     const res = await DB.query(
-      "SELECT * FROM listings WHERE agency_id = $1 AND status = 'active' ORDER BY id DESC",
+      "SELECT * FROM listings WHERE agency_id = $1 AND status = 'active' ORDER BY created_at DESC",
       [broker.agency_id]
     );
     const buffer = await Excel.buildAgencyInventoryWorkbook({
@@ -905,7 +924,7 @@ async function handleCommand(broker, raw) {
       );
       return true;
     }
-    await setSession(broker.id, "edit", { code }, 900); // 15-minute TTL
+    await setSession(broker.id, "edit", { code }, 900);
     DB.logStdout("info", "Command executed: enter edit mode", {
       code,
       brokerId: broker.id
@@ -915,7 +934,7 @@ async function handleCommand(broker, raw) {
       M(
         lang,
         `✏️ *بدء تعديل الوحدة #${code}*\nأرسل التعديل المطلوب (صوت أو كتابة، مثلاً: 'السعر بقى 9.5 مليون والتسليم فوري') أو اضغط إلغاء:`,
-        `✏️ *Editing unit #${code}*\nSend changes (voice/text, e.g. 'Price is 9.5M ready to move'):`
+        `✏️ *Editing unit #${code}*\nSend changes (voice/text):`
       ),
       [
         {
@@ -1173,7 +1192,7 @@ async function handleText(broker, raw) {
   if (activeEdit && activeEdit.code) {
     const code = activeEdit.code;
 
-    // Collision Check: Search query sent while in Edit mode -> Prompt: Complete vs Exit & Search
+    // Collision Check: Search query sent while in Edit mode
     if (isSearchIntent) {
       await setSession(broker.id, "pending_search", { query: raw }, 600);
       DB.logStdout(
@@ -1236,7 +1255,9 @@ async function handleText(broker, raw) {
       existing: listing,
       draft: validated,
       price: parsedPrice,
-      lang
+      lang,
+      enriched: null,
+      imageOnly: false
     });
 
     await DB.query(
@@ -1289,7 +1310,7 @@ async function handleText(broker, raw) {
   // 3. Draft Mode (Add Mode) Interception
   const activeDraft = await Drafts.getDraft(broker.id);
   if (activeDraft) {
-    // Collision Check: Search query sent while Draft is open -> Prompt: Complete vs Exit & Search
+    // Collision Check: Search query sent while Draft is open
     if (isSearchIntent) {
       await setSession(broker.id, "pending_search", { query: raw }, 600);
       DB.logStdout(
@@ -1458,7 +1479,12 @@ async function handleImage(broker, imageObj) {
 
   let draft = await Drafts.getDraft(broker.id);
   if (!draft) {
-    draft = await Drafts.createDraft(broker.id, broker.agency_id, broker.phone);
+    // Uses broker.phone_number for strict NOT NULL compliance on broker_phone
+    draft = await Drafts.createDraft(
+      broker.id,
+      broker.agency_id,
+      broker.phone_number
+    );
     DB.logStdout("info", "Implicit draft created by incoming image", {
       brokerId: broker.id
     });
@@ -1900,7 +1926,7 @@ async function handleInteractive(broker, interactive) {
     if (!canEdit(broker, listing)) return reply(broker, "⛔ غير مصرح.");
 
     const imgRes = await DB.query(
-      "SELECT url FROM listing_images WHERE listing_id = $1",
+      `SELECT url FROM listing_images WHERE listing_id = $1`,
       [listing.id]
     );
     await Supabase.deleteStorageFiles(imgRes.rows.map((r) => r.url));
@@ -2017,7 +2043,7 @@ async function handleInteractive(broker, interactive) {
     return "done";
   }
 
-  // I. Primary Payment Plan Interactive Viewer (Restored from UX Audit)
+  // I. Primary Payment Plan Interactive Viewer
   if (replyId.startsWith("plans_view:")) {
     const code = replyId.split(":")[1];
     const listing = await fetchListing(broker, code);
@@ -2042,7 +2068,7 @@ async function handleInteractive(broker, interactive) {
     return "done";
   }
 
-  // J. Search Results Pagination Handler (Restored from UX Audit)
+  // J. Search Results Pagination Handler
   if (replyId.startsWith("MORE_SEARCH:")) {
     const parts = replyId.split(":");
     const currentOffset = Number(parts[1]) || 5;
@@ -2137,7 +2163,7 @@ app.get("/webhook", (req, res) => {
 
 // Meta Webhook HMAC-SHA256 Signature Validator
 function isValidMetaSignature(req) {
-  if (!process.env.WHATSAPP_APP_SECRET) return true; // Optional bypass if secret not set
+  if (!process.env.WHATSAPP_APP_SECRET) return true;
   const signature = req.headers["x-hub-signature-256"];
   if (!signature) return false;
 
@@ -2156,7 +2182,6 @@ function isValidMetaSignature(req) {
 }
 
 app.post("/webhook", async (req, res) => {
-  // Validate HMAC signature to reject spoofed webhooks
   if (!isValidMetaSignature(req)) {
     DB.logStdout("warn", "Rejected webhook with invalid HMAC signature");
     return res.sendStatus(401);
@@ -2175,7 +2200,6 @@ app.post("/webhook", async (req, res) => {
   const from = message.from;
   const broker = await resolveBroker(from);
 
-  // Eliminate Silent Drop: Send registration notice to unrecognized phone numbers
   if (!broker) {
     DB.logStdout("warn", "Inbound message from unregistered phone number", {
       phone: from
@@ -2210,7 +2234,6 @@ app.post("/webhook", async (req, res) => {
             await handleInteractive(broker, message.interactive);
           }
         } catch (err) {
-          // Specific Quota Error Traps
           if (err.code === "BROKER_QUOTA_EXCEEDED") {
             DB.logStdout("warn", "Broker daily AI quota exceeded", {
               brokerId: broker.id,

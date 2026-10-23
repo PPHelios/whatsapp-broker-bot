@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "checkJs": false,
+    "allowJs": true,
+    "skipLibCheck": true,
+    "maxNodeModuleJsDepth": 0
+  },
+  "include": ["lib/**/*.js", "server.js"],
+  "exclude": ["node_modules", "coverage", "dist", "tests", "scripts"]
+}
