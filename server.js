@@ -32,25 +32,9 @@ const pool = new Pool({
   connectionTimeoutMillis: 5000
 });
 
-// Runtime in-memory caches (transient rate limiting & deduplication)
-const recentButtonClicks = new Map();
-const recentBrokerListings = new Map();
-const cooldowns = new Map();
-
-// Drain Protocol State
+// Drain Protocol State (Distributed Multi-Pod Invariant)
 let inFlight = 0;
 let isDraining = false;
-
-// Periodic cache cleanup every 10 minutes
-const cleanupInterval = setInterval(() => {
-  const now = Date.now();
-  for (const [k, v] of recentButtonClicks.entries()) {
-    if (v <= now) recentButtonClicks.delete(k);
-  }
-  for (const [k, v] of cooldowns.entries()) {
-    if (v <= now) cooldowns.delete(k);
-  }
-}, 600000);
 
 const app = express();
 
@@ -62,6 +46,45 @@ app.use(
     }
   })
 );
+
+/**
+ * Non-blocking operational telemetry logging helper.
+ */
+async function logServerOp(
+  poolInstance,
+  {
+    agency_id = null,
+    broker_id = null,
+    listing_code = null,
+    operation_type,
+    status = "success",
+    error_code = null,
+    total_duration_ms = 0,
+    metadata = {}
+  }
+) {
+  if (!poolInstance) return;
+  try {
+    await poolInstance.query(
+      `INSERT INTO operation_logs (
+        agency_id, broker_id, listing_code, operation_type,
+        status, error_code, total_duration_ms, metadata, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+      [
+        agency_id,
+        broker_id,
+        listing_code,
+        operation_type,
+        status,
+        error_code,
+        Math.round(total_duration_ms),
+        JSON.stringify(metadata)
+      ]
+    );
+  } catch (e) {
+    console.warn("Server telemetry log warning:", e.message);
+  }
+}
 
 /**
  * SEC-01: Cryptographic Webhook HMAC-SHA256 Verification
@@ -102,7 +125,7 @@ app.get("/webhook", (req, res) => {
  * Central Inbound Message Dispatcher
  */
 async function dispatchMessage(broker, message, ctx) {
-  const { lang, pool } = ctx;
+  const { lang, pool: poolInstance } = ctx;
 
   switch (message.type) {
     case "interactive":
@@ -143,21 +166,18 @@ async function dispatchMessage(broker, message, ctx) {
     case "text": {
       const text = message.text?.body?.trim() || "";
 
-      // 1. Try structured text commands (help, sold, delete, price, export)
+      // 1. Try structured text commands (help, stats, export, sold, delete, price, flyer, plans)
       const handledCommand = await handleCommand(broker, text, ctx);
       if (handledCommand) return "done";
 
       // 2. COL-01: Check for active draft session collision before invoking search
-      const { rows: openDrafts } = await pool.query(
-        "SELECT session_data, expires_at FROM broker_sessions WHERE broker_id = $1 AND session_type = 'draft'",
-        [broker.id]
+      const activeDraft = await Drafts.getDraft(
+        poolInstance,
+        broker.id,
+        "draft"
       );
 
-      const hasActiveDraft =
-        openDrafts.length > 0 &&
-        new Date(openDrafts[0].expires_at) > new Date();
-
-      if (hasActiveDraft) {
+      if (activeDraft) {
         const lower = text.toLowerCase();
         // Strict explicit search intent check (excluding property types so specs aren't mistaken for search queries)
         const hasExplicitSearchIntent =
@@ -186,7 +206,7 @@ async function dispatchMessage(broker, message, ctx) {
         }
 
         // Invariant: Non-search text sent while a draft is active represents unit specifications
-        await Drafts.appendText(pool, broker.id, text, "draft");
+        await Drafts.appendText(poolInstance, broker.id, text, "draft");
         const promptBody =
           lang === "en"
             ? "📝 Specifications added to draft. Send remaining details, voice notes, or photos, then type *done* to review."
@@ -194,11 +214,11 @@ async function dispatchMessage(broker, message, ctx) {
 
         await replyButtons(broker, promptBody, [
           {
-            id: "DRAFT_SAVE",
+            id: "draft_confirm",
             title: lang === "en" ? "Done (Save) ✅" : "تم (حفظ) ✅"
           },
           {
-            id: "DRAFT_CANCEL",
+            id: "draft_cancel",
             title: lang === "en" ? "Cancel ❌" : "إلغاء ❌"
           }
         ]);
@@ -210,6 +230,11 @@ async function dispatchMessage(broker, message, ctx) {
     }
 
     case "location":
+      logServerOp(poolInstance, {
+        agency_id: broker.agency_id,
+        broker_id: broker.id,
+        operation_type: "ingress_unsupported_location"
+      });
       await reply(
         broker,
         lang === "en"
@@ -219,6 +244,11 @@ async function dispatchMessage(broker, message, ctx) {
       return "done";
 
     case "video":
+      logServerOp(poolInstance, {
+        agency_id: broker.agency_id,
+        broker_id: broker.id,
+        operation_type: "ingress_unsupported_video"
+      });
       await reply(
         broker,
         lang === "en"
@@ -228,6 +258,11 @@ async function dispatchMessage(broker, message, ctx) {
       return "done";
 
     case "contacts":
+      logServerOp(poolInstance, {
+        agency_id: broker.agency_id,
+        broker_id: broker.id,
+        operation_type: "ingress_unsupported_contacts"
+      });
       await reply(
         broker,
         lang === "en"
@@ -237,6 +272,12 @@ async function dispatchMessage(broker, message, ctx) {
       return "done";
 
     default:
+      logServerOp(poolInstance, {
+        agency_id: broker.agency_id,
+        broker_id: broker.id,
+        operation_type: "ingress_unsupported_default",
+        metadata: { messageType: message.type }
+      });
       await reply(
         broker,
         lang === "en"
@@ -278,7 +319,23 @@ app.post("/webhook", async (req, res) => {
 
   inFlight++;
   try {
-    // 2. Authenticate Broker against PostgreSQL (Strict Schema Invariant)
+    // 2. Webhook Deduplication via inbound_messages (SEC-03)
+    if (message.id) {
+      const { rows: inserted } = await pool.query(
+        `INSERT INTO inbound_messages (msg_id, phone_key, payload, status, received_at, updated_at)
+         VALUES ($1, $2, $3::jsonb, 'processing', NOW(), NOW())
+         ON CONFLICT (msg_id) DO NOTHING
+         RETURNING msg_id`,
+        [message.id, normalizedPhone, JSON.stringify(message)]
+      );
+
+      if (inserted.length === 0) {
+        // Duplicate delivery from Meta; drop safely to avoid duplicate turns
+        return;
+      }
+    }
+
+    // 3. Authenticate Broker against PostgreSQL (Strict Schema Invariant)
     const { rows: brokers } = await pool.query(
       `SELECT id, agency_id, name, phone_number, phone_normalized, role, preferred_lang, is_active
        FROM brokers
@@ -298,30 +355,44 @@ app.post("/webhook", async (req, res) => {
     const broker = brokers[0];
     const lang = broker.preferred_lang || "ar";
 
-    // 3. Assemble Execution Context
+    // 4. Assemble Distributed Execution Context (Zero in-memory Maps)
     const ctx = {
       pool,
       lang,
-      recentButtonClicks,
-      recentBrokerListings,
-      cooldowns,
       S,
       AI
     };
 
-    // 4. Execute turn inside the Symmetrical Zero-Silent-Drop boundary
+    // 5. Execute turn inside the Symmetrical Zero-Silent-Drop boundary
     await executeGuardedTurn(broker, message, () =>
       dispatchMessage(broker, message, ctx)
     );
+
+    if (message.id) {
+      await pool
+        .query(
+          "UPDATE inbound_messages SET status = 'completed', updated_at = NOW() WHERE msg_id = $1",
+          [message.id]
+        )
+        .catch(() => {});
+    }
   } catch (err) {
     console.error("Critical webhook processing error:", err);
+    if (message.id) {
+      await pool
+        .query(
+          "UPDATE inbound_messages SET status = 'failed', updated_at = NOW() WHERE msg_id = $1",
+          [message.id]
+        )
+        .catch(() => {});
+    }
   } finally {
     inFlight--;
   }
 });
 
 /**
- * Render Health Check
+ * Render Health Check Probe
  */
 app.get("/health", async (_req, res) => {
   if (isDraining) {
@@ -361,7 +432,6 @@ async function bootRecovery() {
           [item.msg_id]
         );
 
-        // Re-dispatch recovered message
         const messagePayload = item.payload;
         if (messagePayload && messagePayload.from) {
           const normPhone = U.normalizePhone(messagePayload.from);
@@ -375,9 +445,6 @@ async function bootRecovery() {
             const ctx = {
               pool,
               lang: broker.preferred_lang || "ar",
-              recentButtonClicks,
-              recentBrokerListings,
-              cooldowns,
               S,
               AI
             };
@@ -414,7 +481,7 @@ async function preWarmAssets() {
   }
 }
 
-// Start Server & Bind Port Immediately for Render Health Checks
+// Start Server & Bind Port Immediately for Render Health Probes
 const server = app.listen(PORT, () => {
   console.log(
     `🚀 AqarChat Engine live on port ${PORT} (Node.js ${process.version})`
@@ -429,7 +496,6 @@ const server = app.listen(PORT, () => {
 async function gracefulShutdown(signal) {
   console.log(`Received ${signal}. Initiating Render drain protocol...`);
   isDraining = true;
-  clearInterval(cleanupInterval);
 
   server.close(() => {
     console.log("HTTP server closed to new connections.");

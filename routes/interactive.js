@@ -4,14 +4,63 @@
 const WA = require("../lib/whatsapp");
 const T = require("../lib/text");
 const U = require("../lib/util");
+const Drafts = require("../lib/drafts");
 const financials = require("../lib/financials");
-const { reply, allowSilentDrop } = require("../lib/dispatcher");
+const { reply, replyButtons, allowSilentDrop } = require("../lib/dispatcher");
 
 /**
- * Interactive Button & List Menu Callbacks Router (CRD-01, DEL-01 - DEL-05)
+ * Validates broker mutation permissions.
+ */
+function canEdit(broker, listing) {
+  if (["admin", "owner", "manager"].includes(broker.role)) return true;
+  return listing.broker_id === broker.id;
+}
+
+/**
+ * Non-blocking operational telemetry logging helper.
+ */
+async function logInteractiveOp(
+  pool,
+  {
+    agency_id,
+    broker_id,
+    listing_code = null,
+    operation_type,
+    status = "success",
+    error_code = null,
+    total_duration_ms = 0,
+    metadata = {}
+  }
+) {
+  if (!pool) return;
+  try {
+    await pool.query(
+      `INSERT INTO operation_logs (
+        agency_id, broker_id, listing_code, operation_type,
+        status, error_code, total_duration_ms, metadata, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+      [
+        agency_id || null,
+        broker_id || null,
+        listing_code || null,
+        operation_type,
+        status,
+        error_code,
+        Math.round(total_duration_ms),
+        JSON.stringify(metadata)
+      ]
+    );
+  } catch (e) {
+    console.warn("Operation telemetry log warning:", e.message);
+  }
+}
+
+/**
+ * Interactive Button & List Menu Callbacks Router (CRD-01, DEL-01 - DEL-05, SCH-02)
  */
 async function handleInteractive(broker, message, ctx) {
-  const { pool, lang, recentButtonClicks, cooldowns } = ctx;
+  const startTime = Date.now();
+  const { pool, lang, recentButtonClicks, cooldowns, S } = ctx;
   const replyObj = message.interactive;
 
   const replyId =
@@ -30,18 +79,28 @@ async function handleInteractive(broker, message, ctx) {
   // 1. Debounce Trap (3 seconds per broker + button ID)
   const clickKey = `${broker.phone_normalized}:${replyId}`;
   const now = Date.now();
-  if (recentButtonClicks.get(clickKey) > now) {
+  if (recentButtonClicks && recentButtonClicks.get(clickKey) > now) {
     allowSilentDrop("button_debounce");
     return "done";
   }
-  recentButtonClicks.set(clickKey, now + 3000);
+  if (recentButtonClicks) {
+    recentButtonClicks.set(clickKey, now + 3000);
+  }
 
-  // 2. DISCARD DRAFT (DRAFT_CANCEL)
-  if (replyId === "DRAFT_CANCEL") {
+  // 2. DISCARD DRAFT (DRAFT_CANCEL / draft_cancel)
+  if (replyId === "DRAFT_CANCEL" || replyId === "draft_cancel") {
     await pool.query(
       "DELETE FROM broker_sessions WHERE broker_id = $1 AND session_type IN ('draft', 'edit')",
       [broker.id]
     );
+
+    logInteractiveOp(pool, {
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      operation_type: "draft_discard",
+      total_duration_ms: Date.now() - startTime
+    });
+
     await reply(
       broker,
       lang === "en"
@@ -80,8 +139,12 @@ async function handleInteractive(broker, message, ctx) {
     return "done";
   }
 
-  // 5. FINALIZE & SAVE DRAFT (DRAFT_SAVE / draft_confirm)
-  if (replyId === "DRAFT_SAVE" || replyId === "draft_confirm") {
+  // 5. FINALIZE & SAVE DRAFT (DRAFT_SAVE / draft_confirm / draft_save_exit)
+  if (
+    replyId === "DRAFT_SAVE" ||
+    replyId === "draft_confirm" ||
+    replyId === "draft_save_exit"
+  ) {
     const { rows: sessions } = await pool.query(
       "SELECT session_data, expires_at FROM broker_sessions WHERE broker_id = $1 AND session_type = 'draft'",
       [broker.id]
@@ -114,11 +177,11 @@ async function handleInteractive(broker, message, ctx) {
           : `⚠️ لا يمكن تسجيل الوحدة بالصور فقط (${mediaCount} صور). يرجى إرسال فويس نوت أو رسالة تحتوي على السعر والمشروع.`,
         [
           {
-            id: "DRAFT_SAVE",
+            id: "draft_confirm",
             title: lang === "en" ? "Done (Save) ✅" : "تم (حفظ) ✅"
           },
           {
-            id: "DRAFT_CANCEL",
+            id: "draft_cancel",
             title: lang === "en" ? "Cancel ❌" : "إلغاء ❌"
           }
         ]
@@ -133,8 +196,6 @@ async function handleInteractive(broker, message, ctx) {
         : "⏳ جاري حفظ الوحدة، رفع الصور، وتحديث سجلات المخزون..."
     );
 
-    // Dynamic commit execution with built-in double-tap protection
-    const Drafts = require("../lib/drafts");
     return await Drafts.commitDraftToDatabase(broker, draft, ctx);
   }
 
@@ -150,9 +211,9 @@ async function handleInteractive(broker, message, ctx) {
     try {
       await client.query("BEGIN");
 
-      // SEC-03: Acquire 64-bit transactional advisory lock matching ARCHITECTURE_MANIFEST invariant
+      // SEC-03: Acquire 64-bit transactional advisory lock
       await client.query(
-        "SELECT pg_advisory_xact_lock(('x' || substr(md5($1 || ':' || $2), 1, 16))::bit(64)::bigint)",
+        "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
         [String(broker.agency_id), listingCode]
       );
 
@@ -169,6 +230,18 @@ async function handleInteractive(broker, message, ctx) {
           lang === "en"
             ? "⚠️ Listing was already deleted."
             : "⚠️ هذه الوحدة محذوفة بالفعل أو غير متاحة."
+        );
+        return "done";
+      }
+
+      const listing = rows[0];
+      if (!canEdit(broker, listing)) {
+        await client.query("ROLLBACK");
+        await reply(
+          broker,
+          lang === "en"
+            ? "⛔ You do not have permission to delete this listing."
+            : "⛔ ليس لديك صلاحية لحذف هذه الوحدة."
         );
         return "done";
       }
@@ -196,6 +269,14 @@ async function handleInteractive(broker, message, ctx) {
         });
       }
 
+      logInteractiveOp(pool, {
+        agency_id: broker.agency_id,
+        broker_id: broker.id,
+        listing_code: listingCode,
+        operation_type: "listing_delete",
+        total_duration_ms: Date.now() - startTime
+      });
+
       await reply(
         broker,
         lang === "en"
@@ -212,12 +293,14 @@ async function handleInteractive(broker, message, ctx) {
     return "done";
   }
 
-  // 7. CLIENT AD COPY (DEL-04)
+  // 7. CLIENT AD COPY (DEL-02)
   if (replyId.startsWith("client_copy:") || replyId.startsWith("client:")) {
-    const code = replyId.split(":")[1];
+    const code = T.extractCleanCode(replyId.split(":")[1]);
     const { rows } = await pool.query(
-      "SELECT * FROM listings WHERE agency_id = $1 AND UPPER(code) = $2",
-      [broker.agency_id, code.toUpperCase()]
+      `SELECT * FROM listings
+       WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+       LIMIT 1`,
+      [broker.agency_id, code]
     );
 
     if (rows.length === 0) {
@@ -234,12 +317,13 @@ async function handleInteractive(broker, message, ctx) {
     return "done";
   }
 
-  // 8. ON-DEMAND BROCHURE GENERATION (DEL-01 / DEL-03)
+  // 8. ON-DEMAND BROCHURE GENERATION (DEL-01)
   if (replyId.startsWith("flyer:")) {
-    const [, flyerLang, theme, code] = replyId.split(":");
+    const [, flyerLang, theme, rawCode] = replyId.split(":");
+    const code = T.extractCleanCode(rawCode);
     const cooldownKey = `flyer:${broker.agency_id}:${code}`;
 
-    if (cooldowns.get(cooldownKey) > now) {
+    if (cooldowns && cooldowns.get(cooldownKey) > now) {
       await reply(
         broker,
         lang === "en"
@@ -248,7 +332,9 @@ async function handleInteractive(broker, message, ctx) {
       );
       return "done";
     }
-    cooldowns.set(cooldownKey, now + 20000); // 20s cooldown
+    if (cooldowns) {
+      cooldowns.set(cooldownKey, now + 20000); // 20s cooldown
+    }
 
     await reply(
       broker,
@@ -261,12 +347,14 @@ async function handleInteractive(broker, message, ctx) {
     return await Flyer.renderFlyerOnDemand(broker, code, flyerLang, theme, ctx);
   }
 
-  // 9. DEVELOPER INSTALLMENT MATRIX OVERVIEW (DEL-05)
+  // 9. DEVELOPER INSTALLMENT MATRIX OVERVIEW (DEL-03)
   if (replyId.startsWith("plans_view:") || replyId.startsWith("plans_all:")) {
-    const code = replyId.split(":")[1];
+    const code = T.extractCleanCode(replyId.split(":")[1]);
     const { rows } = await pool.query(
-      "SELECT * FROM listings WHERE agency_id = $1 AND UPPER(code) = $2",
-      [broker.agency_id, code.toUpperCase()]
+      `SELECT * FROM listings
+       WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+       LIMIT 1`,
+      [broker.agency_id, code]
     );
 
     if (rows.length === 0) {
@@ -322,15 +410,17 @@ async function handleInteractive(broker, message, ctx) {
     return "done";
   }
 
-  // 10. SELECT SPECIFIC PAYMENT PLAN -> FORWARDABLE CLIENT COPY (UX DEAD-END FIX)
+  // 10. SELECT SPECIFIC PAYMENT PLAN -> FORWARDABLE CLIENT COPY
   if (replyId.startsWith("plan_select:") || replyId.startsWith("plan_view:")) {
     const parts = replyId.split(":");
-    const code = parts[1];
+    const code = T.extractCleanCode(parts[1]);
     const selectedPlanId = parts[2];
 
     const { rows } = await pool.query(
-      "SELECT * FROM listings WHERE agency_id = $1 AND UPPER(code) = $2",
-      [broker.agency_id, code.toUpperCase()]
+      `SELECT * FROM listings
+       WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+       LIMIT 1`,
+      [broker.agency_id, code]
     );
 
     if (rows.length === 0) {
@@ -365,10 +455,12 @@ async function handleInteractive(broker, message, ctx) {
 
   // 11. MULTI-PLAN EXCEL COMPARISON EXPORT (DEL-04)
   if (replyId.startsWith("compare_excel:")) {
-    const code = replyId.split(":")[1];
+    const code = T.extractCleanCode(replyId.split(":")[1]);
     const { rows: listings } = await pool.query(
-      "SELECT * FROM listings WHERE agency_id = $1 AND UPPER(code) = $2",
-      [broker.agency_id, code.toUpperCase()]
+      `SELECT * FROM listings
+       WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+       LIMIT 1`,
+      [broker.agency_id, code]
     );
 
     if (listings.length === 0) {
@@ -436,7 +528,249 @@ async function handleInteractive(broker, message, ctx) {
     return "done";
   }
 
-  // 12. Unrecognized or Stale Button ID
+  // 12. TRIGGER EDIT MODE FROM LISTING CARD (EDT-01)
+  if (replyId.startsWith("edit:")) {
+    const targetCode = T.extractCleanCode(replyId.split(":")[1]);
+
+    const { rows } = await pool.query(
+      `SELECT * FROM listings
+       WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+       LIMIT 1`,
+      [broker.agency_id, targetCode]
+    );
+
+    if (rows.length === 0) {
+      await reply(
+        broker,
+        lang === "en"
+          ? `🔍 Unit #${targetCode} not found.`
+          : `🔍 الوحدة #${targetCode} غير موجودة.`
+      );
+      return "done";
+    }
+
+    const listing = rows[0];
+    if (!canEdit(broker, listing)) {
+      await reply(
+        broker,
+        lang === "en"
+          ? "⛔ Not authorized to edit this listing."
+          : "⛔ ليس لديك صلاحية لتعديل هذه الوحدة."
+      );
+      return "done";
+    }
+
+    await pool.query(
+      `INSERT INTO broker_sessions (broker_id, session_type, session_data, expires_at)
+       VALUES ($1::uuid, 'edit', $2::jsonb, NOW() + INTERVAL '15 minutes')
+       ON CONFLICT (broker_id, session_type) DO UPDATE SET
+         session_data = EXCLUDED.session_data,
+         expires_at = NOW() + INTERVAL '15 minutes'`,
+      [
+        broker.id,
+        JSON.stringify({
+          listing_id: listing.id,
+          code: listing.code,
+          voice_buffers: [],
+          text_notes: []
+        })
+      ]
+    );
+
+    await reply(
+      broker,
+      lang === "en"
+        ? `✏️ Edit mode active for unit #${listing.code}. Send your modifications (voice or text), then type *done*.`
+        : `✏️ وضع التعديل نشط للوحدة #${listing.code}. أرسل تعديلاتك (صوت أو كتابة) واكتب «تم» عند الانتهاء.`
+    );
+    return "done";
+  }
+
+  // 13. CANCEL DRAFT AND EXECUTE SEARCH (COL-01)
+  if (replyId.startsWith("cancel_and_search:")) {
+    const encodedQuery = replyId.split(":")[1];
+    let queryText = "";
+    try {
+      queryText = Buffer.from(encodedQuery, "base64").toString("utf8");
+    } catch (e) {
+      console.warn("Base64 query decode error:", e);
+    }
+
+    await pool.query(
+      "DELETE FROM broker_sessions WHERE broker_id = $1 AND session_type = 'draft'",
+      [broker.id]
+    );
+
+    if (!queryText.trim()) {
+      await reply(
+        broker,
+        lang === "en"
+          ? "🗑️ Draft cancelled. Please type your search query."
+          : "🗑️ تم إلغاء المسودة. يرجى كتابة مواصفات البحث المطلوبة."
+      );
+      return "done";
+    }
+
+    if (S && S.handleSearchMessage) {
+      return await S.handleSearchMessage(broker, queryText.trim(), ctx);
+    }
+    return "done";
+  }
+
+  // 14. EXPORT INVENTORY VIA BUTTON (STATS-01 / DEL-06)
+  if (replyId === "cmd:export" || replyId === "cmd_export") {
+    const cooldownKey = `export:${broker.id}`;
+    if (cooldowns && cooldowns.get(cooldownKey) > now) {
+      const waitSec = Math.ceil((cooldowns.get(cooldownKey) - now) / 1000);
+      await reply(
+        broker,
+        lang === "en"
+          ? `⏳ Export is cooling down. Please wait ${waitSec}s before requesting again.`
+          : `⏳ عذراً، تم طلب تصدير الشيت منذ قليل. يرجى الانتظار ${waitSec} ثانية قبل إعادة الطلب.`
+      );
+      return "done";
+    }
+
+    if (cooldowns) {
+      cooldowns.set(cooldownKey, now + 60000);
+    }
+
+    await reply(
+      broker,
+      lang === "en"
+        ? "⏳ Compiling agency inventory spreadsheet... You will receive the .xlsx file shortly."
+        : "⏳ جاري استخراج شيت إكسيل بمخزون الوكالة... سيتم إرسال الملف مباشرة."
+    );
+
+    setImmediate(async () => {
+      try {
+        const { rows: listings } = await pool.query(
+          "SELECT * FROM listings WHERE agency_id = $1 AND status = 'active' ORDER BY created_at DESC",
+          [broker.agency_id]
+        );
+        const { rows: agencies } = await pool.query(
+          "SELECT * FROM agencies WHERE id = $1",
+          [broker.agency_id]
+        );
+        const Excel = require("../lib/excel");
+        const buf = await Excel.buildAgencyInventoryWorkbook({
+          listings,
+          agency: agencies[0],
+          broker,
+          lang
+        });
+
+        await WA.sendWhatsAppDocument(
+          broker.phone_normalized,
+          buf,
+          `Inventory_${new Date().toISOString().slice(0, 10)}.xlsx`,
+          lang === "en"
+            ? "📊 Full Agency Inventory Report"
+            : "📊 تقرير مخزون الوكالة المعتمد"
+        );
+      } catch (err) {
+        console.error("Interactive export failure:", err);
+        if (cooldowns) cooldowns.delete(cooldownKey);
+        await reply(
+          broker,
+          lang === "en"
+            ? "❌ Failed to generate the inventory spreadsheet. Please try again later."
+            : "❌ تعذر إنشاء ملف الإكسيل حالياً. يرجى إعادة المحاولة لاحقاً."
+        );
+      }
+    });
+
+    return "done";
+  }
+
+  // 15. OPEN NEW DRAFT VIA BUTTON (DRF-01)
+  if (replyId === "cmd:add" || replyId === "cmd_add") {
+    await Drafts.createDraft(
+      pool,
+      broker.id,
+      broker.agency_id,
+      broker.phone_normalized || broker.phone_number,
+      "draft"
+    );
+    await reply(
+      broker,
+      lang === "en"
+        ? "📝 New listing draft opened. Send photos, voice notes, or details, and type *done* when finished."
+        : "📝 تم فتح مسودة وحدة جديدة. أرسل الصور، التسجيلات الصوتية، أو التفاصيل واكتب «تم» عند الانتهاء."
+    );
+    return "done";
+  }
+
+  // 16. SEARCH PAGINATION CURSOR FETCH (SCH-02)
+  if (replyId === "MORE_SEARCH" || replyId.startsWith("search_more:")) {
+    const { rows: sessionRows } = await pool.query(
+      `SELECT session_data FROM broker_sessions
+       WHERE broker_id = $1 AND session_type = 'search_state' AND expires_at > NOW()`,
+      [broker.id]
+    );
+
+    if (sessionRows.length === 0) {
+      await reply(
+        broker,
+        lang === "en"
+          ? "⏳ Search session expired. Please type your search query again."
+          : "⏳ انتهت جلسة البحث السابقة. يرجى كتابة طلب البحث مجدداً."
+      );
+      return "done";
+    }
+
+    const searchState = sessionRows[0].session_data || {};
+    const parsed = searchState.parsed || {};
+    const currentOffset = Number(searchState.offset) || 0;
+    const totalCount = Number(searchState.total_count) || 0;
+
+    const { sql, params } = S.buildSearchQuery(broker.agency_id, parsed, {
+      limit: 5,
+      offset: currentOffset
+    });
+
+    const { rows: nextRows } = await pool.query(sql, params);
+
+    if (nextRows.length === 0) {
+      await reply(
+        broker,
+        lang === "en"
+          ? "🏁 You have viewed all matching units."
+          : "🏁 لقد وصلت لنهاية نتائج البحث المتاحة."
+      );
+      return "done";
+    }
+
+    const nextOffset = currentOffset + nextRows.length;
+    await pool.query(
+      `UPDATE broker_sessions
+       SET session_data = jsonb_set(session_data, '{offset}', $1::jsonb),
+           expires_at = NOW() + INTERVAL '15 minutes'
+       WHERE broker_id = $2 AND session_type = 'search_state'`,
+      [JSON.stringify(nextOffset), broker.id]
+    );
+
+    const formattedResults = T.formatSearchResults(nextRows, {
+      total: totalCount,
+      lang,
+      agencyId: broker.agency_id
+    });
+
+    if (nextOffset < totalCount) {
+      await replyButtons(broker, formattedResults, [
+        {
+          id: "MORE_SEARCH",
+          title: lang === "en" ? "More Results ➡️" : "المزيد ➡️"
+        }
+      ]);
+    } else {
+      await reply(broker, formattedResults);
+    }
+
+    return "done";
+  }
+
+  // 17. Unrecognized or Stale Button ID
   await reply(
     broker,
     lang === "en"

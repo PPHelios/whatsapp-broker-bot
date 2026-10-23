@@ -6,6 +6,7 @@ const T = require("../lib/text");
 const U = require("../lib/util");
 const Flyer = require("../lib/flyer");
 const Drafts = require("../lib/drafts");
+const Vision = require("../lib/vision");
 const { reply, replyButtons } = require("../lib/dispatcher");
 
 /**
@@ -17,26 +18,524 @@ function canEdit(broker, listing) {
 }
 
 /**
- * Text Commands Controller
+ * Asynchronous, non-blocking operational telemetry logging helper.
  */
+async function logCommandOp(
+  pool,
+  {
+    agency_id,
+    broker_id,
+    listing_code = null,
+    operation_type,
+    status = "success",
+    error_code = null,
+    total_duration_ms = 0,
+    metadata = {}
+  }
+) {
+  if (!pool) return;
+  try {
+    await pool.query(
+      `INSERT INTO operation_logs (
+        agency_id, broker_id, listing_code, operation_type,
+        status, error_code, total_duration_ms, metadata, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+      [
+        agency_id || null,
+        broker_id || null,
+        listing_code || null,
+        operation_type,
+        status,
+        error_code,
+        Math.round(total_duration_ms),
+        JSON.stringify(metadata)
+      ]
+    );
+  } catch (e) {
+    console.warn("Operation telemetry log warning:", e.message);
+  }
+}
+
+/**
+ * Distributed Session State: Retrieves broker's most recently accessed listing code.
+ */
+async function getRecentBrokerListing(pool, brokerId, fallbackMap) {
+  if (pool && brokerId) {
+    try {
+      const { rows } = await pool.query(
+        `SELECT session_data->>'recent_code' AS code
+         FROM broker_sessions
+         WHERE broker_id = $1 AND session_type = 'session_context' AND expires_at > NOW()`,
+        [brokerId]
+      );
+      if (rows.length && rows[0].code) return rows[0].code;
+    } catch (e) {
+      console.warn(
+        "Failed to read recent listing from broker_sessions:",
+        e.message
+      );
+    }
+  }
+  return fallbackMap?.get?.(brokerId) || null;
+}
+
+/**
+ * Distributed Session State: Persists broker's most recently accessed listing code.
+ */
+async function setRecentBrokerListing(pool, brokerId, code, fallbackMap) {
+  if (fallbackMap?.set) fallbackMap.set(brokerId, code);
+  if (!pool || !brokerId || !code) return;
+  try {
+    await pool.query(
+      `INSERT INTO broker_sessions (broker_id, session_type, session_data, expires_at)
+       VALUES ($1, 'session_context', jsonb_build_object('recent_code', $2::text), NOW() + INTERVAL '1 hour')
+       ON CONFLICT (broker_id, session_type) DO UPDATE SET
+         session_data = jsonb_build_object('recent_code', $2::text),
+         expires_at = NOW() + INTERVAL '1 hour'`,
+      [brokerId, code]
+    );
+  } catch (e) {
+    console.warn("Failed to set recent listing in broker_sessions:", e.message);
+  }
+}
+
+/**
+ * Distributed Cooldown: Checks remaining cooldown in seconds.
+ */
+async function checkBrokerCooldown(pool, brokerId, action, fallbackMap) {
+  const now = Date.now();
+  if (fallbackMap) {
+    const memExp = fallbackMap.get(`${action}:${brokerId}`);
+    if (memExp && memExp > now) return Math.ceil((memExp - now) / 1000);
+  }
+  if (!pool || !brokerId) return 0;
+  try {
+    const { rows } = await pool.query(
+      `SELECT expires_at FROM broker_sessions
+       WHERE broker_id = $1 AND session_type = $2 AND expires_at > NOW()`,
+      [brokerId, `cooldown_${action}`]
+    );
+    if (rows.length > 0) {
+      return Math.ceil((new Date(rows[0].expires_at).getTime() - now) / 1000);
+    }
+  } catch (e) {
+    console.warn("Failed to check cooldown in DB:", e.message);
+  }
+  return 0;
+}
+
+/**
+ * Distributed Cooldown: Persists cooldown expiration timestamp.
+ */
+async function setBrokerCooldown(
+  pool,
+  brokerId,
+  action,
+  windowMs,
+  fallbackMap
+) {
+  const now = Date.now();
+  if (fallbackMap) fallbackMap.set(`${action}:${brokerId}`, now + windowMs);
+  if (!pool || !brokerId) return;
+  try {
+    await pool.query(
+      `INSERT INTO broker_sessions (broker_id, session_type, session_data, expires_at)
+       VALUES ($1, $2, '{}'::jsonb, NOW() + ($3 || ' milliseconds')::interval)
+       ON CONFLICT (broker_id, session_type) DO UPDATE SET
+         expires_at = NOW() + ($3 || ' milliseconds')::interval`,
+      [brokerId, `cooldown_${action}`, String(windowMs)]
+    );
+  } catch (e) {
+    console.warn("Failed to set cooldown in DB:", e.message);
+  }
+}
+
+/**
+ * Distributed Cooldown: Releases active cooldown early (e.g. on execution crash).
+ */
+async function releaseBrokerCooldown(pool, brokerId, action, fallbackMap) {
+  if (fallbackMap) fallbackMap.delete(`${action}:${brokerId}`);
+  if (!pool || !brokerId) return;
+  try {
+    await pool.query(
+      `DELETE FROM broker_sessions WHERE broker_id = $1 AND session_type = $2`,
+      [brokerId, `cooldown_${action}`]
+    );
+  } catch (e) {}
+}
+
+/**
+ * Reusable Deliverable Handler: Payment Matrix / Plans (DEL-03)
+ */
+async function deliverPaymentPlans(listing, broker, lang, pool, ctx) {
+  const plans = listing.payment_terms?.plans || [];
+  if (!plans.length) {
+    await reply(
+      broker,
+      lang === "en"
+        ? `ℹ️ Unit #${listing.code} is a resale listing with cash/upfront breakdown. No developer payment schedule attached.`
+        : `ℹ️ الوحدة #${listing.code} تابعة للريزيل ولا يوجد لها جدول أنظمة سداد مطورين.`
+    );
+    return true;
+  }
+
+  let planMsg =
+    lang === "en"
+      ? `💳 *Available Payment Plans for #${listing.code}*\n`
+      : `💳 *أنظمة السداد المتاحة للوحدة #${listing.code}*\n`;
+
+  plans.forEach((p, idx) => {
+    planMsg += `\n*${idx + 1}. ${p.name || `${p.years} Years`}*`;
+    planMsg += `\n  • ${lang === "en" ? "Down Payment" : "المقدم"}: ${
+      p.down_payment_pct
+    }%`;
+    if (p.quarterly_amount) {
+      planMsg += `\n  • ${
+        lang === "en" ? "Quarterly Installment" : "القسط الربع سنوي"
+      }: ${T.formatPrice(p.quarterly_amount, lang, "EGP")}`;
+    }
+    if (p.delivery_pct) {
+      planMsg += `\n  • ${lang === "en" ? "Upon Delivery" : "دفعة الاستلام"}: ${
+        p.delivery_pct
+      }%`;
+    }
+  });
+
+  await replyButtons(broker, planMsg, [
+    {
+      id: `flyer:en:dark:${listing.code}`,
+      title: lang === "en" ? "Flyer 📄" : "الكتالوج 📄"
+    },
+    {
+      id: `client:${listing.code}`,
+      title: lang === "en" ? "Client Pitch 📱" : "نص العميل 📱"
+    }
+  ]);
+  return true;
+}
+
+/**
+ * Reusable Deliverable Handler: Luxury Brochure with Lazy Vision Curation (DEL-01)
+ */
+async function deliverFlyer(
+  listing,
+  isUnbranded,
+  broker,
+  lang,
+  pool,
+  cooldowns,
+  ctx
+) {
+  const targetCode = listing.code;
+  const cooldownRemaining = await checkBrokerCooldown(
+    pool,
+    broker.id,
+    "flyer",
+    cooldowns
+  );
+
+  if (cooldownRemaining > 0) {
+    await reply(
+      broker,
+      lang === "en"
+        ? `⏳ Brochure generation is cooling down. Please wait ${cooldownRemaining}s.`
+        : `⏳ جاري معالجة طلب سابق. يرجى الانتظار ${cooldownRemaining} ثانية.`
+    );
+    return true;
+  }
+
+  await setBrokerCooldown(pool, broker.id, "flyer", 20000, cooldowns);
+
+  const cacheKey = isUnbranded ? "unbranded" : "branded";
+  const cachedUrl = listing.flyer_cache?.[cacheKey];
+
+  if (cachedUrl) {
+    const caption =
+      lang === "en"
+        ? `📄 Luxury Brochure for #${listing.code} (${
+            isUnbranded ? "White-Label" : "Agency Branded"
+          })`
+        : `📄 كتالوج الوحدة #${listing.code} (${
+            isUnbranded ? "بدون بيانات" : "معتمد بالبيانات"
+          })`;
+    await WA.sendWhatsAppImage(
+      broker.phone_normalized || broker.phone_number,
+      cachedUrl,
+      caption
+    );
+    return true;
+  }
+
+  await reply(
+    broker,
+    lang === "en"
+      ? `🎨 Generating luxury brochure for #${listing.code} (100% English)...\n⏱️ Estimated time: ~4 to 8 seconds.`
+      : `🎨 جاري تصميم واعتماد الكتالوج عالي الجودة للوحدة #${listing.code} (إنجليزي 100%)...\n⏱️ الوقت المتوقع: ~4 إلى 8 ثوانٍ.`
+  );
+
+  setImmediate(async () => {
+    const flyerStartTime = Date.now();
+    try {
+      // Lazy Vision Curation (DEL-01): Trigger curation if any listing_images have role = NULL
+      await Vision.ensureListingImagesCurated(listing.id, ctx);
+
+      // Re-fetch listing with curated image_order and hero_position
+      const { rows: refreshedListings } = await pool.query(
+        "SELECT * FROM listings WHERE id = $1 LIMIT 1",
+        [listing.id]
+      );
+      const activeListing = refreshedListings[0] || listing;
+
+      const { rows: agencyRows } = await pool.query(
+        "SELECT * FROM agencies WHERE id = $1 LIMIT 1",
+        [broker.agency_id]
+      );
+      const agency = agencyRows[0] || {};
+
+      const flyerBuffer = await Flyer.generateFlyerBuffer({
+        listing: activeListing,
+        agency,
+        broker: isUnbranded ? null : broker,
+        lang: "en",
+        unbranded: isUnbranded
+      });
+
+      if (!flyerBuffer) {
+        throw new Error("Flyer buffer output was empty");
+      }
+
+      const Supabase = require("../lib/supabase");
+      const storagePath = `flyers/${broker.agency_id}/${activeListing.id}/${
+        isUnbranded ? "unbranded" : "branded"
+      }_${Date.now()}.png`;
+
+      const publicUrl = await Supabase.uploadFlyerImage(
+        broker.agency_id,
+        storagePath,
+        flyerBuffer
+      );
+
+      // Update flyer_cache in listings
+      const updatedCache = {
+        ...(activeListing.flyer_cache || {}),
+        [cacheKey]: publicUrl
+      };
+      await pool.query(
+        "UPDATE listings SET flyer_cache = $1, updated_at = NOW() WHERE id = $2",
+        [JSON.stringify(updatedCache), activeListing.id]
+      );
+
+      await logCommandOp(pool, {
+        agency_id: broker.agency_id,
+        broker_id: broker.id,
+        listing_code: activeListing.code,
+        operation_type: "flyer_render",
+        total_duration_ms: Date.now() - flyerStartTime,
+        metadata: { unbranded: isUnbranded, publicUrl }
+      });
+
+      const caption =
+        lang === "en"
+          ? `📄 Luxury Brochure for #${activeListing.code}`
+          : `📄 كتالوج الوحدة #${activeListing.code}`;
+
+      await WA.sendWhatsAppImage(
+        broker.phone_normalized || broker.phone_number,
+        publicUrl || flyerBuffer,
+        caption
+      );
+    } catch (err) {
+      console.error("Flyer render failure:", err);
+      await releaseBrokerCooldown(pool, broker.id, "flyer", cooldowns);
+      await reply(
+        broker,
+        lang === "en"
+          ? `❌ Could not generate flyer for #${targetCode}. Please ensure unit photos are uploaded.`
+          : `❌ تعذر إنشاء الكتالوج للوحدة #${targetCode}. يرجى التأكد من رفع صور كافية للوحدة.`
+      );
+    }
+  });
+
+  return true;
+}
+
+/**
+ * Reusable Deliverable Handler: Marketing Collateral / Layout (DEL-05)
+ */
+async function deliverCollateral(listing, broker, lang) {
+  const collateral = listing.collateral || {};
+  const links = [];
+
+  if (collateral.layout_pdf_url) {
+    links.push(
+      `📐 *${lang === "en" ? "2D Layout Plan" : "المخطط الهندسي"}:* ${
+        collateral.layout_pdf_url
+      }`
+    );
+  }
+  if (collateral.master_plan_url) {
+    links.push(
+      `🗺️ *${lang === "en" ? "Master Plan" : "المخطط العام"}:* ${
+        collateral.master_plan_url
+      }`
+    );
+  }
+  if (collateral.drive_folder_url) {
+    links.push(
+      `📁 *${lang === "en" ? "Drive Sales Kit" : "ملفات درايف"}:* ${
+        collateral.drive_folder_url
+      }`
+    );
+  }
+  if (collateral.project_brochure_url) {
+    links.push(
+      `📖 *${lang === "en" ? "Project Brochure" : "بروشور المشروع"}:* ${
+        collateral.project_brochure_url
+      }`
+    );
+  }
+
+  if (!links.length) {
+    await reply(
+      broker,
+      lang === "en"
+        ? `ℹ️ No external collateral or floor plans are currently linked to #${listing.code}.`
+        : `ℹ️ لا توجد روابط مخططات أو ملفات درايف مسجلة للوحدة #${listing.code}.`
+    );
+    return true;
+  }
+
+  const header =
+    lang === "en"
+      ? `📁 *Sales Collateral for #${listing.code}:*\n\n`
+      : `📁 *ملفات ومخططات الوحدة #${listing.code}:*\n\n`;
+
+  await reply(broker, header + links.join("\n\n"));
+  return true;
+}
+
+/**
+ * Reusable Deliverable Handler: Direct Unit Code Inspection Card (ING-04)
+ */
+async function deliverUnitInspectionCard(listing, broker, lang) {
+  const detailsCard = T.formatInternalListingDetails(listing, lang);
+  const isResale = listing.inventory_type === "resale_unit";
+
+  const buttons = [
+    {
+      id: `flyer:en:dark:${listing.code}`,
+      title: lang === "en" ? "Flyer 📄" : "الكتالوج 📄"
+    },
+    {
+      id: `client:${listing.code}`,
+      title: lang === "en" ? "Client Copy 📱" : "نص العميل 📱"
+    },
+    {
+      id: isResale ? `edit:${listing.code}` : `plans_view:${listing.code}`,
+      title: isResale
+        ? lang === "en"
+          ? "Edit ✏️"
+          : "تعديل ✏️"
+        : lang === "en"
+        ? "Plans 💳"
+        : "جدول الأقساط 💳"
+    }
+  ];
+
+  await replyButtons(broker, detailsCard, buttons);
+  return true;
+}
+
 /**
  * Text Commands Controller
  */
 async function handleCommand(broker, text, ctx) {
+  const startTime = Date.now();
   const { pool, lang, recentBrokerListings, cooldowns, AI } = ctx;
   const raw = text.trim();
   const lower = raw.toLowerCase();
 
-  // Helper to resolve code explicitly or fallback to recent session
-  const resolveTargetCode = (explicitCode) => {
+  // Helper to resolve code explicitly or fallback to persistent session context
+  const resolveTargetCode = async (explicitCode) => {
     if (explicitCode) return T.extractCleanCode(explicitCode);
-    return recentBrokerListings.get(broker.id) || null;
+    return await getRecentBrokerListing(pool, broker.id, recentBrokerListings);
   };
+
+  // 0. INTERCEPT FORWARDED / PASTED MULTI-LINE LISTING CARDS (Resolves [9:19 PM] Error)
+  if (raw.includes("\n")) {
+    const codeMatch =
+      raw.match(
+        /(?:كود|الكود|code|unit\s*code|كود\s*الوحدة|الكود\s*الداخلي)\s*[:#]?\s*([A-Za-z0-9_\-\.\/]{3,30})/i
+      ) || raw.match(/#([A-Za-z0-9_\-\.\/]{3,30})/);
+
+    if (codeMatch) {
+      const extractedCode = T.extractCleanCode(codeMatch[1]);
+      const { rows: matchedUnits } = await pool.query(
+        `SELECT * FROM listings
+         WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+         LIMIT 1`,
+        [broker.agency_id, extractedCode]
+      );
+
+      if (matchedUnits.length > 0) {
+        const listing = matchedUnits[0];
+        await setRecentBrokerListing(
+          pool,
+          broker.id,
+          listing.code,
+          recentBrokerListings
+        );
+
+        // Check for specific deliverable intent inside the pasted card
+        if (
+          /(?:جدول|انظمة\s*السداد|أنظمة\s*السداد|plans|matrix|اقساط|أقساط)/i.test(
+            raw
+          )
+        ) {
+          return await deliverPaymentPlans(listing, broker, lang, pool, ctx);
+        }
+        if (/(?:flyer|كتالوج|بروشور|brochure)/i.test(raw)) {
+          const isUnbranded = /unbranded|بدون بيانات/i.test(raw);
+          return await deliverFlyer(
+            listing,
+            isUnbranded,
+            broker,
+            lang,
+            pool,
+            cooldowns,
+            ctx
+          );
+        }
+        if (/(?:client|عميل|نص\s*العميل)/i.test(raw)) {
+          const isEn = /client/i.test(raw);
+          const clientCopy = T.formatClientListingText(
+            listing,
+            broker,
+            isEn ? "en" : "ar"
+          );
+          await reply(broker, clientCopy);
+          return true;
+        }
+        if (/(?:layout|مخطط|collateral|ملفات)/i.test(raw)) {
+          return await deliverCollateral(listing, broker, lang);
+        }
+
+        // Default: If card contains code with no specific action, treat as direct unit inspection
+        return await deliverUnitInspectionCard(listing, broker, lang);
+      }
+    }
+  }
 
   // 1. HELP / MENU (SYS-01)
   if (/^(مساعدة|help|اوامر|الأوامر|menu|قائمة)$/i.test(lower)) {
     const helpMsg = T.getHelpMessage(lang);
     await reply(broker, helpMsg);
+    logCommandOp(pool, {
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      operation_type: "command_help",
+      total_duration_ms: Date.now() - startTime
+    });
     return true;
   }
 
@@ -57,6 +556,13 @@ async function handleCommand(broker, text, ctx) {
         ? "✅ Language preference updated to English."
         : "✅ تم تغيير لغة التفاعل إلى اللغة العربية بنجاح."
     );
+    logCommandOp(pool, {
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      operation_type: "command_lang_toggle",
+      total_duration_ms: Date.now() - startTime,
+      metadata: { newLang }
+    });
     return true;
   }
 
@@ -72,6 +578,12 @@ async function handleCommand(broker, text, ctx) {
         ? "🗑️ Draft session cancelled and cleared successfully."
         : "🗑️ تم إلغاء المسودة وتفريغ البيانات بنجاح."
     );
+    logCommandOp(pool, {
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      operation_type: "command_draft_cancel",
+      total_duration_ms: Date.now() - startTime
+    });
     return true;
   }
 
@@ -90,6 +602,12 @@ async function handleCommand(broker, text, ctx) {
         ? "📝 New listing draft opened. Send photos, voice notes, or details, and type *done* when finished."
         : "📝 تم فتح مسودة وحدة جديدة. أرسل الصور، التسجيلات الصوتية، أو التفاصيل واكتب «تم» عند الانتهاء."
     );
+    logCommandOp(pool, {
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      operation_type: "command_draft_open",
+      total_duration_ms: Date.now() - startTime
+    });
     return true;
   }
 
@@ -98,7 +616,7 @@ async function handleCommand(broker, text, ctx) {
     /^(تعديل|edit)(?:\s+([A-Za-z0-9_\-\.\/]+))?(?:\s+(.+))?$/i
   );
   if (editMatch) {
-    const targetCode = resolveTargetCode(editMatch[2]);
+    const targetCode = await resolveTargetCode(editMatch[2]);
     const instructions = editMatch[3];
 
     if (!targetCode) {
@@ -116,14 +634,14 @@ async function handleCommand(broker, text, ctx) {
       await client.query("BEGIN");
       await client.query(
         "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
-        [String(broker.agency_id), targetCode]
+        [String(broker.agency_id), targetCode.toUpperCase()]
       );
 
       const { rows } = await client.query(
         `SELECT * FROM listings
          WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
          FOR UPDATE`,
-        [broker.agency_id, targetCode]
+        [broker.agency_id, targetCode.toUpperCase()]
       );
 
       if (rows.length === 0) {
@@ -176,7 +694,12 @@ async function handleCommand(broker, text, ctx) {
         );
         await client.query("COMMIT");
 
-        recentBrokerListings.set(broker.id, listing.code);
+        await setRecentBrokerListing(
+          pool,
+          broker.id,
+          listing.code,
+          recentBrokerListings
+        );
         await reply(
           broker,
           lang === "en"
@@ -235,8 +758,8 @@ async function handleCommand(broker, text, ctx) {
           : `⚠️ لا يمكن تسجيل الوحدة بالصور فقط (${mediaCount} صور). يرجى إرسال فويس نوت أو رسالة تحتوي على السعر والمشروع.`,
         [
           {
-            id: "draft_save_exit",
-            title: lang === "en" ? "Save & Exit ✅" : "حفظ وخروج ✅"
+            id: "draft_confirm",
+            title: lang === "en" ? "Done (Save) ✅" : "تم (حفظ) ✅"
           },
           {
             id: "draft_cancel",
@@ -247,7 +770,6 @@ async function handleCommand(broker, text, ctx) {
       return true;
     }
 
-    // Process draft through AI extraction cascade
     await reply(
       broker,
       lang === "en"
@@ -295,7 +817,6 @@ async function handleCommand(broker, text, ctx) {
         return true;
       }
 
-      // Stage review card with quick reply actions
       const card = T.formatDraftReviewCard(
         validationResult.extracted,
         validationResult.extracted.price_value,
@@ -459,6 +980,13 @@ async function handleCommand(broker, text, ctx) {
           title: lang === "en" ? "New Unit 📝" : "إضافة وحدة 📝"
         }
       ]);
+
+      logCommandOp(pool, {
+        agency_id: broker.agency_id,
+        broker_id: broker.id,
+        operation_type: "command_inventory_stats",
+        total_duration_ms: Date.now() - startTime
+      });
       return true;
     } catch (err) {
       console.error("Inventory stats summary failure:", err);
@@ -474,22 +1002,24 @@ async function handleCommand(broker, text, ctx) {
 
   // 8. EXPORT INVENTORY (EXCEL) (DEL-06)
   if (/^(تصدير|export|excel|شيت)$/i.test(lower)) {
-    const cooldownKey = `export:${broker.id}`;
-    const now = Date.now();
-    const activeCooldown = cooldowns.get(cooldownKey);
+    const cooldownRemaining = await checkBrokerCooldown(
+      pool,
+      broker.id,
+      "export",
+      cooldowns
+    );
 
-    if (activeCooldown && activeCooldown > now) {
-      const waitSec = Math.ceil((activeCooldown - now) / 1000);
+    if (cooldownRemaining > 0) {
       await reply(
         broker,
         lang === "en"
-          ? `⏳ Export is cooling down. Please wait ${waitSec}s before requesting again.`
-          : `⏳ عذراً، تم طلب تصدير الشيت منذ قليل. يرجى الانتظار ${waitSec} ثانية قبل إعادة الطلب.`
+          ? `⏳ Export is cooling down. Please wait ${cooldownRemaining}s before requesting again.`
+          : `⏳ عذراً، تم طلب تصدير الشيت منذ قليل. يرجى الانتظار ${cooldownRemaining} ثانية قبل إعادة الطلب.`
       );
       return true;
     }
 
-    cooldowns.set(cooldownKey, now + 60000); // 60s cooldown
+    await setBrokerCooldown(pool, broker.id, "export", 60000, cooldowns);
 
     await reply(
       broker,
@@ -499,6 +1029,7 @@ async function handleCommand(broker, text, ctx) {
     );
 
     setImmediate(async () => {
+      const exportStartTime = Date.now();
       try {
         const { rows: listings } = await pool.query(
           "SELECT * FROM listings WHERE agency_id = $1 AND status = 'active' ORDER BY created_at DESC",
@@ -524,9 +1055,17 @@ async function handleCommand(broker, text, ctx) {
             ? "📊 Full Agency Inventory Report"
             : "📊 تقرير مخزون الوكالة المعتمد"
         );
+
+        await logCommandOp(pool, {
+          agency_id: broker.agency_id,
+          broker_id: broker.id,
+          operation_type: "command_inventory_export",
+          total_duration_ms: Date.now() - exportStartTime,
+          metadata: { rowsCount: listings.length }
+        });
       } catch (err) {
         console.error("Export failure:", err);
-        cooldowns.delete(cooldownKey);
+        await releaseBrokerCooldown(pool, broker.id, "export", cooldowns);
         await reply(
           broker,
           lang === "en"
@@ -545,7 +1084,7 @@ async function handleCommand(broker, text, ctx) {
   );
   if (statusMatch) {
     const action = statusMatch[1].toLowerCase();
-    const targetCode = resolveTargetCode(statusMatch[2]);
+    const targetCode = await resolveTargetCode(statusMatch[2]);
 
     if (!targetCode) {
       await reply(
@@ -567,14 +1106,14 @@ async function handleCommand(broker, text, ctx) {
       await client.query("BEGIN");
       await client.query(
         "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
-        [String(broker.agency_id), targetCode]
+        [String(broker.agency_id), targetCode.toUpperCase()]
       );
 
       const { rows } = await client.query(
         `SELECT id, broker_id, code, status FROM listings
          WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
          FOR UPDATE`,
-        [broker.agency_id, targetCode]
+        [broker.agency_id, targetCode.toUpperCase()]
       );
 
       if (rows.length === 0) {
@@ -619,6 +1158,14 @@ async function handleCommand(broker, text, ctx) {
           ? `✅ Status for unit #${listing.code} changed to *${statusLabels[newStatus].en}*.`
           : `✅ تم تغيير حالة الوحدة #${listing.code} إلى: *${statusLabels[newStatus].ar}*.`
       );
+
+      logCommandOp(pool, {
+        agency_id: broker.agency_id,
+        broker_id: broker.id,
+        listing_code: listing.code,
+        operation_type: `command_status_${newStatus}`,
+        total_duration_ms: Date.now() - startTime
+      });
     } catch (err) {
       await client.query("ROLLBACK");
       throw err;
@@ -632,7 +1179,7 @@ async function handleCommand(broker, text, ctx) {
   // 10. DELETION: REQUEST WITH ADVISORY & ROW-LOCKING (DEL-01)
   const deleteMatch = raw.match(/^(حذف|delete|مسح)(?:\s+(.+))?$/i);
   if (deleteMatch) {
-    const targetCode = resolveTargetCode(deleteMatch[2]);
+    const targetCode = await resolveTargetCode(deleteMatch[2]);
     if (!targetCode) {
       await reply(
         broker,
@@ -648,14 +1195,14 @@ async function handleCommand(broker, text, ctx) {
       await client.query("BEGIN");
       await client.query(
         "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
-        [String(broker.agency_id), targetCode]
+        [String(broker.agency_id), targetCode.toUpperCase()]
       );
 
       const { rows } = await client.query(
         `SELECT id, broker_id, code FROM listings
          WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
          FOR UPDATE`,
-        [broker.agency_id, targetCode]
+        [broker.agency_id, targetCode.toUpperCase()]
       );
 
       if (rows.length === 0) {
@@ -734,14 +1281,14 @@ async function handleCommand(broker, text, ctx) {
       await client.query("BEGIN");
       await client.query(
         "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
-        [String(broker.agency_id), targetCode]
+        [String(broker.agency_id), targetCode.toUpperCase()]
       );
 
       const { rows } = await client.query(
         `SELECT * FROM listings
          WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
          FOR UPDATE`,
-        [broker.agency_id, targetCode]
+        [broker.agency_id, targetCode.toUpperCase()]
       );
 
       if (rows.length === 0) {
@@ -838,6 +1385,15 @@ async function handleCommand(broker, text, ctx) {
           ? `✅ Price for unit #${listing.code} updated to *${formattedPriceDisplay}*. Brochure cache invalidated.`
           : `✅ تم تعديل سعر الوحدة #${listing.code} إلى *${formattedPriceDisplay}*. تم تحديث فهارس البحث ومسح كاش البروشور القديم.`
       );
+
+      logCommandOp(pool, {
+        agency_id: broker.agency_id,
+        broker_id: broker.id,
+        listing_code: listing.code,
+        operation_type: "command_price_patch",
+        total_duration_ms: Date.now() - startTime,
+        metadata: { newPrice: numericPrice, formattedPriceDisplay }
+      });
     } catch (err) {
       await client.query("ROLLBACK");
       throw err;
@@ -854,7 +1410,7 @@ async function handleCommand(broker, text, ctx) {
   );
   if (flyerMatch) {
     const isUnbranded = /unbranded|بدون بيانات/i.test(flyerMatch[0]);
-    const targetCode = resolveTargetCode(flyerMatch[1]);
+    const targetCode = await resolveTargetCode(flyerMatch[1]);
 
     if (!targetCode) {
       await reply(
@@ -870,7 +1426,7 @@ async function handleCommand(broker, text, ctx) {
       `SELECT * FROM listings
        WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
        LIMIT 1`,
-      [broker.agency_id, targetCode]
+      [broker.agency_id, targetCode.toUpperCase()]
     );
 
     if (rows.length === 0) {
@@ -884,116 +1440,21 @@ async function handleCommand(broker, text, ctx) {
     }
 
     const listing = rows[0];
-    recentBrokerListings.set(broker.id, listing.code);
-
-    // Cooldown Guard (20s on brochure rendering)
-    const flyerCooldownKey = `flyer:${broker.id}`;
-    const now = Date.now();
-    if (cooldowns.get(flyerCooldownKey) > now) {
-      const waitSec = Math.ceil((cooldowns.get(flyerCooldownKey) - now) / 1000);
-      await reply(
-        broker,
-        lang === "en"
-          ? `⏳ Brochure generation is cooling down. Please wait ${waitSec}s.`
-          : `⏳ جاري معالجة طلب سابق. يرجى الانتظار ${waitSec} ثانية.`
-      );
-      return true;
-    }
-    cooldowns.set(flyerCooldownKey, now + 20000);
-
-    // Fast-path: Check flyer_cache in listings
-    const cacheKey = isUnbranded ? "unbranded" : "branded";
-    const cachedUrl = listing.flyer_cache?.[cacheKey];
-
-    if (cachedUrl) {
-      const caption =
-        lang === "en"
-          ? `📄 Luxury Brochure for #${listing.code} (${
-              isUnbranded ? "White-Label" : "Agency Branded"
-            })`
-          : `📄 كتالوج الوحدة #${listing.code} (${
-              isUnbranded ? "بدون بيانات" : "معتمد بالبيانات"
-            })`;
-      await WA.sendWhatsAppImage(
-        broker.phone_normalized || broker.phone_number,
-        cachedUrl,
-        caption
-      );
-      return true;
-    }
-
-    // Dynamic ETA acknowledgment
-    await reply(
-      broker,
-      lang === "en"
-        ? `🎨 Generating luxury brochure for #${listing.code} (100% English)...\n⏱️ Estimated time: ~4 to 8 seconds.`
-        : `🎨 جاري تصميم واعتماد الكتالوج عالي الجودة للوحدة #${listing.code} (إنجليزي 100%)...\n⏱️ الوقت المتوقع: ~4 إلى 8 ثوانٍ.`
+    await setRecentBrokerListing(
+      pool,
+      broker.id,
+      listing.code,
+      recentBrokerListings
     );
-
-    setImmediate(async () => {
-      try {
-        const { rows: agencyRows } = await pool.query(
-          "SELECT * FROM agencies WHERE id = $1 LIMIT 1",
-          [broker.agency_id]
-        );
-        const agency = agencyRows[0] || {};
-
-        const flyerBuffer = await Flyer.generateFlyerBuffer({
-          listing,
-          agency,
-          broker: isUnbranded ? null : broker,
-          lang: "en",
-          unbranded: isUnbranded
-        });
-
-        if (!flyerBuffer) {
-          throw new Error("Flyer buffer output was empty");
-        }
-
-        const Supabase = require("../lib/supabase");
-        const storagePath = `flyers/${broker.agency_id}/${listing.id}/${
-          isUnbranded ? "unbranded" : "branded"
-        }_${Date.now()}.png`;
-
-        const publicUrl = await Supabase.uploadFlyerImage(
-          broker.agency_id,
-          storagePath,
-          flyerBuffer
-        );
-
-        // Update flyer_cache in listings
-        const updatedCache = {
-          ...(listing.flyer_cache || {}),
-          [cacheKey]: publicUrl
-        };
-        await pool.query(
-          "UPDATE listings SET flyer_cache = $1, updated_at = NOW() WHERE id = $2",
-          [JSON.stringify(updatedCache), listing.id]
-        );
-
-        const caption =
-          lang === "en"
-            ? `📄 Luxury Brochure for #${listing.code}`
-            : `📄 كتالوج الوحدة #${listing.code}`;
-
-        await WA.sendWhatsAppImage(
-          broker.phone_normalized || broker.phone_number,
-          publicUrl || flyerBuffer,
-          caption
-        );
-      } catch (err) {
-        console.error("Flyer render failure:", err);
-        cooldowns.delete(flyerCooldownKey);
-        await reply(
-          broker,
-          lang === "en"
-            ? `❌ Could not generate flyer for #${listing.code}. Please ensure unit photos are uploaded.`
-            : `❌ تعذر إنشاء الكتالوج للوحدة #${listing.code}. يرجى التأكد من رفع صور كافية للوحدة.`
-        );
-      }
-    });
-
-    return true;
+    return await deliverFlyer(
+      listing,
+      isUnbranded,
+      broker,
+      lang,
+      pool,
+      cooldowns,
+      ctx
+    );
   }
 
   // 13. DELIVERABLE: CLIENT MARKETING AD COPY (DEL-02)
@@ -1002,7 +1463,7 @@ async function handleCommand(broker, text, ctx) {
   );
   if (clientCopyMatch) {
     const isEn = /^client/i.test(clientCopyMatch[0]);
-    const targetCode = resolveTargetCode(clientCopyMatch[1]);
+    const targetCode = await resolveTargetCode(clientCopyMatch[1]);
 
     if (!targetCode) {
       await reply(
@@ -1018,7 +1479,7 @@ async function handleCommand(broker, text, ctx) {
       `SELECT * FROM listings
        WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
        LIMIT 1`,
-      [broker.agency_id, targetCode]
+      [broker.agency_id, targetCode.toUpperCase()]
     );
 
     if (rows.length === 0) {
@@ -1032,7 +1493,12 @@ async function handleCommand(broker, text, ctx) {
     }
 
     const listing = rows[0];
-    recentBrokerListings.set(broker.id, listing.code);
+    await setRecentBrokerListing(
+      pool,
+      broker.id,
+      listing.code,
+      recentBrokerListings
+    );
 
     const clientCopy = T.formatClientListingText(
       listing,
@@ -1040,6 +1506,14 @@ async function handleCommand(broker, text, ctx) {
       isEn ? "en" : "ar"
     );
     await reply(broker, clientCopy);
+
+    logCommandOp(pool, {
+      agency_id: broker.agency_id,
+      broker_id: broker.id,
+      listing_code: listing.code,
+      operation_type: "command_client_copy",
+      total_duration_ms: Date.now() - startTime
+    });
     return true;
   }
 
@@ -1048,7 +1522,7 @@ async function handleCommand(broker, text, ctx) {
     /^(?:plans|جدول|انظمة السداد|سداد)(?:\s+([A-Za-z0-9_\-\.\/]+))?$/i
   );
   if (plansMatch) {
-    const targetCode = resolveTargetCode(plansMatch[1]);
+    const targetCode = await resolveTargetCode(plansMatch[1]);
 
     if (!targetCode) {
       await reply(
@@ -1064,7 +1538,7 @@ async function handleCommand(broker, text, ctx) {
       `SELECT * FROM listings
        WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
        LIMIT 1`,
-      [broker.agency_id, targetCode]
+      [broker.agency_id, targetCode.toUpperCase()]
     );
 
     if (rows.length === 0) {
@@ -1078,52 +1552,13 @@ async function handleCommand(broker, text, ctx) {
     }
 
     const listing = rows[0];
-    recentBrokerListings.set(broker.id, listing.code);
-
-    const plans = listing.payment_terms?.plans || [];
-    if (!plans.length) {
-      await reply(
-        broker,
-        lang === "en"
-          ? `ℹ️ Unit #${listing.code} is a resale listing with cash/upfront breakdown. No developer matrix is attached.`
-          : `ℹ️ الوحدة #${listing.code} تابعة للريزيل ولا يوجد لها جدول أنظمة سداد مطورين.`
-      );
-      return true;
-    }
-
-    let planMsg =
-      lang === "en"
-        ? `💳 *Available Payment Plans for #${listing.code}*\n`
-        : `💳 *أنظمة السداد المتاحة للوحدة #${listing.code}*\n`;
-
-    plans.forEach((p, idx) => {
-      planMsg += `\n*${idx + 1}. ${p.name || `${p.years} Years`}*`;
-      planMsg += `\n  • ${lang === "en" ? "Down Payment" : "المقدم"}: ${
-        p.down_payment_pct
-      }%`;
-      if (p.quarterly_amount) {
-        planMsg += `\n  • ${
-          lang === "en" ? "Quarterly Installment" : "القسط الربع سنوي"
-        }: ${T.formatPrice(p.quarterly_amount, lang, "EGP")}`;
-      }
-      if (p.delivery_pct) {
-        planMsg += `\n  • ${
-          lang === "en" ? "Upon Delivery" : "دفعة الاستلام"
-        }: ${p.delivery_pct}%`;
-      }
-    });
-
-    await replyButtons(broker, planMsg, [
-      {
-        id: `flyer:en:dark:${listing.code}`,
-        title: lang === "en" ? "Flyer 📄" : "الكتالوج 📄"
-      },
-      {
-        id: `client:${listing.code}`,
-        title: lang === "en" ? "Client Pitch 📱" : "نص العميل 📱"
-      }
-    ]);
-    return true;
+    await setRecentBrokerListing(
+      pool,
+      broker.id,
+      listing.code,
+      recentBrokerListings
+    );
+    return await deliverPaymentPlans(listing, broker, lang, pool, ctx);
   }
 
   // 15. DELIVERABLE: MARKETING COLLATERAL / LAYOUT (DEL-05)
@@ -1131,7 +1566,7 @@ async function handleCommand(broker, text, ctx) {
     /^(?:layout|مخطط|collateral|ملفات)(?:\s+([A-Za-z0-9_\-\.\/]+))?$/i
   );
   if (collateralMatch) {
-    const targetCode = resolveTargetCode(collateralMatch[1]);
+    const targetCode = await resolveTargetCode(collateralMatch[1]);
 
     if (!targetCode) {
       await reply(
@@ -1147,7 +1582,7 @@ async function handleCommand(broker, text, ctx) {
       `SELECT * FROM listings
        WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
        LIMIT 1`,
-      [broker.agency_id, targetCode]
+      [broker.agency_id, targetCode.toUpperCase()]
     );
 
     if (rows.length === 0) {
@@ -1161,57 +1596,13 @@ async function handleCommand(broker, text, ctx) {
     }
 
     const listing = rows[0];
-    recentBrokerListings.set(broker.id, listing.code);
-
-    const collateral = listing.collateral || {};
-    const links = [];
-
-    if (collateral.layout_pdf_url) {
-      links.push(
-        `📐 *${lang === "en" ? "2D Layout Plan" : "المخطط الهندسي"}:* ${
-          collateral.layout_pdf_url
-        }`
-      );
-    }
-    if (collateral.master_plan_url) {
-      links.push(
-        `🗺️ *${lang === "en" ? "Master Plan" : "المخطط العام"}:* ${
-          collateral.master_plan_url
-        }`
-      );
-    }
-    if (collateral.drive_folder_url) {
-      links.push(
-        `📁 *${lang === "en" ? "Drive Sales Kit" : "ملفات درايف"}:* ${
-          collateral.drive_folder_url
-        }`
-      );
-    }
-    if (collateral.project_brochure_url) {
-      links.push(
-        `📖 *${lang === "en" ? "Project Brochure" : "بروشور المشروع"}:* ${
-          collateral.project_brochure_url
-        }`
-      );
-    }
-
-    if (!links.length) {
-      await reply(
-        broker,
-        lang === "en"
-          ? `ℹ️ No external collateral or floor plans are currently linked to #${listing.code}.`
-          : `ℹ️ لا توجد روابط مخططات أو ملفات درايف مسجلة للوحدة #${listing.code}.`
-      );
-      return true;
-    }
-
-    const header =
-      lang === "en"
-        ? `📁 *Sales Collateral for #${listing.code}:*\n\n`
-        : `📁 *ملفات ومخططات الوحدة #${listing.code}:*\n\n`;
-
-    await reply(broker, header + links.join("\n\n"));
-    return true;
+    await setRecentBrokerListing(
+      pool,
+      broker.id,
+      listing.code,
+      recentBrokerListings
+    );
+    return await deliverCollateral(listing, broker, lang);
   }
 
   // 16. DIRECT UNIT CODE LOOKUP (ING-04)
@@ -1223,39 +1614,18 @@ async function handleCommand(broker, text, ctx) {
       `SELECT * FROM listings
        WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
        LIMIT 1`,
-      [broker.agency_id, targetCode]
+      [broker.agency_id, targetCode.toUpperCase()]
     );
 
     if (rows.length > 0) {
       const listing = rows[0];
-      recentBrokerListings.set(broker.id, listing.code);
-
-      const detailsCard = T.formatInternalListingDetails(listing, lang);
-      const isResale = listing.inventory_type === "resale_unit";
-
-      const buttons = [
-        {
-          id: `flyer:en:dark:${listing.code}`,
-          title: lang === "en" ? "Flyer 📄" : "الكتالوج 📄"
-        },
-        {
-          id: `client:${listing.code}`,
-          title: lang === "en" ? "Client Copy 📱" : "نص العميل 📱"
-        },
-        {
-          id: isResale ? `edit:${listing.code}` : `plans_view:${listing.code}`,
-          title: isResale
-            ? lang === "en"
-              ? "Edit ✏️"
-              : "تعديل ✏️"
-            : lang === "en"
-            ? "Plans 💳"
-            : "جدول الأقساط 💳"
-        }
-      ];
-
-      await replyButtons(broker, detailsCard, buttons);
-      return true;
+      await setRecentBrokerListing(
+        pool,
+        broker.id,
+        listing.code,
+        recentBrokerListings
+      );
+      return await deliverUnitInspectionCard(listing, broker, lang);
     }
   }
 
