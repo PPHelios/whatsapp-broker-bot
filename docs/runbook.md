@@ -132,6 +132,7 @@ Sizing: replies inside the 24-hour window are free up to Meta's monthly allowanc
 | "حد الذكاء الاصطناعي اليومي" messages | The daily AI quota is spent (`AI_QUOTA_*`) or Gemini billing is off. |
 | A sign-in link never arrives (web form) | The broker's 24-hour WhatsApp window is closed; they send «دخول» to the bot instead. |
 | A shared link shows "الصفحة غير موجودة" | Wrong or revoked link, or the unit's code changed; share a new one. Sold units show "مبقتش متاحة". |
+| Web forms answer "Cross-site request refused" (403) | The browser's address differs from `PUBLIC_BASE_URL` (e.g. the custom domain is live but the variable still names onrender.com). Set `PUBLIC_BASE_URL` to the address brokers open. |
 | Flyer requests time out | Worker queue full (`FLYER_MAX_QUEUE`) or a slow render (`FLYER_TIMEOUT_MS`); check memory. |
 
 ## 9. Before Release 4
