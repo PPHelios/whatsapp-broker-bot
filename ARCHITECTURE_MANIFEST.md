@@ -24,6 +24,7 @@
   | `004_search_document.js` | one normalizer and one search trigger (D1/D2), `compound_synonyms` and `search_vocabulary` seeded from the domain dictionaries, place key columns |
   | `005_agency_slug.sql` | `agencies.slug` (NOT NULL, unique, URL-safe, not reserved): derived from the name by `agency_slug_base` + trigger `trg_agencies_slug` (−2, −3 on clashes), backfilled oldest first |
   | `006_web_auth.sql` | `web_login_tokens`, `web_sessions` (SHA-256 hashes only) and `web_rate_limits` for the web app |
+  | `007_saved_searches.sql` | `saved_searches` (per broker, agency-scoped; `seen_ids` for the "new" count) |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
 * **Graceful Termination & Drain Protocol:** On `SIGTERM` or `SIGINT`, the service enters a draining state:
@@ -86,6 +87,7 @@ The database runs on PostgreSQL (Supabase) with the `pg_trgm`, `pgcrypto` and `u
 * **`web_login_tokens`** (`token_hash` PK, `broker_id`, `agency_id`, `channel` whatsapp|web, `created_at`, `expires_at`, `used_at`): one-time magic-link tokens, 15 minutes.
 * **`web_sessions`** (`id_hash` PK, `broker_id`, `agency_id`, `csrf_token`, `user_agent`, `created_at`, `last_seen_at`, `expires_at`, `revoked_at`): 30-day web sessions.
 * **`web_rate_limits`** (`bucket`, `window_start`, `hits`): fixed-window counters shared by all pods.
+* **`saved_searches`** (`id`, `agency_id`, `broker_id`, `name`, `filters` jsonb = canonical filters, `seen_ids uuid[]`, `created_at`, `last_run_at`): a broker's saved web searches (Release 3 adds `lead_id`).
 * **`agency_outbound_daily`** (view): `agency_id`, `day` (Africa/Cairo), `sent`, `failed`, counted from `operation_logs` rows with `operation_type = 'wa_outbound'` (§5).
 #### D. Domain Responsibility Partitioning (State & Ingress)
 * **`lib/drafts.js` Contract (review → staged commit):**
@@ -208,7 +210,7 @@ Target layering: **`routes` → `lib/registry.js` → `services` (return data) �
 * `search({ pool, AI, agencyId, text, ctx })`: `parseRequest` (AI route `search_parse`, local parser on any failure) → intent guard → `runSearch`. Returns `{ status: results|none|small_talk|listing, parsed, source, rows, ids, total, relaxed, timings }`.
 * `buildSearchQuery(agencyId, filters, { relaxed })`: agency-scoped, active-only SQL. Place keys use the indexed key columns, free place words the search document; features use `feature_keys @>`; delivery, payment (cash, installments, max down payment, max installment), finishing, furnishing and floor are columns. Order: `confirmed_at DESC, created_at DESC, id DESC` (stable). The relaxed pass widens price/area ±15% and bedrooms ±1 and drops bathrooms/floor/finishing/furnishing; the place stays locked.
 * `runSearch` returns the first page and an **id snapshot** (up to `SNAPSHOT_MAX` = 100); `pageByIds` pages that snapshot (B1: no repeats or shifts when inventory changes; sold units are skipped).
-* `lib/search.js` is the WhatsApp adapter: it formats with `Describe.searchResults`, logs `search_query`, and keeps the snapshot in `broker_sessions` (`search_state`, 30 minutes) for "المزيد"/More (`handleMore`). Text and voice call the same function, so the same request returns the same ids in the same order (parity tests).
+* `lib/search.js` is the WhatsApp adapter: it formats with `Describe.searchResults` (plus the web "refine and see all" link), logs `search_query`, and keeps the snapshot in `broker_sessions` (`search_state`, 30 minutes) for "المزيد"/More (`handleMore`). Text and voice call the same function, so the same request returns the same ids in the same order (parity tests).
 
 #### C. Edits, quick updates and the write path
 * **`lib/listingStore.js`:** `findByCode(db, agencyId, code, { forUpdate })` (code or developer code through `code_norm`), and **`applyListingPatch(db, broker, { listing, patch, expectedVersion })`, the one write path for edits and quick updates**: `canEdit` is checked, only `PATCH_COLUMNS` are written, `price_display` is recomputed with the price, and the update is `WHERE id AND agency_id AND version = expectedVersion`. A stale version returns `{ conflict: true }` (**optimistic locking**), never an overwrite. On success: `version + 1`, `confirmed_at = now()`, `flyer_cache = '{}'`.
@@ -244,6 +246,13 @@ Target layering: **`routes` → `lib/registry.js` → `services` (return data) �
   - **Rate limits (`lib/rateLimit.js`, `LIMITS`):** Postgres fixed windows (`web_rate_limits`), so every pod shares them. Link requests: 20/hour per IP and 5/hour per number on the web, 6/hour per broker on WhatsApp; confirms: 30/10 min per IP. Over the limit: 429 with `Retry-After` (WhatsApp: "طلبت روابط دخول كتير"). In production `trust proxy` is on so `req.ip` is the client behind Render's proxy.
   - **Telemetry:** `operation_logs` rows `web_login_link` (status success|dropped) and `web_login`; the WhatsApp message is counted as `wa_outbound` with `kind = web_login_link`.
   - **24-hour window:** a link asked for on the web is a free-form WhatsApp message, so Meta delivers it only inside the broker's 24-hour window; the page tells the broker to send «دخول» to the bot otherwise.
+* **Web search (`web/routes/search.js`):** the same `services/search.js` as WhatsApp, so the same request gives the same ids in the same order.
+  - `GET /app/search?q=` runs `Search.parseRequest` (AI, local parser on failure) and the intent guard; `?f=<token>` and the refine form skip the AI. Results come from `runSearch` (strict, then relaxed) and pages of 20 (`WEB_PAGE_SIZE`) from its id snapshot (`pageByIds`), up to `SNAPSHOT_MAX` = 100. Each result is `Describe.compactLine` with **every** feature as a tag (WhatsApp cuts after 4 with "+N").
+  - **Filters in a URL (`domain/searchLink.js`):** `encodeFilters` → base64url JSON of the set canonical fields; `decodeFilters` never trusts the content (`sanitizeFilters`: unknown keys dropped, types checked, places and features must exist in the dictionaries) and the agency always comes from the session. `filtersFromForm` sends form fields through `normalizeAiSearch`, so a place typed in either language resolves to the same key; `formFromFilters` prefills the form.
+  - **"Refine and see all" from WhatsApp:** every WhatsApp search reply (results or none) ends with `🌐 عدّل البحث وشوف كل النتائج: <Links.searchUrl(token)>`, in the same message.
+  - **Saved searches:** save (name + token; at most 50 per broker), list with the number of units not seen since the last run (`seen_ids`), open (runs it and resets `seen_ids`), delete. Per broker and agency-scoped.
+  - Free-text searches are limited to 60 a minute per broker (AI cost); each search writes `operation_logs` `search_query` with `metadata.channel = 'web'`.
+* **Units (`web/routes/units.js`):** `/app/units` (agency list, status tabs, "mine only") and `/app/units/<code>` (every fact and the internal lines through `Describe.factLines`/`internalLines`, photos), agency-scoped through `findByCode` and `Authz.canView`. Fragments live in `web/views/`.
 * **Body parsing:** `/app` adds `urlencoded` forms (limit `BODY_LIMIT`); file uploads (photos, Excel, chat exports) use `multer` with memory storage only.
 
 ---

@@ -3,6 +3,6 @@
 "use strict";
 
 const PUBLIC = [require("./auth")];
-const PRIVATE = [require("./home")];
+const PRIVATE = [require("./home"), require("./search"), require("./units")];
 
 module.exports = { PUBLIC, PRIVATE };

@@ -447,6 +447,31 @@
     },
     "web/routes/auth.js": {
       "register": ["web", "params"]
+    },
+    "domain/searchLink.js": {
+      "MAX_TOKEN": "Number",
+      "sanitizeFilters": ["input"],
+      "encodeFilters": ["filters"],
+      "decodeFilters": ["token"],
+      "filtersFromForm": ["q"],
+      "formFromFilters": ["f", "lang"]
+    },
+    "web/routes/search.js": {
+      "WEB_PAGE_SIZE": "Number",
+      "MAX_SAVED": "Number",
+      "register": ["web", "params"]
+    },
+    "web/routes/units.js": {
+      "register": ["web", "params"],
+      "imagesOf": ["pool", "listing"]
+    },
+    "web/views/units.js": {
+      "stripMarkdown": ["s"],
+      "resultItem": ["l", "lang"],
+      "factList": ["l", "lang", "params"]
+    },
+    "web/views/searchForm.js": {
+      "refineForm": ["filters", "lang", "params"]
     }
   },
   "invariant_variable_names": {
