@@ -44,15 +44,17 @@ function parsePrices(raw) {
  */
 function loadConfig(env = process.env) {
   const isProd = env.NODE_ENV === "production";
+  // Until PUBLIC_BASE_URL is set, Render's own https://<service>.onrender.com address is used.
+  const baseUrl = String(env.PUBLIC_BASE_URL || "").trim() || String(env.RENDER_EXTERNAL_URL || "").trim();
 
   if (isProd) {
-    const missing = REQUIRED_IN_PRODUCTION.filter((k) => !String(env[k] || "").trim());
+    const missing = REQUIRED_IN_PRODUCTION.filter((k) => !String(k === "PUBLIC_BASE_URL" ? baseUrl : env[k] || "").trim());
     if (missing.length) {
       throw new Error(`Missing required environment variables: ${missing.join(", ")}`);
     }
   }
 
-  const publicBaseUrl = String(env.PUBLIC_BASE_URL || `http://localhost:${env.PORT || 3000}`).replace(/\/+$/, "");
+  const publicBaseUrl = String(baseUrl || `http://localhost:${env.PORT || 3000}`).replace(/\/+$/, "");
   if (isProd && !/^https:\/\//.test(publicBaseUrl)) {
     throw new Error("PUBLIC_BASE_URL must be an https:// URL in production");
   }
