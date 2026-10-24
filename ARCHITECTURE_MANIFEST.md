@@ -23,6 +23,7 @@
   | `003_backfill_feature_keys.js` | `feature_keys`/`features_other` from legacy free text through `domain/features.js` |
   | `004_search_document.js` | one normalizer and one search trigger (D1/D2), `compound_synonyms` and `search_vocabulary` seeded from the domain dictionaries, place key columns |
   | `005_agency_slug.sql` | `agencies.slug` (NOT NULL, unique, URL-safe, not reserved): derived from the name by `agency_slug_base` + trigger `trg_agencies_slug` (−2, −3 on clashes), backfilled oldest first |
+  | `006_web_auth.sql` | `web_login_tokens`, `web_sessions` (SHA-256 hashes only) and `web_rate_limits` for the web app |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
 * **Graceful Termination & Drain Protocol:** On `SIGTERM` or `SIGINT`, the service enters a draining state:
@@ -82,6 +83,9 @@ The database runs on PostgreSQL (Supabase) with the `pg_trgm`, `pgcrypto` and `u
 * **`processed_batches`**: Multi-tap mutation idempotency (`batch_key`, `agency_id`, `listing_code`).
 * **`schema_migrations`**: applied migration versions (`version`, `applied_at`).
 * **`compound_synonyms`** (`kind` compound|developer|area, `key`, `synonym`, `synonym_norm`, `area_key`, `developer_key`) and **`search_vocabulary`** (`kind` type|feature, `key`, `terms`): reference data seeded by migration 004 from `domain/places.js`, `domain/features.js` and `domain/vocabulary.js`. The test harness keeps them across `TRUNCATE`.
+* **`web_login_tokens`** (`token_hash` PK, `broker_id`, `agency_id`, `channel` whatsapp|web, `created_at`, `expires_at`, `used_at`): one-time magic-link tokens, 15 minutes.
+* **`web_sessions`** (`id_hash` PK, `broker_id`, `agency_id`, `csrf_token`, `user_agent`, `created_at`, `last_seen_at`, `expires_at`, `revoked_at`): 30-day web sessions.
+* **`web_rate_limits`** (`bucket`, `window_start`, `hits`): fixed-window counters shared by all pods.
 * **`agency_outbound_daily`** (view): `agency_id`, `day` (Africa/Cairo), `sent`, `failed`, counted from `operation_logs` rows with `operation_type = 'wa_outbound'` (§5).
 #### D. Domain Responsibility Partitioning (State & Ingress)
 * **`lib/drafts.js` Contract (review → staged commit):**
@@ -153,7 +157,7 @@ The database runs on PostgreSQL (Supabase) with the `pg_trgm`, `pgcrypto` and `u
 ### 5. Conversational UX, WhatsApp Limits & Symmetrical Messaging
 * **Zero Silent Drops:** Every code branch (success, validation failure, DB error, expired session, unsupported media) must return an explicit WhatsApp response. Silence is strictly prohibited.
 * **Single Outbound Path & Delivery Truth:**
-  - Handlers send only through `lib/dispatcher.js`: `reply`, `replyButtons`, `replyList`, `replyImage`, `replyDocument` and `react`. They never call `WA.send*` directly; a test in `tests/unit/whatsapp-client.test.js` enforces this.
+  - Handlers send only through `lib/dispatcher.js`: `reply`, `replyButtons`, `replyList`, `replyImage`, `replyDocument` and `react`; messages outside a turn (web sign-in links, opened alerts) use `notify(broker, text, { pool, kind })`, which goes through the same `deliver()` and counter. They never call `WA.send*` directly; a test in `tests/unit/whatsapp-client.test.js` enforces this.
   - A turn counts as answered **only after WhatsApp accepts the message**, i.e. a non-null result. A failed or dropped send leaves the turn unanswered, so `executeGuardedTurn`'s safety net still replies.
   - A delivered 📸 reaction answers a photo turn.
   - The single exception is the unregistered-number notice in `server.js`, which runs outside any broker turn.
@@ -230,6 +234,16 @@ Target layering: **`routes` → `lib/registry.js` → `services` (return data) �
 * **Static files (`web/assets.js`):** read once at boot into memory (never written at runtime), content-hashed, served at `/app/static/<name>?v=<hash>` with an immutable cache (unversioned URLs are `no-cache`). htmx comes from the pinned `htmx.org` package.
 * **PWA:** `/app/manifest.webmanifest` (scope and start URL `/app/`) and `/app/sw.js`, generated from `web/static/sw.js` with the asset version and list, sent with `Service-Worker-Allowed: /app/` and `no-cache`. The worker precaches the static files and `/app/offline`, serves static files cache-first and pages network-only with the offline fallback, and ignores non-GET requests and everything outside `/app/`, so private pages are never cached.
 * **Security headers (`web/security.js`):** CSP `default-src 'self'; script-src 'self'; style-src 'self'` (no inline script or style; htmx runs with `allowEval: false`), `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: same-origin`, `Permissions-Policy` (microphone for the voice button only). `sameOrigin()` refuses POSTs that the browser marks cross-site (`Sec-Fetch-Site`) or whose `Origin` is not the site origin (`Links.siteOrigin()`), in addition to the CSRF tokens of step 3.
+* **Sign-in (magic link, `lib/webAuth.js`, `web/routes/auth.js`, `web/session.js`):**
+  - **Getting a link:** the broker sends **«دخول»/login** to the bot (registry command `web_login`), or enters the registered mobile on `/app/login`, which sends the link on WhatsApp through `dispatcher.notify` (the answer is the same for unknown numbers, so the form reveals nothing). The link is `Links.loginLinkUrl(token)`: `/app/login/confirm?t=<token>`.
+  - **GET → POST:** the GET confirm page uses nothing (WhatsApp link previews and scanners may open it); its button POSTs the token. Only the POST consumes it (`UPDATE … SET used_at … WHERE used_at IS NULL AND expires_at > now()`, atomic), so a token works once. The confirm pages send `Referrer-Policy: no-referrer`.
+  - **Hashed tokens:** login tokens (32 random bytes, base64url) and session ids are stored only as SHA-256 hashes; the plain value exists only in the link or the cookie.
+  - **Sessions:** 30 days from sign-in (`SESSION_DAYS`), cookie `__Host-aq_sid` on https (`aq_sid` on http dev): `HttpOnly`, `SameSite=Lax`, `Secure`, `Path=/`. A new session id on every sign-in; sign-out revokes it; a deactivated broker's sessions stop at once (`getSession` joins `brokers.is_active`). `revokeAllSessions(brokerId)` signs a broker out everywhere.
+  - **CSRF:** every non-GET request of a signed-in broker must carry the session's `csrf_token` (`X-CSRF-Token` header, set for htmx by `app.js` from `<meta name="csrf-token">`, or a `_csrf` form field), compared in constant time. Sign-in forms, which have no session yet, use a double-submit token (`__Host-aq_pre` cookie echoed in `_csrf`). Plus the same-origin check above.
+  - **Gate:** `web/routes/index.js` splits pages into `PUBLIC` (sign-in) and `PRIVATE`; private pages get `Cache-Control: no-store`, `requireBroker` (303 to `/app/login?next=…`, htmx gets `HX-Redirect`, others 401) and `verifyCsrf`. `safeNext` only follows same-site `/app/` paths.
+  - **Rate limits (`lib/rateLimit.js`, `LIMITS`):** Postgres fixed windows (`web_rate_limits`), so every pod shares them. Link requests: 20/hour per IP and 5/hour per number on the web, 6/hour per broker on WhatsApp; confirms: 30/10 min per IP. Over the limit: 429 with `Retry-After` (WhatsApp: "طلبت روابط دخول كتير"). In production `trust proxy` is on so `req.ip` is the client behind Render's proxy.
+  - **Telemetry:** `operation_logs` rows `web_login_link` (status success|dropped) and `web_login`; the WhatsApp message is counted as `wa_outbound` with `kind = web_login_link`.
+  - **24-hour window:** a link asked for on the web is a free-form WhatsApp message, so Meta delivers it only inside the broker's 24-hour window; the page tells the broker to send «دخول» to the bot otherwise.
 * **Body parsing:** `/app` adds `urlencoded` forms (limit `BODY_LIMIT`); file uploads (photos, Excel, chat exports) use `multer` with memory storage only.
 
 ---

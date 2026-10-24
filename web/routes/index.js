@@ -1,6 +1,8 @@
 // web/routes/index.js — Page modules of the web app, in mount order. Each exports register(router, ctx).
+// PUBLIC pages are open (sign-in); PRIVATE pages need a signed-in broker and CSRF tokens on writes.
 "use strict";
 
-const PAGES = [require("./home")];
+const PUBLIC = [require("./auth")];
+const PRIVATE = [require("./home")];
 
-module.exports = { PAGES };
+module.exports = { PUBLIC, PRIVATE };

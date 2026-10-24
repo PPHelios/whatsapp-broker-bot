@@ -8,6 +8,7 @@ jest.mock("../../lib/supabase", () => require("../harness/fake-supabase"));
 const request = require("supertest");
 const { createHarness, closeHarness } = require("../harness/app");
 const { html, raw, escapeHtml } = require("../../web/html");
+const { signIn } = require("../harness/web");
 
 jest.setTimeout(60000);
 
@@ -19,11 +20,11 @@ beforeAll(async () => {
 });
 afterAll(closeHarness);
 
-test("/app redirects into the service worker scope; /app/ is an Arabic RTL page with htmx and the manifest", async () => {
+test("/app redirects into the service worker scope; pages are Arabic RTL with htmx and the manifest", async () => {
   const r = await request(web).get("/app");
   expect(r.status).toBe(301);
   expect(r.headers.location).toBe("/app/");
-  const page = await request(web).get("/app/");
+  const page = await request(web).get("/app/login");
   expect(page.status).toBe(200);
   expect(page.text).toMatch(/<html lang="ar" dir="rtl">/);
   expect(page.text).toMatch(/<script src="\/app\/static\/htmx\.min\.js\?v=[0-9a-f]{10}" defer><\/script>/);
@@ -33,7 +34,7 @@ test("/app redirects into the service worker scope; /app/ is an Arabic RTL page 
 });
 
 test("pages carry a strict CSP (no inline script), no framing, nosniff and a same-origin referrer policy", async () => {
-  const r = await request(web).get("/app/");
+  const r = await request(web).get("/app/login");
   const csp = r.headers["content-security-policy"];
   expect(csp).toMatch(/script-src 'self'(;|$)/);
   expect(csp).not.toMatch(/unsafe-inline|unsafe-eval/);
@@ -83,7 +84,9 @@ test("the htmx served is the pinned package", async () => {
 
 test("unknown static files and pages are 404; the offline page exists", async () => {
   expect((await request(web).get("/app/static/nope.js")).status).toBe(404);
-  expect((await request(web).get("/app/no-such-page")).status).toBe(404);
+  expect((await request(web).get("/app/no-such-page")).status).toBe(303); // signed out: to sign-in, nothing revealed
+  const { agent } = await signIn(h, "broker");
+  expect((await agent.get("/app/no-such-page")).status).toBe(404);
   const off = await request(web).get("/app/offline");
   expect(off.status).toBe(200);
   expect(off.text).toMatch(/مفيش اتصال/);

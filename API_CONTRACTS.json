@@ -165,6 +165,7 @@
       "replyImage": ["broker", "mediaIdOrUrl", "caption"],
       "replyDocument": ["broker", "buffer", "filename", "caption"],
       "react": ["broker", "messageId", "emoji"],
+      "notify": ["broker", "text", "params"],
       "markReplied": [],
       "allowSilentDrop": ["reason"],
       "executeGuardedTurn": ["broker", "message", "handlerFn", "params"]
@@ -409,7 +410,43 @@
       "register": ["web", "params"]
     },
     "web/routes/index.js": {
-      "PAGES": "Array"
+      "PUBLIC": "Array",
+      "PRIVATE": "Array"
+    },
+    "lib/webAuth.js": {
+      "LOGIN_TOKEN_TTL_MINUTES": "Number",
+      "SESSION_DAYS": "Number",
+      "sha256": ["s"],
+      "randomToken": ["bytes"],
+      "safeEqual": ["a", "b"],
+      "issueLoginToken": ["pool", "broker", "params"],
+      "peekLoginToken": ["pool", "token"],
+      "consumeLoginToken": ["pool", "token"],
+      "createSession": ["pool", "broker", "params"],
+      "getSession": ["pool", "sid"],
+      "revokeSession": ["pool", "sid"],
+      "revokeAllSessions": ["pool", "brokerId"]
+    },
+    "lib/rateLimit.js": {
+      "hit": ["pool", "bucket", "params"],
+      "LIMITS": "Object"
+    },
+    "web/session.js": {
+      "SESSION_COOKIE": [],
+      "PRE_COOKIE": [],
+      "parseCookies": ["header"],
+      "setSessionCookie": ["res", "sid"],
+      "clearSessionCookie": ["res"],
+      "loadSession": ["pool"],
+      "noStore": ["_req", "res", "next"],
+      "requireBroker": ["req", "res", "next"],
+      "verifyCsrf": ["req", "res", "next"],
+      "issuePreToken": ["req", "res"],
+      "verifyPreToken": ["req"],
+      "safeNext": ["next"]
+    },
+    "web/routes/auth.js": {
+      "register": ["web", "params"]
     }
   },
   "invariant_variable_names": {
