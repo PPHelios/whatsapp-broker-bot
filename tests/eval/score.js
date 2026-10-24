@@ -39,8 +39,8 @@ const CHECKS = {
   compound: (exp, out) => {
     const got = norm(pick(out, "compound_en") || "") + "|" + norm(pick(out, "compound") || "");
     const e = norm(exp);
-    // Accept a reasonable prefix (e.g. "Palm Hills" for "Palm Hills October").
-    return got.includes(e) || got.split("|").some((g) => g.length >= 4 && e.startsWith(g));
+    // Accept a reasonable prefix (e.g. "Palm Hills" for "Palm Hills October", "Zed" for "ZED Sheikh Zayed").
+    return got.includes(e) || got.split("|").some((g) => g.length >= 3 && e.startsWith(g));
   },
   floor: (exp, out) => {
     const raw = `${pick(out, "floor") || ""} ${pick(out, "floor_en") || ""}`;

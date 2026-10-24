@@ -1,7 +1,26 @@
 // scripts/eval-ai.js — Manual AI quality/latency eval (plan Part 6, L1-eval). Calls real Gemini; not run in CI.
-// Usage: node --env-file=.env scripts/eval-ai.js [--model gemini-3.8-flash] [--configs A,B,C,D,E] [--cases 01,02]
-// Recordings: tests/eval/audio/*.ogg (local only). Results: tests/eval/results/<timestamp>.json (local only).
+// Usage: node --env-file=.env scripts/eval-ai.js [--key-env KEY_A,KEY_B] [--model gemini-3.8-flash] [--configs A,B,C,D,E] [--cases 01,02]
+// Recordings: tests/eval/audio/*.ogg (local only). Results: tests/eval/results/<model>.json (local only).
 "use strict";
+
+// Evals must never consume the production key's daily quota (it starves the live bot).
+// --key-env takes one or more env var names (comma-separated), each a key from a separate
+// Google AI Studio project; when one hits its daily limit the eval moves to the next.
+const keyFlag = process.argv.indexOf("--key-env");
+const KEY_ENVS = (keyFlag > -1 ? process.argv[keyFlag + 1] : "GEMINI_EVAL_API_KEY").split(",");
+const PROD_KEY = String(process.env.GEMINI_API_KEY || "").trim();
+const EVAL_KEYS = KEY_ENVS.map((name) => {
+  const key = String(process.env[name] || "").trim();
+  if (!key) {
+    console.error(`${name} is not set. Add a key from a separate Google AI Studio project to .env.`);
+    process.exit(1);
+  }
+  if (name === "GEMINI_API_KEY" || key === PROD_KEY) {
+    console.error("Eval keys must differ from the production GEMINI_API_KEY.");
+    process.exit(1);
+  }
+  return { name, key };
+});
 
 const fs = require("fs");
 const path = require("path");
@@ -32,8 +51,19 @@ const CONFIGS = {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let lastCall = 0;
+let keyIndex = 0;
+const clients = new Map();
 
-async function callGemini(genAI, parts, { thinking, json }) {
+async function client() {
+  const { name, key } = EVAL_KEYS[keyIndex];
+  if (!clients.has(name)) {
+    const { GoogleGenAI } = await import("@google/genai");
+    clients.set(name, new GoogleGenAI({ apiKey: key }));
+  }
+  return clients.get(name);
+}
+
+async function callGemini(_unused, parts, { thinking, json }) {
   const config = { temperature: 0.1 };
   if (json) config.responseMimeType = "application/json";
   if (thinking) config.thinkingConfig = { thinkingLevel: thinking };
@@ -43,7 +73,7 @@ async function callGemini(genAI, parts, { thinking, json }) {
     lastCall = Date.now();
     const t0 = Date.now();
     try {
-      const res = await genAI.models.generateContent({ model: MODEL, contents: [{ role: "user", parts }], config });
+      const res = await (await client()).models.generateContent({ model: MODEL, contents: [{ role: "user", parts }], config });
       const u = res.usageMetadata || {};
       return {
         text: res.text || "",
@@ -52,6 +82,15 @@ async function callGemini(genAI, parts, { thinking, json }) {
         retries: attempt
       };
     } catch (err) {
+      if (/PerDay/.test(err.message)) {
+        // This project's daily limit is used up: move to the next key (does not count as a retry).
+        if (keyIndex + 1 >= EVAL_KEYS.length) throw err;
+        console.log(`
+[eval] ${EVAL_KEYS[keyIndex].name} hit its daily limit; switching to ${EVAL_KEYS[keyIndex + 1].name}`);
+        keyIndex++;
+        attempt--;
+        continue;
+      }
       const transient = /429|503|RESOURCE_EXHAUSTED|UNAVAILABLE|overloaded|high demand/i.test(err.message);
       if (!transient || attempt === 3) throw err;
       await sleep(20000 * (attempt + 1)); // back off; retried attempts are not timed
@@ -104,6 +143,24 @@ const pct = (arr, p) => {
   return s.length ? s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))] : 0;
 };
 
+function summarize(cfg, results) {
+  const ok = results.filter((r) => !r.error);
+  const correct = results.reduce((s, r) => s + r.score.correct, 0);
+  const total = results.reduce((s, r) => s + r.score.total, 0);
+  return {
+    label: cfg.label,
+    fieldAccuracy: +(100 * (correct / total)).toFixed(1),
+    perfectCases: results.filter((r) => r.score.correct === r.score.total).length,
+    cases: results.length,
+    errors: results.length - ok.length,
+    atDoneP50: pct(ok.map((r) => r.atDoneMs), 50),
+    atDoneP90: pct(ok.map((r) => r.atDoneMs), 90),
+    transcribeP50: pct(ok.map((r) => r.transcribeMs), 50),
+    thoughtTokensAvg: Math.round(ok.reduce((s, r) => s + r.tokens.thoughts, 0) / (ok.length || 1)),
+    outTokensAvg: Math.round(ok.reduce((s, r) => s + r.tokens.out, 0) / (ok.length || 1))
+  };
+}
+
 async function main() {
   const cases = JSON.parse(fs.readFileSync(path.join(ROOT, "tests", "eval", "cases.json"), "utf8")).voice;
   const onlyCases = arg("cases", null)?.split(",");
@@ -111,7 +168,7 @@ async function main() {
   const missing = selected.flatMap((c) => c.files).filter((f) => !fs.existsSync(path.join(AUDIO_DIR, f)));
   if (missing.length) throw new Error(`Missing recordings: ${missing.join(", ")}`);
 
-  const genAI = await AI.getGenAI();
+  const genAI = null; // clients come from EVAL_KEYS (see client())
   const configIds = arg("configs", Object.keys(CONFIGS).join(",")).split(",");
   // One results file per model; saved after every case so an interrupted run resumes where it stopped.
   fs.mkdirSync(RESULTS_DIR, { recursive: true });
@@ -121,6 +178,20 @@ async function main() {
     : { model: MODEL, configs: {} };
   const save = () =>
     fs.writeFileSync(file, JSON.stringify({ ...report, at: new Date().toISOString() }, null, 2));
+
+  // --rescore: re-apply the current scorer to stored outputs (no API calls), e.g. after a scorer fix.
+  if (process.argv.includes("--rescore")) {
+    const expectedById = new Map(cases.map((c) => [c.id, c.expected]));
+    for (const [id, entry] of Object.entries(report.configs)) {
+      for (const r of entry.results || []) {
+        if (!r.error) r.score = scoreExtraction(expectedById.get(r.id), r.out);
+      }
+      if (entry.summary) entry.summary = { ...summarize(CONFIGS[id], entry.results) };
+      if (entry.summary) console.log(`${id} ${entry.summary.label}: ${entry.summary.fieldAccuracy}% fields, ${entry.summary.perfectCases}/${entry.summary.cases} perfect`);
+    }
+    save();
+    return;
+  }
 
   for (const id of configIds) {
     const cfg = CONFIGS[id];
@@ -143,21 +214,7 @@ async function main() {
       save();
       process.stdout.write(".");
     }
-    const ok = results.filter((r) => !r.error);
-    const correct = results.reduce((s, r) => s + r.score.correct, 0);
-    const total = results.reduce((s, r) => s + r.score.total, 0);
-    const summary = {
-      label: cfg.label,
-      fieldAccuracy: +(100 * (correct / total)).toFixed(1),
-      perfectCases: results.filter((r) => r.score.correct === r.score.total).length,
-      cases: results.length,
-      errors: results.length - ok.length,
-      atDoneP50: pct(ok.map((r) => r.atDoneMs), 50),
-      atDoneP90: pct(ok.map((r) => r.atDoneMs), 90),
-      transcribeP50: pct(ok.map((r) => r.transcribeMs), 50),
-      thoughtTokensAvg: Math.round(ok.reduce((s, r) => s + r.tokens.thoughts, 0) / (ok.length || 1)),
-      outTokensAvg: Math.round(ok.reduce((s, r) => s + r.tokens.out, 0) / (ok.length || 1))
-    };
+    const summary = summarize(cfg, results);
     report.configs[id] = { summary, results };
     save();
     console.log(`\n${id} ${cfg.label}: ${summary.fieldAccuracy}% fields, ${summary.perfectCases}/${summary.cases} perfect, ` +

@@ -93,6 +93,8 @@ The database runs on PostgreSQL (Supabase) with the `pg_trgm`, `pgcrypto` and `u
   - `npm run eval:ai -- --model <model> --configs A,B,C,D,E` scores real Gemini extractions of the recorded broker voice notes (`tests/eval/cases.json`, scorer `tests/eval/score.js`). It reports field accuracy and latency per thinking level and pipeline.
   - Recordings and results stay local, in `tests/eval/audio/` and `tests/eval/results/`; both are gitignored.
   - Results are saved after every case, and a rerun resumes.
+  - **Key safety:** the eval never uses the production `GEMINI_API_KEY`. `--key-env KEY_A,KEY_B` names keys from separate Google AI Studio projects, because daily free-tier limits are per project. The runner refuses to start on the production key, and when one key hits its daily limit it moves to the next.
+  - `--rescore` re-applies the scorer to stored outputs without calling the API, e.g. after a scorer fix.
 
 ---
 

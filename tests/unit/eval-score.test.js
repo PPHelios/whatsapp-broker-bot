@@ -45,6 +45,11 @@ test("tolerant matching: Arabic floor ordinals, orientation, compound prefix, re
   expect(r.misses).toEqual([]);
 });
 
+test("short English compound names count as a prefix match (ZED, NOLL)", () => {
+  expect(scoreExtraction({ compound: "ZED Sheikh Zayed" }, { compound: "زد", compound_en: "Zed" }).correct).toBe(1);
+  expect(scoreExtraction({ compound: "ZED Sheikh Zayed" }, { compound: "", compound_en: "Ze" }).correct).toBe(0);
+});
+
 test("down payment % can be derived from the amount; commercial accepts retail/shop", () => {
   expect(scoreExtraction({ down_payment_pct: 10 }, { price_value: 11000000, details: { down_payment_value: 1100000 } }).correct).toBe(1);
   expect(scoreExtraction({ property_type: "commercial", bedrooms: null }, { property_type: "retail", bedrooms: 0 }).correct).toBe(2);
