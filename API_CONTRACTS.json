@@ -265,7 +265,8 @@
       "localPatch": ["texts"],
       "recentCode": ["pool", "brokerId"],
       "rememberListing": ["pool", "brokerId", "code"],
-      "withCodeLock": ["pool", "agencyId", "code", "fn"]
+      "withCodeLock": ["pool", "agencyId", "code", "fn"],
+      "FIELD_LABELS": "Object"
     },
     "services/search.js": {
       "PAGE_SIZE": "Number",
@@ -474,7 +475,7 @@
     },
     "web/views/units.js": {
       "stripMarkdown": ["s"],
-      "resultItem": ["l", "lang"],
+      "resultItem": ["l", "lang", "params"],
       "factList": ["l", "lang", "params"]
     },
     "web/views/searchForm.js": {
@@ -509,6 +510,49 @@
     "web/routes/unitForm.js": {
       "register": ["web", "params"],
       "storePhotos": ["broker", "files"]
+    },
+    "domain/sheetImport.js": {
+      "COLUMNS": "Array",
+      "columnFor": ["header"],
+      "rowToDraft": ["input"],
+      "money": ["v"],
+      "propertyType": ["v"],
+      "finishing": ["v"]
+    },
+    "domain/chatExport.js": {
+      "MAX_POSTS": "Number",
+      "isChatExport": ["text"],
+      "parseChatExport": ["text"],
+      "splitPasted": ["text"],
+      "looksLikeListing": ["text"],
+      "candidatePosts": ["text"]
+    },
+    "lib/sheets.js": {
+      "MAX_BYTES": "Number",
+      "MAX_ROWS": "Number",
+      "readInventorySheet": ["buffer"]
+    },
+    "services/imports.js": {
+      "describeChanges": ["listing", "patch", "lang"],
+      "planExcel": ["pool", "broker", "sheet", "params"],
+      "savePlan": ["pool", "broker", "kind", "payload", "params"],
+      "loadImport": ["pool", "broker", "id"],
+      "applyExcel": ["pool", "broker", "id", "params"],
+      "findDuplicate": ["pool", "agencyId", "l"],
+      "startGroupImport": ["pool", "broker", "posts", "params"],
+      "waitForGroupImport": ["id"],
+      "applyGroup": ["pool", "broker", "id", "params"]
+    },
+    "services/bulk.js": {
+      "ACTIONS": "Array",
+      "MAX_UNITS": "Number",
+      "PCT_RANGE": "Array",
+      "bulkUpdate": ["pool", "broker", "params"]
+    },
+    "web/routes/imports.js": {
+      "register": ["web", "params"],
+      "chatText": ["file"],
+      "TEMPLATE_HEADERS": "Array"
     }
   },
   "invariant_variable_names": {

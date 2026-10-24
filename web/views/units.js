@@ -7,11 +7,11 @@ const { html } = require("../html");
 const stripMarkdown = (s) => String(s || "").replace(/[*`_]/g, "");
 
 /** Search result: the compact line (code as a link) and every feature as a tag. */
-function resultItem(l, lang = "ar") {
+function resultItem(l, lang = "ar", { selectable = false } = {}) {
   const line = stripMarkdown(Describe.compactLine(l, lang).replace(/^`[^`]*`\s*·\s*/, ""));
   const tags = Describe.featureLabels(l, lang);
   return html`<li class="card result" data-code="${l.code}">
-  <div class="line"><a href="/app/units/${encodeURIComponent(l.code)}">${l.code}</a> · ${line}</div>
+  <div class="line">${selectable ? html`<input type="checkbox" name="code" value="${l.code}" form="bulk" aria-label="${l.code}"> ` : ""}<a href="/app/units/${encodeURIComponent(l.code)}">${l.code}</a> · ${line}</div>
   ${tags.length ? html`<ul class="tags">${tags.map((t) => html`<li>${t}</li>`)}</ul>` : ""}
 </li>`;
 }

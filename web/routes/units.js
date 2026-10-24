@@ -39,7 +39,20 @@ function register(web, { pool, page }) {
   ${tab("active", L(lang, "🟢 متاحة", "🟢 Available"))} ${tab("sold", L(lang, "🔴 مباعة", "🔴 Sold"))} ${tab("archived", L(lang, "📁 مؤرشفة", "📁 Archived"))}
   <a href="/app/units?status=${status}${mine ? "" : "&mine=1"}">${mine ? L(lang, "كل الوكالة", "Whole agency") : L(lang, "وحداتي بس", "Mine only")}</a>
 </nav>
-${rows.length ? html`<ol class="results">${rows.map((r) => resultItem(r, lang))}</ol>` : html`<p class="card">${L(lang, "مفيش وحدات هنا.", "No units here.")}</p>`}`
+${rows.length
+  ? html`<form id="bulk" method="post" action="/app/units/bulk" class="card row">
+  <strong>${L(lang, "للمختار:", "Selected:")}</strong>
+  <select name="action">
+    <option value="available">${L(lang, "🟢 لسه متاحة (تأكيد)", "🟢 Still available (confirm)")}</option>
+    <option value="sold">${L(lang, "✅ اتباعت", "✅ Sold")}</option>
+    <option value="archive">${L(lang, "📁 أرشفة", "📁 Archive")}</option>
+    <option value="price_pct">${L(lang, "💰 تغيير السعر %", "💰 Change price %")}</option>
+  </select>
+  <label>% <input name="pct" type="number" step="0.5" min="-50" max="100" style="width:6em"></label>
+  <button type="submit">${L(lang, "تطبيق", "Apply")}</button>
+</form>
+<ol class="results">${rows.map((r) => resultItem(r, lang, { selectable: true }))}</ol>`
+  : html`<p class="card">${L(lang, "مفيش وحدات هنا.", "No units here.")}</p>`}`
     });
   });
 
