@@ -16,7 +16,8 @@
     "test:router": "node --experimental-vm-modules node_modules/jest/bin/jest.js tests/router --runInBand",
     "test:jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
     "test:ci": "npm run test:unit && npm run test:jest",
-    "test": "npm run audit:schema && npm run test:pipeline && npm run test:ci"
+    "test": "npm run audit:schema && npm run test:pipeline && npm run test:ci",
+    "migrate": "node --env-file=.env scripts/migrate.js"
   },
   "jest": {
     "testEnvironment": "node",
@@ -32,22 +33,21 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "@google/genai": "*",
-    "@resvg/resvg-js": "^2.6.2",
-    "@supabase/supabase-js": "^2.45.0",
-    "axios": "*",
-    "dotenv": "*",
-    "exceljs": "^4.4.0",
-    "express": "*",
-    "html-react-parser": "^5.1.18",
-    "pg": "^8.12.0",
-    "satori": "^0.10.14",
-    "sharp": "^0.35.5"
+    "@google/genai": "2.30.0",
+    "@resvg/resvg-js": "2.6.2",
+    "@supabase/supabase-js": "2.118.0",
+    "dotenv": "18.0.8",
+    "exceljs": "4.4.0",
+    "express": "5.3.0",
+    "html-react-parser": "5.2.17",
+    "pg": "8.23.1",
+    "satori": "0.10.14",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",
-    "jest": "^29.7.0",
-    "supertest": "^7.0.0",
-    "typescript": "^7.0.2"
+    "jest": "29.7.0",
+    "supertest": "7.3.1",
+    "typescript": "7.0.2"
   }
 }

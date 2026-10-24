@@ -2,6 +2,7 @@
 "use strict";
 
 const AI = require("../../lib/ai");
+const { estimateCostUsd } = require("../../config");
 const [M1, M2, M3] = AI.TIERS;
 
 // Fake SDK client: behaviour per model is "ok", "fail", "hang" or a delay in ms before answering.
@@ -36,7 +37,17 @@ AI.ROUTES.test_fast = { deadlineMs: 600, hedgeAfterMs: 100, thinking: "fast" };
 AI.ROUTES.test_default = { deadlineMs: 600, hedgeAfterMs: 100, thinking: "default" };
 
 const logged = [];
-const ctx = { pool: { query: async (sql, params) => logged.push(params) }, broker: { id: "b1", agency_id: "a1" } };
+const quotaChecks = [];
+const ctx = {
+  pool: {
+    query: async (sql, params) => {
+      if (/^\s*INSERT/i.test(sql)) logged.push(params);
+      else quotaChecks.push(params);
+      return { rows: [{ broker_count: 0, agency_count: 0 }] };
+    }
+  },
+  broker: { id: "b1", agency_id: "a1" }
+};
 const flush = () => new Promise((r) => setImmediate(r));
 
 beforeEach(async () => {
@@ -88,7 +99,7 @@ test("all tiers fail: throws and logs a failed call with every attempt", async (
   await flush();
   const [row] = logged;
   expect(row[3]).toBe("failed");
-  expect(JSON.parse(row[10]).attempts).toHaveLength(3);
+  expect(JSON.parse(row[11]).attempts).toHaveLength(3);
 });
 
 test("everything hangs: the call fails at the route deadline", async () => {
@@ -105,10 +116,30 @@ test("success telemetry records model, tokens (thinking billed as output) and at
   AI._setClientForTests(fakeClient({}));
   await AI.generateWithCascade({ contents: "q", operationType: "test_fast", ctx });
   await flush();
-  const [agency, broker, op, status, errorCode, , , tokIn, tokOut, model, meta] = logged[0];
+  const [agency, broker, op, status, errorCode, , , tokIn, tokOut, model, cost, meta] = logged[0];
   expect([agency, broker, op, status, errorCode]).toEqual(["a1", "b1", "test_fast", "success", null]);
   expect([tokIn, tokOut, model]).toEqual([10, 8, M1]);
+  // Cost comes from config prices for the winning model.
+  expect(cost).toBe(estimateCostUsd(M1, 10, 8));
   expect(JSON.parse(meta)).toMatchObject({ thoughts_tokens: 3, attempts: [{ model: M1, outcome: "ok" }] });
+});
+
+test("the daily AI quota is checked before calling Gemini and blocks when exhausted", async () => {
+  AI._setClientForTests(fakeClient({}));
+  quotaChecks.length = 0;
+  await AI.generateWithCascade({ contents: "q", operationType: "test_fast", ctx });
+  expect(quotaChecks[0].slice(0, 2)).toEqual(["a1", "b1"]);
+
+  const client = fakeClient({});
+  AI._setClientForTests(client);
+  const exhausted = {
+    ...ctx,
+    pool: { query: async () => ({ rows: [{ broker_count: 1e6, agency_count: 1e6 }] }) }
+  };
+  await expect(
+    AI.generateWithCascade({ contents: "q", operationType: "test_fast", ctx: exhausted })
+  ).rejects.toMatchObject({ code: "BROKER_QUOTA_EXCEEDED" });
+  expect(client.calls).toHaveLength(0);
 });
 
 test("every model has a fast-thinking setting it accepts (MINIMAL is not valid on gemini-3.8-flash)", () => {

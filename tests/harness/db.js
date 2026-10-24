@@ -4,16 +4,18 @@
 const fs = require("fs");
 const path = require("path");
 
+const { runMigrations } = require("../../lib/migrate");
+
 const SCHEMA_PATH = path.join(__dirname, "..", "..", "db", "schema.sql");
 
-// node-pg returns NUMERIC and INT8 as strings; mirror that so tests see production types.
+// lib/db.js parses NUMERIC and INT8 into numbers; mirror that so tests see production types.
 const PG_COMPAT_PARSERS = {
-  1700: (v) => v, // numeric
-  20: (v) => v // int8
+  1700: (v) => (v === null ? null : Number(v)), // numeric
+  20: (v) => (v === null ? null : Number(v)) // int8
 };
 
 /**
- * Creates a fresh database loaded with db/schema.sql and returns a pg.Pool-like object.
+ * Creates a fresh database loaded with db/schema.sql plus db/migrations and returns a pg.Pool-like object.
  * PGlite has a single connection, so the adapter serializes transactions: while a client
  * holds an open transaction, pool.query calls wait until it commits or rolls back.
  */
@@ -102,6 +104,7 @@ async function createTestDb() {
     on: () => {}
   };
 
+  await runMigrations(pool);
   return { pool, db };
 }
 

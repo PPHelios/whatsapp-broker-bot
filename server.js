@@ -3,7 +3,10 @@
 
 const express = require("express");
 const crypto = require("crypto");
-const { Pool } = require("pg");
+
+const { getConfig } = require("./config");
+const Db = require("./lib/db");
+const { runMigrations } = require("./lib/migrate");
 
 const WA = require("./lib/whatsapp");
 const U = require("./lib/util");
@@ -19,16 +22,14 @@ const { handleImage, handleAudio } = require("./routes/media");
 const { handleDocument } = require("./routes/documents");
 const { handleInteractive } = require("./routes/interactive");
 
-// Runtime Configuration
-const PORT = process.env.PORT || 3000;
-const APP_SECRET = process.env.WHATSAPP_APP_SECRET || "";
-const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || "";
-
 /**
  * Builds the Express app and message pipeline around an injected pg-compatible pool.
- * Tests pass an in-process Postgres; production passes a real pg.Pool (see bootstrap below).
+ * Tests pass an in-process Postgres; production passes the lib/db.js pool (see bootstrap below).
  */
-function createApp({ pool }) {
+function createApp({ pool, config = getConfig() }) {
+  const APP_SECRET = config.whatsapp.appSecret;
+  const VERIFY_TOKEN = config.whatsapp.verifyToken;
+
   // Drain Protocol State (Distributed Multi-Pod Invariant)
   const state = { inFlight: 0, isDraining: false };
 
@@ -37,6 +38,7 @@ function createApp({ pool }) {
   // Capture raw body for cryptographic HMAC verification
   app.use(
     express.json({
+      limit: config.bodyLimit,
       verify: (req, _res, buf) => {
         req.rawBody = buf;
       }
@@ -86,7 +88,8 @@ function createApp({ pool }) {
    * SEC-01: Cryptographic Webhook HMAC-SHA256 Verification
    */
   function verifyWebhookSignature(req) {
-    if (!APP_SECRET) return true; // Bypass in local dev if secret unset
+    // Fail closed: without a secret nothing is accepted, unless explicitly allowed in local dev.
+    if (!APP_SECRET) return config.whatsapp.allowUnsigned;
     const signature = req.headers["x-hub-signature-256"];
     if (!signature) return false;
 
@@ -111,7 +114,7 @@ function createApp({ pool }) {
     const token = req.query["hub.verify_token"];
     const challenge = req.query["hub.challenge"];
 
-    if (mode === "subscribe" && token === VERIFY_TOKEN) {
+    if (mode === "subscribe" && VERIFY_TOKEN && token === VERIFY_TOKEN) {
       return res.status(200).send(challenge);
     }
     return res.sendStatus(403);
@@ -326,6 +329,35 @@ function createApp({ pool }) {
     }
   }
 
+  /** Active broker for a normalized phone (with the agency_id every query is scoped to). */
+  async function findActiveBroker(normalizedPhone) {
+    const { rows } = await pool.query(
+      `SELECT id, agency_id, name, phone_number, phone_normalized, contact_phone, role, preferred_lang, is_active
+       FROM brokers
+       WHERE phone_normalized = $1 AND is_active = true
+       LIMIT 1`,
+      [normalizedPhone]
+    );
+    return rows;
+  }
+
+  /**
+   * Per-turn execution context. broker and agency travel with every call, so telemetry
+   * (AI gateway, search, commands) always records agency_id and broker_id.
+   */
+  async function buildTurnContext(broker) {
+    const { rows } = await pool.query("SELECT * FROM agencies WHERE id = $1", [broker.agency_id]);
+    return {
+      pool,
+      config,
+      lang: broker.preferred_lang || "ar",
+      broker,
+      agency: rows[0] || { id: broker.agency_id },
+      S,
+      AI
+    };
+  }
+
   /**
    * Processes one inbound message: dedupe, broker auth, guarded dispatch, status update.
    */
@@ -358,13 +390,7 @@ function createApp({ pool }) {
       }
 
       // 3. Authenticate Broker against PostgreSQL (Strict Schema Invariant)
-      const { rows: brokers } = await pool.query(
-        `SELECT id, agency_id, name, phone_number, phone_normalized, role, preferred_lang, is_active
-       FROM brokers
-       WHERE phone_normalized = $1 AND is_active = true
-       LIMIT 1`,
-        [normalizedPhone]
-      );
+      const brokers = await findActiveBroker(normalizedPhone);
 
       if (brokers.length === 0) {
         // Reply to an unknown number at most once per 24h (its messages are all recorded above).
@@ -384,19 +410,14 @@ function createApp({ pool }) {
       }
 
       const broker = brokers[0];
-      const lang = broker.preferred_lang || "ar";
-
-      // 4. Assemble Distributed Execution Context (Zero in-memory Maps)
-      const ctx = {
-        pool,
-        lang,
-        S,
-        AI
-      };
+      const ctx = await buildTurnContext(broker);
 
       // 5. Execute turn inside the Symmetrical Zero-Silent-Drop boundary
-      await executeGuardedTurn(broker, message, () =>
-        dispatchMessage(broker, message, ctx)
+      await executeGuardedTurn(
+        broker,
+        message,
+        () => dispatchMessage(broker, message, ctx),
+        { pool }
       );
 
       if (message.id) {
@@ -466,22 +487,17 @@ function createApp({ pool }) {
           const messagePayload = item.payload;
           if (messagePayload && messagePayload.from) {
             const normPhone = U.normalizePhone(messagePayload.from);
-            const { rows: brokers } = await pool.query(
-              "SELECT * FROM brokers WHERE phone_normalized = $1 AND is_active = true LIMIT 1",
-              [normPhone]
-            );
+            const brokers = await findActiveBroker(normPhone);
 
             if (brokers.length > 0) {
               const broker = brokers[0];
-              const ctx = {
-                pool,
-                lang: broker.preferred_lang || "ar",
-                S,
-                AI
-              };
+              const ctx = await buildTurnContext(broker);
 
-              executeGuardedTurn(broker, messagePayload, () =>
-                dispatchMessage(broker, messagePayload, ctx)
+              executeGuardedTurn(
+                broker,
+                messagePayload,
+                () => dispatchMessage(broker, messagePayload, ctx),
+                { pool }
               ).catch((e) =>
                 console.warn(
                   `[BOOT] Recovery execution failed for ${item.msg_id}:`,
@@ -526,20 +542,22 @@ function createApp({ pool }) {
 /* ====================================================================== */
 /* Production bootstrap (skipped when required by tests)                  */
 /* ====================================================================== */
-function start() {
-  // Database Pool (Supabase Transaction & Session Pool)
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 5000
-  });
-  const { app, state, bootRecovery, preWarmAssets } = createApp({ pool });
+async function start() {
+  // Fails fast in production when required configuration is missing.
+  const config = getConfig();
+  const pool = Db.getPool();
+
+  if (config.db.migrateOnBoot) {
+    const applied = await runMigrations(pool, { log: (m) => console.log(`[MIGRATE] ${m}`) });
+    if (applied.length) console.log(`[MIGRATE] ${applied.length} migration(s) applied`);
+  }
+
+  const { app, state, bootRecovery, preWarmAssets } = createApp({ pool, config });
 
   // Start Server & Bind Port Immediately for Render Health Probes
-  const server = app.listen(PORT, () => {
+  const server = app.listen(config.port, () => {
     console.log(
-      `🚀 AqarChat Engine live on port ${PORT} (Node.js ${process.version})`
+      `🚀 AqarChat Engine live on port ${config.port} (Node.js ${process.version})`
     );
     preWarmAssets();
     bootRecovery();
@@ -583,7 +601,10 @@ function start() {
 }
 
 if (require.main === module) {
-  start();
+  start().catch((err) => {
+    console.error("Startup failed:", err.message);
+    process.exit(1);
+  });
 }
 
 module.exports = { createApp };

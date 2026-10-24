@@ -88,7 +88,7 @@ async function freshDb() {
     shared = await createTestDb();
   } else {
     const { rows } = await shared.pool.query(
-      "SELECT string_agg(format('public.%I', tablename), ', ') AS t FROM pg_tables WHERE schemaname = 'public'"
+      "SELECT string_agg(format('public.%I', tablename), ', ') AS t FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'schema_migrations'"
     );
     await shared.pool.query(`TRUNCATE ${rows[0].t} RESTART IDENTITY CASCADE`);
   }
