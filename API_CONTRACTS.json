@@ -366,6 +366,7 @@
     },
     "lib/links.js": {
       "withQuery": ["path", "query"],
+      "siteOrigin": [],
       "appUrl": ["path", "query"],
       "loginLinkUrl": ["token"],
       "searchUrl": ["encodedFilters"],
@@ -379,6 +380,36 @@
       "slugify": ["name"],
       "baseSlug": ["name", "id"],
       "isValidSlug": ["slug"]
+    },
+    "web/assets.js": {
+      "STATIC_DIR": "String",
+      "FILES": "Object",
+      "loadAssets": []
+    },
+    "web/html.js": {
+      "SafeHtml": [],
+      "html": ["strings", "values"],
+      "raw": ["text"],
+      "escapeHtml": ["value"],
+      "jsonAttr": ["obj"],
+      "layout": ["params"],
+      "NAV": "Array",
+      "HTMX_CONFIG": "Object"
+    },
+    "web/index.js": {
+      "MANIFEST": "Object",
+      "mountWeb": ["app", "params"]
+    },
+    "web/security.js": {
+      "CSP": "String",
+      "securityHeaders": ["_req", "res", "next"],
+      "sameOrigin": []
+    },
+    "web/routes/home.js": {
+      "register": ["web", "params"]
+    },
+    "web/routes/index.js": {
+      "PAGES": "Array"
     }
   },
   "invariant_variable_names": {

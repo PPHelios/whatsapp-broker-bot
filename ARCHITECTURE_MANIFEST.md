@@ -223,6 +223,15 @@ Target layering: **`routes` → `lib/registry.js` → `services` (return data) �
 * **`lib/onboarding.js` + `scripts/onboard.js`** (`npm run onboard -- <agency.json> [--dry-run]`): validates the file (agency name, optional `slug`, `#RRGGBB` colours, `dark|light` theme, https logo; Egyptian mobiles; roles broker/agent/admin/owner/manager; at least one manager role), then in one transaction creates or updates the agency (matched by name) and its brokers (matched by phone). A phone registered with another agency (or a slug used by another agency, `SLUG_TAKEN`) is an error, never a silent move. It prints the agency slug and the web app address. Example: `docs/pilot/agency.example.json`; broker how-to: `docs/pilot/broker-howto-ar.md`.
 * **`render.yaml`:** one Render web service (Starter, Frankfurt), `npm ci --omit=dev`, `npm start`, health check `/health`, `NODE_ENV=production`, Node 22, `MALLOC_ARENA_MAX=2`. Secrets (`PUBLIC_BASE_URL`, `DATABASE_URL`, WhatsApp, Gemini, Supabase) are set in the dashboard (`sync: false`). Move to Standard if measured peak memory stays above about 400 MB.
 
+#### F. Web app (`web/`, Release 2)
+* **Same app, same pool:** `server.js` calls `mountWeb(app, { pool, config })` after `/webhook` and `/health`. The broker web app lives under **`/app/`**; the root holds only `robots.txt` (`Disallow: /app/`) and, from step 7, the public unit pages. Next.js is reserved for future SEO sites.
+* **Rendering:** server-side HTML from tagged templates (`web/html.js` `html```: every interpolated value is HTML-escaped unless it is `SafeHtml`), plus htmx 2 for partial updates. No template engine and no client framework. `layout()` renders Arabic RTL by default (`lang="ar" dir="rtl"`) and LTR for English, with logical CSS properties so one stylesheet serves both.
+* **Page modules:** `web/routes/*.js` export `register(router, ctx)` and are listed in mount order in `web/routes/index.js` (`PAGES`); `ctx = { pool, config, assets, page }`.
+* **Static files (`web/assets.js`):** read once at boot into memory (never written at runtime), content-hashed, served at `/app/static/<name>?v=<hash>` with an immutable cache (unversioned URLs are `no-cache`). htmx comes from the pinned `htmx.org` package.
+* **PWA:** `/app/manifest.webmanifest` (scope and start URL `/app/`) and `/app/sw.js`, generated from `web/static/sw.js` with the asset version and list, sent with `Service-Worker-Allowed: /app/` and `no-cache`. The worker precaches the static files and `/app/offline`, serves static files cache-first and pages network-only with the offline fallback, and ignores non-GET requests and everything outside `/app/`, so private pages are never cached.
+* **Security headers (`web/security.js`):** CSP `default-src 'self'; script-src 'self'; style-src 'self'` (no inline script or style; htmx runs with `allowEval: false`), `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: same-origin`, `Permissions-Policy` (microphone for the voice button only). `sameOrigin()` refuses POSTs that the browser marks cross-site (`Sec-Fetch-Site`) or whose `Origin` is not the site origin (`Links.siteOrigin()`), in addition to the CSRF tokens of step 3.
+* **Body parsing:** `/app` adds `urlencoded` forms (limit `BODY_LIMIT`); file uploads (photos, Excel, chat exports) use `multer` with memory storage only.
+
 ---
 
 ### 8. Testing, CI & Change Discipline
@@ -230,6 +239,7 @@ Target layering: **`routes` → `lib/registry.js` → `services` (return data) �
 * **`API_CONTRACTS.json` is generated from the real exports:** `node scripts/api-contracts.js` rewrites the `libraries` map (export name → parameter names, or a type name). `tests/contract-guard.test.js` fails when a listed module's exports or parameters differ from the file, or when a module in `lib/`, `domain/` or `services/` is missing from it.
 * **`SCHEMA_REFERENCE.sql` is regenerated with every migration** (`npm run schema:reference`; §2).
 * **Behaviour tests drive the real router.**
+  - `tests/web/*.test.js` drive the web app with `supertest` against the same `createApp` (PGlite and the same fakes).
   - `tests/router/*.test.js` send real webhook payloads through `createApp(...).handleWebhookBody` and assert on the outbound WhatsApp messages and the resulting DB rows.
   - The external edges are replaced by recording fakes in `tests/harness/`:
     - `fake-whatsapp.js` records outbound messages and serves inbound media.

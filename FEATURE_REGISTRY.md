@@ -110,7 +110,6 @@ This registry documents every user-facing capability, command, interactive callb
 | **SYS-05** | Outbound Message Counter | - Every WhatsApp send through the dispatcher inside a turn. | - One `operation_logs` row per attempt (`operation_type = 'wa_outbound'`, status success/dropped/failed).<br>- `agency_outbound_daily` view: sent and failed per agency per Cairo day. | No user-visible output; used to size the WhatsApp pool. |
 | **SYS-06** | Migrations on Boot | - `start()` with `MIGRATE_ON_BOOT` not `false`. | - `lib/migrate.js` applies pending `db/migrations` in order under an advisory lock, each in its own transaction, recorded in `schema_migrations`. | Logged `[MIGRATE] applied …`; a failed migration stops the boot. |
 | **ONB-01** | Agency Onboarding (`npm run onboard -- <file> [--dry-run]`) | - Valid onboarding JSON. | - Creates/updates the agency (by name) and brokers (by phone) in one transaction; roles and branding; a phone of another agency is refused.<br>- Agency slug: from the file (validated, `SLUG_TAKEN` if another agency has it) or derived once from the name; kept on rename. | Console summary with the slug and the web app address; the brokers get `docs/pilot/broker-howto-ar.md`. |
-| **WEB-00** | Links & agency slugs | - Any absolute link sent out. | - Built only by `lib/links.js` from `PUBLIC_BASE_URL` (`config.publicUrl`).<br>- `agencies.slug`: unique, URL-safe, not a reserved path (`app`, `webhook`, `health`, …). | Public unit links read `<PUBLIC_BASE_URL>/<agency-slug>/<unit-code>?s=<token>`. |
 | **SYS-04** | Unregistered Number | - Sender has no active broker row. | - Message is still recorded in `inbound_messages`.<br>- Notice is sent at most once per 24h per number. | Bilingual "number not registered, ask your agency admin" notice, once per 24h. |
 | **SEC-01** | Webhook Cryptographic Verification | - Inbound HTTP POST to `/webhook`. | - Validates Meta's `X-Hub-Signature-256` HMAC-SHA256 signature against `WHATSAPP_APP_SECRET` using `crypto.timingSafeEqual`. | **Invalid:** HTTP 401 Unauthorized.<br>**Valid:** Proceeds to payload ingestion. |
 | **SEC-02** | Row-Level Tenant Isolation | - Every SQL query across all modules. | - Enforces `WHERE agency_id = $1` on all SELECT, UPDATE, and DELETE statements.<br>- Cross-agency data access is structurally impossible. | Absolute multi-tenant segregation. |
@@ -119,7 +118,17 @@ This registry documents every user-facing capability, command, interactive callb
 
 ---
 
-## 10. QA Test Verification & Traceability Baseline
+### 10. Web App & Public Pages (`WEB`) — Release 2
+
+| Feature ID | Event / Trigger | Pre-Conditions & Constraints | System Execution & Safeguards | Symmetrical Response Contract |
+| :--- | :--- | :--- | :--- | :--- |
+| **WEB-00** | Links & agency slugs | - Any absolute link sent out. | - Built only by `lib/links.js` from `PUBLIC_BASE_URL` (`config.publicUrl`).<br>- `agencies.slug`: unique, URL-safe, not a reserved path (`app`, `webhook`, `health`, …). | Public unit links read `<PUBLIC_BASE_URL>/<agency-slug>/<unit-code>?s=<token>`. |
+| **WEB-01** | Web shell (`GET /app/`, `/app` → 301 `/app/`) | - Any browser. Same Express app as the webhook. | - Server-rendered HTML (`web/html.js`: every value escaped) with htmx 2 (pinned, served from `/app/static/`, `allowEval: false`, `selfRequestsOnly`).<br>- Arabic RTL by default (`<html lang="ar" dir="rtl">`); LTR for English.<br>- Headers on every page: strict CSP (no inline script or style, `frame-ancestors 'none'`), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: same-origin`, `noindex`.<br>- State-changing requests from another site (`Sec-Fetch-Site` / `Origin`) get 403. | RTL page with the top bar (search, units, add, import) once signed in. |
+| **WEB-02** | PWA (`/app/manifest.webmanifest`, `/app/sw.js`) | - Browser with service workers. | - Manifest: `scope` and `start_url` `/app/`, standalone, icons 192/512/maskable/SVG.<br>- Service worker served at `/app/sw.js` (`Service-Worker-Allowed: /app/`, `no-cache`), registered with scope `/app/`. It precaches the versioned static files and the offline page, serves `/app/static/` cache-first, and pages network-only with the offline fallback. It never caches private pages, POSTs or anything outside `/app/`.<br>- Static files are hashed in memory at boot (`?v=<hash>`, immutable cache); a new deploy is a new cache. | Installable app; "📴 مفيش اتصال بالإنترنت" page when offline. |
+
+---
+
+## 11. QA Test Verification & Traceability Baseline
 
 * `TC-ING-01`: 1–15 photos processed into in-memory buffer; sharp resized to 1600x1600 Q82; silent WhatsApp reaction (`📸`) emitted; zero text bubbles dispatched.
 * `TC-ING-02`: Photo 16 rejected; warning dispatched; action buttons `[Save ✅]` / `[Cancel ❌]` preserved.
@@ -145,7 +154,7 @@ This registry documents every user-facing capability, command, interactive callb
 * `TC-SEC-01`: Inbound webhooks validated with timing-safe HMAC-SHA256 signature against `WHATSAPP_APP_SECRET`.
 * `TC-SEC-02`: Tenant isolation enforced via strict `agency_id = $1` on all database operations.
 * `TC-SEC-03`: Render `SIGTERM` initiates drain protocol (HTTP 503 response, 25s window for `inFlight` tasks).
-## 11. Test Coverage Map
+## 12. Test Coverage Map
 Legend: ✅ covered by a passing test · 🐞 known defect pinned as `test.failing` (plan ID in brackets) · ⬜ not yet covered.
 Router tests send real webhook payloads through the production pipeline (`tests/router/`); unit tests live in `tests/unit/` and `tests/e2e.test.js`. After Release 1 there are no 🐞 rows: every pinned defect is a passing test.
 
@@ -164,6 +173,7 @@ Router tests send real webhook payloads through the production pipeline (`tests/
 | SYS-06 migrations recorded, re-run is a no-op | ✅ | `foundation` |
 | ONB-01 onboarding validation and idempotent upsert | ✅ | `tests/unit/onboarding.test.js` |
 | WEB-00 slugs (derived, unique, reserved words, kept on rename; JS = SQL); links from PUBLIC_BASE_URL only; onboarding slug | ✅ | `tests/unit/slug-links.test.js` |
+| WEB-01 shell (RTL, htmx pinned, CSP and headers, cross-site POST refused, 404s) · WEB-02 PWA (manifest scope, service worker scope/caching, versioned assets) | ✅ | `tests/web/shell.test.js` |
 | Config: production fail-fast, https base URL, prices, quotas | ✅ | `tests/unit/config.test.js` |
 | ING-01 / TC-ING-01 photo stored + 📸 reaction, no fallback bubble | ✅ | `core-flows` |
 | TC-ING-02 16th photo warning with Save/Cancel | ✅ | `tests/router/reply-delivery.test.js` |
@@ -204,7 +214,7 @@ Router tests send real webhook payloads through the production pipeline (`tests/
 | `API_CONTRACTS.json` = real exports; `SCHEMA_REFERENCE.sql` current | ✅ | `tests/contract-guard.test.js`, `tests/unit/schema-reference.test.js` |
 | XLS-01…04, DEL-03…06/08, STATS-01 | ⬜ | — |
 
-## 12. Defect IDs
+## 13. Defect IDs
 Remediation-plan IDs used in test names. Each one was a `test.failing` (or a new test written with the fix) and is now a passing test.
 
 | ID | Defect (fixed) | Release | Test |
