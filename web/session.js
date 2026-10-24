@@ -62,12 +62,29 @@ function requireBroker(req, res, next) {
   return res.status(401).send("Sign in first");
 }
 
+// Routes that parse multipart bodies with web/uploads.js; only there may the form field be checked
+// after parsing (a plain multipart POST anywhere else without the header is refused).
+const MULTIPART_ROUTES = [];
+function allowMultipart(re) {
+  MULTIPART_ROUTES.push(re);
+}
+
 /** Every state-changing request of a signed-in broker must carry the session's CSRF token. */
 function verifyCsrf(req, res, next) {
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
-  const sent = req.get("X-CSRF-Token") || req.body?._csrf;
+  const header = req.get("X-CSRF-Token");
+  if (!header && req.is("multipart/form-data") && MULTIPART_ROUTES.some((re) => re.test(req.path))) {
+    req.csrfDeferred = true; // checked by web/uploads.js once the body is parsed
+    return next();
+  }
+  const sent = header || req.body?._csrf;
   if (req.session && WebAuth.safeEqual(sent, req.session.csrf)) return next();
   return res.status(403).send("Invalid or missing CSRF token");
+}
+
+/** The deferred multipart check (form field _csrf). */
+function csrfAfterParse(req) {
+  return !req.csrfDeferred || Boolean(req.session && WebAuth.safeEqual(req.body?._csrf, req.session.csrf));
 }
 
 /** Pre-session CSRF (sign-in forms): a random cookie that the form must echo (double submit). */
@@ -99,6 +116,8 @@ module.exports = {
   noStore,
   requireBroker,
   verifyCsrf,
+  allowMultipart,
+  csrfAfterParse,
   issuePreToken,
   verifyPreToken,
   safeNext

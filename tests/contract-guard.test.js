@@ -240,7 +240,7 @@ describe("API Contract, Database Schema & Variable Naming Guardians", () => {
     const contracts = JSON.parse(fs.readFileSync(path.join(root, "API_CONTRACTS.json"), "utf8"));
     // Worker entry points export nothing.
     const entryPoints = ["lib/flyerWorker.js"];
-    const modules = ["lib", "domain", "services", "web", "web/routes", "web/views"].filter((d) => fs.existsSync(path.join(root, d))).flatMap((d) =>
+    const modules = ["lib", "domain", "services", "web", "web/routes", "web/views", "web/forms"].filter((d) => fs.existsSync(path.join(root, d))).flatMap((d) =>
       fs.readdirSync(path.join(root, d)).filter((f) => f.endsWith(".js")).map((f) => `${d}/${f}`)
     );
     const missing = modules.filter((m) => !entryPoints.includes(m) && !contracts.libraries[m]);

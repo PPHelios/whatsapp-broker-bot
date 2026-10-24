@@ -89,4 +89,4 @@ ${placeList()}
 </details>`;
 }
 
-module.exports = { refineForm };
+module.exports = { refineForm, placeList };

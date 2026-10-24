@@ -55,6 +55,7 @@ ${rows.length ? html`<ol class="results">${rows.map((r) => resultItem(r, lang))}
       title: listing.code,
       nav: "units",
       body: html`<article class="card" data-code="${listing.code}">
+  ${req.query.saved ? html`<p class="notice card ok">✅ ${L(lang, "تم الحفظ", "Saved")}</p>` : ""}
   <h1>${listing.code} · ${status}${conf ? html` <span class="muted">${conf[0]}</span>` : ""}</h1>
   ${factList(listing, lang)}
   ${images.length ? html`<div class="photos">${images.map((i) => html`<img src="${i.url}" alt="" loading="lazy">`)}</div>` : ""}

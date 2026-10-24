@@ -246,7 +246,11 @@
     },
     "lib/listingStore.js": {
       "findByCode": ["db", "agencyId", "code", "params"],
+      "createListing": ["db", "broker", "params"],
+      "addPhotos": ["db", "listing", "urls"],
+      "removePhotos": ["db", "listing", "imageIds"],
       "applyListingPatch": ["db", "broker", "params"],
+      "INSERT_COLUMNS": "Array",
       "PATCH_COLUMNS": "Array"
     },
     "lib/edits.js": {
@@ -260,7 +264,8 @@
       "diffPatch": ["listing", "composed"],
       "localPatch": ["texts"],
       "recentCode": ["pool", "brokerId"],
-      "rememberListing": ["pool", "brokerId", "code"]
+      "rememberListing": ["pool", "brokerId", "code"],
+      "withCodeLock": ["pool", "agencyId", "code", "fn"]
     },
     "services/search.js": {
       "PAGE_SIZE": "Number",
@@ -441,6 +446,8 @@
       "noStore": ["_req", "res", "next"],
       "requireBroker": ["req", "res", "next"],
       "verifyCsrf": ["req", "res", "next"],
+      "allowMultipart": ["re"],
+      "csrfAfterParse": ["req"],
       "issuePreToken": ["req", "res"],
       "verifyPreToken": ["req"],
       "safeNext": ["next"]
@@ -471,7 +478,37 @@
       "factList": ["l", "lang", "params"]
     },
     "web/views/searchForm.js": {
-      "refineForm": ["filters", "lang", "params"]
+      "refineForm": ["filters", "lang", "params"],
+      "placeList": []
+    },
+    "lib/images.js": {
+      "MAX_PHOTOS": "Number",
+      "normalizeImageBuffer": ["rawBuffer"]
+    },
+    "web/forms/unitForm.js": {
+      "FORM_COLUMNS": "Array",
+      "FORM_DETAILS": "Array",
+      "INTERNAL_DETAILS": "Array",
+      "PLAN_ROWS": "Number",
+      "FREQUENCIES": "Array",
+      "unitFromForm": ["body"],
+      "composeFromForm": ["params"],
+      "formFromUnit": ["l"],
+      "money": ["v"]
+    },
+    "web/uploads.js": {
+      "MB": "Number",
+      "uploads": ["fields", "params"],
+      "PHOTO": "Object",
+      "VOICE": "Object"
+    },
+    "web/views/unitForm.js": {
+      "unitForm": ["params"],
+      "reviewPanel": ["evaluation", "lang"]
+    },
+    "web/routes/unitForm.js": {
+      "register": ["web", "params"],
+      "storePhotos": ["broker", "files"]
     }
   },
   "invariant_variable_names": {
