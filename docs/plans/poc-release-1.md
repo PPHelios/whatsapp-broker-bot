@@ -206,13 +206,16 @@ The POC is delivered as **four releases**. **Release 1, the WhatsApp-only slice,
    - Create an environment with a setup script of `npm ci`.
    - No secrets are needed: the tests use PGlite and the fakes.
    - Add `GEMINI_API_KEY_*` only if the eval should run in the cloud. Otherwise run the eval locally later.
-3. **Start the session** with: "Implement `docs/plans/poc-release-1.md` Release 1 on branch `poc/release-1`, one step at a time. Run `npm run test:ci` after each step, commit each step, push, and open a PR at the end. Ask me when a decision is needed."
+3. **Start the session** with: "Implement `docs/plans/poc-release-1.md` Release 1 on branch `poc/release-1`, one step at a time. After each step: run `npm run test:ci`, commit, push, and send me a short progress notification. No PR approval is needed. When all steps are green, merge `poc/release-1` into `main` and push. Only stop to ask me for decisions that block progress."
 4. **Notifications:** install the Claude mobile app on the same account and allow notifications. Cloud Code sessions appear there, and you can reply from your phone when input is needed. *Check the exact notification setting in the app.*
-5. **Stays with you:**
-   - reviewing and merging the PR
-   - the Render deploy
+5. **Merge policy (owner's decision):**
+   - No PR review. The session merges to `main` itself, once `npm run test:ci` is green after the last step.
+   - Never merge with a failing or skipped test.
+   - The session reviews the flyer sample PNGs itself, fixes anything visually broken, and lists what it changed in the final progress note.
+6. **Stays with you:**
+   - the Render deploy (if Render auto-deploys `main`, the merge goes live immediately)
    - real-phone checks
-   - the flyer PNG review (the session attaches the samples to the PR)
+   - the Gemini eval on the paid key, if no key is set in the cloud environment
 
 ## Critical files (Release 1)
 - `server.js`: ctx, mounting config
