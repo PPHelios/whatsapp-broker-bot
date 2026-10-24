@@ -32,6 +32,7 @@
 * **Graceful Termination & Drain Protocol:** On `SIGTERM` or `SIGINT`, the service enters a draining state:
   - Halts acceptance of new incoming webhooks (returns HTTP 503 so Meta Graph retries).
   - Permits up to 25 seconds for in-flight tasks (`inFlight > 0` and per-broker queues) to finish executing and write logs before closing the `pg.Pool`.
+  - Web requests are short and are not counted in `inFlight`. A group import still extracting when the instance stops stays `processing` and expires with its plan (1 day); the broker uploads it again.
 * **Zero-Downtime Multi-Pod Concurrency:** Because Render runs concurrent containers during blue/green deploys, all unit mutations (edits, deletions, status transitions) must acquire distributed PostgreSQL transactional advisory locks:
   `SELECT pg_advisory_xact_lock(('x' || substr(md5($1 || ':' || $2), 1, 16))::bit(64)::bigint)` using `[String(agency_id), String(code).toUpperCase()]`.
 
@@ -282,6 +283,8 @@ Target layering: **`routes` → `lib/registry.js` → `services` (return data) �
 * **Every change ships with tests and doc updates.** A change is complete only when it includes tests that cover it and updates to this manifest, `FEATURE_REGISTRY.md` and `API_CONTRACTS.json` where they are affected. (Release 1 ran under a POC exception; its docs were caught up at the start of Release 2.)
 * **`API_CONTRACTS.json` is generated from the real exports:** `node scripts/api-contracts.js` rewrites the `libraries` map (export name → parameter names, or a type name). `tests/contract-guard.test.js` fails when a listed module's exports or parameters differ from the file, or when a module in `lib/`, `domain/` or `services/` is missing from it.
 * **`SCHEMA_REFERENCE.sql` is regenerated with every migration** (`npm run schema:reference`; §2).
+* **Operator docs keep up:** `tests/unit/docs.test.js` fails when the code reads an environment variable `docs/runbook.md` does not list, or when a migration is not named here.
+* **Docs map:** this manifest (architecture and invariants), `FEATURE_REGISTRY.md` (features, coverage, defect IDs), `API_CONTRACTS.json` (exports), `SCHEMA_REFERENCE.sql` (schema), `docs/runbook.md` (env vars, Render, migrations, onboarding, secret rotation, `operation_logs` and `agency_outbound_daily` queries), `docs/pilot/broker-howto-ar.md` and `docs/pilot/web-howto-ar.md` (broker guides, Arabic), `docs/plans/poc-release-1.md` (the POC plan).
 * **Behaviour tests drive the real router.**
   - `tests/web/*.test.js` drive the web app with `supertest` against the same `createApp` (PGlite and the same fakes).
   - `tests/router/*.test.js` send real webhook payloads through `createApp(...).handleWebhookBody` and assert on the outbound WhatsApp messages and the resulting DB rows.

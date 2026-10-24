@@ -234,6 +234,7 @@ Router tests send real webhook payloads through the production pipeline (`tests/
 | Typing indicator on every inbound message | ✅ | `reply-delivery` |
 | AI quality eval scorer | ✅ | `tests/unit/eval-score.test.js` |
 | `API_CONTRACTS.json` = real exports; `SCHEMA_REFERENCE.sql` current | ✅ | `tests/contract-guard.test.js`, `tests/unit/schema-reference.test.js` |
+| Runbook lists every env var; manifest names every migration; broker guides present | ✅ | `tests/unit/docs.test.js` |
 | XLS-01…04 (WhatsApp Excel upload), DEL-03…06/08, STATS-01 | ⬜ | — (the web Excel import WEB-14 is covered) |
 
 ## 13. Defect IDs
