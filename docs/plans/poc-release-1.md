@@ -166,7 +166,7 @@ The POC is delivered as **four releases**. **Release 1, the WhatsApp-only slice,
 - Every `known-defects` case that this release fixes becomes a normal test.
 
 ## Later releases (planned, not built now)
-- **Release 2: Website** (about 4–6 days)
+- **Release 2: Website** (about 4–6 days) — **built on `poc/release-2`** (steps 0–8: docs catch-up, slugs and links, web shell, magic-link sign-in, web search, add/edit form, imports and bulk edit, public unit pages, user docs). See `docs/runbook.md` and `FEATURE_REGISTRY.md` §10.
   - `agencies.slug`.
   - Web shell: RTL, htmx, PWA, service worker scoped to `/app/`.
   - Magic-link login (GET→POST, hashed tokens, 30-day sessions), CSRF, rate limits.

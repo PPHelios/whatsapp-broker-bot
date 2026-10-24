@@ -1,6 +1,7 @@
 {
   "agency": {
     "name": "Pilot Agency",
+    "slug": "pilot-agency",
     "phone": "0221234567",
     "logo_url": "https://example.com/logo.png",
     "primary_color": "#0B132B",

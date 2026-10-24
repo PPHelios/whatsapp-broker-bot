@@ -18,6 +18,13 @@ test("production requires an https PUBLIC_BASE_URL; trailing slash is dropped", 
   expect(loadConfig(PROD).publicBaseUrl).toBe("https://aqarchat.onrender.com");
 });
 
+test("on Render, RENDER_EXTERNAL_URL stands in until PUBLIC_BASE_URL is set; PUBLIC_BASE_URL wins", () => {
+  const { PUBLIC_BASE_URL, ...noBase } = PROD;
+  expect(() => loadConfig(noBase)).toThrow(/PUBLIC_BASE_URL/);
+  expect(loadConfig({ ...noBase, RENDER_EXTERNAL_URL: "https://aqarchat-x1.onrender.com" }).publicBaseUrl).toBe("https://aqarchat-x1.onrender.com");
+  expect(loadConfig({ ...PROD, RENDER_EXTERNAL_URL: "https://aqarchat-x1.onrender.com" }).publicBaseUrl).toBe("https://aqarchat.onrender.com");
+});
+
 test("unsigned webhooks are never allowed in production, and only by opt-in elsewhere", () => {
   expect(loadConfig({ ...PROD, WEBHOOK_ALLOW_UNSIGNED: "true" }).whatsapp.allowUnsigned).toBe(false);
   expect(loadConfig({}).whatsapp.allowUnsigned).toBe(false);

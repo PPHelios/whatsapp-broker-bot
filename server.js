@@ -22,6 +22,7 @@ const { handleCommand } = require("./routes/commands");
 const { handleImage, handleAudio } = require("./routes/media");
 const { handleDocument } = require("./routes/documents");
 const { handleInteractive } = require("./routes/interactive");
+const { mountWeb } = require("./web");
 
 /**
  * Builds the Express app and message pipeline around an injected pg-compatible pool.
@@ -464,6 +465,9 @@ function createApp({ pool, config = getConfig() }) {
       res.status(503).json({ status: "degraded", error: err.message });
     }
   });
+
+  // Release 2: the broker web app (/app/) and the public pages, after /webhook and /health.
+  mountWeb(app, { pool, config });
 
   /**
    * SEC-03: Startup Crash Recovery Sweep

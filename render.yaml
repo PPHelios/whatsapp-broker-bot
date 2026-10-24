@@ -16,6 +16,8 @@ services:
       # glibc arena cap: flyer rendering peak RSS ~250 MB instead of ~410 MB (scripts/render-flyer-samples.js).
       - key: MALLOC_ARENA_MAX
         value: "2"
+      # Optional until the domain exists: without it the app uses Render's RENDER_EXTERNAL_URL
+      # (https://<service>.onrender.com). Set it to https://www.aqarchat.com once the domain is live.
       - key: PUBLIC_BASE_URL
         sync: false
       - key: DATABASE_URL

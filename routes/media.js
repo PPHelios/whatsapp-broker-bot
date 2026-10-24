@@ -1,7 +1,6 @@
 // routes/media.js — Photo Ingress (15-Ceiling) & Audio Note Context Routing
 "use strict";
 
-const sharp = require("sharp");
 const WA = require("../lib/whatsapp");
 const U = require("../lib/util");
 const Drafts = require("../lib/drafts");
@@ -10,21 +9,8 @@ const Edits = require("../lib/edits");
 const Registry = require("../lib/registry");
 const { reply, replyButtons, react } = require("../lib/dispatcher");
 
-// Constrain Sharp concurrency and memory for Render containers
-sharp.concurrency(1);
-sharp.cache({ items: 20, memory: 64 });
-
-/**
- * Normalizes an inbound photo buffer using Sharp before staging/storage.
- * Auto-rotates via EXIF, bounds inside 1600x1600, outputs JPEG Q82.
- */
-async function normalizeImageBuffer(rawBuffer) {
-  return await sharp(rawBuffer)
-    .rotate()
-    .resize(1600, 1600, { fit: "inside", withoutEnlargement: true })
-    .jpeg({ quality: 82, progressive: true })
-    .toBuffer();
-}
+// Photo normalization (sharp, in memory) is shared with the web uploads.
+const { normalizeImageBuffer } = require("../lib/images");
 
 /**
  * Handles incoming WhatsApp photos (ING-01).

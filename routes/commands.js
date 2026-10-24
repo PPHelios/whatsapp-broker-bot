@@ -6,6 +6,7 @@ const U = require("../lib/util");
 const Flyer = require("../lib/flyer");
 const Drafts = require("../lib/drafts");
 const Registry = require("../lib/registry");
+const ShareLinks = require("../lib/shareLinks");
 const { cardButtons } = require("../lib/buttons");
 const {
   reply,
@@ -349,10 +350,12 @@ async function handleCommand(broker, text, ctx) {
         }
         if (/(?:client|عميل|نص\s*العميل)/i.test(raw)) {
           const isEn = /client/i.test(raw);
-          const clientCopy = T.formatClientListingText(
-            listing,
+          const clientCopy = await ShareLinks.clientCopyWithLink(
+            pool,
             broker,
-            isEn ? "en" : "ar"
+            listing,
+            isEn ? "en" : "ar",
+            T.formatClientListingText(listing, broker, isEn ? "en" : "ar")
           );
           await reply(broker, clientCopy);
           return true;
@@ -908,10 +911,13 @@ async function handleCommand(broker, text, ctx) {
       recentBrokerListings
     );
 
-    const clientCopy = T.formatClientListingText(
-      listing,
+    // The copy carries a client share link (public unit page; the broker is told when it is opened).
+    const clientCopy = await ShareLinks.clientCopyWithLink(
+      pool,
       broker,
-      isEn ? "en" : "ar"
+      listing,
+      isEn ? "en" : "ar",
+      T.formatClientListingText(listing, broker, isEn ? "en" : "ar")
     );
     await reply(broker, clientCopy);
 

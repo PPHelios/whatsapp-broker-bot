@@ -1,5 +1,5 @@
 // domain/places.js — Bilingual places: areas, developers and compounds as language-neutral keys (pure)
-// Seeds the compound_synonyms table (db/migrations/005) and resolves query text on the search side,
+// Seeds the compound_synonyms table (db/migrations/004) and resolves query text on the search side,
 // so "Mountain View" and "ماونتن فيو" become the same key.
 "use strict";
 

@@ -1,0 +1,119 @@
+// web/routes/units.js — Units in the web app: the agency's list and one unit's page (agency-scoped)
+"use strict";
+
+const Store = require("../../lib/listingStore");
+const Authz = require("../../lib/authz");
+const Describe = require("../../domain/describe");
+const Share = require("../../lib/shareLinks");
+const { html } = require("../html");
+const { resultItem, factList } = require("../views/units");
+
+const L = (lang, ar, en) => (lang === "en" ? en : ar);
+const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
+const STATUSES = ["active", "sold", "archived"];
+
+async function imagesOf(pool, listing) {
+  const { rows } = await pool.query("SELECT id, url, position FROM listing_images WHERE listing_id = $1 AND agency_id = $2 ORDER BY position", [
+    listing.id,
+    listing.agency_id
+  ]);
+  return rows;
+}
+
+function register(web, { pool, page }) {
+  web.get("/units", async (req, res) => {
+    const lang = langOf(req);
+    const { broker } = req.session;
+    const status = STATUSES.includes(req.query.status) ? req.query.status : "active";
+    const mine = req.query.mine === "1";
+    const { rows } = await pool.query(
+      `SELECT * FROM listings WHERE agency_id = $1 AND status = $2 ${mine ? "AND broker_id = $3" : ""}
+       ORDER BY confirmed_at DESC NULLS LAST, created_at DESC, id DESC LIMIT 200`,
+      mine ? [broker.agency_id, status, broker.id] : [broker.agency_id, status]
+    );
+    const tab = (s, label) => html`<a href="/app/units?status=${s}${mine ? "&mine=1" : ""}"${s === status ? html` aria-current="page"` : ""}>${label}</a>`;
+    return page(req, res, {
+      title: L(lang, "الوحدات", "Units"),
+      nav: "units",
+      body: html`<h1>🏠 ${L(lang, "الوحدات", "Units")}</h1>
+<nav class="row card">
+  ${tab("active", L(lang, "🟢 متاحة", "🟢 Available"))} ${tab("sold", L(lang, "🔴 مباعة", "🔴 Sold"))} ${tab("archived", L(lang, "📁 مؤرشفة", "📁 Archived"))}
+  <a href="/app/units?status=${status}${mine ? "" : "&mine=1"}">${mine ? L(lang, "كل الوكالة", "Whole agency") : L(lang, "وحداتي بس", "Mine only")}</a>
+</nav>
+${rows.length
+  ? html`<form id="bulk" method="post" action="/app/units/bulk" class="card row">
+  <strong>${L(lang, "للمختار:", "Selected:")}</strong>
+  <select name="action">
+    <option value="available">${L(lang, "🟢 لسه متاحة (تأكيد)", "🟢 Still available (confirm)")}</option>
+    <option value="sold">${L(lang, "✅ اتباعت", "✅ Sold")}</option>
+    <option value="archive">${L(lang, "📁 أرشفة", "📁 Archive")}</option>
+    <option value="price_pct">${L(lang, "💰 تغيير السعر %", "💰 Change price %")}</option>
+  </select>
+  <label>% <input class="narrow" name="pct" type="number" step="0.5" min="-50" max="100"></label>
+  <button type="submit">${L(lang, "تطبيق", "Apply")}</button>
+</form>
+<ol class="results">${rows.map((r) => resultItem(r, lang, { selectable: true }))}</ol>`
+  : html`<p class="card">${L(lang, "مفيش وحدات هنا.", "No units here.")}</p>`}`
+    });
+  });
+
+  /** Share section: a new client link (public page) and the broker's earlier links with their opens. */
+  async function shareSection(broker, listing, lang, fresh = null) {
+    if (listing.status !== "active") return "";
+    const links = await Share.linksFor(pool, broker, listing);
+    const copy = fresh ? `${Describe.clientCopy(listing, broker, { lang: fresh.lang })}\n\n🔗 ${fresh.url}` : null;
+    return html`<section class="card" id="share">
+  <h2>🔗 ${L(lang, "رابط للعميل", "Link for a client")}</h2>
+  ${fresh
+    ? html`<p class="share-url" data-share-url>${fresh.url}</p>
+  <p><a class="btn" href="https://wa.me/?text=${encodeURIComponent(copy)}" rel="noopener">${L(lang, "ابعته على واتساب", "Send on WhatsApp")}</a></p>`
+    : ""}
+  <form method="post" action="/app/units/${encodeURIComponent(listing.code)}/share" class="row">
+    <select name="lang"><option value="ar">عربي</option><option value="en">English</option></select>
+    <button type="submit" class="secondary">${L(lang, "رابط جديد", "New link")}</button>
+  </form>
+  ${links.length
+    ? html`<ul class="muted">${links.map(
+        (k) => html`<li data-link-opens="${k.open_count}">${new Date(k.created_at).toISOString().slice(0, 10)} · ${k.channel} · ${L(lang, `اتفتح ${k.open_count} مرة`, `opened ${k.open_count} time(s)`)}</li>`
+      )}</ul>`
+    : ""}
+  <p class="muted">${L(lang, "الصفحة بتظهر للعميل الصور والمواصفات بس — مفيش بيانات داخلية. هيوصلك تنبيه على واتساب لما يفتحها.", "The page shows clients the photos and facts only — nothing internal. You get a WhatsApp alert when it is opened.")}</p>
+</section>`;
+  }
+
+  web.post("/units/:code/share", async (req, res, next) => {
+    const lang = langOf(req);
+    const { broker } = req.session;
+    const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!listing || !Authz.canView(broker, listing) || listing.status !== "active") return next();
+    const linkLang = req.body.lang === "en" ? "en" : "ar";
+    const fresh = await Share.createShareLink(pool, broker, listing, { channel: "web", lang: linkLang });
+    return page(req, res, { title: listing.code, nav: "units", body: html`<h1>${listing.code}</h1>${await shareSection(broker, listing, lang, { ...fresh, lang: linkLang })}<p><a href="/app/units/${encodeURIComponent(listing.code)}">${L(lang, "رجوع للوحدة", "Back to the unit")}</a></p>` });
+  });
+
+  web.get("/units/:code", async (req, res, next) => {
+    const lang = langOf(req);
+    const { broker } = req.session;
+    const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!listing || !Authz.canView(broker, listing)) return next();
+    const images = await imagesOf(pool, listing);
+    const status = { active: L(lang, "🟢 متاحة", "🟢 Available"), sold: L(lang, "🔴 مباعة", "🔴 Sold"), archived: L(lang, "📁 مؤرشفة", "📁 Archived") }[listing.status] || listing.status;
+    const conf = Describe.compactLine({ code: "", confirmed_at: listing.confirmed_at }, lang).match(/✅ \S+/);
+    return page(req, res, {
+      title: listing.code,
+      nav: "units",
+      body: html`<article class="card" data-code="${listing.code}">
+  ${req.query.saved ? html`<p class="notice card ok">✅ ${L(lang, "تم الحفظ", "Saved")}</p>` : ""}
+  <h1>${listing.code} · ${status}${conf ? html` <span class="muted">${conf[0]}</span>` : ""}</h1>
+  ${factList(listing, lang)}
+  ${images.length ? html`<div class="photos">${images.map((i) => html`<img src="${i.url}" alt="" loading="lazy">`)}</div>` : ""}
+  <div class="row" id="unit-actions">
+    ${Authz.canEdit(broker, listing) ? html`<a class="btn" href="/app/units/${encodeURIComponent(listing.code)}/edit">✏️ ${L(lang, "تعديل", "Edit")}</a>` : ""}
+  </div>
+</article>
+${await shareSection(broker, listing, lang)}`
+    });
+  });
+}
+
+module.exports = { register, imagesOf };

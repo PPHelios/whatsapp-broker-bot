@@ -1,5 +1,5 @@
-// domain/searchText.js — The one search normalizer (JS twin of SQL normalize_search, migration 005)
-// Both sides must agree byte for byte; tests/unit/search-parity.test.js checks them against each other.
+// domain/searchText.js — The one search normalizer (JS twin of SQL normalize_search, migration 004)
+// Both sides must agree byte for byte; tests/router/search.test.js ("JS and SQL normalizers agree") checks them against each other.
 "use strict";
 
 /**

@@ -1,7 +1,7 @@
 {
   "libraries": {
     "server.js": {
-      "createApp": ["deps"]
+      "createApp": ["params"]
     },
     "lib/whatsapp.js": {
       "sendWhatsAppText": ["recipient", "text", "opts"],
@@ -31,37 +31,32 @@
       "ensureListingImagesCurated": ["listingId", "ctx"]
     },
     "lib/financials.js": {
+      "STEP_MONTHS": "Object",
+      "normalizeFrequency": ["plan"],
+      "planDeliveryMonths": ["listing", "now"],
+      "maintenanceTerms": ["plan", "listing"],
       "addMonths": ["date", "months"],
       "formatDate": ["d"],
       "calculatePlanSummary": ["basePrice", "plan"],
-      "calculateDeveloperPaymentPlans": [
-        "basePrice",
-        "plans",
-        "maintenancePct"
-      ],
+      "calculateDeveloperPaymentPlans": ["basePrice", "plans", "maintenancePct"],
       "filterMatchingPlans": ["basePrice", "plans", "constraints"],
       "generateDetailedSchedule": ["basePrice", "plan", "startDate"],
       "reconcileResaleBalance": ["params"],
       "calculateResaleFinancials": ["listing"],
-      "formatSinglePlanAdCopy": [
-        "listing",
-        "broker",
-        "selectedPlanIdOrYears",
-        "lang"
-      ]
+      "formatSinglePlanAdCopy": ["listing", "broker", "selectedPlanIdOrYears", "lang"]
     },
     "lib/util.js": {
-      "normalizePhone": ["phone"],
-      "cleanAudioMime": ["mimeType"],
-      "withTimeout": ["promise", "ms", "label"],
       "sleep": ["ms"],
+      "normalizePhone": ["p"],
+      "sha1": ["s"],
       "hashListingCode": ["code"],
-      "sha1": ["str"],
-      "isValidZipBuffer": ["buf"],
+      "withTimeout": ["promise", "ms", "label"],
+      "createLimiter": ["concurrency", "params"],
       "createSerializer": [],
-      "createLimiter": ["maxConcurrency", "opts"],
-      "createRateGate": ["rpm"],
-      "createCounter": ["windowMs", "max"]
+      "createRateGate": ["perMinute"],
+      "createCounter": ["windowMs", "max"],
+      "cleanAudioMime": ["raw"],
+      "isValidZipBuffer": ["buf"]
     },
     "lib/text.js": {
       "normalizeDigits": ["str"],
@@ -73,22 +68,17 @@
       "cleanFeaturesList": ["features"],
       "detectCurrency": ["text"],
       "normalizePriceInput": ["str"],
-      "parseMoney": ["raw", "opts"],
+      "parseMoney": ["raw", "params"],
       "formatAbbreviatedPrice": ["val", "currency", "lang", "listingType"],
       "parseEgyptianPrice": ["rawText", "opts"],
-      "parsePrice": ["raw", "opts"],
+      "parsePrice": ["raw", "params"],
       "formatPrice": ["n", "lang", "currency"],
       "priceText": ["listing", "lang"],
       "formatStandardHeader": ["listing", "lang"],
       "formatClientListingText": ["listing", "broker", "lang"],
-      "formatDraftReviewCard": [
-        "draft",
-        "parsedPrice",
-        "validationResult",
-        "lang"
-      ],
+      "formatDraftReviewCard": ["draft", "_parsedPrice", "_validationResult", "lang"],
       "formatInternalListingDetails": ["listing", "lang"],
-      "formatSearchResults": ["rows", "opts"],
+      "formatSearchResults": ["rows", "params"],
       "listingsToCsv": ["rows"],
       "getHelpMessage": ["lang"],
       "toEnglishSpec": ["value", "category"],
@@ -100,24 +90,27 @@
       "PROPERTY_TYPE_MAP": "Object"
     },
     "lib/search.js": {
-      "parseSearchRequest": ["aiShim", "params"],
-      "buildSearchQuery": ["agencyId", "parsed", "opts"],
-      "fallbackParse": ["text"],
-      "enrichLocation": ["aiShim", "params"],
-      "normalizeKeywords": ["list", "max"],
-      "normalizeTerm": ["t"],
-      "normalizeParsed": ["raw"],
-      "hasAnyFilter": ["p"],
-      "formatInterpretation": ["parsed"],
-      "estimateCostUsd": ["usage", "rates"],
-      "expandAmenitySynonyms": ["term"],
-      "handleSearchMessage": ["broker", "text", "ctx"],
       "PROPERTY_TYPES": "Array",
       "TYPE_AR": "Object",
       "SEARCH_PROMPT": "String",
-      "ENRICH_PROMPT": "String"
+      "ENRICH_PROMPT": "String",
+      "normalizeParsed": ["raw"],
+      "hasAnyFilter": ["parsed"],
+      "buildSearchQuery": ["agencyId", "parsed", "opts"],
+      "fallbackParse": ["text"],
+      "formatInterpretation": ["parsed", "lang"],
+      "estimateCostUsd": ["usage", "model"],
+      "parseSearchRequest": ["aiShim", "params"],
+      "enrichLocation": ["aiShim", "params"],
+      "expandAmenitySynonyms": ["term"],
+      "normalizeKeywords": ["list", "max"],
+      "normalizeTerm": ["t"],
+      "handleSearchMessage": ["broker", "text", "ctx", "params"],
+      "handleMore": ["broker", "ctx"]
     },
     "lib/listing.js": {
+      "ROLES": "Array",
+      "ALL_TYPES": "Array",
       "normalizeArabicDigits": ["str"],
       "parseExplicitUnitCode": ["text"],
       "extractExplicitUnitCode": ["text"],
@@ -126,20 +119,30 @@
       "isReplaceMode": ["text"],
       "generateListingCode": ["customCode", "propertyType"],
       "buildListingPrompt": ["targetLang", "fenceToken"],
+      "normalizeExtraction": ["raw", "params"],
+      "findStatedCode": ["texts"],
+      "extractPropertyDetails": ["aiShim", "params"],
       "buildVisionPrompt": [],
       "validateDraft": ["inputDraft", "lang", "ctx"],
       "checkDraftCompleteness": ["draft", "parsedContext"],
       "validateVisionDraft": ["raw", "nImages"],
       "composeFields": ["params"],
+      "LISTING_COLUMNS": "Array",
       "isVillaTypology": ["propertyType"],
-      "isStudioTypology": ["propertyType", "bedrooms"],
-      "ROLES": "Array",
-      "ALL_TYPES": "Array"
+      "isStudioTypology": ["propertyType", "bedrooms"]
     },
     "lib/flyer.js": {
       "generateFlyerBuffer": ["params"],
-      "renderFlyerOnDemand": ["broker", "code", "flyerLang", "theme", "ctx"],
-      "loadFont": ["filename"]
+      "renderFlyerImage": ["params"],
+      "fetchFlyerAssets": ["params"],
+      "renderOffThread": ["payload"],
+      "stopFlyerWorker": [],
+      "renderFlyerOnDemand": ["broker", "code", "_flyerLang", "theme", "ctx"],
+      "loadFont": ["filename"],
+      "buildFlyerModel": ["params"],
+      "makeTheme": ["mode", "P", "S"],
+      "photoLayout": ["n", "opts"],
+      "flyerCacheKey": ["params"]
     },
     "lib/excel.js": {
       "buildAgencyInventoryWorkbook": ["params"],
@@ -149,41 +152,426 @@
       "sanitizeCellValue": ["val"]
     },
     "lib/supabase.js": {
+      "supabase": "Object",
       "uploadListingImage": ["agencyId", "storagePath", "buffer"],
       "uploadFlyerImage": ["agencyId", "storagePath", "buffer"],
       "deleteStorageFiles": ["paths"]
     },
     "lib/dispatcher.js": {
+      "countOutbound": ["broker", "kind", "status"],
       "reply": ["broker", "text", "opts"],
-      "replyButtons": ["broker", "body", "buttons"],
-      "replyList": ["broker", "body", "buttonText", "sections"],
+      "replyButtons": ["broker", "bodyText", "buttons"],
+      "replyList": ["broker", "bodyText", "buttonText", "sections"],
       "replyImage": ["broker", "mediaIdOrUrl", "caption"],
       "replyDocument": ["broker", "buffer", "filename", "caption"],
       "react": ["broker", "messageId", "emoji"],
+      "notify": ["broker", "text", "params"],
       "markReplied": [],
       "allowSilentDrop": ["reason"],
-      "executeGuardedTurn": ["broker", "message", "handlerFn"]
+      "executeGuardedTurn": ["broker", "message", "handlerFn", "params"]
     },
     "lib/drafts.js": {
       "getDraft": ["pool", "brokerId", "sessionType"],
-      "createDraft": [
-        "pool",
-        "brokerId",
-        "agencyId",
-        "brokerPhoneNormalized",
-        "sessionType"
-      ],
+      "createDraft": ["pool", "brokerId", "agencyId", "brokerPhoneNormalized", "sessionType"],
       "clearDraft": ["pool", "brokerId", "sessionType"],
       "appendText": ["pool", "brokerId", "text", "sessionType"],
-      "appendVoice": ["pool", "brokerId", "voiceData", "sessionType"],
-      "appendMedia": ["pool", "brokerId", "mediaData", "sessionType"],
+      "appendVoice": ["pool", "brokerId", "params", "sessionType"],
+      "appendMedia": ["pool", "brokerId", "params", "sessionType"],
       "stageDraftReview": ["pool", "brokerId", "reviewPayload"],
       "getStagedReview": ["pool", "brokerId"],
-      "commitDraftToDatabase": ["broker", "draft", "ctx"],
-      "commitDraftToListing": ["broker", "draft", "ctx"],
+      "invalidateStagedReview": ["pool", "brokerId"],
+      "reviewDraft": ["broker", "ctx"],
+      "commitStagedReview": ["broker", "ctx"],
+      "commitDraftToDatabase": ["broker", "_draft", "ctx"],
+      "commitDraftToListing": ["broker", "_draft", "ctx"],
       "appendToDraft": ["pool", "broker", "params"],
       "MAX_IMAGES": "Number",
       "DRAFT_TTL_MS": "Number"
+    },
+    "config.js": {
+      "DEFAULT_AI_PRICES": "Object",
+      "REQUIRED_IN_PRODUCTION": "Array",
+      "loadConfig": ["env"],
+      "getConfig": [],
+      "resetConfig": [],
+      "estimateCostUsd": ["model", "tokensIn", "tokensOut", "prices"],
+      "publicUrl": ["path"]
+    },
+    "lib/db.js": {
+      "createPool": ["cfg"],
+      "getPool": [],
+      "TYPE_OVERRIDES": "Object",
+      "query": ["pool", "text", "params"],
+      "withTransaction": ["pool", "workFn"],
+      "withAdvisoryLock": ["pool", "key1", "key2", "workFn"],
+      "logOperation": ["pool", "p"],
+      "logStdout": ["level", "msg", "meta"],
+      "als": "Object",
+      "getRequestContext": [],
+      "checkAiQuota": ["pool", "agencyId", "brokerId", "params"]
+    },
+    "lib/migrate.js": {
+      "MIGRATIONS_DIR": "String",
+      "listMigrations": ["dir"],
+      "runMigrations": ["pool", "params"]
+    },
+    "lib/onboarding.js": {
+      "ROLES": "Array",
+      "normalizeEgyptMobile": ["raw"],
+      "validate": ["input"],
+      "onboard": ["pool", "input"]
+    },
+    "lib/authz.js": {
+      "MANAGER_ROLES": "Array",
+      "canView": ["broker", "listing"],
+      "canEdit": ["broker", "listing"]
+    },
+    "lib/buttons.js": {
+      "BUTTONS": "Object",
+      "QUICK_ROWS": "Array",
+      "quickSections": ["code", "lang"],
+      "cardButtons": ["listing", "lang"]
+    },
+    "lib/copy.js": {
+      "COPY": "Object",
+      "t": ["key", "lang", "vars"]
+    },
+    "lib/registry.js": {
+      "COMMANDS": "Array",
+      "find": ["text", "state", "params"],
+      "dispatch": ["broker", "text", "ctx", "opts"],
+      "matchStatus": ["text"],
+      "matchPrice": ["text"],
+      "matchEdit": ["text"]
+    },
+    "lib/listingStore.js": {
+      "findByCode": ["db", "agencyId", "code", "params"],
+      "createListing": ["db", "broker", "params"],
+      "addPhotos": ["db", "listing", "urls"],
+      "removePhotos": ["db", "listing", "imageIds"],
+      "applyListingPatch": ["db", "broker", "params"],
+      "INSERT_COLUMNS": "Array",
+      "PATCH_COLUMNS": "Array"
+    },
+    "lib/edits.js": {
+      "quickUpdate": ["broker", "params", "ctx"],
+      "startEdit": ["broker", "code", "ctx", "params"],
+      "appendToEdit": ["broker", "ctx", "params"],
+      "reviewEdit": ["broker", "ctx"],
+      "confirmEdit": ["broker", "ctx"],
+      "cancelEdit": ["broker", "ctx"],
+      "getEditSession": ["pool", "brokerId"],
+      "diffPatch": ["listing", "composed"],
+      "localPatch": ["texts"],
+      "recentCode": ["pool", "brokerId"],
+      "rememberListing": ["pool", "brokerId", "code"],
+      "withCodeLock": ["pool", "agencyId", "code", "fn"],
+      "FIELD_LABELS": "Object"
+    },
+    "services/search.js": {
+      "PAGE_SIZE": "Number",
+      "SNAPSHOT_MAX": "Number",
+      "SEARCH_PROMPT": ["featureList"],
+      "parseRequest": ["AI", "params"],
+      "buildSearchQuery": ["agencyId", "parsedOrFilters", "params"],
+      "runSearch": ["pool", "agencyId", "parsed", "params"],
+      "pageByIds": ["pool", "agencyId", "ids", "offset", "pageSize"],
+      "search": ["params"]
+    },
+    "domain/describe.js": {
+      "clientCopy": ["l", "broker", "params"],
+      "paymentHint": ["l", "lang"],
+      "featuresLine": ["l", "lang", "max"],
+      "compactLine": ["l", "lang"],
+      "searchResult": ["l", "lang"],
+      "searchResults": ["rows", "params"],
+      "planCopy": ["l", "broker", "planIdOrYears", "params"],
+      "flyerModel": ["l", "params"],
+      "cleanSummary": ["text"],
+      "TYPE_LABELS": "Object",
+      "FINISHING_LABELS": "Object",
+      "FREQUENCY_LABELS": "Object",
+      "money": ["value", "lang", "currency"],
+      "typeLabel": ["l", "lang"],
+      "priceLabel": ["l", "lang"],
+      "areaLabel": ["l", "lang"],
+      "bedsLabel": ["l", "lang"],
+      "bathsLabel": ["l", "lang"],
+      "floorLabel": ["l", "lang"],
+      "finishingLabel": ["l", "lang"],
+      "furnishingLabel": ["l", "lang"],
+      "frequencyLabel": ["freq", "lang"],
+      "yearsLeft": ["l", "now"],
+      "featureLabels": ["l", "lang"],
+      "paymentLines": ["l", "lang", "params"],
+      "planHint": ["p", "lang"],
+      "maintenanceText": ["l", "lang"],
+      "factLines": ["l", "lang"],
+      "internalLines": ["l", "lang"],
+      "brokerCard": ["l", "params"],
+      "reviewCard": ["l", "params"],
+      "savedCard": ["l", "params"]
+    },
+    "domain/fieldRules.js": {
+      "PROPERTY_TYPES": "Array",
+      "APARTMENT_LIKE": "Array",
+      "VILLA_LIKE": "Array",
+      "COMMERCIAL": "Array",
+      "MISMATCH_TOLERANCE_EGP": "Number",
+      "unitKind": ["propertyType"],
+      "paymentCase": ["l"],
+      "normalizeForRules": ["input"],
+      "evaluate": ["listing", "params"],
+      "resaleMismatch": ["l"],
+      "warningLine": ["w", "lang"],
+      "blockerLine": ["b", "lang"]
+    },
+    "domain/features.js": {
+      "FEATURES": "Array",
+      "normalizeForMatch": ["text"],
+      "featureLabel": ["key", "lang"],
+      "matchFeatureKeys": ["text"],
+      "classifyFeatures": ["list"],
+      "keysFromDetails": ["details"],
+      "searchTermsFor": ["keys"],
+      "sortKeys": ["keys"],
+      "isFeatureKey": ["k"]
+    },
+    "domain/delivery.js": {
+      "parseDelivery": ["input", "params"],
+      "formatDelivery": ["l", "lang", "params"],
+      "hasDelivery": ["l"],
+      "toLatinDigits": ["s"]
+    },
+    "domain/places.js": {
+      "AREAS": "Object",
+      "DEVELOPERS": "Object",
+      "COMPOUNDS": "Object",
+      "synonymRows": [],
+      "findPlaces": ["text"],
+      "resolvePlace": ["text"],
+      "placeName": ["kind", "key"]
+    },
+    "domain/searchText.js": {
+      "normalizeSearch": ["text"],
+      "NORMALIZE_SEARCH_SQL": "String"
+    },
+    "domain/searchQuery.js": {
+      "emptyFilters": [],
+      "normalizeCode": ["code"],
+      "normalizeAiSearch": ["raw"],
+      "fallbackParse": ["text"],
+      "hasAnyFilter": ["parsed"],
+      "classifyIntent": ["parsed"],
+      "ensureFilters": ["parsed"],
+      "canonical": ["f"]
+    },
+    "domain/vocabulary.js": {
+      "TYPE_TERMS": "Object",
+      "vocabularyRows": [],
+      "seedVocabulary": ["client"]
+    },
+    "lib/links.js": {
+      "withQuery": ["path", "query"],
+      "siteOrigin": [],
+      "appUrl": ["path", "query"],
+      "loginLinkUrl": ["token"],
+      "searchUrl": ["encodedFilters"],
+      "unitAppUrl": ["code"],
+      "unitPageUrl": ["agencySlug", "code", "shareToken"]
+    },
+    "domain/slug.js": {
+      "RESERVED_SLUGS": "Array",
+      "SLUG_RE": "Object",
+      "MAX_BASE": "Number",
+      "slugify": ["name"],
+      "baseSlug": ["name", "id"],
+      "isValidSlug": ["slug"]
+    },
+    "web/assets.js": {
+      "STATIC_DIR": "String",
+      "FILES": "Object",
+      "loadAssets": []
+    },
+    "web/html.js": {
+      "SafeHtml": [],
+      "html": ["strings", "values"],
+      "raw": ["text"],
+      "escapeHtml": ["value"],
+      "jsonAttr": ["obj"],
+      "layout": ["params"],
+      "NAV": "Array",
+      "HTMX_CONFIG": "Object"
+    },
+    "web/index.js": {
+      "MANIFEST": "Object",
+      "mountWeb": ["app", "params"]
+    },
+    "web/security.js": {
+      "CSP": "String",
+      "securityHeaders": ["_req", "res", "next"],
+      "sameOrigin": []
+    },
+    "web/routes/home.js": {
+      "register": ["web", "params"]
+    },
+    "web/routes/index.js": {
+      "PUBLIC": "Array",
+      "PRIVATE": "Array"
+    },
+    "lib/webAuth.js": {
+      "LOGIN_TOKEN_TTL_MINUTES": "Number",
+      "SESSION_DAYS": "Number",
+      "sha256": ["s"],
+      "randomToken": ["bytes"],
+      "safeEqual": ["a", "b"],
+      "issueLoginToken": ["pool", "broker", "params"],
+      "peekLoginToken": ["pool", "token"],
+      "consumeLoginToken": ["pool", "token"],
+      "createSession": ["pool", "broker", "params"],
+      "getSession": ["pool", "sid"],
+      "revokeSession": ["pool", "sid"],
+      "revokeAllSessions": ["pool", "brokerId"]
+    },
+    "lib/rateLimit.js": {
+      "hit": ["pool", "bucket", "params"],
+      "LIMITS": "Object"
+    },
+    "web/session.js": {
+      "SESSION_COOKIE": [],
+      "PRE_COOKIE": [],
+      "parseCookies": ["header"],
+      "setSessionCookie": ["res", "sid"],
+      "clearSessionCookie": ["res"],
+      "loadSession": ["pool"],
+      "noStore": ["_req", "res", "next"],
+      "requireBroker": ["req", "res", "next"],
+      "verifyCsrf": ["req", "res", "next"],
+      "allowMultipart": ["re"],
+      "csrfAfterParse": ["req"],
+      "issuePreToken": ["req", "res"],
+      "verifyPreToken": ["req"],
+      "safeNext": ["next"]
+    },
+    "web/routes/auth.js": {
+      "register": ["web", "params"]
+    },
+    "domain/searchLink.js": {
+      "MAX_TOKEN": "Number",
+      "sanitizeFilters": ["input"],
+      "encodeFilters": ["filters"],
+      "decodeFilters": ["token"],
+      "filtersFromForm": ["q"],
+      "formFromFilters": ["f", "lang"]
+    },
+    "web/routes/search.js": {
+      "WEB_PAGE_SIZE": "Number",
+      "MAX_SAVED": "Number",
+      "register": ["web", "params"]
+    },
+    "web/routes/units.js": {
+      "register": ["web", "params"],
+      "imagesOf": ["pool", "listing"]
+    },
+    "web/views/units.js": {
+      "stripMarkdown": ["s"],
+      "resultItem": ["l", "lang", "params"],
+      "factList": ["l", "lang", "params"]
+    },
+    "web/views/searchForm.js": {
+      "refineForm": ["filters", "lang", "params"],
+      "placeList": []
+    },
+    "lib/images.js": {
+      "MAX_PHOTOS": "Number",
+      "normalizeImageBuffer": ["rawBuffer"]
+    },
+    "web/forms/unitForm.js": {
+      "FORM_COLUMNS": "Array",
+      "FORM_DETAILS": "Array",
+      "INTERNAL_DETAILS": "Array",
+      "PLAN_ROWS": "Number",
+      "FREQUENCIES": "Array",
+      "unitFromForm": ["body"],
+      "composeFromForm": ["params"],
+      "formFromUnit": ["l"],
+      "money": ["v"]
+    },
+    "web/uploads.js": {
+      "MB": "Number",
+      "uploads": ["fields", "params"],
+      "PHOTO": "Object",
+      "VOICE": "Object"
+    },
+    "web/views/unitForm.js": {
+      "unitForm": ["params"],
+      "reviewPanel": ["evaluation", "lang"]
+    },
+    "web/routes/unitForm.js": {
+      "register": ["web", "params"],
+      "storePhotos": ["broker", "files"]
+    },
+    "domain/sheetImport.js": {
+      "COLUMNS": "Array",
+      "columnFor": ["header"],
+      "rowToDraft": ["input"],
+      "money": ["v"],
+      "propertyType": ["v"],
+      "finishing": ["v"]
+    },
+    "domain/chatExport.js": {
+      "MAX_POSTS": "Number",
+      "isChatExport": ["text"],
+      "parseChatExport": ["text"],
+      "splitPasted": ["text"],
+      "looksLikeListing": ["text"],
+      "candidatePosts": ["text"]
+    },
+    "lib/sheets.js": {
+      "MAX_BYTES": "Number",
+      "MAX_ROWS": "Number",
+      "readInventorySheet": ["buffer"]
+    },
+    "services/imports.js": {
+      "describeChanges": ["listing", "patch", "lang"],
+      "planExcel": ["pool", "broker", "sheet", "params"],
+      "savePlan": ["pool", "broker", "kind", "payload", "params"],
+      "loadImport": ["pool", "broker", "id"],
+      "applyExcel": ["pool", "broker", "id", "params"],
+      "findDuplicate": ["pool", "agencyId", "l"],
+      "startGroupImport": ["pool", "broker", "posts", "params"],
+      "waitForGroupImport": ["id"],
+      "applyGroup": ["pool", "broker", "id", "params"]
+    },
+    "services/bulk.js": {
+      "ACTIONS": "Array",
+      "MAX_UNITS": "Number",
+      "PCT_RANGE": "Array",
+      "bulkUpdate": ["pool", "broker", "params"]
+    },
+    "web/routes/imports.js": {
+      "register": ["web", "params"],
+      "chatText": ["file"],
+      "TEMPLATE_HEADERS": "Array"
+    },
+    "domain/publicUnit.js": {
+      "PUBLIC_FIELDS": "Array",
+      "MAX_IMAGES": "Number",
+      "toPublicUnit": ["listing", "params"],
+      "unavailable": ["listing", "params"]
+    },
+    "lib/shareLinks.js": {
+      "ALERT_EVERY_HOURS": "Number",
+      "BOT_UA": "Object",
+      "isBot": ["ua"],
+      "createShareLink": ["pool", "broker", "listing", "params"],
+      "resolveShareLink": ["pool", "slug", "code", "token"],
+      "recordOpen": ["pool", "resolved", "params"],
+      "clientCopyWithLink": ["pool", "broker", "listing", "lang", "copyText"],
+      "linksFor": ["pool", "broker", "listing"]
+    },
+    "web/routes/publicUnit.js": {
+      "mountPublic": ["app", "params"]
     }
   },
   "invariant_variable_names": {

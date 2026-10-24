@@ -1,3 +1,596 @@
-| schema_reference_sql                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| -- =========================================================================<br>-- AQARCHAT LIVE DATABASE CANONICAL SCHEMA REFERENCE<br>-- Exported: 2026-10-23 13:03:50.245721+00<br>-- =========================================================================<br><br>-- Table: agencies<br>CREATE TABLE IF NOT EXISTS public.agencies (<br>    id                        uuid DEFAULT gen_random_uuid() NOT NULL,<br>    name                      text NOT NULL,<br>    logo_url                  text,<br>    brand_color               text DEFAULT '#0f172a'::text NOT NULL,<br>    accent_color              text DEFAULT '#38bdf8'::text NOT NULL,<br>    created_at                timestamp with time zone DEFAULT now() NOT NULL,<br>    primary_color             character varying(7) DEFAULT '#0B132B'::character varying,<br>    secondary_color           character varying(7) DEFAULT '#D4AF37'::character varying,<br>    flyer_theme               text DEFAULT 'dark'::text NOT NULL,<br>    phone                     text,<br>    updated_at                timestamp with time zone DEFAULT now()<br>);<br><br>-- Indexes for agencies<br>CREATE UNIQUE INDEX agencies_pkey ON public.agencies USING btree (id);<br><br>-- -------------------------------------------------------------------------<br><br>-- Table: broker_sessions<br>CREATE TABLE IF NOT EXISTS public.broker_sessions (<br>    broker_id                 uuid NOT NULL,<br>    session_type              character varying(64) NOT NULL,<br>    session_data              jsonb DEFAULT '{}'::jsonb NOT NULL,<br>    expires_at                timestamp with time zone NOT NULL<br>);<br><br>-- Indexes for broker_sessions<br>CREATE UNIQUE INDEX broker_sessions_pkey ON public.broker_sessions USING btree (broker_id, session_type);<br>CREATE INDEX idx_broker_sessions_expires ON public.broker_sessions USING btree (expires_at);<br><br>-- -------------------------------------------------------------------------<br><br>-- Table: brokers<br>CREATE TABLE IF NOT EXISTS public.brokers (<br>    id                        uuid DEFAULT gen_random_uuid() NOT NULL,<br>    agency_id                 uuid NOT NULL,<br>    phone_number              text NOT NULL,<br>    name                      text NOT NULL,<br>    contact_phone             text,<br>    role                      text DEFAULT 'broker'::text NOT NULL,<br>    is_active                 boolean DEFAULT true NOT NULL,<br>    created_at                timestamp with time zone DEFAULT now() NOT NULL,<br>    last_active_at            timestamp with time zone DEFAULT now(),<br>    preferred_lang            character varying(10) DEFAULT 'ar'::character varying,<br>    phone_normalized          text GENERATED ALWAYS AS (regexp_replace(phone_number, '[^0-9]'::text, ''::text, 'g'::text)) STORED<br>);<br><br>-- Indexes for brokers<br>CREATE UNIQUE INDEX brokers_phone_key ON public.brokers USING btree (phone_number);<br>CREATE INDEX brokers_agency_idx ON public.brokers USING btree (agency_id);<br>CREATE UNIQUE INDEX brokers_pkey ON public.brokers USING btree (id);<br>CREATE INDEX brokers_phone_normalized_idx ON public.brokers USING btree (phone_normalized);<br>CREATE UNIQUE INDEX brokers_phone_normalized_uidx ON public.brokers USING btree (phone_normalized);<br>CREATE INDEX idx_brokers_phone_number ON public.brokers USING btree (phone_number);<br>CREATE UNIQUE INDEX uq_broker_phone ON public.brokers USING btree (agency_id, phone_number);<br>CREATE INDEX idx_brokers_agency ON public.brokers USING btree (agency_id);<br>CREATE INDEX idx_brokers_phone ON public.brokers USING btree (phone_number);<br><br>-- -------------------------------------------------------------------------<br><br>-- Table: inbound_messages<br>CREATE TABLE IF NOT EXISTS public.inbound_messages (<br>    msg_id                    text NOT NULL,<br>    phone_key                 text NOT NULL,<br>    payload                   jsonb NOT NULL,<br>    status                    text DEFAULT 'new'::text NOT NULL,<br>    attempts                  integer DEFAULT 0 NOT NULL,<br>    received_at               timestamp with time zone DEFAULT now() NOT NULL,<br>    updated_at                timestamp with time zone DEFAULT now() NOT NULL<br>);<br><br>-- Indexes for inbound_messages<br>CREATE UNIQUE INDEX inbound_messages_pkey ON public.inbound_messages USING btree (msg_id);<br>CREATE INDEX inbound_messages_status_idx ON public.inbound_messages USING btree (status, received_at);<br>CREATE INDEX inbound_messages_phone_idx ON public.inbound_messages USING btree (phone_key, received_at DESC);<br><br>-- -------------------------------------------------------------------------<br><br>-- Table: listing_images<br>CREATE TABLE IF NOT EXISTS public.listing_images (<br>    id                        uuid DEFAULT gen_random_uuid() NOT NULL,<br>    listing_id                uuid NOT NULL,<br>    agency_id                 uuid NOT NULL,<br>    position                  integer NOT NULL,<br>    url                       text NOT NULL,<br>    phash                     bit(64),<br>    role                      text<br>);<br><br>-- Indexes for listing_images<br>CREATE UNIQUE INDEX listing_images_pkey ON public.listing_images USING btree (id);<br>CREATE INDEX listing_images_agency_idx ON public.listing_images USING btree (agency_id);<br>CREATE INDEX listing_images_listing_idx ON public.listing_images USING btree (listing_id, "position");<br>CREATE INDEX idx_listing_images_listing_id ON public.listing_images USING btree (listing_id, "position");<br>CREATE UNIQUE INDEX listing_images_listing_pos_uniq ON public.listing_images USING btree (listing_id, "position");<br><br>-- -------------------------------------------------------------------------<br><br>-- Table: listings<br>CREATE TABLE IF NOT EXISTS public.listings (<br>    id                        uuid DEFAULT gen_random_uuid() NOT NULL,<br>    code                      text NOT NULL,<br>    agency_id                 uuid NOT NULL,<br>    broker_id                 uuid,<br>    status                    text DEFAULT 'active'::text NOT NULL,<br>    title                     text,<br>    property_type             text,<br>    listing_type              text,<br>    price_value               numeric,<br>    price_display             text,<br>    area_value                numeric,<br>    bedrooms                  integer,<br>    location                  text,<br>    features                  ARRAY DEFAULT '{}'::text[] NOT NULL,<br>    language                  text DEFAULT 'ar'::text NOT NULL,<br>    lat                       double precision,<br>    lng                       double precision,<br>    location_name             text,<br>    raw_text                  text,<br>    details                   jsonb DEFAULT '{}'::jsonb NOT NULL,<br>    search_text               text DEFAULT ''::text NOT NULL,<br>    flyer_url                 text,<br>    hero_position             integer DEFAULT 0 NOT NULL,<br>    is_primary_developer      boolean DEFAULT false NOT NULL,<br>    down_payment_value        numeric,<br>    installment_years         integer,<br>    installment_value         numeric,<br>    payment_frequency         text DEFAULT 'quarterly'::text,<br>    delivery_date             text,<br>    maintenance_pct           numeric DEFAULT 8,<br>    created_at                timestamp with time zone DEFAULT now() NOT NULL,<br>    updated_at                timestamp with time zone DEFAULT now() NOT NULL,<br>    compound                  text,<br>    district                  text,<br>    city                      text,<br>    location_keywords         ARRAY DEFAULT '{}'::text[] NOT NULL,<br>    search_text_normalized    text,<br>    flyer_wa_media_id         text,<br>    flyer_wa_media_at         timestamp with time zone,<br>    flyer_cache               jsonb DEFAULT '{}'::jsonb,<br>    project_id                uuid,<br>    inventory_type            text DEFAULT 'resale_unit'::text NOT NULL,<br>    developer_unit_code       text,<br>    payment_terms             jsonb DEFAULT '{}'::jsonb NOT NULL,<br>    collateral                jsonb DEFAULT '{}'::jsonb NOT NULL,<br>    bathrooms                 integer,<br>    compound_en               character varying(120)<br>);<br><br>-- Indexes for listings<br>CREATE UNIQUE INDEX listings_pkey ON public.listings USING btree (id);<br>CREATE INDEX listings_search_trgm_idx ON public.listings USING gin (search_text gin_trgm_ops);<br>CREATE INDEX listings_location_keywords_gin ON public.listings USING gin (location_keywords);<br>CREATE INDEX listings_agency_status_created_idx ON public.listings USING btree (agency_id, status, created_at DESC);<br>CREATE INDEX listings_agency_status_idx ON public.listings USING btree (agency_id, status);<br>CREATE INDEX listings_agency_code_idx ON public.listings USING btree (agency_id, lower(code));<br>CREATE INDEX idx_listings_agency_status ON public.listings USING btree (agency_id, status);<br>CREATE INDEX idx_listings_code ON public.listings USING btree (code);<br>CREATE UNIQUE INDEX uq_listings_agency_code ON public.listings USING btree (agency_id, code);<br>CREATE INDEX listings_search_trgm ON public.listings USING gin (search_text_normalized gin_trgm_ops);<br>CREATE INDEX listings_agency_status_created ON public.listings USING btree (agency_id, status, created_at DESC);<br>CREATE INDEX idx_listings_agency_code ON public.listings USING btree (agency_id, code);<br>CREATE INDEX idx_listings_dev_code ON public.listings USING btree (agency_id, developer_unit_code) WHERE (developer_unit_code IS NOT NULL);<br>CREATE INDEX idx_listings_search_trgm ON public.listings USING gin (clean_arabic_text(COALESCE(search_text_normalized, search_text, ''::text)) gin_trgm_ops) WITH (fastupdate=off);<br>CREATE INDEX idx_listings_compound_trgm ON public.listings USING gin (clean_arabic_text(COALESCE(compound, ''::text)) gin_trgm_ops) WITH (fastupdate=off);<br>CREATE INDEX idx_listings_compound ON public.listings USING btree (compound);<br>CREATE INDEX idx_listings_details_gin ON public.listings USING gin (details);<br><br>-- -------------------------------------------------------------------------<br><br>-- Table: operation_logs<br>CREATE TABLE IF NOT EXISTS public.operation_logs (<br>    id                        bigint DEFAULT nextval('operation_logs_id_seq'::regclass) NOT NULL,<br>    agency_id                 uuid,<br>    broker_id                 uuid,<br>    listing_code              text,<br>    operation_type            text NOT NULL,<br>    status                    text DEFAULT 'success'::text NOT NULL,<br>    error_code                text,<br>    total_duration_ms         integer DEFAULT 0,<br>    gemini_ms                 integer DEFAULT 0,<br>    media_download_ms         integer DEFAULT 0,<br>    image_process_ms          integer DEFAULT 0,<br>    flyer_render_ms           integer DEFAULT 0,<br>    storage_upload_ms         integer DEFAULT 0,<br>    db_ms                     integer DEFAULT 0,<br>    tokens_input              integer DEFAULT 0,<br>    tokens_output             integer DEFAULT 0,<br>    model_used                text,<br>    estimated_cost_usd        numeric DEFAULT 0,<br>    created_at                timestamp with time zone DEFAULT now() NOT NULL,<br>    metadata                  jsonb DEFAULT '{}'::jsonb<br>);<br><br>-- Indexes for operation_logs<br>CREATE UNIQUE INDEX operation_logs_pkey ON public.operation_logs USING btree (id);<br>CREATE INDEX op_logs_agency_day ON public.operation_logs USING btree (agency_id, created_at DESC);<br>CREATE INDEX idx_op_logs_agency_date ON public.operation_logs USING btree (agency_id, created_at);<br>CREATE INDEX idx_op_logs_listing_code ON public.operation_logs USING btree (listing_code);<br>CREATE INDEX idx_operation_logs_agency_type_created ON public.operation_logs USING btree (agency_id, operation_type, created_at DESC);<br>CREATE INDEX idx_operation_logs_broker_created ON public.operation_logs USING btree (broker_id, created_at DESC);<br><br>-- -------------------------------------------------------------------------<br><br>-- Table: processed_batches<br>CREATE TABLE IF NOT EXISTS public.processed_batches (<br>    batch_key                 text NOT NULL,<br>    agency_id                 uuid,<br>    listing_code              text,<br>    created_at                timestamp with time zone DEFAULT now() NOT NULL<br>);<br><br>-- Indexes for processed_batches<br>CREATE UNIQUE INDEX processed_batches_pkey ON public.processed_batches USING btree (batch_key);<br><br>-- -------------------------------------------------------------------------<br><br>-- Table: projects<br>CREATE TABLE IF NOT EXISTS public.projects (<br>    id                        uuid DEFAULT gen_random_uuid() NOT NULL,<br>    agency_id                 uuid NOT NULL,<br>    name                      text NOT NULL,<br>    developer_name            text,<br>    district                  text,<br>    city                      text,<br>    delivery_year             integer,<br>    maintenance_pct           numeric DEFAULT 8.0,<br>    collateral                jsonb DEFAULT '{}'::jsonb NOT NULL,<br>    media                     jsonb DEFAULT '{}'::jsonb NOT NULL,<br>    created_at                timestamp with time zone DEFAULT now() NOT NULL,<br>    updated_at                timestamp with time zone DEFAULT now() NOT NULL<br>);<br><br>-- Indexes for projects<br>CREATE UNIQUE INDEX projects_pkey ON public.projects USING btree (id);<br>CREATE UNIQUE INDEX uq_agency_project_name ON public.projects USING btree (agency_id, name);<br> |
+-- SCHEMA_REFERENCE.sql — the schema after every migration (generated by scripts/schema-reference.js; do not edit by hand)
+-- = db/schema.sql (baseline exported from the live database) + db/migrations/* applied in order.
+-- Regenerate with `npm run schema:reference` whenever a migration is added; a test fails when it is stale.
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+
+CREATE SEQUENCE IF NOT EXISTS public.listing_code_seq;
+CREATE SEQUENCE IF NOT EXISTS public.operation_logs_id_seq;
+
+CREATE OR REPLACE FUNCTION public.agencies_set_slug()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  base text;
+  cand text;
+  n integer := 1;
+BEGIN
+  IF NEW.slug IS NOT NULL AND btrim(NEW.slug) <> '' THEN
+    NEW.slug := lower(btrim(NEW.slug));
+    RETURN NEW;
+  END IF;
+  base := public.agency_slug_base(NEW.name, NEW.id);
+  cand := base;
+  WHILE EXISTS (SELECT 1 FROM agencies WHERE slug = cand AND id <> NEW.id) LOOP
+    n := n + 1;
+    cand := base || '-' || n;
+  END LOOP;
+  NEW.slug := cand;
+  RETURN NEW;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.agency_slug_base(p_name text, p_id uuid)
+ RETURNS text
+ LANGUAGE sql
+ IMMUTABLE
+AS $function$
+  SELECT CASE
+    WHEN s = '' OR s = ANY (ARRAY['app', 'api', 'auth', 'login', 'logout', 'webhook', 'health', 'static', 'assets', 'public', 'admin', 's', 'u', 'www', 'aqarchat', 'about', 'help', 'terms', 'privacy', 'pricing', 'blog', 'docs', 'robots', 'favicon', 'manifest', 'sw', 'share', 'new']) THEN 'agency-' || left(replace(p_id::text, '-', ''), 8)
+    ELSE s END
+  FROM (SELECT btrim(left(btrim(regexp_replace(lower(coalesce(p_name, '')), '[^a-z0-9]+', '-', 'g'), '-'), 40), '-') AS s) x
+$function$;
+
+CREATE OR REPLACE FUNCTION public.clean_arabic_text(input_text text)
+ RETURNS text
+ LANGUAGE sql
+ IMMUTABLE PARALLEL SAFE
+AS $function$ SELECT public.normalize_search(input_text) $function$;
+
+CREATE OR REPLACE FUNCTION public.listings_search_document()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  d jsonb := COALESCE(NEW.details, '{}'::jsonb);
+  place_text text := concat_ws(' ', NEW.compound, NEW.compound_en, d->>'compound_en');
+  c compound_synonyms;
+  dv compound_synonyms;
+  ar compound_synonyms;
+  place_terms text;
+  type_terms text;
+  feature_terms text;
+  legacy_features text := '';
+BEGIN
+  -- Columns other code paths used to fill from details.
+  IF NEW.bathrooms IS NULL AND (d->>'bathrooms') ~ '^[0-9]+$' THEN
+    NEW.bathrooms := (d->>'bathrooms')::integer;
+  END IF;
+  IF NEW.compound_en IS NULL AND d->>'compound_en' IS NOT NULL THEN
+    NEW.compound_en := d->>'compound_en';
+  END IF;
+
+  -- Language-neutral place keys.
+  c := public.match_place('compound', place_text);
+  NEW.compound_key := c.key;
+  NEW.developer_key := COALESCE(c.developer_key,
+    (public.match_place('developer', concat_ws(' ', place_text, d->>'developer'))).key);
+  ar := public.match_place('area', concat_ws(' ', NEW.district, NEW.city, NEW.location, place_text));
+  NEW.area_key := COALESCE(c.area_key, ar.key);
+
+  SELECT string_agg(s.synonym_norm, ' ') INTO place_terms FROM compound_synonyms s
+  WHERE (s.kind = 'compound' AND s.key = NEW.compound_key)
+     OR (s.kind = 'developer' AND s.key = NEW.developer_key)
+     OR (s.kind = 'area' AND s.key = NEW.area_key);
+
+  SELECT terms INTO type_terms FROM search_vocabulary WHERE kind = 'type' AND key = NEW.property_type;
+  SELECT string_agg(terms, ' ') INTO feature_terms FROM search_vocabulary
+  WHERE kind = 'feature' AND key = ANY(COALESCE(NEW.feature_keys, '{}'));
+
+  -- Free-text features written before Release 1 stay searchable.
+  IF jsonb_typeof(d->'features') = 'array' THEN
+    SELECT legacy_features || ' ' || COALESCE(string_agg(value #>> '{}', ' '), '') INTO legacy_features FROM jsonb_array_elements(d->'features');
+  END IF;
+  IF jsonb_typeof(d->'features_en') = 'array' THEN
+    SELECT legacy_features || ' ' || COALESCE(string_agg(value #>> '{}', ' '), '') INTO legacy_features FROM jsonb_array_elements(d->'features_en');
+  END IF;
+
+  NEW.search_text_normalized := public.normalize_search(concat_ws(' ',
+    NEW.code, NEW.title, NEW.compound, NEW.compound_en, NEW.district, NEW.city, NEW.location,
+    array_to_string(NEW.location_keywords, ' '),
+    d->>'title_en', d->>'project', d->>'developer', d->>'finishing', d->>'orientation',
+    place_terms, type_terms, feature_terms,
+    array_to_string(NEW.features_other, ' '), array_to_string(NEW.features, ' '), legacy_features));
+  RETURN NEW;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.match_place(p_kind text, p_text text)
+ RETURNS compound_synonyms
+ LANGUAGE sql
+ STABLE
+AS $function$
+  SELECT s.* FROM compound_synonyms s
+  WHERE s.kind = p_kind
+    AND (' ' || public.normalize_search(p_text) || ' ') LIKE ('% ' || s.synonym_norm || ' %')
+  ORDER BY length(s.synonym_norm) DESC, s.key
+  LIMIT 1
+$function$;
+
+CREATE OR REPLACE FUNCTION public.normalize_arabic(t text)
+ RETURNS text
+ LANGUAGE sql
+ IMMUTABLE PARALLEL SAFE
+AS $function$ SELECT public.normalize_search(t) $function$;
+
+CREATE OR REPLACE FUNCTION public.normalize_search(t text)
+ RETURNS text
+ LANGUAGE sql
+ IMMUTABLE PARALLEL SAFE
+AS $function$
+  SELECT btrim(regexp_replace(
+    regexp_replace(
+      translate(lower(coalesce(t, '')),
+                'أإآٱىةؤئ٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹',
+                'اااايهوي01234567890123456789'),
+      '[\u064B-\u065F\u0670\u0640]', '', 'g'),
+    '[^0-9a-z\u0621-\u064A\u0660-\u0669\u0671-\u06D3-]+', ' ', 'g'))
+$function$;
+
+CREATE OR REPLACE FUNCTION public.set_listing_image_agency_id()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF NEW.agency_id IS NULL THEN
+    SELECT agency_id INTO NEW.agency_id FROM listings WHERE id = NEW.listing_id;
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.update_timestamp_column()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$function$;
+
+CREATE TABLE IF NOT EXISTS public.agencies (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  name text NOT NULL,
+  logo_url text,
+  brand_color text DEFAULT '#0f172a'::text NOT NULL,
+  accent_color text DEFAULT '#38bdf8'::text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  primary_color character varying(7) DEFAULT '#0B132B'::character varying,
+  secondary_color character varying(7) DEFAULT '#D4AF37'::character varying,
+  flyer_theme text DEFAULT 'dark'::text NOT NULL,
+  phone text,
+  updated_at timestamp with time zone DEFAULT now(),
+  slug text NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.brokers (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid NOT NULL,
+  phone_number text NOT NULL,
+  name text NOT NULL,
+  contact_phone text,
+  role text DEFAULT 'broker'::text NOT NULL,
+  is_active boolean DEFAULT true NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  last_active_at timestamp with time zone DEFAULT now(),
+  preferred_lang character varying(10) DEFAULT 'ar'::character varying,
+  phone_normalized text GENERATED ALWAYS AS (regexp_replace(phone_number, '[^0-9]'::text, ''::text, 'g'::text)) STORED
+);
+
+CREATE TABLE IF NOT EXISTS public.listings (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  code text NOT NULL,
+  agency_id uuid NOT NULL,
+  broker_id uuid,
+  status text DEFAULT 'active'::text NOT NULL,
+  title text,
+  property_type text,
+  listing_type text,
+  price_value numeric,
+  price_display text,
+  area_value numeric,
+  bedrooms integer,
+  location text,
+  features text[] DEFAULT '{}'::text[] NOT NULL,
+  language text DEFAULT 'ar'::text NOT NULL,
+  lat double precision,
+  lng double precision,
+  location_name text,
+  raw_text text,
+  details jsonb DEFAULT '{}'::jsonb NOT NULL,
+  search_text text DEFAULT ''::text NOT NULL,
+  flyer_url text,
+  hero_position integer DEFAULT 0 NOT NULL,
+  is_primary_developer boolean DEFAULT false NOT NULL,
+  down_payment_value numeric,
+  installment_years integer,
+  installment_value numeric,
+  payment_frequency text,
+  delivery_date text,
+  maintenance_pct numeric,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  compound text,
+  district text,
+  city text,
+  location_keywords text[] DEFAULT '{}'::text[] NOT NULL,
+  search_text_normalized text,
+  flyer_wa_media_id text,
+  flyer_wa_media_at timestamp with time zone,
+  flyer_cache jsonb DEFAULT '{}'::jsonb,
+  project_id uuid,
+  inventory_type text DEFAULT 'resale_unit'::text NOT NULL,
+  developer_unit_code text,
+  payment_terms jsonb DEFAULT '{}'::jsonb NOT NULL,
+  collateral jsonb DEFAULT '{}'::jsonb NOT NULL,
+  bathrooms integer,
+  compound_en character varying(120),
+  delivery_year smallint,
+  delivery_quarter smallint,
+  delivery_month smallint,
+  is_ready boolean,
+  delivery_raw text,
+  feature_keys text[] DEFAULT '{}'::text[] NOT NULL,
+  features_other text[] DEFAULT '{}'::text[] NOT NULL,
+  remaining_amount numeric,
+  installments_end date,
+  confirmed_at timestamp with time zone,
+  market text DEFAULT 'resale'::text NOT NULL,
+  finishing text,
+  furnishing text,
+  floor_level smallint,
+  version integer DEFAULT 1 NOT NULL,
+  code_norm text GENERATED ALWAYS AS (upper(translate(btrim(code), '٠١٢٣٤٥٦٧٨٩'::text, '0123456789'::text))) STORED,
+  compound_key text,
+  developer_key text,
+  area_key text
+);
+
+CREATE TABLE IF NOT EXISTS public.listing_images (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  listing_id uuid NOT NULL,
+  agency_id uuid NOT NULL,
+  position integer NOT NULL,
+  url text NOT NULL,
+  phash bit(64),
+  role text
+);
+
+CREATE TABLE IF NOT EXISTS public.inbound_messages (
+  msg_id text NOT NULL,
+  phone_key text NOT NULL,
+  payload jsonb NOT NULL,
+  status text DEFAULT 'new'::text NOT NULL,
+  attempts integer DEFAULT 0 NOT NULL,
+  received_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.processed_batches (
+  batch_key text NOT NULL,
+  agency_id uuid,
+  listing_code text,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.broker_search_state (
+  phone_key text NOT NULL,
+  parsed jsonb NOT NULL,
+  next_offset integer DEFAULT 0 NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.operation_logs (
+  id bigint DEFAULT nextval('operation_logs_id_seq'::regclass) NOT NULL,
+  agency_id uuid,
+  broker_id uuid,
+  listing_code text,
+  operation_type text NOT NULL,
+  status text DEFAULT 'success'::text NOT NULL,
+  error_code text,
+  total_duration_ms integer DEFAULT 0,
+  gemini_ms integer DEFAULT 0,
+  media_download_ms integer DEFAULT 0,
+  image_process_ms integer DEFAULT 0,
+  flyer_render_ms integer DEFAULT 0,
+  storage_upload_ms integer DEFAULT 0,
+  db_ms integer DEFAULT 0,
+  tokens_input integer DEFAULT 0,
+  tokens_output integer DEFAULT 0,
+  model_used text,
+  estimated_cost_usd numeric(10,6) DEFAULT 0,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  metadata jsonb DEFAULT '{}'::jsonb
+);
+
+CREATE TABLE IF NOT EXISTS public.listing_drafts (
+  broker_id uuid NOT NULL,
+  agency_id uuid NOT NULL,
+  broker_phone character varying(32) NOT NULL,
+  media_ids text[] DEFAULT '{}'::text[],
+  voice_ids text[] DEFAULT '{}'::text[],
+  texts text[] DEFAULT '{}'::text[],
+  custom_code character varying(64),
+  updated_at timestamp with time zone DEFAULT now(),
+  staged_data jsonb
+);
+
+CREATE TABLE IF NOT EXISTS public.projects (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid NOT NULL,
+  name text NOT NULL,
+  developer_name text,
+  district text,
+  city text,
+  delivery_year integer,
+  maintenance_pct numeric DEFAULT 8.0,
+  collateral jsonb DEFAULT '{}'::jsonb NOT NULL,
+  media jsonb DEFAULT '{}'::jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.broker_sessions (
+  broker_id uuid NOT NULL,
+  session_type character varying(64) NOT NULL,
+  session_data jsonb DEFAULT '{}'::jsonb NOT NULL,
+  expires_at timestamp with time zone NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.payment_plans (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  listing_id uuid,
+  plan_id character varying(64) NOT NULL,
+  name character varying(255) NOT NULL,
+  years integer DEFAULT 0 NOT NULL,
+  discount_pct numeric(5,2) DEFAULT 0.00,
+  down_payment_pct numeric(5,2) DEFAULT 10.00,
+  maintenance_pct numeric(5,2) DEFAULT 8.00,
+  maintenance_splits integer DEFAULT 3,
+  milestones jsonb DEFAULT '[]'::jsonb,
+  created_at timestamp with time zone DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.processed_messages (
+  message_id character varying(128) NOT NULL,
+  sender_masked character varying(64) NOT NULL,
+  direction character varying(16) DEFAULT 'inbound'::character varying NOT NULL,
+  action_type character varying(64),
+  created_at timestamp with time zone DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.audit_logs (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid,
+  broker_id uuid,
+  action character varying(64) NOT NULL,
+  severity character varying(16) DEFAULT 'info'::character varying,
+  payload jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.schema_migrations (
+  version text NOT NULL,
+  applied_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.compound_synonyms (
+  kind text NOT NULL,
+  key text NOT NULL,
+  synonym text NOT NULL,
+  synonym_norm text NOT NULL,
+  area_key text,
+  developer_key text
+);
+
+CREATE TABLE IF NOT EXISTS public.search_vocabulary (
+  kind text NOT NULL,
+  key text NOT NULL,
+  terms text NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.web_login_tokens (
+  token_hash text NOT NULL,
+  broker_id uuid NOT NULL,
+  agency_id uuid NOT NULL,
+  channel text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  expires_at timestamp with time zone NOT NULL,
+  used_at timestamp with time zone
+);
+
+CREATE TABLE IF NOT EXISTS public.web_sessions (
+  id_hash text NOT NULL,
+  broker_id uuid NOT NULL,
+  agency_id uuid NOT NULL,
+  csrf_token text NOT NULL,
+  user_agent text,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  last_seen_at timestamp with time zone DEFAULT now() NOT NULL,
+  expires_at timestamp with time zone NOT NULL,
+  revoked_at timestamp with time zone
+);
+
+CREATE TABLE IF NOT EXISTS public.web_rate_limits (
+  bucket text NOT NULL,
+  window_start timestamp with time zone NOT NULL,
+  hits integer DEFAULT 0 NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.saved_searches (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid NOT NULL,
+  broker_id uuid NOT NULL,
+  name text NOT NULL,
+  filters jsonb NOT NULL,
+  seen_ids uuid[] DEFAULT '{}'::uuid[] NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  last_run_at timestamp with time zone
+);
+
+CREATE TABLE IF NOT EXISTS public.web_imports (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid NOT NULL,
+  broker_id uuid NOT NULL,
+  kind text NOT NULL,
+  status text DEFAULT 'ready'::text NOT NULL,
+  filename text,
+  payload jsonb DEFAULT '{}'::jsonb NOT NULL,
+  result jsonb,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  expires_at timestamp with time zone DEFAULT (now() + '1 day'::interval) NOT NULL,
+  applied_at timestamp with time zone
+);
+
+CREATE TABLE IF NOT EXISTS public.share_links (
+  token_hash text NOT NULL,
+  agency_id uuid NOT NULL,
+  listing_id uuid NOT NULL,
+  broker_id uuid,
+  channel text NOT NULL,
+  lang text DEFAULT 'ar'::text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  expires_at timestamp with time zone DEFAULT (now() + '180 days'::interval) NOT NULL,
+  revoked_at timestamp with time zone,
+  open_count integer DEFAULT 0 NOT NULL,
+  first_opened_at timestamp with time zone,
+  last_opened_at timestamp with time zone,
+  last_alert_at timestamp with time zone
+);
+
+ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
+ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (id);
+ALTER TABLE broker_search_state ADD CONSTRAINT broker_search_state_pkey PRIMARY KEY (phone_key);
+ALTER TABLE broker_sessions ADD CONSTRAINT broker_sessions_pkey PRIMARY KEY (broker_id, session_type);
+ALTER TABLE brokers ADD CONSTRAINT brokers_pkey PRIMARY KEY (id);
+ALTER TABLE compound_synonyms ADD CONSTRAINT compound_synonyms_pkey PRIMARY KEY (kind, key, synonym);
+ALTER TABLE inbound_messages ADD CONSTRAINT inbound_messages_pkey PRIMARY KEY (msg_id);
+ALTER TABLE listing_drafts ADD CONSTRAINT listing_drafts_pkey PRIMARY KEY (broker_id);
+ALTER TABLE listing_images ADD CONSTRAINT listing_images_pkey PRIMARY KEY (id);
+ALTER TABLE listings ADD CONSTRAINT listings_pkey PRIMARY KEY (id);
+ALTER TABLE operation_logs ADD CONSTRAINT operation_logs_pkey PRIMARY KEY (id);
+ALTER TABLE payment_plans ADD CONSTRAINT payment_plans_pkey PRIMARY KEY (id);
+ALTER TABLE processed_batches ADD CONSTRAINT processed_batches_pkey PRIMARY KEY (batch_key);
+ALTER TABLE processed_messages ADD CONSTRAINT processed_messages_pkey PRIMARY KEY (message_id);
+ALTER TABLE projects ADD CONSTRAINT projects_pkey PRIMARY KEY (id);
+ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_pkey PRIMARY KEY (id);
+ALTER TABLE schema_migrations ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (version);
+ALTER TABLE search_vocabulary ADD CONSTRAINT search_vocabulary_pkey PRIMARY KEY (kind, key);
+ALTER TABLE share_links ADD CONSTRAINT share_links_pkey PRIMARY KEY (token_hash);
+ALTER TABLE web_imports ADD CONSTRAINT web_imports_pkey PRIMARY KEY (id);
+ALTER TABLE web_login_tokens ADD CONSTRAINT web_login_tokens_pkey PRIMARY KEY (token_hash);
+ALTER TABLE web_rate_limits ADD CONSTRAINT web_rate_limits_pkey PRIMARY KEY (bucket, window_start);
+ALTER TABLE web_sessions ADD CONSTRAINT web_sessions_pkey PRIMARY KEY (id_hash);
+ALTER TABLE brokers ADD CONSTRAINT brokers_phone_key UNIQUE (phone_number);
+ALTER TABLE brokers ADD CONSTRAINT uq_broker_phone UNIQUE (agency_id, phone_number);
+ALTER TABLE listings ADD CONSTRAINT uq_listings_agency_code UNIQUE (agency_id, code);
+ALTER TABLE projects ADD CONSTRAINT uq_agency_project_name UNIQUE (agency_id, name);
+ALTER TABLE agencies ADD CONSTRAINT agencies_slug_format CHECK (((slug ~ '^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$'::text) AND (NOT (slug = ANY (ARRAY['app'::text, 'api'::text, 'auth'::text, 'login'::text, 'logout'::text, 'webhook'::text, 'health'::text, 'static'::text, 'assets'::text, 'public'::text, 'admin'::text, 's'::text, 'u'::text, 'www'::text, 'aqarchat'::text, 'about'::text, 'help'::text, 'terms'::text, 'privacy'::text, 'pricing'::text, 'blog'::text, 'docs'::text, 'robots'::text, 'favicon'::text, 'manifest'::text, 'sw'::text, 'share'::text, 'new'::text])))));
+ALTER TABLE brokers ADD CONSTRAINT brokers_role_check CHECK ((role = ANY (ARRAY['broker'::text, 'agent'::text, 'admin'::text, 'owner'::text, 'manager'::text])));
+ALTER TABLE compound_synonyms ADD CONSTRAINT compound_synonyms_kind_check CHECK ((kind = ANY (ARRAY['compound'::text, 'developer'::text, 'area'::text])));
+ALTER TABLE listings ADD CONSTRAINT listings_delivery_month_check CHECK (((delivery_month >= 1) AND (delivery_month <= 12)));
+ALTER TABLE listings ADD CONSTRAINT listings_delivery_quarter_check CHECK (((delivery_quarter >= 1) AND (delivery_quarter <= 4)));
+ALTER TABLE listings ADD CONSTRAINT listings_furnishing_check CHECK ((furnishing = ANY (ARRAY['furnished'::text, 'semi_furnished'::text, 'unfurnished'::text])));
+ALTER TABLE listings ADD CONSTRAINT listings_market_check CHECK ((market = ANY (ARRAY['resale'::text, 'primary'::text])));
+ALTER TABLE listings ADD CONSTRAINT listings_payment_frequency_check CHECK ((payment_frequency = ANY (ARRAY['monthly'::text, 'quarterly'::text, 'semi_annual'::text, 'annual'::text])));
+ALTER TABLE listings ADD CONSTRAINT listings_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'sold'::text, 'archived'::text])));
+ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_name_check CHECK (((length(btrim(name)) >= 1) AND (length(btrim(name)) <= 80)));
+ALTER TABLE search_vocabulary ADD CONSTRAINT search_vocabulary_kind_check CHECK ((kind = ANY (ARRAY['type'::text, 'feature'::text])));
+ALTER TABLE share_links ADD CONSTRAINT share_links_channel_check CHECK ((channel = ANY (ARRAY['whatsapp'::text, 'web'::text])));
+ALTER TABLE share_links ADD CONSTRAINT share_links_lang_check CHECK ((lang = ANY (ARRAY['ar'::text, 'en'::text])));
+ALTER TABLE web_imports ADD CONSTRAINT web_imports_kind_check CHECK ((kind = ANY (ARRAY['excel'::text, 'group'::text])));
+ALTER TABLE web_imports ADD CONSTRAINT web_imports_status_check CHECK ((status = ANY (ARRAY['processing'::text, 'ready'::text, 'applied'::text, 'failed'::text])));
+ALTER TABLE web_login_tokens ADD CONSTRAINT web_login_tokens_channel_check CHECK ((channel = ANY (ARRAY['whatsapp'::text, 'web'::text])));
+ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE brokers ADD CONSTRAINT brokers_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE listing_images ADD CONSTRAINT listing_images_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE listing_images ADD CONSTRAINT listing_images_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
+ALTER TABLE listings ADD CONSTRAINT fk_listings_agency FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE listings ADD CONSTRAINT fk_listings_broker FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE listings ADD CONSTRAINT listings_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE listings ADD CONSTRAINT listings_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id);
+ALTER TABLE listings ADD CONSTRAINT listings_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL;
+ALTER TABLE payment_plans ADD CONSTRAINT payment_plans_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
+ALTER TABLE projects ADD CONSTRAINT projects_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
+ALTER TABLE share_links ADD CONSTRAINT share_links_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE share_links ADD CONSTRAINT share_links_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE share_links ADD CONSTRAINT share_links_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
+ALTER TABLE web_imports ADD CONSTRAINT web_imports_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE web_imports ADD CONSTRAINT web_imports_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
+ALTER TABLE web_login_tokens ADD CONSTRAINT web_login_tokens_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
+ALTER TABLE web_sessions ADD CONSTRAINT web_sessions_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
+
+CREATE UNIQUE INDEX uq_agencies_slug ON public.agencies USING btree (slug);
+CREATE INDEX idx_audit_logs_agency ON public.audit_logs USING btree (agency_id, created_at DESC);
+CREATE INDEX idx_broker_sessions_expires ON public.broker_sessions USING btree (expires_at);
+CREATE INDEX brokers_agency_idx ON public.brokers USING btree (agency_id);
+CREATE UNIQUE INDEX brokers_phone_normalized_uidx ON public.brokers USING btree (phone_normalized);
+CREATE INDEX idx_compound_synonyms_norm ON public.compound_synonyms USING btree (synonym_norm);
+CREATE INDEX inbound_messages_phone_idx ON public.inbound_messages USING btree (phone_key, received_at DESC);
+CREATE INDEX inbound_messages_status_idx ON public.inbound_messages USING btree (status, received_at);
+CREATE INDEX idx_listing_drafts_updated ON public.listing_drafts USING btree (updated_at);
+CREATE INDEX listing_images_agency_idx ON public.listing_images USING btree (agency_id);
+CREATE INDEX listing_images_listing_idx ON public.listing_images USING btree (listing_id, "position");
+CREATE UNIQUE INDEX listing_images_listing_pos_uniq ON public.listing_images USING btree (listing_id, "position");
+CREATE INDEX idx_listings_area_key ON public.listings USING btree (agency_id, area_key) WHERE (area_key IS NOT NULL);
+CREATE INDEX idx_listings_code ON public.listings USING btree (code);
+CREATE INDEX idx_listings_compound ON public.listings USING btree (compound);
+CREATE INDEX idx_listings_compound_key ON public.listings USING btree (agency_id, compound_key) WHERE (compound_key IS NOT NULL);
+CREATE INDEX idx_listings_compound_trgm ON public.listings USING gin (clean_arabic_text(COALESCE(compound, ''::text)) gin_trgm_ops) WITH (fastupdate=off);
+CREATE INDEX idx_listings_delivery ON public.listings USING btree (agency_id, is_ready, delivery_year);
+CREATE INDEX idx_listings_details_gin ON public.listings USING gin (details);
+CREATE INDEX idx_listings_dev_code ON public.listings USING btree (agency_id, developer_unit_code) WHERE (developer_unit_code IS NOT NULL);
+CREATE INDEX idx_listings_dev_code_norm ON public.listings USING btree (agency_id, upper(developer_unit_code)) WHERE (developer_unit_code IS NOT NULL);
+CREATE INDEX idx_listings_developer_key ON public.listings USING btree (agency_id, developer_key) WHERE (developer_key IS NOT NULL);
+CREATE INDEX idx_listings_feature_keys ON public.listings USING gin (feature_keys);
+CREATE INDEX idx_listings_search_trgm ON public.listings USING gin (clean_arabic_text(COALESCE(search_text_normalized, search_text, ''::text)) gin_trgm_ops) WITH (fastupdate=off);
+CREATE INDEX listings_agency_code_idx ON public.listings USING btree (agency_id, lower(code));
+CREATE INDEX listings_agency_status_created_idx ON public.listings USING btree (agency_id, status, created_at DESC);
+CREATE INDEX listings_agency_status_idx ON public.listings USING btree (agency_id, status);
+CREATE INDEX listings_location_keywords_gin ON public.listings USING gin (location_keywords);
+CREATE INDEX listings_search_trgm ON public.listings USING gin (search_text_normalized gin_trgm_ops);
+CREATE INDEX listings_search_trgm_idx ON public.listings USING gin (search_text gin_trgm_ops);
+CREATE UNIQUE INDEX uq_listings_agency_code_norm ON public.listings USING btree (agency_id, code_norm);
+CREATE INDEX idx_op_logs_agency_date ON public.operation_logs USING btree (agency_id, created_at);
+CREATE INDEX idx_op_logs_listing_code ON public.operation_logs USING btree (listing_code);
+CREATE INDEX idx_operation_logs_agency_type_created ON public.operation_logs USING btree (agency_id, operation_type, created_at DESC);
+CREATE INDEX idx_operation_logs_broker_created ON public.operation_logs USING btree (broker_id, created_at DESC);
+CREATE INDEX op_logs_agency_day ON public.operation_logs USING btree (agency_id, created_at DESC);
+CREATE INDEX idx_payment_plans_listing ON public.payment_plans USING btree (listing_id);
+CREATE INDEX idx_processed_messages_created ON public.processed_messages USING btree (created_at);
+CREATE INDEX idx_saved_searches_broker ON public.saved_searches USING btree (agency_id, broker_id, created_at DESC);
+CREATE INDEX idx_share_links_listing ON public.share_links USING btree (agency_id, listing_id, created_at DESC);
+CREATE INDEX idx_web_imports_broker ON public.web_imports USING btree (agency_id, broker_id, created_at DESC);
+CREATE INDEX idx_web_login_tokens_broker ON public.web_login_tokens USING btree (broker_id, created_at DESC);
+CREATE INDEX idx_web_sessions_broker ON public.web_sessions USING btree (broker_id);
+
+CREATE TRIGGER trg_agencies_slug BEFORE INSERT OR UPDATE OF slug, name ON public.agencies FOR EACH ROW WHEN (((new.slug IS NULL) OR (btrim(new.slug) = ''::text) OR (new.slug <> lower(btrim(new.slug))))) EXECUTE FUNCTION agencies_set_slug();
+CREATE TRIGGER trg_set_listing_image_agency_id BEFORE INSERT ON public.listing_images FOR EACH ROW EXECUTE FUNCTION set_listing_image_agency_id();
+CREATE TRIGGER trg_listings_search_document BEFORE INSERT OR UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_search_document();
+CREATE TRIGGER trg_update_listings_timestamp BEFORE UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION update_timestamp_column();
+
+CREATE OR REPLACE VIEW public.agency_outbound_daily AS
+SELECT agency_id,
+    ((created_at AT TIME ZONE 'Africa/Cairo'::text))::date AS day,
+    count(*) FILTER (WHERE (status = 'success'::text)) AS sent,
+    count(*) FILTER (WHERE (status <> 'success'::text)) AS failed
+   FROM operation_logs
+  WHERE (operation_type = 'wa_outbound'::text)
+  GROUP BY agency_id, (((created_at AT TIME ZONE 'Africa/Cairo'::text))::date);

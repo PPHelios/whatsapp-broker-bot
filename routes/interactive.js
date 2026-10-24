@@ -2,6 +2,7 @@
 "use strict";
 
 const T = require("../lib/text");
+const ShareLinks = require("../lib/shareLinks");
 const U = require("../lib/util");
 const Drafts = require("../lib/drafts");
 const financials = require("../lib/financials");
@@ -304,7 +305,7 @@ async function handleInteractive(broker, message, ctx) {
     }
 
     const listing = rows[0];
-    const copyText = T.formatClientListingText(listing, broker, lang);
+    const copyText = await ShareLinks.clientCopyWithLink(pool, broker, listing, lang, T.formatClientListingText(listing, broker, lang));
     await reply(broker, copyText);
     return "done";
   }

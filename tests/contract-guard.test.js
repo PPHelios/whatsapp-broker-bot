@@ -6,7 +6,7 @@ const path = require("path");
 
 describe("API Contract, Database Schema & Variable Naming Guardians", () => {
   const root = path.join(__dirname, "..");
-  const scanDirs = ["routes", "lib"];
+  const scanDirs = ["routes", "lib", "web", "services", "domain"];
   const jsFiles = [];
 
   function collectJsFiles(dir) {
@@ -16,7 +16,7 @@ describe("API Contract, Database Schema & Variable Naming Guardians", () => {
       const fullPath = path.join(dir, entry.name);
       if (
         entry.isDirectory() &&
-        !["node_modules", "tests", "scripts", ".git"].includes(entry.name)
+        !["node_modules", "tests", "scripts", ".git", "static"].includes(entry.name)
       ) {
         collectJsFiles(fullPath);
       } else if (
@@ -225,6 +225,26 @@ describe("API Contract, Database Schema & Variable Naming Guardians", () => {
         });
       }
     });
+  });
+
+  // 2b. The contract lists exactly the real exports (no stale or missing names, same parameters).
+  test("API_CONTRACTS.json matches every listed module's real exports (node scripts/api-contracts.js)", () => {
+    const Contracts = require("../scripts/api-contracts");
+    const contracts = JSON.parse(fs.readFileSync(path.join(root, "API_CONTRACTS.json"), "utf8"));
+    for (const [relPath, expected] of Object.entries(contracts.libraries)) {
+      expect({ [relPath]: Contracts.describeModule(relPath) }).toEqual({ [relPath]: expected });
+    }
+  });
+
+  test("every module in lib/, domain/, services/ and web/ is in API_CONTRACTS.json", () => {
+    const contracts = JSON.parse(fs.readFileSync(path.join(root, "API_CONTRACTS.json"), "utf8"));
+    // Worker entry points export nothing.
+    const entryPoints = ["lib/flyerWorker.js"];
+    const modules = ["lib", "domain", "services", "web", "web/routes", "web/views", "web/forms"].filter((d) => fs.existsSync(path.join(root, d))).flatMap((d) =>
+      fs.readdirSync(path.join(root, d)).filter((f) => f.endsWith(".js")).map((f) => `${d}/${f}`)
+    );
+    const missing = modules.filter((m) => !entryPoints.includes(m) && !contracts.libraries[m]);
+    expect(missing).toEqual([]);
   });
 
   // 3. Dynamic ESM Singleton Import Guard
