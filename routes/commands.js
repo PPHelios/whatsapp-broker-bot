@@ -480,7 +480,7 @@ async function handleCommand(broker, text, ctx) {
       const extractedCode = T.extractCleanCode(codeMatch[1]);
       const { rows: matchedUnits } = await pool.query(
         `SELECT * FROM listings
-         WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+         WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
          LIMIT 1`,
         [broker.agency_id, extractedCode]
       );
@@ -531,6 +531,18 @@ async function handleCommand(broker, text, ctx) {
         // Default: If card contains code with no specific action, treat as direct unit inspection
         return await deliverUnitInspectionCard(listing, broker, lang);
       }
+    }
+  }
+
+  // 0b. SEARCH PAGING BY TEXT (SCH-02, B4): "المزيد" pages the last search, also inside a draft.
+  if (/^(المزيد|مزيد|كمان|more|next)$/i.test(lower)) {
+    const { rows } = await pool.query(
+      "SELECT 1 FROM broker_sessions WHERE broker_id = $1 AND session_type = 'search_state' AND expires_at > NOW()",
+      [broker.id]
+    );
+    if (rows.length) {
+      await ctx.S.handleMore(broker, ctx);
+      return true;
     }
   }
 
@@ -647,7 +659,7 @@ async function handleCommand(broker, text, ctx) {
 
       const { rows } = await client.query(
         `SELECT * FROM listings
-         WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+         WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
          FOR UPDATE`,
         [broker.agency_id, targetCode.toUpperCase()]
       );
@@ -1037,7 +1049,7 @@ async function handleCommand(broker, text, ctx) {
 
       const { rows } = await client.query(
         `SELECT id, broker_id, code, status FROM listings
-         WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+         WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
          FOR UPDATE`,
         [broker.agency_id, targetCode.toUpperCase()]
       );
@@ -1126,7 +1138,7 @@ async function handleCommand(broker, text, ctx) {
 
       const { rows } = await client.query(
         `SELECT id, broker_id, code FROM listings
-         WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+         WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
          FOR UPDATE`,
         [broker.agency_id, targetCode.toUpperCase()]
       );
@@ -1212,7 +1224,7 @@ async function handleCommand(broker, text, ctx) {
 
       const { rows } = await client.query(
         `SELECT * FROM listings
-         WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+         WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
          FOR UPDATE`,
         [broker.agency_id, targetCode.toUpperCase()]
       );
@@ -1350,7 +1362,7 @@ async function handleCommand(broker, text, ctx) {
 
     const { rows } = await pool.query(
       `SELECT * FROM listings
-       WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+       WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
        LIMIT 1`,
       [broker.agency_id, targetCode.toUpperCase()]
     );
@@ -1403,7 +1415,7 @@ async function handleCommand(broker, text, ctx) {
 
     const { rows } = await pool.query(
       `SELECT * FROM listings
-       WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+       WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
        LIMIT 1`,
       [broker.agency_id, targetCode.toUpperCase()]
     );
@@ -1462,7 +1474,7 @@ async function handleCommand(broker, text, ctx) {
 
     const { rows } = await pool.query(
       `SELECT * FROM listings
-       WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+       WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
        LIMIT 1`,
       [broker.agency_id, targetCode.toUpperCase()]
     );
@@ -1506,7 +1518,7 @@ async function handleCommand(broker, text, ctx) {
 
     const { rows } = await pool.query(
       `SELECT * FROM listings
-       WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+       WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
        LIMIT 1`,
       [broker.agency_id, targetCode.toUpperCase()]
     );
@@ -1538,7 +1550,7 @@ async function handleCommand(broker, text, ctx) {
 
     const { rows } = await pool.query(
       `SELECT * FROM listings
-       WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+       WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
        LIMIT 1`,
       [broker.agency_id, targetCode.toUpperCase()]
     );

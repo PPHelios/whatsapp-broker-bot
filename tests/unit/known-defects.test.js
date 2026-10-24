@@ -175,7 +175,7 @@ describe("Database triggers (plan §5.8c)", () => {
   });
   afterAll(() => db.pool.end());
 
-  test.failing("D1: features written by the app are searchable (not overwritten by a later trigger)", async () => {
+  test("D1: features written by the app are searchable (not overwritten by a later trigger)", async () => {
     const { rows } = await db.pool.query(
       `INSERT INTO listings (agency_id, code, title, details)
        VALUES ('a0000000-0000-0000-0000-00000000000a', 'T-1', 'شقة', '{"features":["حمام سباحة"]}')
@@ -184,7 +184,7 @@ describe("Database triggers (plan §5.8c)", () => {
     expect(rows[0].search_text_normalized).toMatch(/سباحه|سباحة/);
   });
 
-  test.failing("D2: stored and query-side Arabic normalization agree on Eastern digits", async () => {
+  test("D2: stored and query-side Arabic normalization agree on Eastern digits", async () => {
     const { rows } = await db.pool.query("SELECT normalize_arabic('٣ غرف') a, clean_arabic_text('٣ غرف') b");
     expect(rows[0].a).toBe(rows[0].b);
   });

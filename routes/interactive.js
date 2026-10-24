@@ -293,7 +293,7 @@ async function handleInteractive(broker, message, ctx) {
     const code = T.extractCleanCode(replyId.split(":")[1]);
     const { rows } = await pool.query(
       `SELECT * FROM listings
-       WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+       WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
        LIMIT 1`,
       [broker.agency_id, code]
     );
@@ -347,7 +347,7 @@ async function handleInteractive(broker, message, ctx) {
     const code = T.extractCleanCode(replyId.split(":")[1]);
     const { rows } = await pool.query(
       `SELECT * FROM listings
-       WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+       WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
        LIMIT 1`,
       [broker.agency_id, code]
     );
@@ -413,7 +413,7 @@ async function handleInteractive(broker, message, ctx) {
 
     const { rows } = await pool.query(
       `SELECT * FROM listings
-       WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+       WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
        LIMIT 1`,
       [broker.agency_id, code]
     );
@@ -453,7 +453,7 @@ async function handleInteractive(broker, message, ctx) {
     const code = T.extractCleanCode(replyId.split(":")[1]);
     const { rows: listings } = await pool.query(
       `SELECT * FROM listings
-       WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+       WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
        LIMIT 1`,
       [broker.agency_id, code]
     );
@@ -530,7 +530,7 @@ async function handleInteractive(broker, message, ctx) {
 
     const { rows } = await pool.query(
       `SELECT * FROM listings
-       WHERE agency_id = $1 AND (UPPER(code) = $2 OR UPPER(developer_unit_code) = $2)
+       WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
        LIMIT 1`,
       [broker.agency_id, targetCode]
     );
@@ -708,73 +708,10 @@ async function handleInteractive(broker, message, ctx) {
     return "done";
   }
 
-  // 16. SEARCH PAGINATION CURSOR FETCH (SCH-02)
+  // 16. SEARCH PAGINATION (SCH-02): next page from the id snapshot (B1).
+  // session_type = 'search_state' holds { ids, offset, total } (lib/search.js handleMore).
   if (replyId === "MORE_SEARCH" || replyId.startsWith("search_more:")) {
-    const { rows: sessionRows } = await pool.query(
-      `SELECT session_data FROM broker_sessions
-       WHERE broker_id = $1 AND session_type = 'search_state' AND expires_at > NOW()`,
-      [broker.id]
-    );
-
-    if (sessionRows.length === 0) {
-      await reply(
-        broker,
-        lang === "en"
-          ? "⏳ Search session expired. Please type your search query again."
-          : "⏳ انتهت جلسة البحث السابقة. يرجى كتابة طلب البحث مجدداً."
-      );
-      return "done";
-    }
-
-    const searchState = sessionRows[0].session_data || {};
-    const parsed = searchState.parsed || {};
-    const currentOffset = Number(searchState.offset) || 0;
-    const totalCount = Number(searchState.total_count) || 0;
-
-    const { sql, params } = S.buildSearchQuery(broker.agency_id, parsed, {
-      limit: 5,
-      offset: currentOffset
-    });
-
-    const { rows: nextRows } = await pool.query(sql, params);
-
-    if (nextRows.length === 0) {
-      await reply(
-        broker,
-        lang === "en"
-          ? "🏁 You have viewed all matching units."
-          : "🏁 لقد وصلت لنهاية نتائج البحث المتاحة."
-      );
-      return "done";
-    }
-
-    const nextOffset = currentOffset + nextRows.length;
-    await pool.query(
-      `UPDATE broker_sessions
-       SET session_data = jsonb_set(session_data, '{offset}', $1::jsonb),
-           expires_at = NOW() + INTERVAL '15 minutes'
-       WHERE broker_id = $2 AND session_type = 'search_state'`,
-      [JSON.stringify(nextOffset), broker.id]
-    );
-
-    const formattedResults = T.formatSearchResults(nextRows, {
-      total: totalCount,
-      lang,
-      agencyId: broker.agency_id
-    });
-
-    if (nextOffset < totalCount) {
-      await replyButtons(broker, formattedResults, [
-        {
-          id: "MORE_SEARCH",
-          title: lang === "en" ? "More Results ➡️" : "المزيد ➡️"
-        }
-      ]);
-    } else {
-      await reply(broker, formattedResults);
-    }
-
-    return "done";
+    return await S.handleMore(broker, ctx);
   }
 
   // 17. Unrecognized or Stale Button ID

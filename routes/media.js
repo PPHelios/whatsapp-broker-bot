@@ -282,13 +282,7 @@ async function handleAudio(broker, message, ctx) {
     return "done";
   }
 
-  await reply(
-    broker,
-    lang === "en"
-      ? "🎙️ Transcribing and searching inventory..."
-      : "🎙️ جاري تفريغ الصوت والبحث في المخزون..."
-  );
-
+  // One reply per task: the typing indicator covers transcription and search.
   let transcribedText = "";
   try {
     transcribedText = await AI.transcribeAudio(
@@ -311,7 +305,7 @@ async function handleAudio(broker, message, ctx) {
   }
 
   // Delegate transcribed text to the 2-pass search engine
-  return await S.handleSearchMessage(broker, transcribedText.trim(), ctx);
+  return await S.handleSearchMessage(broker, transcribedText.trim(), ctx, { channel: "voice" });
 }
 
 module.exports = {

@@ -1,0 +1,371 @@
+// domain/searchQuery.js — Search request → language-neutral filters (pure)
+// Arabic, English or mixed wording, typed or spoken, must produce the same filters, so the same
+// units come back in the same order. Places and features become keys; free text is normalized.
+"use strict";
+
+const Features = require("./features");
+const Places = require("./places");
+const { TYPE_TERMS } = require("./vocabulary");
+const { normalizeSearch } = require("./searchText");
+const { PROPERTY_TYPES } = require("./fieldRules");
+
+const FINISHING_KEYS = ["core_and_shell", "semi_finished", "fully_finished", "super_lux", "ultra_super_lux"];
+const SMALL_TALK = [
+  "شكرا", "شكرا جزيلا", "تمام", "اوكي", "ok", "okay", "thanks", "thank you", "السلام عليكم", "سلام", "صباح الخير",
+  "مساء الخير", "اهلا", "hi", "hello", "hey", "مرحبا", "تسلم", "ماشي", "حاضر", "👍"
+].map(normalizeSearch);
+
+const num = (v) => {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(String(v).replace(/[,\s]/g, ""));
+  return Number.isFinite(n) ? n : null;
+};
+const pos = (v) => {
+  const n = num(v);
+  return n !== null && n > 0 ? n : null;
+};
+const nonNegInt = (v) => {
+  const n = num(v);
+  return n !== null && n >= 0 ? Math.round(n) : null;
+};
+const uniq = (a) => [...new Set(a)];
+const sortPlaces = (list) =>
+  uniq(list.map((p) => `${p.kind}:${p.key}`))
+    .sort()
+    .map((s) => ({ kind: s.split(":")[0], key: s.split(":")[1] }));
+
+function emptyFilters() {
+  return {
+    code: null,
+    listing_type: null,
+    property_types: [],
+    market: null,
+    places: [],
+    place_terms: [],
+    currency: null,
+    price_min: null,
+    price_max: null,
+    area_min: null,
+    area_max: null,
+    bedrooms_min: null,
+    bedrooms_max: null,
+    bathrooms_min: null,
+    floor_min: null,
+    floor_max: null,
+    finishing: [],
+    furnishing: null,
+    delivery_ready: null,
+    delivery_by_year: null,
+    payment_cash: null,
+    payment_installments: null,
+    max_down_payment: null,
+    max_installment: null,
+    features: [],
+    feature_terms: []
+  };
+}
+
+/** Normalized code: same folding as the listings.code_norm column. */
+function normalizeCode(code) {
+  const s = String(code ?? "")
+    .replace(/[​-‍﻿‎‏‪-‮]/g, "")
+    .replace(/^[`'"\[\(#\s_]+|[`'"\]\)#\s_]+$/g, "")
+    .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+    .trim()
+    .toUpperCase();
+  return s || null;
+}
+
+/** Places and leftover place words from a list of names as the broker said them. */
+function resolvePlaceNames(names = []) {
+  const places = [];
+  const terms = [];
+  for (const raw of names) {
+    const name = String(raw || "").trim();
+    if (!name) continue;
+    for (const part of name.split(/[,/|،]|\s+(?:or|او|أو)\s+/i)) {
+      const one = Places.resolvePlace(part);
+      if (one) {
+        places.push(one);
+        continue;
+      }
+      const { places: found, rest } = Places.findPlaces(part);
+      places.push(...found);
+      const leftover = normalizeSearch(rest)
+        .split(" ")
+        .filter((w) => w.length >= 3 && !STOP.has(w))
+        .join(" ");
+      if (!found.length && leftover) terms.push(leftover);
+    }
+  }
+  return { places, terms };
+}
+
+/** Sorted, de-duplicated, canonical filters (order-independent equality across languages). */
+function canonical(f) {
+  const out = { ...emptyFilters(), ...f };
+  out.property_types = uniq(out.property_types.filter((t) => PROPERTY_TYPES.includes(t))).sort();
+  out.places = sortPlaces(out.places);
+  out.place_terms = uniq(out.place_terms.map(normalizeSearch).filter(Boolean)).sort();
+  out.features = Features.sortKeys(out.features);
+  out.feature_terms = uniq(out.feature_terms.map(normalizeSearch).filter(Boolean)).sort();
+  out.finishing = uniq(out.finishing.filter((k) => FINISHING_KEYS.includes(k))).sort();
+  if (out.property_types.includes("studio") && out.bedrooms_min === null && out.bedrooms_max === null) {
+    out.bedrooms_min = 0;
+    out.bedrooms_max = 0;
+  } else if (out.bedrooms_min === 0 && out.bedrooms_max === 0 && !out.property_types.length) {
+    out.property_types = ["studio"];
+  }
+  for (const [lo, hi] of [["price_min", "price_max"], ["area_min", "area_max"], ["bedrooms_min", "bedrooms_max"], ["floor_min", "floor_max"]]) {
+    if (out[lo] !== null && out[hi] !== null && out[lo] > out[hi]) [out[lo], out[hi]] = [out[hi], out[lo]];
+  }
+  return out;
+}
+
+/**
+ * AI search JSON → { intent, transcript, language, filters }.
+ * Accepts the Release 1 prompt shape and the earlier one (compound, features as words, ...).
+ */
+function normalizeAiSearch(raw) {
+  const r = (Array.isArray(raw) ? raw[0] : raw) || {};
+  const f = r.filters || {};
+  const names = [f.compound, ...(Array.isArray(f.locations) ? f.locations : []), ...(Array.isArray(r.locations) ? r.locations : [])];
+  const { places, terms } = resolvePlaceNames(names);
+  const featureWords = [...(Array.isArray(f.features) ? f.features : []), ...(Array.isArray(f.other_features) ? f.other_features : [])];
+  const { keys, other } = Features.classifyFeatures(featureWords);
+  const legacyFlags = Features.keysFromDetails({ has_nanny_room: f.nanny_room, has_master_bedroom: f.has_master_bedroom, has_dressing_room: f.has_dressing_room });
+  const delivery = f.delivery || {};
+  const payment = f.payment || {};
+
+  const types = (Array.isArray(f.property_types) ? f.property_types : [])
+    .map((t) => String(t).toLowerCase().replace(/[\s_-]/g, ""))
+    .map((t) => (t === "standalone" ? "villa" : t));
+
+  const filters = canonical({
+    code: f.code ? normalizeCode(f.code) : null,
+    listing_type: ["sale", "rent"].includes(f.listing_type) ? f.listing_type : null,
+    property_types: types,
+    market: ["primary", "resale"].includes(f.market) ? f.market : null,
+    places,
+    place_terms: terms,
+    currency: ["EGP", "USD", "EUR"].includes(f.currency) ? f.currency : null,
+    price_min: pos(f.price_min),
+    price_max: pos(f.price_max),
+    area_min: pos(f.area_min),
+    area_max: pos(f.area_max),
+    bedrooms_min: nonNegInt(f.bedrooms_min),
+    bedrooms_max: nonNegInt(f.bedrooms_max),
+    bathrooms_min: nonNegInt(f.bathrooms_min),
+    floor_min: num(f.floor_min) !== null ? Math.round(num(f.floor_min)) : null,
+    floor_max: num(f.floor_max) !== null ? Math.round(num(f.floor_max)) : null,
+    finishing: (Array.isArray(f.finishing) ? f.finishing : f.finishing ? [f.finishing] : []).map((x) => String(x).toLowerCase()),
+    furnishing: ["furnished", "semi_furnished", "unfurnished"].includes(f.furnishing) ? f.furnishing : null,
+    delivery_ready: delivery.ready === true ? true : null,
+    delivery_by_year: num(delivery.by_year) && num(delivery.by_year) >= 2000 ? Math.round(num(delivery.by_year)) : null,
+    payment_cash: payment.cash === true ? true : null,
+    payment_installments: payment.installments === true ? true : null,
+    max_down_payment: pos(payment.max_down_payment ?? f.down_payment_max),
+    max_installment: pos(payment.max_installment ?? f.installment_max),
+    features: [...keys, ...legacyFlags],
+    feature_terms: other
+  });
+
+  return {
+    intent: ["search", "listing", "other"].includes(r.intent) ? r.intent : "search",
+    transcript: String(r.transcript ?? "").slice(0, 500),
+    language: r.language === "en" ? "en" : "ar",
+    filters
+  };
+}
+
+/* ---------------------------------------------------------------------- */
+/* Regex fallback (AI down): same output shape                              */
+/* ---------------------------------------------------------------------- */
+
+const STOP = new Set(
+  [
+    "في", "فى", "من", "الى", "إلى", "علي", "على", "عن", "و", "مع", "عايز", "عاوز", "عايزه", "محتاج", "دورلي", "ورني", "وريني",
+    "فيه", "فيها", "عندنا", "عندك", "عندي", "بحث", "ابحث", "لي", "لو", "سمحت", "بس", "حاجة", "حاجه", "وحدة", "وحده", "كمبوند",
+    "the", "a", "an", "in", "for", "at", "with", "show", "me", "find", "search", "i", "want", "need", "looking", "unit", "units",
+    "compound", "please", "any", "some", "and", "or", "of", "to", "is", "near", "around", "قريب", "جنب"
+  ].map(normalizeSearch)
+);
+
+const TYPE_MATCHERS = Object.entries(TYPE_TERMS)
+  .flatMap(([type, words]) => words.map((w) => ({ type, term: normalizeSearch(w) })))
+  .sort((a, b) => b.term.length - a.term.length);
+
+const AR_NUMBER_WORDS = { واحد: 1, واحده: 1, اتنين: 2, اثنين: 2, تلات: 3, تلاته: 3, ثلاث: 3, ثلاثه: 3, اربع: 4, اربعه: 4, خمس: 5, خمسه: 5, ست: 6, سته: 6 };
+
+function consume(hay, re) {
+  const m = hay.match(re);
+  return m ? { m, hay: hay.replace(re, " ") } : { m: null, hay };
+}
+
+function parseMoneyWords(n, unit) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return null;
+  if (/مليون|million|^m$/i.test(unit)) return Math.round(v * 1e6);
+  if (/الف|ألف|k|thousand/i.test(unit)) return Math.round(v * 1e3);
+  return v >= 1000 ? Math.round(v) : null;
+}
+
+/** Local parser used when the AI is unavailable. Deterministic and bilingual. */
+function fallbackParse(text) {
+  const raw = String(text || "").trim();
+  let hay = ` ${normalizeSearch(raw)} `;
+  const f = emptyFilters();
+
+  if (SMALL_TALK.includes(hay.trim())) {
+    return { intent: "other", transcript: raw.slice(0, 500), language: /[a-z]/i.test(raw) && !/[؀-ۿ]/.test(raw) ? "en" : "ar", filters: canonical(f) };
+  }
+
+  // Places first (they can contain type-like words, e.g. "town").
+  const placeScan = Places.findPlaces(hay);
+  f.places = placeScan.places;
+  hay = ` ${placeScan.rest} `;
+
+  // Features (dictionary only).
+  f.features = Features.matchFeatureKeys(hay);
+  for (const key of f.features) {
+    const terms = Features.FEATURES.find((x) => x.key === key).syn.map(normalizeSearch).sort((a, b) => b.length - a.length);
+    for (const t of terms) hay = hay.split(` ${t} `).join(" ").split(` و${t} `).join(" ");
+  }
+
+  // Listing type.
+  let c = consume(hay, / (للايجار|ايجار|rent|for rent|lease) /);
+  if (c.m) f.listing_type = "rent";
+  hay = c.hay;
+  c = consume(hay, / (للبيع|بيع|for sale|sale) /);
+  if (c.m && !f.listing_type) f.listing_type = "sale";
+  hay = c.hay;
+  if (/ (ريسيل|resale) /.test(hay)) f.market = "resale";
+  if (/ (برايمري|primary|من المطور|developer) /.test(hay)) f.market = "primary";
+  hay = hay.replace(/ (ريسيل|resale|برايمري|primary|من المطور) /g, " ");
+
+  // Bedrooms / bathrooms (digits or Egyptian number words).
+  const n = (s) => (/^\d+$/.test(s) ? Number(s) : AR_NUMBER_WORDS[s] ?? null);
+  c = consume(hay, / (غرفتين|اوضتين) /);
+  if (c.m) f.bedrooms_min = f.bedrooms_max = 2;
+  hay = c.hay;
+  c = consume(hay, / (\d+|[ء-ي]+) (غرف|غرفه|اوض|اوضه|نوم|bed|beds|bedroom|bedrooms|br) /);
+  if (c.m && n(c.m[1]) !== null) {
+    f.bedrooms_min = f.bedrooms_max = n(c.m[1]);
+    hay = c.hay;
+  }
+  c = consume(hay, / (حمامين) /);
+  if (c.m) f.bathrooms_min = 2;
+  hay = c.hay;
+  c = consume(hay, / (\d+) (حمام|حمامات|bath|baths|bathroom|bathrooms) /);
+  if (c.m) {
+    f.bathrooms_min = Number(c.m[1]);
+    hay = c.hay;
+  }
+
+  // Area: "150 متر" / "150 m2" / "150 sqm".
+  c = consume(hay, / (\d{2,4}) (متر|م|m2|m|sqm|meter|meters) /);
+  if (c.m) {
+    const a = Number(c.m[1]);
+    f.area_min = Math.round(a * 0.9);
+    f.area_max = Math.round(a * 1.1);
+    hay = c.hay;
+  }
+
+  // Budget: "تحت 8 مليون" / "under 8 million" / "8 مليون" (a ceiling).
+  c = consume(hay, / (?:تحت|اقل من|حدود|بحدود|لحد|under|below|max|up to|budget)? ?(\d+(?:\.\d+)?|\d+ \d+) (مليون|million|m|الف|k|thousand) /);
+  if (c.m) {
+    const v = parseMoneyWords(c.m[1].replace(" ", "."), c.m[2]);
+    if (v) f.price_max = v;
+    hay = c.hay;
+  }
+
+  // Delivery.
+  c = consume(hay, / (استلام فوري|فوري|جاهز|ready to move|ready|immediate) /);
+  if (c.m) f.delivery_ready = true;
+  hay = c.hay;
+  c = consume(hay, / (?:تسليم|استلام|delivery|by) (20[2-4]\d) /);
+  if (c.m) {
+    f.delivery_by_year = Number(c.m[1]);
+    hay = c.hay;
+  }
+
+  // Payment.
+  c = consume(hay, / (كاش|cash) /);
+  if (c.m) f.payment_cash = true;
+  hay = c.hay;
+  c = consume(hay, / (تقسيط|اقساط|قسط|installments|installment) /);
+  if (c.m) f.payment_installments = true;
+  hay = c.hay;
+
+  // Property types.
+  for (const m of TYPE_MATCHERS) {
+    if (hay.includes(` ${m.term} `)) {
+      f.property_types.push(m.type);
+      hay = hay.split(` ${m.term} `).join(" ");
+    }
+  }
+
+  // Leftover words: unresolved places (≥3 letters, not stop words, not numbers).
+  const leftovers = hay
+    .split(" ")
+    .filter((w) => w.length >= 3 && !STOP.has(w) && !/^\d+$/.test(w));
+  if (!f.places.length && leftovers.length) f.place_terms = [leftovers.join(" ")];
+
+  const filters = canonical(f);
+  return {
+    intent: hasAnyFilter({ filters }) ? "search" : "other",
+    transcript: raw.slice(0, 500),
+    language: /[؀-ۿ]/.test(raw) ? "ar" : "en",
+    filters
+  };
+}
+
+/** True when the request names at least one real filter. */
+function hasAnyFilter(parsed) {
+  const f = parsed?.filters || {};
+  return Boolean(
+    f.code ||
+      f.listing_type ||
+      f.market ||
+      (f.property_types || []).length ||
+      (f.places || []).length ||
+      (f.place_terms || []).length ||
+      (f.features || []).length ||
+      (f.feature_terms || []).length ||
+      (f.finishing || []).length ||
+      f.furnishing ||
+      [f.price_min, f.price_max, f.area_min, f.area_max, f.bedrooms_min, f.bedrooms_max, f.bathrooms_min, f.floor_min, f.floor_max,
+        f.max_down_payment, f.max_installment, f.delivery_by_year].some((v) => v !== null && v !== undefined) ||
+      f.delivery_ready ||
+      f.payment_cash ||
+      f.payment_installments
+  );
+}
+
+/**
+ * Intent guard (B2): only a search with at least one filter reaches the database.
+ * @returns {"search" | "small_talk" | "listing"}
+ */
+function classifyIntent(parsed) {
+  if (parsed?.intent === "listing") return "listing";
+  if (parsed?.intent === "other" || !hasAnyFilter(parsed)) return "small_talk";
+  return "search";
+}
+
+/** Earlier callers pass { filters: { compound: "..." } }; give them canonical filters. */
+function ensureFilters(parsed) {
+  const f = parsed?.filters || {};
+  if (Array.isArray(f.places) && Array.isArray(f.feature_terms)) return f;
+  return normalizeAiSearch({ filters: f, locations: parsed?.locations || [] }).filters;
+}
+
+module.exports = {
+  emptyFilters,
+  normalizeCode,
+  normalizeAiSearch,
+  fallbackParse,
+  hasAnyFilter,
+  classifyIntent,
+  ensureFilters,
+  canonical
+};

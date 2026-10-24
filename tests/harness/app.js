@@ -80,7 +80,8 @@ async function settle(rounds = 5) {
   }
 }
 
-// One database per test file (Jest isolates modules per file); tests reset it via TRUNCATE.
+// One database per test file (Jest isolates modules per file); tests reset it via TRUNCATE,
+// keeping the reference data the migrations seed.
 let shared = null;
 
 async function freshDb() {
@@ -88,7 +89,7 @@ async function freshDb() {
     shared = await createTestDb();
   } else {
     const { rows } = await shared.pool.query(
-      "SELECT string_agg(format('public.%I', tablename), ', ') AS t FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'schema_migrations'"
+      "SELECT string_agg(format('public.%I', tablename), ', ') AS t FROM pg_tables WHERE schemaname = 'public' AND tablename NOT IN ('schema_migrations', 'compound_synonyms', 'search_vocabulary')"
     );
     await shared.pool.query(`TRUNCATE ${rows[0].t} RESTART IDENTITY CASCADE`);
   }

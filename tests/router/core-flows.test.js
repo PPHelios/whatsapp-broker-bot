@@ -221,7 +221,7 @@ describe("Search (SCH)", () => {
     expect(replies.length).toBeGreaterThan(0);
   });
 
-  test.failing("B2: small talk does not return random listings", async () => {
+  test("B2: small talk does not return random listings", async () => {
     await h.insertListing({ code: "HP-201" });
     h.AI.respond(() => ({ intent: "other", filters: {}, locations: [], location_terms: [] }));
     expect(textOf(await h.text("broker", "شكرا"))).not.toMatch(/HP-201/);

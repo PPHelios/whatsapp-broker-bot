@@ -3,6 +3,8 @@
 // in features_other; nothing is invented.
 "use strict";
 
+const { normalizeSearch } = require("./searchText");
+
 /**
  * key: stable id stored in listings.feature_keys
  * ar / en: display labels
@@ -55,19 +57,8 @@ const FEATURES = [
 
 const BY_KEY = new Map(FEATURES.map((f) => [f.key, f]));
 
-/** Arabic/English normalization for dictionary matching (same folding as search text). */
-function normalizeForMatch(text) {
-  return String(text || "")
-    .toLowerCase()
-    .replace(/[ً-ٰٟـ]/g, "")
-    .replace(/[أإآٱ]/g, "ا")
-    .replace(/ى/g, "ي")
-    .replace(/ة/g, "ه")
-    .replace(/[٠-٩]/g, (d) => "0123456789"["٠١٢٣٤٥٦٧٨٩".indexOf(d)])
-    .replace(/[^\p{L}\p{N}\s/']+/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+/** Matching uses the one search normalizer (domain/searchText.js). */
+const normalizeForMatch = normalizeSearch;
 
 // Longest synonyms first so "حمام سباحة خاص" wins over shorter overlaps.
 const MATCHERS = FEATURES.flatMap((f) => f.syn.map((s) => ({ key: f.key, term: normalizeForMatch(s) })))

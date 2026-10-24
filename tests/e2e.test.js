@@ -398,11 +398,12 @@ describe("5. lib/search.js - Bilingual Normalization & Negative Status Guards", 
     assert.match(sql, /status\s*=\s*'active'/i);
   });
 
-  it("should normalize 'Hyde Park' into Arabic, English, and spaceless variations", () => {
-    const parsed = S.fallbackParse("شقة في هايد بارك 3 غرف");
-    assert.equal(parsed.location_terms.includes("هايد بارك"), true);
-    assert.equal(parsed.location_terms.includes("هايدبارك"), true);
-    assert.equal(parsed.location_terms.includes("hyde park"), true);
+  it("should resolve 'Hyde Park' in Arabic, English or spaceless to the same compound key", () => {
+    for (const q of ["شقة في هايد بارك 3 غرف", "apartment in Hyde Park 3 bedrooms", "شقة هايدبارك 3 غرف"]) {
+      const parsed = S.fallbackParse(q);
+      assert.deepEqual(parsed.filters.places, [{ kind: "compound", key: "hyde_park" }]);
+      assert.equal(parsed.filters.bedrooms_min, 3);
+    }
   });
 
   it("should support search pagination with limit and offset parameters", () => {
