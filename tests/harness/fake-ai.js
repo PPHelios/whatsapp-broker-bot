@@ -16,7 +16,7 @@ function answer(call) {
 
 const genAI = {
   models: {
-    // Direct SDK calls (lib/search.js parseSearchRequest / enrichLocation)
+    // Direct SDK calls (only the unused lib/search.js enrichLocation still calls the SDK directly)
     generateContent: async ({ model, contents, config }) => {
       const text = answer({ operation: "sdk", model, contents, config });
       return { text, usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 20 } };

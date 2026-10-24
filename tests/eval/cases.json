@@ -1,0 +1,83 @@
+{
+  "_about": "AI quality eval set (plan Part 6, L1-eval). Each voice case is one or more recordings in tests/eval/audio/<file>. 'expected' lists only the fields the AI must get right; null means the field must stay empty (never invented). Prices in EGP.",
+  "voice": [
+    {
+      "id": "01-simple",
+      "files": ["01-simple.ogg"],
+      "script": "عندي شقة في مدينتي، مساحتها ١٥٠ متر، ٣ غرف و٢ حمام، في الدور الرابع، تشطيب كامل، والسعر ٨ مليون ونص.",
+      "expected": { "property_type": "apartment", "listing_type": "sale", "compound": "Madinaty", "area_value": 150, "bedrooms": 3, "bathrooms": 2, "floor": 4, "finishing": "fully_finished", "price_value": 8500000 }
+    },
+    {
+      "id": "02-self-correction",
+      "files": ["02-self-correction.ogg"],
+      "script": "شقة في هايد بارك التجمع، ١٨٠ متر، ٣ غرف، السعر ١٢ مليون… لا لا معلش، خليها ١١ مليون ونص. والتشطيب نص تشطيب.",
+      "expected": { "property_type": "apartment", "compound": "Hyde Park", "area_value": 180, "bedrooms": 3, "finishing": "semi_finished", "price_value": 11500000 }
+    },
+    {
+      "id": "03-resale-balance",
+      "files": ["03-resale-balance.ogg"],
+      "script": "ريسيل في ميفيدا، ٢٠٠ متر، ٣ غرف منهم ماستر. المدفوع ٤ مليون، والباقي للشركة ٦ مليون أقساط، يعني الإجمالي ١٠ مليون.",
+      "expected": { "property_type": "apartment", "compound": "Mivida", "area_value": 200, "bedrooms": 3, "price_value": 10000000, "total_upfront_cash": 4000000, "remaining_debt": 6000000 }
+    },
+    {
+      "id": "04-studio-slang",
+      "files": ["04-studio-slang.ogg"],
+      "script": "استوديو في الرحاب، ٦٥ متر، مفروش، بمليون وربع كاش.",
+      "expected": { "property_type": "studio", "compound": "Al Rehab", "area_value": 65, "bedrooms": 0, "finishing": "furnished", "price_value": 1250000 }
+    },
+    {
+      "id": "05-villa",
+      "files": ["05-villa.ogg"],
+      "script": "فيلا مستقلة في بالم هيلز أكتوبر، المباني ٤٠٠ متر والأرض ٦٠٠ متر، ٥ غرف و٦ حمامات، فيها غرفة مربية، استلام فوري، السعر ٣٥ مليون.",
+      "expected": { "property_type": "villa", "compound": "Palm Hills October", "bua": 400, "land_area": 600, "bedrooms": 5, "bathrooms": 6, "nanny_room": true, "ready_to_move": true, "price_value": 35000000 }
+    },
+    {
+      "id": "06-rent",
+      "files": ["06-rent.ogg"],
+      "script": "شقة للإيجار في الشيخ زايد، كمبوند بيفرلي هيلز، ١٦٠ متر، ٣ غرف، مفروشة بالتكييفات، الإيجار ٤٥ ألف في الشهر.",
+      "expected": { "property_type": "apartment", "listing_type": "rent", "compound": "Beverly Hills", "area_value": 160, "bedrooms": 3, "finishing": "furnished_with_ac", "price_value": 45000 }
+    },
+    {
+      "id": "07-noisy",
+      "files": ["07-noisy.ogg"],
+      "script": "(سجّلها والتلفزيون شغال أو في الشارع) تاون هاوس في الشروق، ٢٨٠ متر، ٤ غرف، السعر ١٨ مليون.",
+      "expected": { "property_type": "townhouse", "area_value": 280, "bedrooms": 4, "price_value": 18000000 }
+    },
+    {
+      "id": "08-two-notes",
+      "files": ["08a-two-notes.ogg", "08b-two-notes.ogg"],
+      "script": "فويس ١: دوبلكس في التجمع الخامس، كمبوند ماونتن فيو آي سيتي، ٢٥٠ متر. — فويس ٢ (منفصل): ٤ غرف، الدور الأرضي بجنينة ١٠٠ متر، السعر ١٧ مليون ونص.",
+      "expected": { "property_type": "duplex", "compound": "Mountain View iCity", "area_value": 250, "bedrooms": 4, "garden_area": 100, "price_value": 17500000 }
+    },
+    {
+      "id": "09-code-switch",
+      "files": ["09-code-switch.ogg"],
+      "script": "Apartment in Sodic East, 140 square meters, 2 bedrooms, ready to move، والسعر ٧ مليون و٢٠٠ ألف.",
+      "expected": { "property_type": "apartment", "compound": "Sodic East", "area_value": 140, "bedrooms": 2, "ready_to_move": true, "price_value": 7200000 }
+    },
+    {
+      "id": "10-missing-price",
+      "files": ["10-missing-price.ogg"],
+      "script": "شقة في العاصمة الإدارية، ١٢٠ متر، أوضتين.",
+      "expected": { "property_type": "apartment", "area_value": 120, "bedrooms": 2, "price_value": null }
+    },
+    {
+      "id": "11-developer-plan",
+      "files": ["11-developer-plan.ogg"],
+      "script": "شقة من المطور في زد الشيخ زايد، ١٣٥ متر، السعر ١١ مليون، مقدم ١٠٪ والباقي على ٨ سنين، الاستلام ٢٠٢٨.",
+      "expected": { "property_type": "apartment", "compound": "ZED Sheikh Zayed", "area_value": 135, "price_value": 11000000, "down_payment_pct": 10, "installment_years": 8, "delivery_date": "2028" }
+    },
+    {
+      "id": "12-commercial",
+      "files": ["12-commercial.ogg"],
+      "script": "محل تجاري في التجمع على شارع التسعين، ٦٠ متر، السعر ٨ مليون و٧٥٠ ألف.",
+      "expected": { "property_type": "commercial", "area_value": 60, "bedrooms": null, "price_value": 8750000 }
+    },
+    {
+      "id": "13-thousands-slang",
+      "files": ["13-thousands-slang.ogg"],
+      "script": "شقة في مدينة نصر، الدور العاشر، بحري، ١٢٥ متر، ٣ غرف، تشطيب سوبر لوكس، بأربعة مليون وتلتمية.",
+      "expected": { "property_type": "apartment", "area_value": 125, "bedrooms": 3, "floor": 10, "orientation": "north", "price_value": 4300000 }
+    }
+  ]
+}

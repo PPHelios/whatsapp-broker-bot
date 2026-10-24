@@ -16,6 +16,11 @@
       "safeTruncate": ["str", "maxChars"]
     },
     "lib/ai.js": {
+      "TIERS": "Array",
+      "ROUTES": "Object",
+      "FAST_THINKING": "Object",
+      "TRANSCRIPTION_PROMPT": "String",
+      "classifyError": ["err"],
       "getGenAI": [],
       "generateWithCascade": ["params"],
       "transcribeAudio": ["audioBuffer", "mimeType", "ctx"]

@@ -336,7 +336,8 @@ function createApp({ pool }) {
     const normalizedPhone = U.normalizePhone(rawPhone);
 
     // Mark message as read on WhatsApp
-    WA.markAsRead(message.id).catch(() => {});
+    // Read receipt + typing indicator: the broker sees "typing…" while the turn is processed.
+    WA.markAsRead(message.id, { typing: true }).catch(() => {});
 
     state.inFlight++;
     try {

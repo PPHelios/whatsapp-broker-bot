@@ -56,6 +56,13 @@ describe("Reply truth (plan #7, Part 2 C)", () => {
   });
 });
 
+describe("Perceived latency (plan L8)", () => {
+  test("every inbound message gets a read receipt with the typing indicator", async () => {
+    await h.send("broker", { id: "wamid.typing.1", type: "text", text: { body: "مساعدة" } });
+    expect(h.WA.receipts).toContainEqual({ msgId: "wamid.typing.1", typing: true });
+  });
+});
+
 describe("Photo ceiling (ING-01 / TC-ING-02)", () => {
   test("the 16th photo is dropped with a warning and Save/Cancel buttons", async () => {
     for (let i = 0; i < 15; i++) await h.photo("broker");

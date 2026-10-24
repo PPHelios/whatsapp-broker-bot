@@ -200,7 +200,7 @@ describe("Editing (EDT)", () => {
     await h.text("broker", "تعديل HP-201");
     h.AI.respond(() => searchAnswer());
     await h.text("broker", "السعر بقى 9 مليون");
-    expect(h.AI.calls.filter((c) => c.operation === "sdk")).toHaveLength(0);
+    expect(h.AI.calls.filter((c) => c.operation === "search_parse")).toHaveLength(0);
   });
 });
 

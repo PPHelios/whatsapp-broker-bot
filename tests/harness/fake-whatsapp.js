@@ -4,6 +4,7 @@
 const actual = jest.requireActual("../../lib/whatsapp");
 
 const outbox = []; // every outbound call, in order
+const receipts = []; // markAsRead calls: { msgId, typing }
 const media = new Map(); // mediaId -> { buffer, mimeType }
 const failures = new Map(); // method name -> Error to throw on next call
 let uploadSeq = 0;
@@ -40,17 +41,22 @@ module.exports = {
   sendWhatsAppDocument: async (to, buffer, filename, caption = "") =>
     record("document", to, { filename, caption, size: buffer ? buffer.length : 0 }),
   uploadWhatsAppMedia: async () => `media.up.${++uploadSeq}`,
-  markAsRead: async () => true,
+  markAsRead: async (msgId, opts = {}) => {
+    receipts.push({ msgId, typing: Boolean(opts.typing) });
+    return true;
+  },
   downloadWhatsAppMedia: async (mediaId) => media.get(mediaId) || null,
 
   // --- test controls ---
   outbox,
+  receipts,
   media,
   failNext(method, error = new Error(`fake ${method} failure`)) {
     failures.set(method, error);
   },
   reset() {
     outbox.length = 0;
+    receipts.length = 0;
     media.clear();
     failures.clear();
     uploadSeq = 0;

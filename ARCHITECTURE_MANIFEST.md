@@ -65,18 +65,34 @@ The database runs on PostgreSQL (Supabase) with the `pg_trgm`, `pgcrypto` and `u
 ---
 
 ### 3. AI Gateway & Resilience Architecture
-* **3-Tier Cascade Configuration:**
-  - **Tier 1 (Primary):** `gemini-3.8-flash` (or `CFG.geminiModel`)
-  - **Tier 2 (Fallback 1):** `gemini-3.6-flash`
-  - **Tier 3 (Fallback 2):** `gemini-3.5-flash-lite` (or `CFG.geminiFallback`)
-* **Failover & Backoff Mechanics:**
-  - All AI operations pass through `rateGate(CFG.geminiRpm)`.
-  - Transient errors (`503`, `UNAVAILABLE`, `RESOURCE_EXHAUSTED`, or timeouts) trigger an exponential backoff with full jitter: `1000 * (attempt + 1) + Math.random() * 400`.
-  - On hard service spikes or quota limits, the system sleeps 400ms and fails over to the next fallback tier.
-* **Deterministic Lexical Search Fallback:**
-  - If all three cloud AI tiers fail during search parsing, the system falls back to `S.fallbackParse(text)` using local regex extraction so user queries never fail.
+* **Single gateway:** every Gemini call goes through `lib/ai.js` `generateWithCascade({ contents, config, operationType, ctx })`. That covers search parsing, transcription, vision curation and draft extraction, which makes it the only place that controls AI latency, cost and telemetry. All calls pass through the in-process `rateGate` (60 RPM per process).
+* **Model tiers (`TIERS`, in order):** `gemini-3.8-flash` → `gemini-3.6-flash` → `gemini-3.5-flash-lite`.
+* **Per-task routes (`ROUTES`):** each `operationType` has a total `deadlineMs`, a `hedgeAfterMs`, and a thinking class. Unknown types use `default`.
+
+  | Route | Deadline | Hedge after | Thinking |
+  | :--- | :--- | :--- | :--- |
+  | `search_parse` | 8 s | 3.5 s | fast |
+  | `audio_transcription` | 25 s | 8 s | fast |
+  | `vision_curation` | 45 s | 15 s | fast |
+  | `default` (draft extraction and others) | 40 s | 12 s | model default |
+
+* **Hedged failover:**
+  - If the current tier hasn't answered within `hedgeAfterMs`, the next tier starts **in parallel**. The first successful answer wins, and the other attempts are cancelled through `abortSignal`.
+  - A hard error (overloaded, quota, invalid) moves to the next tier immediately, with no fixed sleeps.
+  - The call fails with `code: "AI_DEADLINE"` when the route deadline passes.
+* **Thinking per model (`FAST_THINKING`):** thinking settings aren't portable across models. `gemini-3.8-flash` rejects `MINIMAL`, and flash-lite rejects `thinkingBudget: 0` (probed 2026-10-24). So the "fast" class maps each model to its own lowest accepted level: 3.8 → `LOW`, 3.6 and lite → `MINIMAL`. Draft extraction keeps the model default until the AI quality eval (`npm run eval:ai`) shows a lower level keeps accuracy.
+* **Telemetry:**
+  - Each call writes one `operation_logs` row, on success **and** on failure. It records `operation_type = <route>`, the winning `model_used`, `gemini_ms` (the winner's latency), `total_duration_ms` and `tokens_input`.
+  - `tokens_output` includes thinking tokens, because they're billed as output.
+  - `metadata.thoughts_tokens` holds the thinking-token count, and `metadata.attempts` lists every attempt with `{ model, startedMs, ms, outcome: ok|aborted|overloaded|quota|timeout|invalid|other, error }`.
+* **Deterministic Lexical Search Fallback:** any search-parse failure falls back to `S.fallbackParse(text)` using local regex extraction, so search queries never fail. That includes the AI client failing to load, and the 8 s deadline.
 * **Dynamic ESM Loading:**
   - The `@google/genai` library must be imported via a dynamic `await import("@google/genai")` singleton to prevent CommonJS `ERR_REQUIRE_ESM` runtime crashes.
+  - Tests inject a fake client with `_setClientForTests`.
+* **Quality eval (manual, not CI):**
+  - `npm run eval:ai -- --model <model> --configs A,B,C,D,E` scores real Gemini extractions of the recorded broker voice notes (`tests/eval/cases.json`, scorer `tests/eval/score.js`). It reports field accuracy and latency per thinking level and pipeline.
+  - Recordings and results stay local, in `tests/eval/audio/` and `tests/eval/results/`; both are gitignored.
+  - Results are saved after every case, and a rerun resumes.
 
 ---
 

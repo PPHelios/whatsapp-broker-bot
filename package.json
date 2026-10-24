@@ -9,6 +9,7 @@
     "test:pipeline": "node --env-file=.env tests/test_search_pipeline.js",
     "test:search:db": "node --env-file=.env tests/test_search_db.js",
     "schema:export": "node --env-file=.env scripts/export-schema.js",
+    "eval:ai": "node --env-file=.env scripts/eval-ai.js",
     "test:unit": "node --test tests/e2e.test.js",
     "test:contracts": "jest tests/contract-guard.test.js --runInBand",
     "test:safeguards": "jest tests/safeguards.test.js --runInBand",

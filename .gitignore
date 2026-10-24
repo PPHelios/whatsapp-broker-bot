@@ -69,3 +69,6 @@ bw5Cloud/public/
 bw5Cloud/public2/
 dist.zip
 **/serviceAccountKey.json
+# Eval voice recordings (personal voice; kept local, not committed)
+tests/eval/audio/
+tests/eval/results/
