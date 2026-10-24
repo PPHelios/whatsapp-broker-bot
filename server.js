@@ -14,6 +14,7 @@ const S = require("./lib/search");
 const AI = require("./lib/ai");
 const Flyer = require("./lib/flyer");
 const Drafts = require("./lib/drafts");
+const Edits = require("./lib/edits");
 const { executeGuardedTurn, reply, replyButtons } = require("./lib/dispatcher");
 
 // Modular Route Controllers
@@ -232,7 +233,10 @@ function createApp({ pool, config = getConfig() }) {
           return "done";
         }
 
-        // 3. Delegate to search & natural language engine
+        // 3. A4: inside an edit session, text is part of the edit (never a search).
+        if (await Edits.appendToEdit(broker, ctx, { text })) return "done";
+
+        // 4. Delegate to search & natural language engine
         return await S.handleSearchMessage(broker, text, ctx);
       }
 

@@ -13,13 +13,10 @@ const {
   allowSilentDrop
 } = require("../lib/dispatcher");
 
-/**
- * Validates broker mutation permissions.
- */
-function canEdit(broker, listing) {
-  if (["admin", "owner", "manager"].includes(broker.role)) return true;
-  return listing.broker_id === broker.id;
-}
+const { canEdit } = require("../lib/authz");
+const Edits = require("../lib/edits");
+const { quickSections } = require("../lib/buttons");
+const { t } = require("../lib/copy");
 
 /**
  * Non-blocking operational telemetry logging helper.
@@ -524,62 +521,25 @@ async function handleInteractive(broker, message, ctx) {
     return "done";
   }
 
-  // 12. TRIGGER EDIT MODE FROM LISTING CARD (EDT-01)
+  // 12. EDIT FROM A CARD (EDT-01) and the staged edit buttons
   if (replyId.startsWith("edit:")) {
-    const targetCode = T.extractCleanCode(replyId.split(":")[1]);
+    return await Edits.startEdit(broker, T.extractCleanCode(replyId.split(":")[1]), ctx);
+  }
+  if (replyId === "edit_review") return await Edits.reviewEdit(broker, ctx);
+  if (replyId === "edit_confirm") return await Edits.confirmEdit(broker, ctx);
+  if (replyId === "edit_cancel") return await Edits.cancelEdit(broker, ctx);
 
-    const { rows } = await pool.query(
-      `SELECT * FROM listings
-       WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
-       LIMIT 1`,
-      [broker.agency_id, targetCode]
-    );
-
-    if (rows.length === 0) {
-      await reply(
-        broker,
-        lang === "en"
-          ? `🔍 Unit #${targetCode} not found.`
-          : `🔍 الوحدة #${targetCode} غير موجودة.`
-      );
-      return "done";
-    }
-
-    const listing = rows[0];
-    if (!canEdit(broker, listing)) {
-      await reply(
-        broker,
-        lang === "en"
-          ? "⛔ Not authorized to edit this listing."
-          : "⛔ ليس لديك صلاحية لتعديل هذه الوحدة."
-      );
-      return "done";
-    }
-
-    await pool.query(
-      `INSERT INTO broker_sessions (broker_id, session_type, session_data, expires_at)
-       VALUES ($1::uuid, 'edit', $2::jsonb, NOW() + INTERVAL '15 minutes')
-       ON CONFLICT (broker_id, session_type) DO UPDATE SET
-         session_data = EXCLUDED.session_data,
-         expires_at = NOW() + INTERVAL '15 minutes'`,
-      [
-        broker.id,
-        JSON.stringify({
-          listing_id: listing.id,
-          code: listing.code,
-          voice_buffers: [],
-          text_notes: []
-        })
-      ]
-    );
-
-    await reply(
-      broker,
-      lang === "en"
-        ? `✏️ Edit mode active for unit #${listing.code}. Send your modifications (voice or text), then type *done*.`
-        : `✏️ وضع التعديل نشط للوحدة #${listing.code}. أرسل تعديلاتك (صوت أو كتابة) واكتب «تم» عند الانتهاء.`
-    );
+  // 12b. QUICK UPDATES: menu (qu_menu:CODE) and actions (qu:sold|available|archive|edit:CODE)
+  if (replyId.startsWith("qu_menu:")) {
+    const code = T.extractCleanCode(replyId.split(":")[1]);
+    await replyList(broker, t("quick_menu", lang, { code }), lang === "en" ? "Choose" : "اختار", quickSections(code, lang));
     return "done";
+  }
+  if (replyId.startsWith("qu:")) {
+    const [, action, rawCode] = replyId.split(":");
+    const code = T.extractCleanCode(rawCode);
+    if (action === "edit") return await Edits.startEdit(broker, code, ctx);
+    if (["sold", "available", "archive"].includes(action)) return await Edits.quickUpdate(broker, { action, code }, ctx);
   }
 
   // 13. CANCEL DRAFT AND EXECUTE SEARCH (COL-01)

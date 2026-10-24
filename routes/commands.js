@@ -6,6 +6,8 @@ const U = require("../lib/util");
 const Flyer = require("../lib/flyer");
 const Drafts = require("../lib/drafts");
 const Vision = require("../lib/vision");
+const Registry = require("../lib/registry");
+const { cardButtons } = require("../lib/buttons");
 const {
   reply,
   replyButtons,
@@ -13,13 +15,7 @@ const {
   replyDocument
 } = require("../lib/dispatcher");
 
-/**
- * Validates whether the broker has permission to mutate a listing.
- */
-function canEdit(broker, listing) {
-  if (["admin", "owner", "manager"].includes(broker.role)) return true;
-  return listing.broker_id === broker.id;
-}
+const { canEdit } = require("../lib/authz");
 
 /**
  * Asynchronous, non-blocking operational telemetry logging helper.
@@ -418,28 +414,7 @@ async function deliverCollateral(listing, broker, lang) {
  */
 async function deliverUnitInspectionCard(listing, broker, lang) {
   const detailsCard = T.formatInternalListingDetails(listing, lang);
-  const isResale = listing.inventory_type === "resale_unit";
-
-  const buttons = [
-    {
-      id: `flyer:en:dark:${listing.code}`,
-      title: lang === "en" ? "Flyer 📄" : "الكتالوج 📄"
-    },
-    {
-      id: `client:${listing.code}`,
-      title: lang === "en" ? "Client Copy 📱" : "نص العميل 📱"
-    },
-    {
-      id: isResale ? `edit:${listing.code}` : `plans_view:${listing.code}`,
-      title: isResale
-        ? lang === "en"
-          ? "Edit ✏️"
-          : "تعديل ✏️"
-        : lang === "en"
-        ? "Plans 💳"
-        : "جدول الأقساط 💳"
-    }
-  ];
+  const buttons = cardButtons(listing, lang);
 
   await replyButtons(broker, detailsCard, buttons);
   return true;
@@ -534,18 +509,6 @@ async function handleCommand(broker, text, ctx) {
     }
   }
 
-  // 0b. SEARCH PAGING BY TEXT (SCH-02, B4): "المزيد" pages the last search, also inside a draft.
-  if (/^(المزيد|مزيد|كمان|more|next)$/i.test(lower)) {
-    const { rows } = await pool.query(
-      "SELECT 1 FROM broker_sessions WHERE broker_id = $1 AND session_type = 'search_state' AND expires_at > NOW()",
-      [broker.id]
-    );
-    if (rows.length) {
-      await ctx.S.handleMore(broker, ctx);
-      return true;
-    }
-  }
-
   // 1. HELP / MENU (SYS-01)
   if (/^(مساعدة|help|اوامر|الأوامر|menu|قائمة)$/i.test(lower)) {
     const helpMsg = T.getHelpMessage(lang);
@@ -631,110 +594,10 @@ async function handleCommand(broker, text, ctx) {
     return true;
   }
 
-  // 5. EDIT SESSION / PATCH (EDT-01, EDT-02)
-  const editMatch = raw.match(
-    /^(تعديل|edit)(?:\s+([A-Za-z0-9_\-\.\/]+))?(?:\s+(.+))?$/i
-  );
-  if (editMatch) {
-    const targetCode = await resolveTargetCode(editMatch[2]);
-    const instructions = editMatch[3];
-
-    if (!targetCode) {
-      await reply(
-        broker,
-        lang === "en"
-          ? "⚠️ Please specify the unit code to edit (e.g., `edit NOLL-101` or `تعديل NOLL-101 السعر 9M`)."
-          : "⚠️ يرجى تحديد كود الوحدة للتعديل (مثال: `تعديل NOLL-101` أو `تعديل NOLL-101 السعر 9 مليون`)."
-      );
-      return true;
-    }
-
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
-        [String(broker.agency_id), targetCode.toUpperCase()]
-      );
-
-      const { rows } = await client.query(
-        `SELECT * FROM listings
-         WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
-         FOR UPDATE`,
-        [broker.agency_id, targetCode.toUpperCase()]
-      );
-
-      if (rows.length === 0) {
-        await client.query("ROLLBACK");
-        await reply(
-          broker,
-          lang === "en"
-            ? `🔍 Unit #${targetCode} not found.`
-            : `🔍 الوحدة #${targetCode} غير موجودة.`
-        );
-        return true;
-      }
-
-      const listing = rows[0];
-      if (!canEdit(broker, listing)) {
-        await client.query("ROLLBACK");
-        await reply(
-          broker,
-          lang === "en"
-            ? "⛔ Not authorized to edit this listing."
-            : "⛔ ليس لديك صلاحية لتعديل هذه الوحدة."
-        );
-        return true;
-      }
-
-      if (instructions) {
-        await client.query("COMMIT");
-        await reply(
-          broker,
-          lang === "en"
-            ? `✏️ Processing update instructions for unit #${listing.code}...`
-            : `✏️ جاري تنفيذ تعليمات التعديل للوحدة #${listing.code}...`
-        );
-      } else {
-        await client.query(
-          `INSERT INTO broker_sessions (broker_id, session_type, session_data, expires_at)
-           VALUES ($1::uuid, 'edit', $2::jsonb, NOW() + INTERVAL '15 minutes')
-           ON CONFLICT (broker_id, session_type) DO UPDATE SET
-             session_data = EXCLUDED.session_data,
-             expires_at = NOW() + INTERVAL '15 minutes'`,
-          [
-            broker.id,
-            JSON.stringify({
-              listing_id: listing.id,
-              code: listing.code,
-              voice_buffers: [],
-              text_notes: []
-            })
-          ]
-        );
-        await client.query("COMMIT");
-
-        await setRecentBrokerListing(
-          pool,
-          broker.id,
-          listing.code,
-          recentBrokerListings
-        );
-        await reply(
-          broker,
-          lang === "en"
-            ? `✏️ Edit mode active for unit #${listing.code}. Send your modifications (voice or text), then type *done*.`
-            : `✏️ وضع التعديل نشط للوحدة #${listing.code}. أرسل تعديلاتك (صوت أو كتابة) واكتب «تم» عند الانتهاء.`
-        );
-      }
-    } catch (err) {
-      await client.query("ROLLBACK");
-      throw err;
-    } finally {
-      client.release();
-    }
-    return true;
-  }
+  // 5. REGISTERED COMMANDS (lib/registry.js): quick status updates (sold / archive / available),
+  //    price edits incl. "تعديل سعر CODE إلى X" (A5), edit sessions (A3), "تم" inside an edit, "المزيد".
+  //    Status keywords handled there: تم البيع|مباع|sold, ارشفة|أرشفة|archive, تفعيل|نشط|active.
+  if (await Registry.dispatch(broker, raw, ctx)) return true;
 
   // 6. DRAFT PRE-SAVE VALIDATION / FINALIZATION (DRF-02, ING-05)
   if (/^(تم|حفظ|done|save)$/i.test(lower)) {
@@ -1016,103 +879,7 @@ async function handleCommand(broker, text, ctx) {
     return true;
   }
 
-  // 9. LIFECYCLE: STATUS UPDATES (Sold, Archived, Reactivate) (LFC-01, LFC-02, LFC-03)
-  const statusMatch = raw.match(
-    /^(تم البيع|مباع|sold|ارشفة|أرشفة|archive|تفعيل|نشط|active)(?:\s+(.+))?$/i
-  );
-  if (statusMatch) {
-    const action = statusMatch[1].toLowerCase();
-    const targetCode = await resolveTargetCode(statusMatch[2]);
-
-    if (!targetCode) {
-      await reply(
-        broker,
-        lang === "en"
-          ? "⚠️ Please specify the unit code (e.g., `sold NOLL-101`)."
-          : "⚠️ يرجى تحديد كود الوحدة (مثال: `مباع NOLL-101`)."
-      );
-      return true;
-    }
-
-    let newStatus = "active";
-    if (["تم البيع", "مباع", "sold"].includes(action)) newStatus = "sold";
-    else if (["ارشفة", "أرشفة", "archive"].includes(action))
-      newStatus = "archived";
-
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
-        [String(broker.agency_id), targetCode.toUpperCase()]
-      );
-
-      const { rows } = await client.query(
-        `SELECT id, broker_id, code, status FROM listings
-         WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
-         FOR UPDATE`,
-        [broker.agency_id, targetCode.toUpperCase()]
-      );
-
-      if (rows.length === 0) {
-        await client.query("ROLLBACK");
-        await reply(
-          broker,
-          lang === "en"
-            ? `🔍 Unit #${targetCode} was not found.`
-            : `🔍 الوحدة #${targetCode} غير موجودة.`
-        );
-        return true;
-      }
-
-      const listing = rows[0];
-      if (!canEdit(broker, listing)) {
-        await client.query("ROLLBACK");
-        await reply(
-          broker,
-          lang === "en"
-            ? "⛔ You are not authorized to update this listing."
-            : "⛔ ليس لديك صلاحية تعديل حالة هذه الوحدة."
-        );
-        return true;
-      }
-
-      await client.query(
-        "UPDATE listings SET status = $1, flyer_cache = '{}'::jsonb, updated_at = NOW() WHERE id = $2",
-        [newStatus, listing.id]
-      );
-
-      await client.query("COMMIT");
-
-      const statusLabels = {
-        active: { ar: "نشطة ومتاحة في البحث", en: "active and searchable" },
-        sold: { ar: "تم البيع", en: "sold" },
-        archived: { ar: "مؤرشفة ومخفية من البحث", en: "archived" }
-      };
-
-      await reply(
-        broker,
-        lang === "en"
-          ? `✅ Status for unit #${listing.code} changed to *${statusLabels[newStatus].en}*.`
-          : `✅ تم تغيير حالة الوحدة #${listing.code} إلى: *${statusLabels[newStatus].ar}*.`
-      );
-
-      logCommandOp(pool, {
-        agency_id: broker.agency_id,
-        broker_id: broker.id,
-        listing_code: listing.code,
-        operation_type: `command_status_${newStatus}`,
-        total_duration_ms: Date.now() - startTime
-      });
-    } catch (err) {
-      await client.query("ROLLBACK");
-      throw err;
-    } finally {
-      client.release();
-    }
-
-    return true;
-  }
+  // 9. LIFECYCLE STATUS UPDATES: lib/registry.js (step 5 above).
 
   // 10. DELETION: REQUEST WITH ADVISORY & ROW-LOCKING (DEL-01)
   const deleteMatch = raw.match(/^(حذف|delete|مسح)(?:\s+(.+))?$/i);
@@ -1193,154 +960,7 @@ async function handleCommand(broker, text, ctx) {
     return true;
   }
 
-  // 11. INLINE DIRECT PRICE EDIT (EDT-03, EDT-04, EDT-05)
-  const priceEditMatch = raw.match(
-    /^(?:تعديل\s+)?(?:سعر|price)\s+([A-Za-z0-9_\-\.\/]+)\s+(?:الى|إلى|to\s+)?(.+)$/i
-  );
-  if (priceEditMatch) {
-    const targetCode = T.extractCleanCode(priceEditMatch[1]);
-    const rawPrice = priceEditMatch[2];
-
-    const parsedPriceResult = T.parseEgyptianPrice(rawPrice);
-    const numericPrice = parsedPriceResult?.priceValue;
-
-    if (!numericPrice || numericPrice <= 0) {
-      await reply(
-        broker,
-        lang === "en"
-          ? "⚠️ Invalid price format. Example: `price NOLL-101 8.5M`"
-          : "⚠️ صيغة السعر غير صحيحة. مثال: `سعر NOLL-101 8.5 مليون`"
-      );
-      return true;
-    }
-
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
-        [String(broker.agency_id), targetCode.toUpperCase()]
-      );
-
-      const { rows } = await client.query(
-        `SELECT * FROM listings
-         WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
-         FOR UPDATE`,
-        [broker.agency_id, targetCode.toUpperCase()]
-      );
-
-      if (rows.length === 0) {
-        await client.query("ROLLBACK");
-        await reply(
-          broker,
-          lang === "en"
-            ? `🔍 Unit #${targetCode} not found.`
-            : `🔍 الوحدة #${targetCode} غير موجودة.`
-        );
-        return true;
-      }
-
-      const listing = rows[0];
-      if (!canEdit(broker, listing)) {
-        await client.query("ROLLBACK");
-        await reply(
-          broker,
-          lang === "en"
-            ? "⛔ Not authorized."
-            : "⛔ ليس لديك صلاحية تعديل هذه الوحدة."
-        );
-        return true;
-      }
-
-      if (
-        listing.is_primary_developer ||
-        listing.inventory_type === "developer_model"
-      ) {
-        await client.query("ROLLBACK");
-        await reply(
-          broker,
-          lang === "en"
-            ? "⚠️ Developer inventory prices cannot be edited directly due to certified payment matrices. Please re-upload the updated project sheet."
-            : "⚠️ لا يمكن تعديل أسعار مشاريع المطورين مباشرة لارتباطها بجدول أقساط معتمد. يرجى رفع شيت الأسعار المحدث."
-        );
-        return true;
-      }
-
-      const formattedPriceDisplay = T.formatAbbreviatedPrice(
-        numericPrice,
-        parsedPriceResult.currency || "EGP",
-        lang,
-        listing.listing_type
-      );
-      const updatedDetails = {
-        ...(listing.details || {}),
-        price_display: formattedPriceDisplay,
-        currency:
-          parsedPriceResult.currency || listing.details?.currency || "EGP"
-      };
-
-      const newArTitle = `${listing.property_type || "وحدة"} ${
-        listing.area_value || ""
-      }م² في ${
-        listing.compound || listing.location || ""
-      } - ${formattedPriceDisplay}`.trim();
-      const newEnTitle = `${listing.property_type || "Unit"} ${
-        listing.area_value || ""
-      }sqm in ${
-        listing.details?.compound_en || listing.compound || ""
-      } - ${formattedPriceDisplay}`.trim();
-      updatedDetails.title_en = newEnTitle;
-
-      const fullSearchCorpus = `${targetCode} ${newArTitle} ${newEnTitle} ${
-        listing.compound || ""
-      } ${listing.district || ""} ${listing.city || ""}`;
-
-      await client.query(
-        `UPDATE listings SET
-           price_value = $1,
-           price_display = $2,
-           title = $3,
-           details = $4,
-           search_text_normalized = clean_arabic_text($5),
-           flyer_cache = '{}'::jsonb,
-           updated_at = NOW()
-         WHERE id = $6`,
-        [
-          numericPrice,
-          formattedPriceDisplay,
-          newArTitle,
-          updatedDetails,
-          fullSearchCorpus,
-          listing.id
-        ]
-      );
-
-      await client.query("COMMIT");
-
-      await reply(
-        broker,
-        lang === "en"
-          ? `✅ Price for unit #${listing.code} updated to *${formattedPriceDisplay}*. Brochure cache invalidated.`
-          : `✅ تم تعديل سعر الوحدة #${listing.code} إلى *${formattedPriceDisplay}*. تم تحديث فهارس البحث ومسح كاش البروشور القديم.`
-      );
-
-      logCommandOp(pool, {
-        agency_id: broker.agency_id,
-        broker_id: broker.id,
-        listing_code: listing.code,
-        operation_type: "command_price_patch",
-        total_duration_ms: Date.now() - startTime,
-        metadata: { newPrice: numericPrice, formattedPriceDisplay }
-      });
-    } catch (err) {
-      await client.query("ROLLBACK");
-      throw err;
-    } finally {
-      client.release();
-    }
-
-    return true;
-  }
+  // 11. PRICE EDITS: lib/registry.js (step 5 above); developer inventory (is_primary_developer / developer_model) is guarded in lib/edits.js.
 
   // 12. DELIVERABLE: LUXURY FLYER / BROCHURE (DEL-01)
   const flyerMatch = raw.match(

@@ -188,14 +188,14 @@ describe("Editing (EDT)", () => {
     expect(textOf(await h.text("broker", "سعر DEV-1 9 مليون"))).toMatch(/المطورين/);
   });
 
-  test.failing("A5: 'تعديل سعر CODE إلى X' edits that CODE", async () => {
+  test("A5: 'تعديل سعر CODE إلى X' edits that CODE", async () => {
     await h.insertListing({ code: "HP-201" });
     await h.text("broker", "تعديل سعر HP-201 إلى 9 مليون");
     const [l] = await h.query("SELECT price_value FROM listings WHERE code = 'HP-201'");
     expect(Number(l.price_value)).toBe(9000000);
   });
 
-  test.failing("A4: text sent in edit mode is not treated as a search", async () => {
+  test("A4: text sent in edit mode is not treated as a search", async () => {
     await h.insertListing({ code: "HP-201" });
     await h.text("broker", "تعديل HP-201");
     h.AI.respond(() => searchAnswer());

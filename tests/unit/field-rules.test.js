@@ -120,7 +120,8 @@ describe("Extraction normalization (never invents)", () => {
       feature_keys: [],
       features_other: []
     });
-    expect(f.details).toEqual({ currency: "EGP" });
+    expect(f.details).toEqual({});
+    expect(f.market).toBeNull();
   });
 
   test("features: keys kept, labels mapped, unknown extras free text", () => {

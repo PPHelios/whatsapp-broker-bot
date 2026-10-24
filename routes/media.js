@@ -6,6 +6,8 @@ const WA = require("../lib/whatsapp");
 const U = require("../lib/util");
 const Drafts = require("../lib/drafts");
 const Supabase = require("../lib/supabase");
+const Edits = require("../lib/edits");
+const Registry = require("../lib/registry");
 const { reply, replyButtons, react } = require("../lib/dispatcher");
 
 // Constrain Sharp concurrency and memory for Render containers
@@ -244,29 +246,14 @@ async function handleAudio(broker, message, ctx) {
     return "done";
   }
 
-  // 4. Scenario B: Append to active edit session (EDT-02) atomically
+  // 4. Scenario B: Append to the active edit session (EDT-02, A4)
   if (activeEdit) {
-    const editData = activeEdit.session_data || { voice_buffers: [] };
-    if (!Array.isArray(editData.voice_buffers)) editData.voice_buffers = [];
-
-    editData.voice_buffers.push({
-      mimeType: U.cleanAudioMime(audioData.mimeType || "audio/ogg"),
-      base64: audioData.buffer.toString("base64")
+    await Edits.appendToEdit(broker, ctx, {
+      voice: {
+        mimeType: U.cleanAudioMime(audioData.mimeType || "audio/ogg"),
+        base64: audioData.buffer.toString("base64")
+      }
     });
-
-    await pool.query(
-      `UPDATE broker_sessions
-       SET session_data = $1, expires_at = NOW() + INTERVAL '15 minutes'
-       WHERE broker_id = $2 AND session_type = 'edit'`,
-      [editData, broker.id]
-    );
-
-    await reply(
-      broker,
-      lang === "en"
-        ? "🎙️ Voice edit note received. Send more edits or type *done* to apply."
-        : "🎙️ تم استلام ملاحظة التعديل الصوتية. أرسل المزيد أو اكتب *«تم»* للتنفيذ."
-    );
     return "done";
   }
 
@@ -304,7 +291,8 @@ async function handleAudio(broker, message, ctx) {
     return "done";
   }
 
-  // Delegate transcribed text to the 2-pass search engine
+  // Spoken quick updates ("اتباعت VIL-08", "سعر VIL-08 9 مليون") run as commands; the rest is a search.
+  if (await Registry.dispatch(broker, transcribedText.trim(), ctx, { voice: true })) return "done";
   return await S.handleSearchMessage(broker, transcribedText.trim(), ctx, { channel: "voice" });
 }
 
