@@ -659,7 +659,7 @@ async function handleCommand(broker, text, ctx) {
   }
 
   // 8. EXPORT INVENTORY (EXCEL) (DEL-06)
-  if (/^(تصدير|export|excel|شيت)$/i.test(lower)) {
+  if (/^(تصدير|export|excel|شيت|اكسل|إكسل|اكسيل|إكسيل)$/i.test(lower)) {
     const cooldownRemaining = await checkBrokerCooldown(
       pool,
       broker.id,

@@ -1,0 +1,15 @@
+{
+  "agency": {
+    "name": "Pilot Agency",
+    "phone": "0221234567",
+    "logo_url": "https://example.com/logo.png",
+    "primary_color": "#0B132B",
+    "secondary_color": "#D4AF37",
+    "flyer_theme": "dark"
+  },
+  "brokers": [
+    { "name": "Agency Owner", "phone": "01000000001", "role": "owner", "lang": "ar" },
+    { "name": "Broker One", "phone": "01000000002", "role": "broker", "lang": "ar" },
+    { "name": "Broker Two", "phone": "01000000003", "role": "broker", "lang": "ar", "contact_phone": "01000000013" }
+  ]
+}

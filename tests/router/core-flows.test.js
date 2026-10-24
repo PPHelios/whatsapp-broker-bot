@@ -229,7 +229,7 @@ describe("Search (SCH)", () => {
 });
 
 describe("Help menu accuracy (U1)", () => {
-  test.failing("U1: the advertised 'اكسل' command exports inventory", async () => {
+  test("U1: the advertised 'اكسل' command exports inventory", async () => {
     await h.insertListing({ code: "HP-201" });
     h.AI.respond(() => searchAnswer());
     const replies = await h.text("broker", "اكسل");

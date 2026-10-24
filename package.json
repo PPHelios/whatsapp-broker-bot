@@ -17,7 +17,9 @@
     "test:jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
     "test:ci": "npm run test:unit && npm run test:jest",
     "test": "npm run audit:schema && npm run test:pipeline && npm run test:ci",
-    "migrate": "node --env-file=.env scripts/migrate.js"
+    "migrate": "node --env-file=.env scripts/migrate.js",
+    "onboard": "node --env-file=.env scripts/onboard.js",
+    "flyer:samples": "node scripts/render-flyer-samples.js"
   },
   "jest": {
     "testEnvironment": "node",
