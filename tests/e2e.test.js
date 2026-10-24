@@ -134,17 +134,16 @@ describe("1. lib/text.js - String, Code Sanitization & Header Guard", () => {
 
     const cardAr = T.formatClientListingText(villa, broker, "ar");
     assert.equal(cardAr.includes("الدور"), false);
-    assert.equal(cardAr.includes("مساحة المباني (BUA):"), true);
-    assert.equal(cardAr.includes("مساحة الأرض:"), true);
+    assert.equal(cardAr.includes("350م مباني"), true);
+    assert.equal(cardAr.includes("الأرض 500م"), true);
 
-    // Labels are WhatsApp-bold (*Label:*); compare on the plain text.
-    const cardEn = T.formatClientListingText(villa, broker, "en").replace(/\*/g, "");
-    assert.equal(cardEn.includes("Floor:"), false);
-    assert.equal(cardEn.includes("Built-Up Area (BUA): 350 sqm"), true);
-    assert.equal(cardEn.includes("Land Area: 500 sqm"), true);
+    const cardEn = T.formatClientListingText(villa, broker, "en");
+    assert.equal(/floor/i.test(cardEn), false);
+    assert.equal(cardEn.includes("350m² BUA"), true);
+    assert.equal(cardEn.includes("Land 500m²"), true);
   });
 
-  it("should format studios cleanly as 'Studio (Open Concept)' / 'استوديو مفتوح'", () => {
+  it("should format studios as a studio, never as '0 bedrooms'", () => {
     const studio = {
       code: "STU-01",
       property_type: "studio",
@@ -160,11 +159,11 @@ describe("1. lib/text.js - String, Code Sanitization & Header Guard", () => {
 
     const cardAr = T.formatClientListingText(studio, broker, "ar");
     assert.equal(cardAr.includes("0 غرف"), false);
-    assert.equal(cardAr.includes("استوديو مفتوح"), true);
+    assert.equal(cardAr.includes("استوديو للبيع"), true);
 
     const cardEn = T.formatClientListingText(studio, broker, "en");
-    assert.equal(cardEn.includes("0 Beds"), false);
-    assert.equal(cardEn.includes("Studio (Open Concept)"), true);
+    assert.equal(/0 beds?/i.test(cardEn), false);
+    assert.equal(cardEn.includes("Studio for sale"), true);
   });
 });
 
@@ -239,12 +238,13 @@ describe("2. lib/financials.js - Calculations & Payment Schedules", () => {
     };
 
     const adCopyAr = F.formatSinglePlanAdCopy(listing, broker, "p8", "ar");
-    assert.match(adCopyAr, /فرصة استثمارية مميزة في مشروع NOLL/);
+    assert.match(adCopyAr, /في NOLL/);
+    assert.match(adCopyAr, /نظام السداد: 8 سنين \(خصم 10%\)/);
     assert.match(adCopyAr, /201012345678/);
 
     const adCopyEn = F.formatSinglePlanAdCopy(listing, broker, "p8", "en");
-    assert.match(adCopyEn, /Prime Opportunity at NOLL/);
-    assert.match(adCopyEn, /8-Year Plan/);
+    assert.match(adCopyEn, /in NOLL/);
+    assert.match(adCopyEn, /8-year plan/);
   });
 });
 
@@ -540,8 +540,8 @@ describe("7. UX & Interactive WhatsApp Routing", () => {
     };
 
     const clientCopy = T.formatClientListingText(rentalListing, broker, "en");
-    assert.equal(clientCopy.includes("4.5K USD / mo"), true);
-    assert.equal(clientCopy.includes("🔑 Unit For Rent"), true);
+    assert.equal(clientCopy.includes("4.5K USD / month"), true);
+    assert.equal(clientCopy.includes("for rent"), true);
   });
 
   it("should enforce authorization hierarchy in canEdit", () => {

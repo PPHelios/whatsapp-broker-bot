@@ -115,7 +115,11 @@ function floorLabel(l, lang = "ar") {
 }
 
 function finishingLabel(l, lang = "ar") {
-  return pick(FINISHING_LABELS[l.finishing], lang);
+  const label = pick(FINISHING_LABELS[l.finishing], lang);
+  if (label) return label;
+  // Rows saved before Release 1 keep finishing as free text in details.
+  const d = l.details || {};
+  return lang === "en" ? latinOnly(d.finishing_en) || latinOnly(d.finishing) : d.finishing || null;
 }
 
 function furnishingLabel(l, lang = "ar") {
@@ -174,7 +178,7 @@ function paymentLines(l, lang = "ar", { now = new Date() } = {}) {
       !inst && freq && (en ? `${freq} installments` : `أقساط ${freq}`),
       yrs !== null && yrs > 0 && (en ? `${yrs} years left` : `باقي ${yrs} ${yrs <= 10 && yrs >= 3 ? "سنين" : "سنة"}`)
     ].filter(Boolean);
-    if (sched.length) lines.push(`🗓️ ${sched.join(" · ")}`);
+    if (sched.length) lines.push(`📆 ${sched.join(" · ")}`);
   } else if (pcase === "primary") {
     const plans = (l.payment_terms?.plans || []).filter((p) => known(p.down_payment_pct) || known(p.years));
     const cash = money(l.payment_terms?.cash_price, lang, cur);
@@ -235,12 +239,20 @@ function factLines(l, lang = "ar") {
     .join(" ");
   lines.push(`🏠 ${headline}`);
 
+  const project = [
+    d.project && `${en ? "Project" : "المشروع"}: ${en ? latinOnly(d.project) || null : d.project}`,
+    d.developer && `${en ? "Developer" : "المطور"}: ${en ? latinOnly(d.developer) || null : d.developer}`
+  ].filter((x) => x && !/: null$/.test(x));
+  if (project.length) lines.push(`🏗️ ${project.join(" · ")}`);
+
   const price = priceLabel(l, lang);
   if (price) lines.push(`💰 ${price}`);
   lines.push(...paymentLines(l, lang));
 
+  // Delivery is highlighted next to rooms and bathrooms when known.
+  const delivery = Delivery.formatDelivery(l, lang);
   const specs = [areaLabel(l, lang), bedsLabel(l, lang), bathsLabel(l, lang)].filter(Boolean);
-  if (specs.length) lines.push(`📐 ${specs.join(" · ")}`);
+  if (specs.length || delivery) lines.push([specs.length && `📐 ${specs.join(" · ")}`, delivery].filter(Boolean).join(" · "));
   const land = num(d.land_area);
   const extras = [
     land && `${en ? "Land" : "الأرض"} ${land}${en ? "m²" : "م"}`,
@@ -251,9 +263,6 @@ function factLines(l, lang = "ar") {
 
   const finish = [floorLabel(l, lang), finishingLabel(l, lang), furnishingLabel(l, lang)].filter(Boolean);
   if (finish.length) lines.push(`🏢 ${finish.join(" · ")}`);
-
-  const delivery = Delivery.formatDelivery(l, lang);
-  if (delivery) lines.push(delivery);
 
   const feats = featureLabels(l, lang);
   if (feats.length) lines.push(`✨ ${feats.join(" · ")}`);
@@ -313,7 +322,225 @@ function savedCard(l, { lang = "ar" } = {}) {
   return `${lang === "en" ? "✅ *Saved*" : "✅ *تم الحفظ*"}\n${brokerCard(l, { lang })}`;
 }
 
+
+/* ---------------------------------------------------------------------- */
+/* Client copy (forwardable): every captured fact, nothing internal        */
+/* ---------------------------------------------------------------------- */
+
+const SUMMARY_SCRUB = [
+  /https?:\/\/\S+/gi,
+  /wa\.me\/\S+/gi,
+  /(?:\+?20|0)?1[0125]\d{8}\b/g,
+  /(?:للتواصل|للاستفسار|اتصل|كلمنا|call us|contact us)[^\n]*/gi
+];
+function cleanSummary(text) {
+  let t = String(text || "");
+  for (const re of SUMMARY_SCRUB) t = t.replace(re, "");
+  return t.replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim();
+}
+
+function contactLines(broker = {}, lang = "ar") {
+  const en = lang === "en";
+  const phone = String(broker.contact_phone || broker.phone_normalized || broker.phone_number || "").replace(/[^\d+]/g, "");
+  const lines = [en ? "📞 *For viewings and details:*" : "📞 *للمعاينة والاستفسار:*"];
+  if (broker.name) lines.push(`👤 ${broker.name}`);
+  if (phone) lines.push(`📱 ${phone.startsWith("+") ? phone : `+${phone}`}`);
+  return lines;
+}
+
+/**
+ * Client copy (Arabic or English). English contains no Arabic script except proper names
+ * the broker typed only in Arabic are dropped rather than shown untranslated.
+ */
+function clientCopy(l, broker = {}, { lang = "ar" } = {}) {
+  const en = lang === "en";
+  const [headline, ...facts] = factLines(l, lang);
+  const summary = cleanSummary(en ? l.details?.summary_en : l.details?.clean_summary);
+  return [
+    `*${headline.replace(/^🏠 /, "🏠 ")}*`,
+    `🏷️ ${en ? "Code" : "كود"}: \`${l.code}\``,
+    ...facts,
+    summary && (!en || !/[؀-ۿ]/.test(summary)) ? `\n📝 ${summary}` : null,
+    "",
+    ...contactLines(broker, lang)
+  ]
+    .filter((x) => x !== null && x !== undefined)
+    .join("\n");
+}
+
+/* ---------------------------------------------------------------------- */
+/* Search result: compact line + features line (identical on every surface) */
+/* ---------------------------------------------------------------------- */
+
+/** Payment hint for the compact line: كاش / مقدم 10% · 8 سنين / متبقي 1.2M. */
+function paymentHint(l, lang = "ar") {
+  const en = lang === "en";
+  const pcase = Rules.paymentCase(l);
+  if (pcase === "rent") return null;
+  if (pcase === "resale_cash") return en ? "cash" : "كاش";
+  if (pcase === "resale_installments") {
+    const rem = money(l.remaining_amount, "en", currencyOf(l));
+    return rem ? `${en ? "remaining" : "متبقي"} ${rem.replace(/ EGP$/, "")}` : en ? "installments" : "أقساط";
+  }
+  const plan = (l.payment_terms?.plans || []).find((p) => known(p.down_payment_pct) || known(p.years));
+  if (plan) return planHint({ ...plan, frequency: null }, lang);
+  return l.payment_terms?.cash_price ? (en ? "cash" : "كاش") : null;
+}
+
+const FEATURES_LINE_MAX = 4;
+
+/** Line 2: features, cut with "+N" when long. */
+function featuresLine(l, lang = "ar", max = FEATURES_LINE_MAX) {
+  const labels = featureLabels(l, lang);
+  if (!labels.length) return null;
+  const shown = labels.slice(0, max);
+  const rest = labels.length - shown.length;
+  return shown.join(" · ") + (rest > 0 ? ` +${rest}` : "");
+}
+
+/** Line 1: code · type · compound · price · area · 🛏 · 🛁 · 🗓 · payment hint · ✅ date. */
+function compactLine(l, lang = "ar") {
+  const en = lang === "en";
+  const beds = kindOf(l) === "studio" || kindOf(l) === "commercial" ? null : num(l.bedrooms);
+  const baths = num(l.bathrooms);
+  const delivery = Delivery.formatDelivery(l, lang);
+  const conf = confirmedLine(l, lang)?.replace(/ (مؤكدة|Confirmed)/, "");
+  const loc = en ? l.compound_en || l.details?.compound_en || latinOnly(l.compound) : l.compound || l.compound_en || l.district;
+  return [
+    `\`${l.code}\``,
+    typeLabel(l, lang),
+    loc,
+    priceLabel(l, lang),
+    areaLabel(l, lang),
+    beds && beds > 0 ? `🛏 ${beds}` : null,
+    baths && baths > 0 ? `🛁 ${baths}` : null,
+    delivery ? delivery.replace(en ? /Delivery /i : /تسليم /, "") : null,
+    paymentHint(l, lang),
+    conf
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** One search result: the compact line and (when any) the features line. */
+function searchResult(l, lang = "ar") {
+  const f = featuresLine(l, lang);
+  return f ? `${compactLine(l, lang)}\n   ✨ ${f}` : compactLine(l, lang);
+}
+
+/** A page of search results with numbering and the footer hint. */
+function searchResults(rows = [], { offset = 0, total = 0, lang = "ar" } = {}) {
+  const en = lang === "en";
+  const count = Number(total) || Number(rows[0]?.total_count) || rows.length;
+  const out = [en ? `🔍 ${count} matching unit(s)` : `🔍 ${count} وحدة مطابقة`, ""];
+  rows.forEach((r, i) => out.push(`${offset + i + 1}. ${searchResult(r, lang)}`));
+  const more = offset + rows.length < count;
+  out.push(
+    "",
+    more
+      ? en
+        ? "Send a code for details · tap More for the next results"
+        : "ابعت الكود للتفاصيل · اضغط المزيد لباقي النتائج"
+      : en
+      ? "Send a code for full details"
+      : "ابعت الكود لعرض التفاصيل كاملة"
+  );
+  return out.join("\n");
+}
+
+/* ---------------------------------------------------------------------- */
+/* Plan copy (one payment plan, forwardable)                                */
+/* ---------------------------------------------------------------------- */
+
+const exact = (n, lang) => `${Math.round(Number(n)).toLocaleString("en-US")} ${lang === "en" ? "EGP" : "ج.م"}`;
+
+function planCopy(l, broker = {}, planIdOrYears = null, { lang = "ar" } = {}) {
+  const F = require("../lib/financials");
+  const en = lang === "en";
+  const price = num(l.price_value) || 0;
+  const plans = l.payment_terms?.plans || [];
+  const raw =
+    plans.find((p) => String(p.plan_id) === String(planIdOrYears) || String(p.years) === String(planIdOrYears)) || plans[0];
+  if (!raw || !price) return "";
+  const terms = F.maintenanceTerms(raw, l);
+  const plan = F.calculatePlanSummary(price, { ...raw, maintenance_pct: terms.pct, maintenance_due: terms.due });
+
+  const [headline, ...facts] = factLines({ ...l, payment_terms: {} }, lang);
+  const years = plan.years;
+  const name = years === 0 ? (en ? "Cash" : "كاش") : en ? `${years}-year plan` : `${years} ${years >= 3 && years <= 10 ? "سنين" : "سنة"}`;
+  const lines = [
+    `*${headline}*`,
+    `🏷️ ${en ? "Code" : "كود"}: \`${l.code}\``,
+    // Price and payment are restated below for this plan.
+    ...facts.filter((x) => !/^(💰|💵|💳|🛠️|🏦|📆)/u.test(x)),
+    "",
+    `💳 *${en ? "Payment plan" : "نظام السداد"}: ${name}${plan.discount_pct > 0 ? (en ? ` (${plan.discount_pct}% off)` : ` (خصم ${plan.discount_pct}%)`) : ""}*`,
+    `• ${en ? "Price" : "السعر"}: ${exact(price, lang)}`
+  ];
+  if (plan.discount_pct > 0) lines.push(`• ${en ? "After discount" : "بعد الخصم"}: ${exact(plan.effective_price, lang)}`);
+  if (years === 0) {
+    lines.push(`• ${en ? "Cash payment" : "الدفع كاش"}: ${exact(plan.effective_price, lang)}`);
+  } else {
+    lines.push(`• ${en ? "Down payment" : "المقدم"} (${plan.down_payment_pct}%): ${exact(plan.down_payment, lang)}`);
+    for (const m of plan.milestones) lines.push(`• ${m.label}: ${exact(m.amount, lang)}`);
+    lines.push(
+      `• ${en ? `Installment (${frequencyLabel(plan.frequency, "en")})` : `القسط ${frequencyLabel(plan.frequency, "ar")}`}: ${exact(plan.installment_amount, lang)} × ${plan.total_installments_count}`
+    );
+  }
+  if (terms.pct) {
+    const due = terms.due === "installments" ? (en ? "with installments" : "مع الأقساط") : en ? "on delivery" : "عند الاستلام";
+    lines.push(`• ${en ? "Maintenance" : "الصيانة"} (${terms.pct}%): ${exact(plan.total_maintenance, lang)} (${due})`);
+  } else {
+    lines.push(`• ${en ? "Maintenance" : "الصيانة"}: ${maintenanceText(l, lang)}`);
+  }
+  lines.push("", ...contactLines(broker, lang));
+  return lines.join("\n");
+}
+
+/* ---------------------------------------------------------------------- */
+/* Flyer model: the data the flyer renders (no layout, no warnings)          */
+/* ---------------------------------------------------------------------- */
+
+function flyerModel(l, { agency = {}, broker = null, lang = "en" } = {}) {
+  const d = l.details || {};
+  const en = lang === "en";
+  const specs = [
+    areaLabel(l, lang) && { icon: "area", label: areaLabel(l, lang) },
+    num(d.land_area) && { icon: "land", label: `${en ? "Land" : "الأرض"} ${num(d.land_area)}${en ? "m²" : "م"}` },
+    bedsLabel(l, lang) && { icon: "bed", label: bedsLabel(l, lang) },
+    bathsLabel(l, lang) && { icon: "bath", label: bathsLabel(l, lang) },
+    floorLabel(l, lang) && { icon: "floor", label: floorLabel(l, lang) },
+    finishingLabel(l, lang) && { icon: "finishing", label: finishingLabel(l, lang) },
+    Delivery.formatDelivery(l, lang, { icon: false }) && { icon: "delivery", label: Delivery.formatDelivery(l, lang, { icon: false }) }
+  ].filter(Boolean);
+  return {
+    code: l.code,
+    lang,
+    title: en ? d.title_en || null : l.title || null,
+    type: typeLabel(l, lang),
+    purpose: isRent(l) ? (en ? "For rent" : "للإيجار") : en ? "For sale" : "للبيع",
+    location: location(l, lang),
+    price: priceLabel(l, lang),
+    payment: paymentLines(l, lang).map((x) => x.replace(/^\S+\s/, "")),
+    specs,
+    features: featureLabels(l, lang),
+    agency: { name: agency.name || null, logo_url: agency.logo_url || null, phone: agency.phone || null },
+    contact: broker
+      ? { name: broker.name || null, phone: String(broker.contact_phone || broker.phone_normalized || broker.phone_number || "") || null }
+      : null
+  };
+}
+
 module.exports = {
+  clientCopy,
+  paymentHint,
+  featuresLine,
+  compactLine,
+  searchResult,
+  searchResults,
+  planCopy,
+  flyerModel,
+  cleanSummary,
   TYPE_LABELS,
   FINISHING_LABELS,
   FREQUENCY_LABELS,
