@@ -106,6 +106,11 @@ async function exportSchema(client) {
   for (const { def } of trg) out.push(`${def};`);
   out.push("");
 
+  // 8. Views (e.g. agency_outbound_daily)
+  const views = await q(`
+    SELECT viewname, definition FROM pg_views WHERE schemaname = 'public' ORDER BY viewname`);
+  for (const v of views) out.push(`CREATE OR REPLACE VIEW public.${v.viewname} AS\n${v.definition.trim()}`, "");
+
   return out.join("\n");
 }
 

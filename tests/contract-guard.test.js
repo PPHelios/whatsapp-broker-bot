@@ -227,6 +227,26 @@ describe("API Contract, Database Schema & Variable Naming Guardians", () => {
     });
   });
 
+  // 2b. The contract lists exactly the real exports (no stale or missing names, same parameters).
+  test("API_CONTRACTS.json matches every listed module's real exports (node scripts/api-contracts.js)", () => {
+    const Contracts = require("../scripts/api-contracts");
+    const contracts = JSON.parse(fs.readFileSync(path.join(root, "API_CONTRACTS.json"), "utf8"));
+    for (const [relPath, expected] of Object.entries(contracts.libraries)) {
+      expect({ [relPath]: Contracts.describeModule(relPath) }).toEqual({ [relPath]: expected });
+    }
+  });
+
+  test("every module in lib/, domain/ and services/ is in API_CONTRACTS.json", () => {
+    const contracts = JSON.parse(fs.readFileSync(path.join(root, "API_CONTRACTS.json"), "utf8"));
+    // Worker entry points export nothing.
+    const entryPoints = ["lib/flyerWorker.js"];
+    const modules = ["lib", "domain", "services"].flatMap((d) =>
+      fs.readdirSync(path.join(root, d)).filter((f) => f.endsWith(".js")).map((f) => `${d}/${f}`)
+    );
+    const missing = modules.filter((m) => !entryPoints.includes(m) && !contracts.libraries[m]);
+    expect(missing).toEqual([]);
+  });
+
   // 3. Dynamic ESM Singleton Import Guard
   test("lib/ai.js must load @google/genai via dynamic import to prevent CommonJS crash", () => {
     const aiPath = path.join(root, "lib/ai.js");

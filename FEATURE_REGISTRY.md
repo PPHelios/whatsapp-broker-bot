@@ -34,8 +34,8 @@ This registry documents every user-facing capability, command, interactive callb
 | Feature ID | Event / Trigger | Pre-Conditions & Constraints | System Execution & Safeguards | Symmetrical Response Contract |
 | :--- | :--- | :--- | :--- | :--- |
 | **DRF-01** | Open Draft (`اضافة`, `add`, `new`) | - Broker is active and authorized. | - Checks/clears existing draft in `broker_sessions`.<br>- Sets 15-minute sliding TTL (`expires_at = NOW() + INTERVAL '15 minutes'`). | "📝 تم فتح مسودة وحدة جديدة. أرسل الصور، التسجيلات الصوتية، أو التفاصيل واكتب «تم» عند الانتهاء." |
-| **DRF-02** | Pre-Save Validation Review (`تم`, `حفظ`, `done`) | - Active draft session exists in `broker_sessions`. | - Calls Gemini extraction cascade with audio/text parts.<br>- Evaluates Hard Blockers: Price, Area, Compound.<br>- Studios: Validates 0 bedrooms without triggering blocker.<br>- Villas: Floor suppressed; BUA/land area elevated.<br>- Reconciles resale balance: `Total Asking Price = Upfront Cash + Remaining Developer Debt`.<br>- Attaches `deltaWarning` if discrepancy $>100$ EGP. | **Missing Blockers:** Lists missing items in bullet points.<br>**Complete:** Displays pre-save card with `[تأكيد وحفظ ✅]`, `[تعديل ✏️]` (`draft_edit`), `[إلغاء ❌]`. |
-| **DRF-03** | Commit Finalization (`draft_confirm` / `DRAFT_SAVE`) | - Active draft in `broker_sessions`.<br>- Broker authorized. | - Invokes `Drafts.commitDraftToDatabase`.<br>- Acquires 64-bit advisory lock on `(agency_id, code)`.<br>- Atomic draft consumption (`DELETE ... RETURNING session_data`) to prevent double-tap race conditions.<br>- Commits physical columns (`bathrooms`, `bedrooms`, `price_value`, `area_value`) and JSONB details.<br>- Streams images to Supabase storage (`role = NULL`). | Symmetrical confirmation card echoing monospace unit code, accompanied by forwardable client ad copy. |
+| **DRF-02** | Pre-Save Validation Review (`تم`, `حفظ`, `done`, `DRAFT_SAVE`) | - Active draft session exists in `broker_sessions`. | - `Drafts.reviewDraft`: one `listing_extraction` call through the AI gateway over every text and voice note (A1).<br>- `composeFields` sets the top-level columns (delivery, features, resale schedule, market).<br>- `domain/fieldRules.evaluate` applies the field table: mandatory fields block saving; warnings (photos, finishing, bathrooms, floor, delivery, installment details, total vs paid + remaining mismatch > 100 EGP, …) are shown **only here**.<br>- Studios get 0 bedrooms automatically; offices have none; villas use BUA and drop the floor.<br>- The result is staged as `session_data.staged_review`; any new input clears it. | **Missing Blockers:** review card with "⛔ ناقص لإتمام الحفظ" and only `[إلغاء ❌]`.<br>**Complete:** `Describe.reviewCard` with the warnings and `[تأكيد وحفظ ✅]` (`draft_confirm`), `[تعديل ✏️]` (`draft_edit`), `[إلغاء ❌]`.<br>**AI down / quota:** the draft is kept; `[مراجعة تاني 🔄]`. |
+| **DRF-03** | Commit Finalization (`draft_confirm`) | - Active draft with an `ok` staged review.<br>- Broker authorized. | - `Drafts.commitStagedReview` commits **only the staged review** (A2); without one it re-reviews.<br>- Atomic draft consumption (`DELETE ... RETURNING session_data`): a double tap saves once.<br>- **Insert-only:** a stated code that exists (`23505` on `(agency_id, code_norm)`, case- and digit-folded) is never overwritten; the draft is kept. A generated code that collides is regenerated.<br>- Sets `confirmed_at`; links the photos uploaded at ingest in `listing_images` (`role = NULL`). | **Saved:** one `Describe.savedCard` message with `[نص العميل 📱]`, `[الكتالوج 📄]`, `[تعديل ✏️]` (no warnings).<br>**Code taken:** "⚠️ الكود #CODE مستخدم لوحدة أخرى في الوكالة…" with `[مراجعة 🔄]` / `[إلغاء ❌]`. |
 | **DRF-04** | Draft Inactivity Expiration | - No incoming messages for $>15$ minutes. | - Evaluated at message arrival or background sweep.<br>- Clears expired draft session from `broker_sessions`. | "⏳ انتهت صلاحية المسودة (15 دقيقة بدون نشاط). يرجى بدء إضافة جديدة بإرسال الصور أو المواصفات." |
 | **DRF-05** | Discard Draft (`الغاء`, `cancel`, `DRAFT_CANCEL`) | - Active draft session exists. | - Purges session row from `broker_sessions`.<br>- Clears uncommitted image references. | "🗑️ تم إلغاء المسودة وتفريغ البيانات بنجاح." |
 | **DRF-06** | Replace Media (`استبدال`, `replace`) | - Active draft session exists. | - Empties stored photo buffer array in `broker_sessions`.<br>- Retains recorded text notes and voice notes. | "🔄 تم مسح الصور السابقة من المسودة. أرسل الصور الجديدة الآن." |
@@ -46,9 +46,9 @@ This registry documents every user-facing capability, command, interactive callb
 
 | Feature ID | Event / Trigger | Pre-Conditions & Constraints | System Execution & Safeguards | Symmetrical Response Contract |
 | :--- | :--- | :--- | :--- | :--- |
-| **EDT-01** | One-Shot Patch (`تعديل <CODE> <INSTRUCTIONS>`) | - `canEdit(broker, listing)` is true. | - Gemini (temp 0) parses instructions against current unit JSON.<br>- Stages patch in `broker_sessions`. | "✏️ جاري تنفيذ تعليمات التعديل للوحدة #[CODE]..." |
-| **EDT-02** | Multi-Turn Edit Session (`تعديل <CODE>` alone, or `edit:<CODE>` button) | - `canEdit(broker, listing)` is true. | - Opens dedicated edit mode in `broker_sessions` with 15-minute sliding TTL.<br>- Intercepts and accumulates follow-up audio, photos, and text.<br>- Finalizes upon receiving `تم`. | "✏️ وضع التعديل نشط للوحدة #[CODE]. أرسل تعديلاتك (صوت أو كتابة) واكتب «تم» عند الانتهاء." |
-| **EDT-03** | Direct Inline Attribute Patch (`سعر <CODE> إلى <VAL>`) | - Resale inventory only.<br>- Valid numeric price extracted via `parseEgyptianPrice(raw).priceValue`. | - Distributed 64-bit advisory lock acquired.<br>- Updates `price_value`, recalculates cash requirements, updates GIN trigrams, wipes `flyer_cache`. | "✅ تم تعديل سعر الوحدة #[CODE] إلى [VAL]. تم تحديث فهارس البحث ومسح كاش البروشور القديم." |
+| **EDT-01** | One-Shot Patch (`تعديل <CODE> <INSTRUCTIONS>`) | - `canEdit(broker, listing)` is true. | - Registry `edit` command → `Edits.startEdit` with the instructions, reviewed at once (A3).<br>- AI extraction of the stated changes (local price parser when the AI is down) → `composeFields` with the existing row → field table → `diffPatch`.<br>- The patch and the row `version` are staged in `broker_sessions` (`edit`, 30 minutes). | "✏️ التعديلات: السعر" + `Describe.reviewCard` with `[تأكيد التعديل ✅]` (`edit_confirm`) / `[إلغاء ❌]` (`edit_cancel`). |
+| **EDT-02** | Multi-Turn Edit Session (`تعديل <CODE>` alone, or `edit:<CODE>` button) | - `canEdit(broker, listing)` is true. | - Opens an edit session (30 minutes).<br>- Follow-up text and voice join the edit and never become a search (A4).<br>- `تم` / `edit_review` stages the review; `edit_confirm` applies it through `applyListingPatch` with the version seen at review: a change made meanwhile returns a conflict, never an overwrite (optimistic locking).<br>- Unstated fields keep their values; a primary unit stays primary. | "✏️ تعديل #CODE: ابعت التعديلات (كتابة أو فويس)، وبعدين اكتب «تم» للمراجعة."<br>**Conflict:** "⚠️ الوحدة #CODE اتعدلت من شخص تاني أثناء المراجعة. راجع التعديل تاني." |
+| **EDT-03** | Direct Price Update (`سعر <CODE> <VAL>`, `تعديل سعر <CODE> إلى <VAL>` (A5), `price <CODE> to <VAL>`, voice) | - Resale inventory only.<br>- Valid price via `parseEgyptianPrice(raw).priceValue`. | - Registry `price` command → `Edits.quickUpdate` under the advisory and row locks → `applyListingPatch` (`price_display` recomputed, `confirmed_at`, `version + 1`, `flyer_cache` cleared; the trigger rebuilds the search text). | "✅ سعر #CODE بقى *9 مليون*." with the card buttons. |
 | **EDT-04** | Developer Price Guard | - Unit is marked `is_primary_developer = true` or `inventory_type = 'developer_model'`. | - Intercepts direct price mutation attempts.<br>- Blocks inline price edits to prevent corrupting certified payment matrices. | "⚠️ لا يمكن تعديل أسعار مشاريع المطورين مباشرة لارتباطها بجدول أقساط معتمد. يرجى رفع شيت الأسعار المحدث." |
 | **EDT-05** | Mutation Cascade Execution | - Any attribute patch committed (price, finishing, area, bedrooms). | - Updates primary DB column.<br>- Re-synthesizes Arabic (`title`) and English (`title_en`) titles.<br>- Re-runs `clean_arabic_text` to update `search_text_normalized`.<br>- Purges `flyer_cache = '{}'::jsonb`.<br>- Preserves `listing_images` role curation. | Refreshes listing and presents updated unit preview card. |
 
@@ -60,9 +60,10 @@ This registry documents every user-facing capability, command, interactive callb
 | :--- | :--- | :--- | :--- | :--- |
 | **DEL-01** | Delete Request (`حذف <CODE>`, `delete`) | - `canEdit(broker, listing)` is true. | - Acquires 64-bit advisory lock and row lock (`FOR UPDATE`).<br>- Verifies ownership/admin role.<br>- Constructs confirmation dialog with distinct cancel ID `del_cancel:<CODE>`. | Dispatches warning prompt with buttons $\le 20$ chars: `[Delete 🗑️ / تأكيد الحذف 🗑️]` / `[Cancel ❌ / تراجع ❌]`. |
 | **DEL-02** | Confirm Deletion (`del_confirm:<ID>:<CODE>`) | - Triggered via interactive button tap. | - Executes inside 64-bit transactional advisory lock.<br>- Collects all image paths from `listing_images` and `flyer_cache`.<br>- Executes `DELETE FROM listings WHERE id = $1` (cascading images).<br>- Dispatches asynchronous, non-blocking `deleteStorageFiles` to Supabase Storage. | "🗑️ تم حذف الوحدة #[CODE] نهائياً ومسح كافة وسائطها وملفاتها من السيرفر." |
-| **LFC-01** | Mark as Sold (`تم البيع`, `sold <CODE>`) | - Unit must be `active`. | - Row-locked status update: `status = 'sold'`.<br>- Hides unit from general search queries.<br>- Purges `flyer_cache`. | "✅ تم تغيير حالة الوحدة #[CODE] إلى: *تم البيع*." |
-| **LFC-02** | Archive Listing (`أرشفة`, `archive <CODE>`) | - Unit must be `active`. | - Row-locked status update: `status = 'archived'`.<br>- Hides unit from search.<br>- Purges `flyer_cache`. | "✅ تم تغيير حالة الوحدة #[CODE] إلى: *مؤرشفة ومخفية من البحث*." |
-| **LFC-03** | Reactivate Listing (`تفعيل`, `active <CODE>`) | - Unit is `sold` or `archived`. | - Row-locked status update: `status = 'active'`.<br>- Restores search index visibility.<br>- Refreshes `updated_at`. | "✅ تم تغيير حالة الوحدة #[CODE] إلى: *نشطة ومتاحة في البحث*." |
+| **LFC-01** | Mark as Sold (`اتباعت <CODE>`, `تم البيع`, `<CODE> sold`, voice, `qu:sold:<CODE>`) | - `canEdit`. Without a code: the unit looked at last (1 hour). | - Registry `status` command → `Edits.quickUpdate` → `applyListingPatch` (`status = 'sold'`, `confirmed_at`).<br>- Hidden from search. | "✅ #CODE اتسجلت *مباعة* واختفت من البحث." |
+| **LFC-02** | Archive Listing (`أرشفة <CODE>`, `archive <CODE>`, `qu:archive:<CODE>`) | - `canEdit`. | - Same path, `status = 'archived'`. Hidden from search; record kept. | "📁 #CODE اتأرشفت واختفت من البحث." |
+| **LFC-03** | Still Available / Reactivate (`لسه متاحة <CODE>`, `متاحة`, `تفعيل`, `active <CODE>`, `qu:available:<CODE>`) | - `canEdit`. | - Same path, `status = 'active'` and `confirmed_at = now()` (availability vouched for today). | "🟢 #CODE *متاحة* — تم تأكيد التوفر اليوم." |
+| **QU-01** | Quick-Update Menu (`qu_menu:<CODE>` button on a card) | - Unit card shown. | - Interactive list (`Buttons.quickSections`): still available, sold, archive, edit details. Rows map to `qu:<action>:<CODE>`. | "⚙️ تحديث سريع للوحدة #CODE:" list menu. |
 
 ---
 
@@ -70,8 +71,8 @@ This registry documents every user-facing capability, command, interactive callb
 
 | Feature ID | Event / Trigger | Pre-Conditions & Constraints | System Execution & Safeguards | Symmetrical Response Contract |
 | :--- | :--- | :--- | :--- | :--- |
-| **SCH-01** | Multimodal Search Query | - Text or transcribed voice note.<br>- No active draft/edit session open. | - AI gateway route `search_parse`: hedged Gemini tiers, 8s deadline, fast thinking per model.<br>- Deterministic regex fallback (`fallbackParse`) on any AI failure or deadline.<br>- Hard bathroom filtering against physical column `listings.bathrooms`.<br>- Non-negative integer parsing (`nonNegInt`) allows 0-bedroom studio searches.<br>- **Pass 1 (Strict):** Queries `search_text_normalized` using GIN trigrams and boundary constraints.<br>- **Pass 2 (Relaxed):** If Pass 1 returns 0, auto-widens price/area by $\pm 15\%$ and bedrooms by $\pm 1$, but keeps compound strictly locked. | Streams up to 5 matching unit cards with defensive window count.<br>If Pass 2: prepends close alternative alert. If zero matches: returns helpful guidance with widening suggestions. |
-| **SCH-02** | Search Pagination (`MORE_SEARCH` / `المزيد`) | - Active search state in `broker_sessions` (`session_type = 'search_state'`). | - Reads stored query filters, offset, and total count from PostgreSQL.<br>- Fetches next page (`LIMIT 5 OFFSET offset`).<br>- Updates cursor in `broker_sessions`. | Streams next 5 unit cards with `[المزيد ➡️]` button or confirms end of matching results. |
+| **SCH-01** | Multimodal Search Query | - Text or transcribed voice note.<br>- No active draft/edit session open. | - **One service** (`services/search.js`) for text and voice: AI route `search_parse` (8 s deadline) → language-neutral filters (`domain/searchQuery.js`); the local parser on any AI failure.<br>- Arabic, English or mixed wording gives the same filters, so the same units in the same order.<br>- **Intent guard (B2):** small talk and requests with no filter never query; a described unit points to "اضافة".<br>- Filters: code, sale/rent, type, primary/resale, compound/developer/area keys (bilingual), price, area, bedrooms, bathrooms, floor, finishing, furnishing, delivery (ready / by year), payment (cash, installments, max down payment, max installment), features.<br>- **Pass 1 (strict)**, then **Pass 2 (relaxed):** price/area ±15%, bedrooms ±1, place locked. | One message: the interpretation, then up to 5 `Describe.searchResult` lines (compact line + features line). `[المزيد ➡️]` when more exist.<br>Pass 2: "⚠️ مفيش تطابق تام — أقرب النتائج". Zero: "🔍 مفيش وحدات مطابقة…". |
+| **SCH-02** | Search Pagination (`MORE_SEARCH` / `المزيد` / `more`) | - Active search state (`search_state`, 30 minutes). | - Pages the **id snapshot** taken at search time (B1): no repeats or shifts when units are added or sold meanwhile; sold units are skipped.<br>- "المزيد" typed while a draft is open pages the search instead of joining the draft (B4). | Next 5 results with `[المزيد ➡️]`, or "🏁 دي كل الوحدات المطابقة." |
 | **COL-01** | Draft vs. Search Collision | - Broker sends text/audio with explicit search keywords (`عايز`, `ابحث`, etc.) while a draft is open. | - Intercepts query; detects search intent (property type words alone do not trigger collision).<br>- Stores the query server-side in `broker_sessions` (`pending_search`, 15-min TTL).<br>- Halts automatic draft append. | "⚠️ لديك مسودة وحدة قيد الإضافة حالياً. هل تريد إلغاء المسودة والبحث في المخزون بدلاً من ذلك؟"<br>Buttons: `[🔍 إلغاء والبحث]` (`cancel_and_search`) / `[📝 إكمال المسودة]` (`draft_edit`). Tapping search runs the full stored query; legacy `cancel_and_search:<b64>` ids still work. |
 
 ---
@@ -80,7 +81,7 @@ This registry documents every user-facing capability, command, interactive callb
 
 | Feature ID | Event / Trigger | Pre-Conditions & Constraints | System Execution & Safeguards | Symmetrical Response Contract |
 | :--- | :--- | :--- | :--- | :--- |
-| **DEL-01** | Luxury Brochure Curation & Render (`flyer:lang:theme:CODE` / `كتالوج <CODE>`) | - Brochure requested.<br>- 20s distributed cooldown in `broker_sessions`. | - Lazy Vision Curation: Checks `listing_images` for uncurated photos (`role IS NULL`).<br>- Generates 768px in-memory thumbnails.<br>- 1 Gemini Vision call classifies roles, selects hero facade (strictly excluding bathrooms/documents), and enforces diversity quotas.<br>- Persists curated order to `listing_images` and `listings.details`.<br>- Satori/Sharp generates English LTR flyer.<br>- Caches result in `flyer_cache`. | Immediate status message with dynamic median ETA, followed by luxury flyer image delivery. |
+| **DEL-01** | Luxury Brochure Curation & Render (`flyer:lang:theme:CODE` / `كتالوج <CODE>`) | - Brochure requested.<br>- 20s distributed cooldown in `broker_sessions`. | - **One pipeline** `renderFlyerOnDemand` (A7/V1); the model comes from `Describe.flyerModel`.<br>- Lazy Vision Curation: uncurated photos (`role IS NULL`) → 768px thumbnails → 1 Gemini Vision call (hero facade, diversity quotas) → persisted order.<br>- Satori/Sharp render in a worker thread (one job at a time, bounded queue, timeout).<br>- Cached in `flyer_cache` under a key that follows the data; a changed unit gets a fresh flyer. | **One message**: the flyer image with its caption. |
 | **DEL-02** | Client Ad Copy (`عميل <CODE>` / `client <CODE>`) | - Unit exists in `listings`. | - Typology-Aware Layout:<br>  * Villas/Townhouses: Suppresses floor; displays BUA, Land Area, Garden, and Roof.<br>  * Studios: Formats open-concept studio cleanly.<br>- Arabic (`عميل`): Standard broker terminology, owner equity vs. developer debt.<br>- English (`client`): Executive LTR format.<br>- Zero system metadata or technical notes. | Forwardable WhatsApp ad copy bubble with broker signature. |
 | **DEL-03** | Installment Matrix Overview (`plans_view:<CODE>` / `جدول <CODE>`) | - Developer model with `payment_terms.plans`. | - Formats approved payment plans (Down payment, years, quarterly installment, discounts).<br>- Avoids $>3$ button traps; presents Interactive List Menu with options to select specific plans (`plan_select:<CODE>:<ID>`). | Interactive List Menu presenting up to 10 payment plan options. |
 | **DEL-04** | Single-Plan Client Ad Copy (`plan_select:<CODE>:<ID>`) | - Plan selected from `plans_view` list. | - Formats verified forwardable WhatsApp text via `financials.formatSinglePlanAdCopy` with net price, installment amount, and maintenance splits. | Delivers single forwardable client pitch for the selected plan. |
@@ -106,6 +107,9 @@ This registry documents every user-facing capability, command, interactive callb
 | **SYS-01** | Dynamic Help Menu (`مساعدة`, `help`) | - Any incoming text matching help regex. | - Pulls preferred language from broker record.<br>- Returns dynamically compiled command menu reflecting active syntax. | Localized help guide bubble. |
 | **SYS-02** | Language Preference Toggle (`lang ar` / `lang en`) | - Broker command. | - Updates `brokers.preferred_lang` in PostgreSQL.<br>- In-memory context updated. | Localized confirmation of language switch. |
 | **SYS-03** | Mandatory Operational Telemetry | - Every completed or failed operation. | - Asynchronous, non-blocking insert into `operation_logs` recording latencies (`db_ms`, `gemini_ms`, `total_duration_ms`), tokens, model, cost ($USD), and payload metadata.<br>- Rolling percentiles (p50/p90) calculate dynamic status ETAs. | Telemetry stored safely without interrupting user transactions. |
+| **SYS-05** | Outbound Message Counter | - Every WhatsApp send through the dispatcher inside a turn. | - One `operation_logs` row per attempt (`operation_type = 'wa_outbound'`, status success/dropped/failed).<br>- `agency_outbound_daily` view: sent and failed per agency per Cairo day. | No user-visible output; used to size the WhatsApp pool. |
+| **SYS-06** | Migrations on Boot | - `start()` with `MIGRATE_ON_BOOT` not `false`. | - `lib/migrate.js` applies pending `db/migrations` in order under an advisory lock, each in its own transaction, recorded in `schema_migrations`. | Logged `[MIGRATE] applied …`; a failed migration stops the boot. |
+| **ONB-01** | Agency Onboarding (`npm run onboard -- <file> [--dry-run]`) | - Valid onboarding JSON. | - Creates/updates the agency (by name) and brokers (by phone) in one transaction; roles and branding; a phone of another agency is refused. | Console summary; the brokers get `docs/pilot/broker-howto-ar.md`. |
 | **SYS-04** | Unregistered Number | - Sender has no active broker row. | - Message is still recorded in `inbound_messages`.<br>- Notice is sent at most once per 24h per number. | Bilingual "number not registered, ask your agency admin" notice, once per 24h. |
 | **SEC-01** | Webhook Cryptographic Verification | - Inbound HTTP POST to `/webhook`. | - Validates Meta's `X-Hub-Signature-256` HMAC-SHA256 signature against `WHATSAPP_APP_SECRET` using `crypto.timingSafeEqual`. | **Invalid:** HTTP 401 Unauthorized.<br>**Valid:** Proceeds to payload ingestion. |
 | **SEC-02** | Row-Level Tenant Isolation | - Every SQL query across all modules. | - Enforces `WHERE agency_id = $1` on all SELECT, UPDATE, and DELETE statements.<br>- Cross-agency data access is structurally impossible. | Absolute multi-tenant segregation. |
@@ -142,49 +146,96 @@ This registry documents every user-facing capability, command, interactive callb
 * `TC-SEC-03`: Render `SIGTERM` initiates drain protocol (HTTP 503 response, 25s window for `inFlight` tasks).
 ## 11. Test Coverage Map
 Legend: ✅ covered by a passing test · 🐞 known defect pinned as `test.failing` (plan ID in brackets) · ⬜ not yet covered.
-Router tests send real webhook payloads through the production pipeline (`tests/router/`); unit tests live in `tests/unit/` and `tests/e2e.test.js`.
+Router tests send real webhook payloads through the production pipeline (`tests/router/`); unit tests live in `tests/unit/` and `tests/e2e.test.js`. After Release 1 there are no 🐞 rows: every pinned defect is a passing test.
 
 | Feature / TC | Status | Test |
 | :--- | :--- | :--- |
 | SEC-01 / TC-SEC-01 signature verification | ✅ | `tests/router/webhook-security.test.js` |
-| SEC-02 / TC-SEC-02 tenant isolation (lookup, search) | ✅ | `tests/router/core-flows.test.js` |
+| SEC-01 fail-closed secret, unsigned dev opt-in, body limit 413, verify token required | ✅ | `tests/router/foundation.test.js` |
+| SEC-02 / TC-SEC-02 tenant isolation (lookup, search, edits) | ✅ | `core-flows`, `search`, `edits` |
 | SEC-03 webhook dedup + completed status | ✅ | `core-flows` |
-| SEC-03 crash recovery (`bootRecovery`) | ⬜ | — (plan P0 #3) |
+| SEC-03 crash recovery (`bootRecovery`) | ⬜ | — |
 | TC-SEC-03 drain returns 503 | ✅ | `webhook-security` |
 | SYS-01 help / SYS-02 language toggle | ✅ | `core-flows` |
-| ING-01 / TC-ING-01 photo stored + 📸 reaction | ✅ | `core-flows` |
-| ING-01 photo must not also send the fallback bubble | ✅ | `core-flows` |
+| SYS-01 help lists only working commands [U1] | ✅ | `core-flows` |
+| SYS-03 telemetry: no null agency_id; ctx carries broker and agency | ✅ | `foundation` |
+| SYS-05 outbound counter (sent and failed) | ✅ | `foundation` |
+| SYS-06 migrations recorded, re-run is a no-op | ✅ | `foundation` |
+| ONB-01 onboarding validation and idempotent upsert | ✅ | `tests/unit/onboarding.test.js` |
+| Config: production fail-fast, https base URL, prices, quotas | ✅ | `tests/unit/config.test.js` |
+| ING-01 / TC-ING-01 photo stored + 📸 reaction, no fallback bubble | ✅ | `core-flows` |
 | TC-ING-02 16th photo warning with Save/Cancel | ✅ | `tests/router/reply-delivery.test.js` |
 | ING-05 / TC-ING-04 image-only draft blocked | ✅ | `core-flows` |
 | ING-06 / TC-ING-05 unsupported media guidance | ✅ (video) | `core-flows` |
 | DRF-01 open draft · DRF-05 cancel · text append | ✅ | `core-flows` |
-| DRF-02 AI extraction + review card | 🐞 [A1] | `core-flows` |
-| DRF-03 commit only a reviewed draft | 🐞 [A2] | `core-flows` |
+| DRF-02 AI extraction + review card [A1]; field table, warnings only in review | ✅ | `core-flows`, `tests/router/draft-pipeline.test.js`, `tests/unit/field-rules.test.js` |
+| DRF-03 commit only a reviewed draft [A2]; double tap saves once; code collision never overwrites | ✅ | `core-flows`, `draft-pipeline` |
 | ING-04 `#CODE` unit card | ✅ | `core-flows` |
-| DEL-01/02 delete with confirmation; owner-only | ✅ | `core-flows` |
-| DEL-01 delete prompt without fallback bubble | ✅ | `core-flows` |
-| LFC-01 mark sold | ✅ | `core-flows` |
-| EDT-03 / TC-EDT-01 inline price edit | ✅ | `core-flows` |
-| EDT-04 / TC-EDT-02 developer price guard | ✅ | `core-flows` |
-| EDT-01 `تعديل CODE <instructions>` / prefixed price form | 🐞 [A3, A5] | `core-flows` (A5) |
-| EDT-02 multi-turn edit session | 🐞 [A4] | `core-flows` |
-| SCH-01 search, agency-scoped; AI outage → regex fallback | ✅ | `core-flows` |
-| SCH-01 small talk is not a search | 🐞 [B2] | `core-flows` |
-| SCH-02 / TC-SCH-03 pagination | ⬜ | — (plan B1) |
+| DEL-01/02 delete with confirmation; owner-only; no fallback bubble | ✅ | `core-flows` |
+| LFC-01…03 / QU-01 quick updates by text, voice and button; recent unit; authz | ✅ | `tests/router/edits.test.js` |
+| EDT-03 / TC-EDT-01 price update [A5]; EDT-04 / TC-EDT-02 developer price guard | ✅ | `core-flows`, `edits` |
+| EDT-01 inline instructions [A3]; EDT-02 multi-turn edit [A4]; optimistic-lock conflict | ✅ | `core-flows`, `edits` |
+| Registry matchers, single `canEdit` | ✅ | `tests/unit/authz-registry.test.js` |
+| SCH-01 search, agency-scoped; AI outage → local parser | ✅ | `core-flows`, `tests/router/search.test.js` |
+| SCH-01 text/voice and ar/en/mixed parity; language-neutral filters | ✅ | `search` |
+| SCH-01 intent guard [B2] | ✅ | `core-flows`, `search` |
+| SCH-02 / TC-SCH-03 paging from an id snapshot [B1]; "المزيد" inside a draft [B4] | ✅ | `search` |
+| Code lookup in any case through `code_norm` [B6, B7] | ✅ | `search` |
+| COL-01 draft vs search collision [B3]: long query round trip + legacy buttons | ✅ | `reply-delivery` |
 | DEL-02 client copy uses the agency's own code | ✅ | `core-flows`, `tests/unit/known-defects.test.js` |
-| SYS-01 help lists only working commands | 🐞 [U1] | `core-flows` |
-| Financial schedules (DEL-04/05) | ✅ baseline · 🐞 [F1–F6, F8] | `tests/unit/known-defects.test.js`, `tests/e2e.test.js` |
-| Client copy language/format | 🐞 [C1, C3, C4] | `tests/unit/known-defects.test.js` |
-| DB search-text triggers / normalization | 🐞 [D1, D2] | `tests/unit/known-defects.test.js` |
+| Descriptions: golden cases × every surface; nothing internal; no warnings outside review | ✅ | `tests/unit/describe-golden.test.js` |
+| Financial schedules (DEL-04/05) [F1–F10] | ✅ | `known-defects`, `tests/e2e.test.js` |
+| Client copy [C1–C7] | ✅ | `known-defects` |
+| DB search text: one trigger, one normalizer [D1, D2]; JS/SQL normalizers agree | ✅ | `known-defects`, `search` |
+| Data model backfills (delivery, features, resale schedule, market, `code_norm`) | ✅ | `tests/unit/data-model.test.js`, `tests/unit/features-delivery.test.js` |
+| DEL-01 flyer: one message [A7, V1], cache follows the data; sample snapshots | ✅ | `tests/router/flyer.test.js`, `tests/unit/flyer.test.js` |
 | Text, Excel, search-SQL, listing helpers | ✅ | `tests/e2e.test.js` |
 | Delivery truth: failed send → safety-net reply; list/blocker prompts count as replies | ✅ | `reply-delivery` |
 | DEL-07 export delivered; failed delivery → error reply | ✅ | `reply-delivery` |
 | Webhook batching (all messages processed; statuses ignored) | ✅ | `reply-delivery` |
 | SYS-04 unregistered notice once per 24h | ✅ | `reply-delivery` |
-| COL-01 long query round trip + legacy buttons | ✅ | `reply-delivery` |
 | Graph API: no resend on timeout; 503 retried; 131047 dropped | ✅ | `tests/unit/whatsapp-client.test.js` |
 | Single outbound path (no direct `WA.send*` in handlers) | ✅ | `whatsapp-client` |
-| AI gateway: hedged tiers, immediate failover, route deadline, per-model thinking, success+failure telemetry | ✅ | `tests/unit/ai-gateway.test.js` |
+| AI gateway: hedged tiers, immediate failover, route deadline, per-model thinking, telemetry, quota | ✅ | `tests/unit/ai-gateway.test.js` |
 | Typing indicator on every inbound message | ✅ | `reply-delivery` |
 | AI quality eval scorer | ✅ | `tests/unit/eval-score.test.js` |
-| XLS-01…04, DEL-01 flyer, DEL-03…06/08, STATS-01 | ⬜ | — (added with their remediation batches) |
+| `API_CONTRACTS.json` = real exports; `SCHEMA_REFERENCE.sql` current | ✅ | `tests/contract-guard.test.js`, `tests/unit/schema-reference.test.js` |
+| XLS-01…04, DEL-03…06/08, STATS-01 | ⬜ | — |
+
+## 12. Defect IDs
+Remediation-plan IDs used in test names. Each one was a `test.failing` (or a new test written with the fix) and is now a passing test.
+
+| ID | Defect (fixed) | Release | Test |
+| :--- | :--- | :--- | :--- |
+| A1 | `تم` ran no AI extraction / review card | R1 step 3 | `core-flows` "A1: …" |
+| A2 | Save could commit an unreviewed draft | R1 step 3 | `core-flows` "A2: …", `draft-pipeline` |
+| A3 | `تعديل CODE <instructions>` ignored the instructions | R1 step 6 | `edits` "A3: …" |
+| A4 | Text in edit mode was treated as a search | R1 step 6 | `core-flows`, `edits` "A4: …" |
+| A5 | `تعديل سعر CODE إلى X` edited the wrong unit | R1 step 6 | `core-flows` "A5: …", `edits` |
+| A7 / V1 | Two flyer pipelines; flyer sent as two messages | R1 step 7 | `flyer` |
+| B1 | "More" re-ran the query (repeats and shifts) | R1 step 5 | `search` "(B1)" |
+| B2 | Small talk returned random listings | R1 step 5 | `core-flows` "B2: …", `search` |
+| B3 | Draft vs search collision: query lost in the button id (128-char cap) | R1 step 5 | `reply-delivery` COL-01 |
+| B4 | "المزيد" inside an open draft joined the draft | R1 step 5 | `search` "(B4)" |
+| B6 / B7 | Code lookup was case-sensitive and skipped the index | R1 step 5 | `search` "(B6)…(B7)" |
+| C1 | English client copy contained Arabic script | R1 step 4 | `known-defects` "C1: …" |
+| C2 | Client copy could contain internal data (owner, notes, commission, co-broker) | R1 step 4 | `known-defects` "C2: …" |
+| C3 | Monthly rent was double-suffixed | R1 step 4 | `known-defects` "C3: …" |
+| C4 | An office with 0 bedrooms showed as a studio | R1 step 4 | `known-defects` "C4: …" |
+| C5 | Unknown fields showed as "-" placeholders | R1 step 4 | `known-defects` "C5: …" |
+| C6 | Structured delivery and feature keys were missing from client copy | R1 step 4 | `known-defects` "C6: …" |
+| C7 | Plan copy named the unit type in the wrong language | R1 step 4 | `known-defects` "C7: …" |
+| D1 | Four search triggers overwrote each other and dropped features | R1 step 5 | `known-defects` "D1: …" |
+| D2 | Stored and query-side Arabic normalization disagreed | R1 step 5 | `known-defects` "D2: …", `search` |
+| F1 | Unknown maintenance invented as 8% | R1 step 4 | `known-defects` "F1: …" |
+| F2 | Maintenance scheduled at the end of the term instead of delivery | R1 step 4 | `known-defects` "F2: …" |
+| F3 | Two milestones in one period: one dropped | R1 step 4 | `known-defects` "F3: …" |
+| F4 | Cash plan had empty installment rows | R1 step 4 | `known-defects` "F4: …" |
+| F5 | Semi-annual installments labelled quarterly | R1 step 4 | `known-defects` "F5: …" |
+| F6 | Studio described as "1 غرف نوم" | R1 step 4 | `known-defects` "F6: …" |
+| F7 | Annual installments silently treated as quarterly | R1 step 4 | `known-defects` "F7: …" |
+| F8 | Monthly plan compared against a quarterly budget | R1 step 4 | `known-defects` "F8: …" |
+| F9 | Fractional tenure gave a fractional number of installments | R1 step 4 | `known-defects` "F9: …" |
+| F10 | Unknown delivery/maintenance invented in the plan workbook and copy | R1 step 4 | `known-defects` "F10: …" |
+| Q-F | Primary maintenance terms were hardcoded; now stored as data (`payment_terms.maintenance = { pct, due }`) | R1 step 4 | `known-defects` "Q-F: …" |
+| U1 | Help advertised a command that did not work (`اكسل`) | R1 | `core-flows` "U1: …" |

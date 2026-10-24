@@ -6,7 +6,22 @@
   - Image normalization via Sharp must accept an in-memory `Buffer` and return a compressed `Buffer` directly to Supabase Storage.
   - Excel ingestion and rejection workbooks must be handled entirely in-memory using Node.js streaming buffers (`stream.PassThrough` or `Buffer.from`).
   - System fonts (`Cairo-Bold.ttf`, `Cairo-Regular.ttf`) must be pre-warmed into process memory on server boot via `Flyer.loadFont(...)`.
-* **App Factory & Bootstrap:** `server.js` exports `createApp({ pool })`, which builds the Express app and the message pipeline around an injected pg-compatible pool. It returns `{ app, state, handleWebhookBody, dispatchMessage, bootRecovery, preWarmAssets }`. Only `start()` creates the real `pg.Pool`, binds the port and installs signal handlers, and it runs only when `server.js` is executed directly (`require.main === module`).
+* **App Factory & Bootstrap:** `server.js` exports `createApp({ pool, config })`, which builds the Express app and the message pipeline around an injected pg-compatible pool. It returns `{ app, state, handleWebhookBody, handleInboundMessage, dispatchMessage, bootRecovery, preWarmAssets }`. Only `start()` creates the real pool (`lib/db.js` `getPool()`), applies pending migrations, binds the port and installs signal handlers, and it runs only when `server.js` is executed directly (`require.main === module`).
+* **Configuration (`config.js`):** the single source of runtime configuration. `getConfig()` loads it once from `process.env`; `loadConfig(env)` builds it from any map (tests).
+  - **Fails fast in production:** `NODE_ENV=production` refuses to start without `DATABASE_URL`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `GEMINI_API_KEY` and `PUBLIC_BASE_URL` (`REQUIRED_IN_PRODUCTION`), and requires `PUBLIC_BASE_URL` to be `https://`.
+  - **Links:** `publicUrl(path)` builds every absolute URL from `PUBLIC_BASE_URL` (trailing slash dropped; `http://localhost:<PORT>` outside production).
+  - **AI prices and quotas:** `ai.prices` (USD per 1M tokens per model, overridable with `AI_PRICES_JSON`) drive `estimateCostUsd(model, in, out)`, the only cost formula; `ai.quotas` (`AI_QUOTA_AGENCY_DAILY`, `AI_QUOTA_BROKER_DAILY`) feed `checkAiQuota`.
+  - Also: `bodyLimit` (`BODY_LIMIT`, default 512kb), `whatsapp.allowUnsigned` (only outside production with `WEBHOOK_ALLOW_UNSIGNED=true`), `db.*` (`DB_POOL_MAX`, `DB_STATEMENT_TIMEOUT_MS` default 10 s, `DATABASE_SSL`, `MIGRATE_ON_BOOT`), `flyer.*` (`FLYER_WORKER`, `FLYER_MAX_QUEUE`, `FLYER_TIMEOUT_MS`).
+* **Single pool (`lib/db.js`):** `createPool()` is the only place a `pg.Pool` is created. It sets `statement_timeout`, SSL and type parsers that return NUMERIC (1700) and INT8 (20) as JS numbers (`TYPE_OVERRIDES`); the PGlite harness mirrors the same parsers. `getPool()` is the lazily created process pool used by `start()` and the scripts.
+* **Migrations (`db/migrations/`, `lib/migrate.js`):** files named `NNN_name.sql` (one script) or `NNN_name.js` (exports `up(client)` for backfills that need application code) are applied in order, each in its own transaction, and recorded in `schema_migrations`. A session advisory lock (`727001`) serializes concurrent boots. `start()` runs them on boot unless `MIGRATE_ON_BOOT=false`; `npm run migrate` (`scripts/migrate.js`) runs them by hand. Migrations are forward-only and must be idempotent where the statement allows (`IF NOT EXISTS`).
+
+  | Migration | What it does |
+  | :--- | :--- |
+  | `001_outbound_message_counts.sql` | `agency_outbound_daily` view (sent/failed WhatsApp messages per agency per Cairo day) |
+  | `002_listing_data_model.sql` | structured delivery, feature keys, resale schedule, `confirmed_at`, `market`, `finishing`, `furnishing`, `floor_level`, `version`, generated `code_norm` + unique `(agency_id, code_norm)`; backfills; drops the invented `payment_frequency`/`maintenance_pct` defaults (F1) |
+  | `003_backfill_feature_keys.js` | `feature_keys`/`features_other` from legacy free text through `domain/features.js` |
+  | `004_search_document.js` | one normalizer and one search trigger (D1/D2), `compound_synonyms` and `search_vocabulary` seeded from the domain dictionaries, place key columns |
+
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
 * **Graceful Termination & Drain Protocol:** On `SIGTERM` or `SIGINT`, the service enters a draining state:
   - Halts acceptance of new incoming webhooks (returns HTTP 503 so Meta Graph retries).
@@ -19,10 +34,13 @@
 ### 2. Verified Database Schema & Data Contracts
 The database runs on PostgreSQL (Supabase) with the `pg_trgm`, `pgcrypto` and `uuid-ossp` extensions.
 
-**Source of truth:** `db/schema.sql` is the canonical schema: extensions, sequences, functions, tables (including generated columns), constraints, indexes and triggers. It is generated from the live catalog by `npm run schema:export` (`scripts/export-schema.js`, which runs in a READ ONLY transaction) and must not be edited by hand. Regenerate it and commit it whenever the database changes. The test database is built from this file. `SCHEMA_REFERENCE.sql` is the older table-only reference and is superseded.
+**Source of truth:** the schema the app runs on is **`db/schema.sql` + `db/migrations/*`**.
+* `db/schema.sql` is the **baseline**: the live catalog exported before Release 1 by `npm run schema:export` (`scripts/export-schema.js`, READ ONLY transaction). It is never edited by hand, and schema changes are never made by re-exporting it: every change is a new migration.
+* `SCHEMA_REFERENCE.sql` is the **full reference after every migration**: extensions, sequences, functions, tables (with generated columns), constraints, indexes, triggers and views. `npm run schema:reference` (`scripts/schema-reference.js`) builds it offline from PGlite (baseline + migrations) with the same exporter. It has no timestamp, and `tests/unit/schema-reference.test.js` fails when it is stale, so every migration commit regenerates it. Read it to know a column or index; never apply it.
+* The test database is built exactly like production: baseline, then the migrations (`tests/harness/db.js`).
 
 #### A. Core Tables & Identity
-* **`agencies`**: Stores multi-tenant agencies (`id`, `name`, `logo_url`, `primary_color`, `secondary_color`, `flyer_theme`, `phone`).
+* **`agencies`**: Stores multi-tenant agencies (`id`, `name`, `logo_url`, `primary_color`, `secondary_color`, `flyer_theme`, `phone`). Created and updated by onboarding (§7.E).
 * **`brokers`**: Identity and WhatsApp phone mapping.
   - *Invariant:* Always reference `brokers.phone_number` and `brokers.phone_normalized`. Lookups must match against `phone_normalized`.
   - Columns: `id`, `agency_id`, `name`, `phone_number`, `phone_normalized`, `contact_phone`, `role`, `is_active`, `preferred_lang`, `last_active_at`.
@@ -31,13 +49,19 @@ The database runs on PostgreSQL (Supabase) with the `pg_trgm`, `pgcrypto` and `u
 #### B. Inventory & Media
 * **`listings`**: The core inventory store.
   - Columns: `id`, `agency_id`, `broker_id`, `project_id`, `code`, `title`, `property_type`, `listing_type`, `price_value`, `price_display`, `area_value`, `bedrooms`, `location`, `compound`, `district`, `city`, `location_keywords`, `status`, `is_primary_developer`, `inventory_type`, `developer_unit_code`, `down_payment_value`, `installment_years`, `installment_value`, `payment_frequency`, `delivery_date`, `maintenance_pct`, `bathrooms`, `compound_en`, `search_text_normalized`, `details`, `payment_terms`, `collateral`, `flyer_cache`.
+  - **Release 1 columns (migration 002/004):**
+    - Delivery: `delivery_year`, `delivery_quarter` (1–4), `delivery_month` (1–12), `is_ready`, `delivery_raw` (what the broker said). The legacy `delivery_date` text is no longer written.
+    - Features: `feature_keys text[]` (fixed bilingual keys from `domain/features.js`) and `features_other text[]` (free-text extras).
+    - Resale schedule: `down_payment_value` (paid), `remaining_amount`, `installment_value`, `payment_frequency` (`monthly|quarterly|semi_annual|annual`), `installments_end` (date). Years left is computed when shown, never stored.
+    - `market` (`resale|primary`), `finishing` (key), `furnishing` (`furnished|semi_furnished|unfurnished`), `floor_level` (0 = ground).
+    - `confirmed_at`: when a broker last vouched for the unit (insert, any edit or quick update).
+    - `version`: optimistic-lock counter, +1 on every patch (§7.C).
+    - `code_norm`: generated `upper(trim(code))` with Eastern digits folded; unique per agency (`uq_listings_agency_code_norm`). Every code lookup uses it (B6/B7).
+    - `compound_key`, `developer_key`, `area_key`: language-neutral place keys set by the search trigger.
+  - *Primary payment terms:* `payment_terms = { plans: [{ plan_id, down_payment_pct, years, frequency, delivery_pct, milestones }], cash_price, maintenance_terms, maintenance: { pct, due: delivery|installments } }` (maintenance terms are data, Q-F). Unknown maintenance reads "حسب التعاقد", never an invented 8% (F1).
   - *Details JSONB Contract:* Stores auxiliary attributes (`finishing`, `finishing_en`, `floor`, `nanny_room`, `driver_room`, `has_master_bedroom`, `has_dressing_room`, `ready_to_move`, `bua`, `land_area`, `roof_area`, `garden_area`, `villa_type`, `image_order`, `description_ar`, `summary_ar`, `total_upfront_cash`, `remaining_debt`, `over_price`).
   - *Missing Attribute Rule:* Missing fields must be stored as explicit SQL `NULL`. Default values (e.g., assuming "Fully Finished" or "2029") are forbidden.
-  - *Mutation Cascade Rule:* Editing price, area, finishing, or bedrooms must trigger:
-    1. Re-synthesis of Arabic (`title`) and English (`title_en`) titles.
-    2. Re-indexing of `search_text_normalized` via `clean_arabic_text(...)`.
-    3. Purging of `flyer_cache = '{}'::jsonb`.
-    4. Curated photo orders and roles in `listing_images` must be preserved.
+  - *Mutation Cascade Rule:* every edit goes through `applyListingPatch` (§7.C), which sets `version = version + 1`, `confirmed_at = now()`, `updated_at = now()` and `flyer_cache = '{}'`. The `trg_listings_search_document` trigger rebuilds `search_text_normalized` and the place keys on every insert and update. Curated photo orders and roles in `listing_images` are preserved.
 * **`listing_images`**: Individual listing media records.
   - Columns: `id`, `listing_id`, `agency_id`, `position`, `url`, `phash`, `role`.
   - Roles: `facade`, `reception`, `master_bedroom`, `bedroom`, `kitchen`, `bathroom`, `terrace`, `garden`, `compound_amenity`, `document`, `other`.
@@ -53,13 +77,19 @@ The database runs on PostgreSQL (Supabase) with the `pg_trgm`, `pgcrypto` and `u
 * **`inbound_messages`**: Webhook deduplication and startup crash recovery.
   - Columns: `msg_id` (PK), `phone_key`, `payload`, `status`, `attempts`, `received_at`, `updated_at`.
 * **`processed_batches`**: Multi-tap mutation idempotency (`batch_key`, `agency_id`, `listing_code`).
+* **`schema_migrations`**: applied migration versions (`version`, `applied_at`).
+* **`compound_synonyms`** (`kind` compound|developer|area, `key`, `synonym`, `synonym_norm`, `area_key`, `developer_key`) and **`search_vocabulary`** (`kind` type|feature, `key`, `terms`): reference data seeded by migration 004 from `domain/places.js`, `domain/features.js` and `domain/vocabulary.js`. The test harness keeps them across `TRUNCATE`.
+* **`agency_outbound_daily`** (view): `agency_id`, `day` (Africa/Cairo), `sent`, `failed`, counted from `operation_logs` rows with `operation_type = 'wa_outbound'` (§5).
 #### D. Domain Responsibility Partitioning (State & Ingress)
-* **`lib/drafts.js` Contract:**
-  - Manages session lifecycle inside `public.broker_sessions` (composite key `[broker_id, session_type]`).
-  - Implements the complete ingestion commit pipeline (`commitDraftToDatabase`) under a 64-bit transactional advisory lock.
-  - Persists uncurated images to `listing_images` (`role = NULL`), deferring Gemini Vision curation to the first luxury flyer render.
+* **`lib/drafts.js` Contract (review → staged commit):**
+  - Manages session lifecycle inside `public.broker_sessions` (composite key `[broker_id, session_type]`, 15-minute sliding TTL).
+  - Inputs (`appendText`, `appendVoice`, `appendMedia`) clear any staged review, so only a review of the current inputs can be committed.
+  - `reviewDraft` (DRF-02): `L.extractPropertyDetails` over every text and voice note → `L.composeFields` → `domain/fieldRules.evaluate` → `stageDraftReview` stores `{ ok, fields, code, warnings, blockers, inputs, model }` as `session_data.staged_review` and replies with `Describe.reviewCard` (the only surface that shows warnings). The Confirm button is offered only when `ok`.
+  - `commitStagedReview` (DRF-03, `draft_confirm`): in one transaction, consumes the draft (`DELETE … RETURNING`, so a double tap saves once), refuses anything but an `ok` staged review (re-reviews instead), and **inserts only**: a stated code that exists (`23505` on `uq_listings_agency_code_norm`) rolls back, keeps the draft and replies "الكود مستخدم"; a generated code that collides is regenerated under a savepoint. `commitDraftToDatabase`/`commitDraftToListing` are kept as contract names for the same path.
+  - Photos are uploaded to storage at ingest (`routes/media.js`); the draft keeps the URL (base64 only when that upload failed) and the commit links them in `listing_images` (`role = NULL`), deferring vision curation to the first flyer render.
 * **`lib/listing.js` (Pure Extraction & Parsing):**
-  - Pure calculation and transformation helpers: `composeFields`, `generateListingCode`, `validateDraft`, `checkDraftCompleteness`, and Gemini prompt assembly.
+  - `buildListingPrompt` (fenced input), `extractPropertyDetails` (one `listing_extraction` call through the AI gateway), `normalizeExtraction` (AI JSON → columns + `details` + `payment_terms`; never fills a field the AI left empty), `findStatedCode`.
+  - `composeFields({ existing, draft })`: a stated value wins, an unstated one keeps the existing value; delivery is replaced as a unit; features are merged; villas drop the floor and keep BUA; studios get 0 bedrooms; commercial units none. `LISTING_COLUMNS` lists the top-level columns it owns.
   - Does NOT perform database I/O or commit transactions directly.
 
 ---
@@ -124,6 +154,8 @@ The database runs on PostgreSQL (Supabase) with the `pg_trgm`, `pgcrypto` and `u
   - A turn counts as answered **only after WhatsApp accepts the message**, i.e. a non-null result. A failed or dropped send leaves the turn unanswered, so `executeGuardedTurn`'s safety net still replies.
   - A delivered 📸 reaction answers a photo turn.
   - The single exception is the unregistered-number notice in `server.js`, which runs outside any broker turn.
+* **Outbound message counter:** `deliver()` in `lib/dispatcher.js` writes one `operation_logs` row per send attempt (`operation_type = 'wa_outbound'`, `status` success|dropped|failed, `metadata.kind` = the reply helper) with the turn's pool. The `agency_outbound_daily` view sums them per agency and Cairo day, so the WhatsApp pool can be sized against Meta's pricing tiers (about 0.19 EGP per reply after 1,000 free a month per number).
+* **One message per task:** quick updates, search and the flyer each answer in one message (the flyer is one image with a caption). Button ids and titles come from `lib/buttons.js`; the copy of the Release 1 messages comes from `lib/copy.js` (§7.C).
 * **Background Deliverables:** Work that finishes after the turn (exports, comparison workbooks, flyers, rejection sheets) must check the dispatcher result and send an explicit error reply when delivery fails.
 * **Webhook Batching:** `handleWebhookBody` processes **every** message in every entry and change of a webhook POST, in order (`handleInboundMessage` per message). Bodies with statuses only are ignored.
 * **Unregistered Numbers:** A number with no active broker gets one bilingual registration notice per 24 hours, counted from `inbound_messages`. All of its messages are still recorded.
@@ -143,13 +175,57 @@ The database runs on PostgreSQL (Supabase) with the `pg_trgm`, `pgcrypto` and `u
 * **SEC-01 (Webhook Verification):** Inbound webhooks must verify Meta's `X-Hub-Signature-256` HMAC-SHA256 signature against `WHATSAPP_APP_SECRET` using `crypto.timingSafeEqual`.
 * **SEC-02 (Tenant Isolation):** Every database read, update, search, and delete query must be strictly scoped to `agency_id = $1`.
 * **SEC-03 (Two-Phase Row & Advisory Locks):** Deletions and status transitions must acquire a 64-bit transactional advisory lock and a row lock (`FOR UPDATE`) inside a transaction and re-evaluate `canEdit(broker, listing)` under lock.
+* **Authorization (`lib/authz.js`):** the single copy of the rules. `canView` requires the same agency; `canEdit` requires the same agency and either ownership (`listing.broker_id = broker.id`) or a manager role (`MANAGER_ROLES`: admin, owner, manager). Routes, `lib/edits.js` and `applyListingPatch` all call it; a test fails if a second `canEdit` appears.
 * **SEC-04 (Non-Blocking Storage Purge):** Cloud file deletions (`deleteStorageFiles`) must execute outside the database transaction boundary so storage API latency never blocks the connection pool.
 * **SEC-05 (Excel Sanitization):** Bulk Excel uploads are capped at 5MB, checked for valid magic bytes (`PK\x03\x04`), and cells starting with dangerous characters (`=`, `+`, `-`, `@`, `\t`, `\r`) are sanitized via `sanitizeCellValue` to neutralize formula injection attacks.
 
+
 ---
 
-### 7. Testing, CI & Change Discipline
-* **Every change ships with tests and doc updates.** A change is complete only when it includes tests that cover it and updates to this manifest, `FEATURE_REGISTRY.md` and `API_CONTRACTS.json` where they are affected.
+### 7. Layering & Release 1 Modules
+Target layering: **`routes` → `lib/registry.js` → `services` (return data) → `domain` (pure)**. Release 1 moved the parts it touched; the rest of `routes/` still matches commands with its older regex chain, after the registry.
+
+#### A. `domain/` (pure: no I/O, no WhatsApp, no database)
+| Module | Responsibility |
+| :--- | :--- |
+| `describe.js` | **The one description template.** `brokerCard` (facts + internal lines), `reviewCard` (the only surface with field warnings and blockers), `savedCard`, `clientCopy` (ar/en; nothing internal; English has no Arabic script), `compactLine` + `featuresLine` (search result, "+N" after 4 features), `searchResults`, `planCopy` (one primary plan), `flyerModel` (data the flyer renders). Unknown fields are left out; nothing is invented. Shared pieces: `factLines` (client-safe facts), `internalLines` (owner, owner phone, commission, co-broker, notes), `paymentLines`, `priceLabel`, `money`, … |
+| `fieldRules.js` | **The field table** (plan "Field rules"): `evaluate(listing, { lang, photoCount })` → `{ ok, blockers, warnings, listing, kind, case }`. `unitKind` (apartment/studio/villa/commercial/land), `paymentCase` (rent/primary/resale_installments/resale_cash), `normalizeForRules` (studio → 0 bedrooms, the third resale amount derived from the other two), `resaleMismatch` (> 100 EGP), `warningLine`/`blockerLine`. |
+| `features.js` | The fixed bilingual feature dictionary (`FEATURES`: key, ar, en, group, synonyms). `classifyFeatures` splits free text into keys and `other`; `keysFromDetails` reads legacy boolean flags; `featureLabel`, `sortKeys`, `searchTermsFor`. The same list feeds descriptions, search filters and the search text. |
+| `delivery.js` | `parseDelivery` (text or `{ year, quarter, month, ready }` → structured columns; "استلام فوري"/"ready" → `is_ready`), `formatDelivery` (`🗓 تسليم 2027 Q3` / `🔑 استلام فوري`), `hasDelivery`. |
+| `places.js` | Bilingual compound, developer and area dictionaries (`COMPOUNDS`, `DEVELOPERS`, `AREAS`), `findPlaces`/`resolvePlace` → `{ kind, key }`, `placeName`, `synonymRows` (seed for `compound_synonyms`). |
+| `searchText.js` | **The one normalizer** `normalizeSearch` and its SQL twin `NORMALIZE_SEARCH_SQL` (`public.normalize_search`), which must agree byte for byte (D2). |
+| `searchQuery.js` | Request → **language-neutral filters**: `emptyFilters`, `normalizeAiSearch` (AI JSON, current and earlier shapes), `fallbackParse` (local regex parser), `canonical` (sorted, de-duplicated), `classifyIntent` (B2: only a request with a filter is a search), `hasAnyFilter`, `normalizeCode` (same folding as `code_norm`). |
+| `vocabulary.js` | Property-type words (`TYPE_TERMS`) and `seedVocabulary(client)`, which writes `search_vocabulary` and `compound_synonyms` from the dictionaries. |
+
+#### B. `services/search.js` (the one search service; returns data)
+* `search({ pool, AI, agencyId, text, ctx })`: `parseRequest` (AI route `search_parse`, local parser on any failure) → intent guard → `runSearch`. Returns `{ status: results|none|small_talk|listing, parsed, source, rows, ids, total, relaxed, timings }`.
+* `buildSearchQuery(agencyId, filters, { relaxed })`: agency-scoped, active-only SQL. Place keys use the indexed key columns, free place words the search document; features use `feature_keys @>`; delivery, payment (cash, installments, max down payment, max installment), finishing, furnishing and floor are columns. Order: `confirmed_at DESC, created_at DESC, id DESC` (stable). The relaxed pass widens price/area ±15% and bedrooms ±1 and drops bathrooms/floor/finishing/furnishing; the place stays locked.
+* `runSearch` returns the first page and an **id snapshot** (up to `SNAPSHOT_MAX` = 100); `pageByIds` pages that snapshot (B1: no repeats or shifts when inventory changes; sold units are skipped).
+* `lib/search.js` is the WhatsApp adapter: it formats with `Describe.searchResults`, logs `search_query`, and keeps the snapshot in `broker_sessions` (`search_state`, 30 minutes) for "المزيد"/More (`handleMore`). Text and voice call the same function, so the same request returns the same ids in the same order (parity tests).
+
+#### C. Edits, quick updates and the write path
+* **`lib/listingStore.js`:** `findByCode(db, agencyId, code, { forUpdate })` (code or developer code through `code_norm`), and **`applyListingPatch(db, broker, { listing, patch, expectedVersion })`, the one write path for edits and quick updates**: `canEdit` is checked, only `PATCH_COLUMNS` are written, `price_display` is recomputed with the price, and the update is `WHERE id AND agency_id AND version = expectedVersion`. A stale version returns `{ conflict: true }` (**optimistic locking**), never an overwrite. On success: `version + 1`, `confirmed_at = now()`, `flyer_cache = '{}'`.
+* **`lib/edits.js`:**
+  - `quickUpdate` (sold, archive, available, price) by text, voice or button: without a code it uses the unit the broker looked at last (`session_context.recent_code`, 1 hour). Runs under the `(agency, code)` advisory lock and a row lock; developer units refuse direct price edits (EDT-04).
+  - Staged edits: `startEdit` (inline instructions are reviewed at once, A3) → `appendToEdit` (text and voice during an edit never become a search, A4) → `reviewEdit` (AI extraction or the local price parser when the AI is down → `composeFields` with the existing row → `fieldRules.evaluate` → `diffPatch`; the patch and the version seen are staged in `broker_sessions` `edit`, 30 minutes) → `confirmEdit` (applies with `expectedVersion`; a conflict asks for a new review) / `cancelEdit`.
+* **`lib/registry.js`:** the command registry for the commands Release 1 touched: `price`, `status` (sold/archive/available), `edit`, `edit_done` (only while an edit is open), `more` (only while a search is open). Each entry is `{ name, match(text, state), run }` with anchored matchers, so the first match is the only match. A voice transcript may trigger only `price` and `status`. `routes/commands.js` and `routes/media.js` call `Registry.dispatch` before the legacy chain.
+* **`lib/buttons.js`** (`BUTTONS`, `QUICK_ROWS`, `quickSections`, `cardButtons`): one id and one bilingual title per action. **`lib/copy.js`** (`COPY`, `t(key, lang, vars)`): one wording per Release 1 message.
+
+#### D. Flyer worker
+* One pipeline: `renderFlyerOnDemand` (button `flyer:…` and the `كتالوج CODE` command; the old `deliverFlyer` is gone, A7/V1). It reads the model from `Describe.flyerModel`, caches by a key that follows the data (`flyerCacheKey`), and sends **one** image with its caption.
+* Rendering (satori + sharp) runs in a `worker_threads` worker (`lib/flyerWorker.js`) behind a limiter of one job (`FLYER_MAX_QUEUE` waiting, default 6, then `QUEUE_FULL`) with a timeout (`FLYER_TIMEOUT_MS`, default 45 s) that terminates a stuck worker. Under tests the worker is off (`FLYER_WORKER`), so rendering is inline.
+* Sample PNGs (`npm run flyer:samples`, `tests/flyer/samples/`) are the reviewed regression snapshots; measured peak RSS with `MALLOC_ARENA_MAX=2` is about 250 MB, which fits Render Starter.
+
+#### E. Onboarding & hosting
+* **`lib/onboarding.js` + `scripts/onboard.js`** (`npm run onboard -- <agency.json> [--dry-run]`): validates the file (agency name, `#RRGGBB` colours, `dark|light` theme, https logo; Egyptian mobiles; roles broker/agent/admin/owner/manager; at least one manager role), then in one transaction creates or updates the agency (matched by name) and its brokers (matched by phone). A phone registered with another agency is an error, never a silent move. Example: `docs/pilot/agency.example.json`; broker how-to: `docs/pilot/broker-howto-ar.md`.
+* **`render.yaml`:** one Render web service (Starter, Frankfurt), `npm ci --omit=dev`, `npm start`, health check `/health`, `NODE_ENV=production`, Node 22, `MALLOC_ARENA_MAX=2`. Secrets (`PUBLIC_BASE_URL`, `DATABASE_URL`, WhatsApp, Gemini, Supabase) are set in the dashboard (`sync: false`). Move to Standard if measured peak memory stays above about 400 MB.
+
+---
+
+### 8. Testing, CI & Change Discipline
+* **Every change ships with tests and doc updates.** A change is complete only when it includes tests that cover it and updates to this manifest, `FEATURE_REGISTRY.md` and `API_CONTRACTS.json` where they are affected. (Release 1 ran under a POC exception; its docs were caught up at the start of Release 2.)
+* **`API_CONTRACTS.json` is generated from the real exports:** `node scripts/api-contracts.js` rewrites the `libraries` map (export name → parameter names, or a type name). `tests/contract-guard.test.js` fails when a listed module's exports or parameters differ from the file, or when a module in `lib/`, `domain/` or `services/` is missing from it.
+* **`SCHEMA_REFERENCE.sql` is regenerated with every migration** (`npm run schema:reference`; §2).
 * **Behaviour tests drive the real router.**
   - `tests/router/*.test.js` send real webhook payloads through `createApp(...).handleWebhookBody` and assert on the outbound WhatsApp messages and the resulting DB rows.
   - The external edges are replaced by recording fakes in `tests/harness/`:
@@ -160,7 +236,7 @@ The database runs on PostgreSQL (Supabase) with the `pg_trgm`, `pgcrypto` and `u
   - `tests/harness/db.js` loads `db/schema.sql` into PGlite (Postgres compiled to WASM, with `pg_trgm`, `pgcrypto` and `uuid-ossp`) behind a `pg.Pool`-compatible adapter. No Docker or external database is needed.
   - NUMERIC and INT8 come back as strings, exactly like node-pg.
   - There is one database per test file, reset with `TRUNCATE` between tests.
-* **Known defects are executable.** Confirmed bugs are written as `test.failing(...)`, named with their remediation-plan ID (e.g. `A1`, `F2`, `D1`). The fixing change converts the test to a normal `test(...)`.
+* **Known defects are executable.** Confirmed bugs are written as `test.failing(...)`, named with their remediation-plan ID (e.g. `A1`, `F2`, `D1`). The fixing change converts the test to a normal `test(...)`. After Release 1 no `test.failing` remains; the IDs live on in the test names (FEATURE_REGISTRY §11).
 * **Commands:**
   - `npm run test:ci` runs all offline tests: `node --test` e2e plus every Jest suite.
   - `npm run test:router` runs only the router behaviour tests.
