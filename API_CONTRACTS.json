@@ -363,6 +363,22 @@
       "TYPE_TERMS": "Object",
       "vocabularyRows": [],
       "seedVocabulary": ["client"]
+    },
+    "lib/links.js": {
+      "withQuery": ["path", "query"],
+      "appUrl": ["path", "query"],
+      "loginLinkUrl": ["token"],
+      "searchUrl": ["encodedFilters"],
+      "unitAppUrl": ["code"],
+      "unitPageUrl": ["agencySlug", "code", "shareToken"]
+    },
+    "domain/slug.js": {
+      "RESERVED_SLUGS": "Array",
+      "SLUG_RE": "Object",
+      "MAX_BASE": "Number",
+      "slugify": ["name"],
+      "baseSlug": ["name", "id"],
+      "isValidSlug": ["slug"]
     }
   },
   "invariant_variable_names": {

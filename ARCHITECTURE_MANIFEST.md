@@ -9,7 +9,8 @@
 * **App Factory & Bootstrap:** `server.js` exports `createApp({ pool, config })`, which builds the Express app and the message pipeline around an injected pg-compatible pool. It returns `{ app, state, handleWebhookBody, handleInboundMessage, dispatchMessage, bootRecovery, preWarmAssets }`. Only `start()` creates the real pool (`lib/db.js` `getPool()`), applies pending migrations, binds the port and installs signal handlers, and it runs only when `server.js` is executed directly (`require.main === module`).
 * **Configuration (`config.js`):** the single source of runtime configuration. `getConfig()` loads it once from `process.env`; `loadConfig(env)` builds it from any map (tests).
   - **Fails fast in production:** `NODE_ENV=production` refuses to start without `DATABASE_URL`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `GEMINI_API_KEY` and `PUBLIC_BASE_URL` (`REQUIRED_IN_PRODUCTION`), and requires `PUBLIC_BASE_URL` to be `https://`.
-  - **Links:** `publicUrl(path)` builds every absolute URL from `PUBLIC_BASE_URL` (trailing slash dropped; `http://localhost:<PORT>` outside production).
+  - **Links:** `publicUrl(path)` builds every absolute URL from `PUBLIC_BASE_URL` (trailing slash dropped; `http://localhost:<PORT>` outside production). Use `https://<service>.onrender.com` until the domain exists, then `https://www.aqarchat.com`; changing the variable moves every link.
+* **Links (`lib/links.js`):** every absolute link the app sends out (WhatsApp messages, OG tags) is built here from `config.publicUrl`: `appUrl(path, query)` (`/app/...`), `loginLinkUrl(token)`, `searchUrl(filters)`, `unitAppUrl(code)`, `unitPageUrl(slug, code, shareToken)` (`/<agency-slug>/<unit-code>?s=<token>`). Pages inside the site link with relative paths. A test fails if any other module reads `PUBLIC_BASE_URL` or hardcodes the host (`onrender.com`, `aqarchat.com`, `localhost:<port>`).
   - **AI prices and quotas:** `ai.prices` (USD per 1M tokens per model, overridable with `AI_PRICES_JSON`) drive `estimateCostUsd(model, in, out)`, the only cost formula; `ai.quotas` (`AI_QUOTA_AGENCY_DAILY`, `AI_QUOTA_BROKER_DAILY`) feed `checkAiQuota`.
   - Also: `bodyLimit` (`BODY_LIMIT`, default 512kb), `whatsapp.allowUnsigned` (only outside production with `WEBHOOK_ALLOW_UNSIGNED=true`), `db.*` (`DB_POOL_MAX`, `DB_STATEMENT_TIMEOUT_MS` default 10 s, `DATABASE_SSL`, `MIGRATE_ON_BOOT`), `flyer.*` (`FLYER_WORKER`, `FLYER_MAX_QUEUE`, `FLYER_TIMEOUT_MS`).
 * **Single pool (`lib/db.js`):** `createPool()` is the only place a `pg.Pool` is created. It sets `statement_timeout`, SSL and type parsers that return NUMERIC (1700) and INT8 (20) as JS numbers (`TYPE_OVERRIDES`); the PGlite harness mirrors the same parsers. `getPool()` is the lazily created process pool used by `start()` and the scripts.
@@ -21,6 +22,7 @@
   | `002_listing_data_model.sql` | structured delivery, feature keys, resale schedule, `confirmed_at`, `market`, `finishing`, `furnishing`, `floor_level`, `version`, generated `code_norm` + unique `(agency_id, code_norm)`; backfills; drops the invented `payment_frequency`/`maintenance_pct` defaults (F1) |
   | `003_backfill_feature_keys.js` | `feature_keys`/`features_other` from legacy free text through `domain/features.js` |
   | `004_search_document.js` | one normalizer and one search trigger (D1/D2), `compound_synonyms` and `search_vocabulary` seeded from the domain dictionaries, place key columns |
+  | `005_agency_slug.sql` | `agencies.slug` (NOT NULL, unique, URL-safe, not reserved): derived from the name by `agency_slug_base` + trigger `trg_agencies_slug` (−2, −3 on clashes), backfilled oldest first |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
 * **Graceful Termination & Drain Protocol:** On `SIGTERM` or `SIGINT`, the service enters a draining state:
@@ -40,7 +42,8 @@ The database runs on PostgreSQL (Supabase) with the `pg_trgm`, `pgcrypto` and `u
 * The test database is built exactly like production: baseline, then the migrations (`tests/harness/db.js`).
 
 #### A. Core Tables & Identity
-* **`agencies`**: Stores multi-tenant agencies (`id`, `name`, `logo_url`, `primary_color`, `secondary_color`, `flyer_theme`, `phone`). Created and updated by onboarding (§7.E).
+* **`agencies`**: Stores multi-tenant agencies (`id`, `name`, `slug`, `logo_url`, `primary_color`, `secondary_color`, `flyer_theme`, `phone`). Created and updated by onboarding (§7.E).
+  - `slug` is the first path segment of public unit pages. It is derived once from the Latin letters and digits of the name (`domain/slug.js` `baseSlug`, SQL twin `agency_slug_base`; Arabic-only or reserved names get `agency-<id prefix>`), or set in the onboarding file, and it never changes on rename, so shared links survive. Reserved first segments (`RESERVED_SLUGS`: app, api, auth, webhook, health, static, …) can never be slugs.
 * **`brokers`**: Identity and WhatsApp phone mapping.
   - *Invariant:* Always reference `brokers.phone_number` and `brokers.phone_normalized`. Lookups must match against `phone_normalized`.
   - Columns: `id`, `agency_id`, `name`, `phone_number`, `phone_normalized`, `contact_phone`, `role`, `is_active`, `preferred_lang`, `last_active_at`.
@@ -217,7 +220,7 @@ Target layering: **`routes` → `lib/registry.js` → `services` (return data) �
 * Sample PNGs (`npm run flyer:samples`, `tests/flyer/samples/`) are the reviewed regression snapshots; measured peak RSS with `MALLOC_ARENA_MAX=2` is about 250 MB, which fits Render Starter.
 
 #### E. Onboarding & hosting
-* **`lib/onboarding.js` + `scripts/onboard.js`** (`npm run onboard -- <agency.json> [--dry-run]`): validates the file (agency name, `#RRGGBB` colours, `dark|light` theme, https logo; Egyptian mobiles; roles broker/agent/admin/owner/manager; at least one manager role), then in one transaction creates or updates the agency (matched by name) and its brokers (matched by phone). A phone registered with another agency is an error, never a silent move. Example: `docs/pilot/agency.example.json`; broker how-to: `docs/pilot/broker-howto-ar.md`.
+* **`lib/onboarding.js` + `scripts/onboard.js`** (`npm run onboard -- <agency.json> [--dry-run]`): validates the file (agency name, optional `slug`, `#RRGGBB` colours, `dark|light` theme, https logo; Egyptian mobiles; roles broker/agent/admin/owner/manager; at least one manager role), then in one transaction creates or updates the agency (matched by name) and its brokers (matched by phone). A phone registered with another agency (or a slug used by another agency, `SLUG_TAKEN`) is an error, never a silent move. It prints the agency slug and the web app address. Example: `docs/pilot/agency.example.json`; broker how-to: `docs/pilot/broker-howto-ar.md`.
 * **`render.yaml`:** one Render web service (Starter, Frankfurt), `npm ci --omit=dev`, `npm start`, health check `/health`, `NODE_ENV=production`, Node 22, `MALLOC_ARENA_MAX=2`. Secrets (`PUBLIC_BASE_URL`, `DATABASE_URL`, WhatsApp, Gemini, Supabase) are set in the dashboard (`sync: false`). Move to Standard if measured peak memory stays above about 400 MB.
 
 ---

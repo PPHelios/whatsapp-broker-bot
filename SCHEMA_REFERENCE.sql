@@ -9,6 +9,41 @@ CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 CREATE SEQUENCE IF NOT EXISTS public.listing_code_seq;
 CREATE SEQUENCE IF NOT EXISTS public.operation_logs_id_seq;
 
+CREATE OR REPLACE FUNCTION public.agencies_set_slug()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  base text;
+  cand text;
+  n integer := 1;
+BEGIN
+  IF NEW.slug IS NOT NULL AND btrim(NEW.slug) <> '' THEN
+    NEW.slug := lower(btrim(NEW.slug));
+    RETURN NEW;
+  END IF;
+  base := public.agency_slug_base(NEW.name, NEW.id);
+  cand := base;
+  WHILE EXISTS (SELECT 1 FROM agencies WHERE slug = cand AND id <> NEW.id) LOOP
+    n := n + 1;
+    cand := base || '-' || n;
+  END LOOP;
+  NEW.slug := cand;
+  RETURN NEW;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.agency_slug_base(p_name text, p_id uuid)
+ RETURNS text
+ LANGUAGE sql
+ IMMUTABLE
+AS $function$
+  SELECT CASE
+    WHEN s = '' OR s = ANY (ARRAY['app', 'api', 'auth', 'login', 'logout', 'webhook', 'health', 'static', 'assets', 'public', 'admin', 's', 'u', 'www', 'aqarchat', 'about', 'help', 'terms', 'privacy', 'pricing', 'blog', 'docs', 'robots', 'favicon', 'manifest', 'sw', 'share', 'new']) THEN 'agency-' || left(replace(p_id::text, '-', ''), 8)
+    ELSE s END
+  FROM (SELECT btrim(left(btrim(regexp_replace(lower(coalesce(p_name, '')), '[^a-z0-9]+', '-', 'g'), '-'), 40), '-') AS s) x
+$function$;
+
 CREATE OR REPLACE FUNCTION public.clean_arabic_text(input_text text)
  RETURNS text
  LANGUAGE sql
@@ -138,7 +173,8 @@ CREATE TABLE IF NOT EXISTS public.agencies (
   secondary_color character varying(7) DEFAULT '#D4AF37'::character varying,
   flyer_theme text DEFAULT 'dark'::text NOT NULL,
   phone text,
-  updated_at timestamp with time zone DEFAULT now()
+  updated_at timestamp with time zone DEFAULT now(),
+  slug text NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.brokers (
@@ -388,6 +424,7 @@ ALTER TABLE brokers ADD CONSTRAINT brokers_phone_key UNIQUE (phone_number);
 ALTER TABLE brokers ADD CONSTRAINT uq_broker_phone UNIQUE (agency_id, phone_number);
 ALTER TABLE listings ADD CONSTRAINT uq_listings_agency_code UNIQUE (agency_id, code);
 ALTER TABLE projects ADD CONSTRAINT uq_agency_project_name UNIQUE (agency_id, name);
+ALTER TABLE agencies ADD CONSTRAINT agencies_slug_format CHECK (((slug ~ '^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$'::text) AND (NOT (slug = ANY (ARRAY['app'::text, 'api'::text, 'auth'::text, 'login'::text, 'logout'::text, 'webhook'::text, 'health'::text, 'static'::text, 'assets'::text, 'public'::text, 'admin'::text, 's'::text, 'u'::text, 'www'::text, 'aqarchat'::text, 'about'::text, 'help'::text, 'terms'::text, 'privacy'::text, 'pricing'::text, 'blog'::text, 'docs'::text, 'robots'::text, 'favicon'::text, 'manifest'::text, 'sw'::text, 'share'::text, 'new'::text])))));
 ALTER TABLE brokers ADD CONSTRAINT brokers_role_check CHECK ((role = ANY (ARRAY['broker'::text, 'agent'::text, 'admin'::text, 'owner'::text, 'manager'::text])));
 ALTER TABLE compound_synonyms ADD CONSTRAINT compound_synonyms_kind_check CHECK ((kind = ANY (ARRAY['compound'::text, 'developer'::text, 'area'::text])));
 ALTER TABLE listings ADD CONSTRAINT listings_delivery_month_check CHECK (((delivery_month >= 1) AND (delivery_month <= 12)));
@@ -410,6 +447,7 @@ ALTER TABLE listings ADD CONSTRAINT listings_project_id_fkey FOREIGN KEY (projec
 ALTER TABLE payment_plans ADD CONSTRAINT payment_plans_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
 ALTER TABLE projects ADD CONSTRAINT projects_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 
+CREATE UNIQUE INDEX uq_agencies_slug ON public.agencies USING btree (slug);
 CREATE INDEX idx_audit_logs_agency ON public.audit_logs USING btree (agency_id, created_at DESC);
 CREATE INDEX idx_broker_sessions_expires ON public.broker_sessions USING btree (expires_at);
 CREATE INDEX brokers_agency_idx ON public.brokers USING btree (agency_id);
@@ -448,6 +486,7 @@ CREATE INDEX op_logs_agency_day ON public.operation_logs USING btree (agency_id,
 CREATE INDEX idx_payment_plans_listing ON public.payment_plans USING btree (listing_id);
 CREATE INDEX idx_processed_messages_created ON public.processed_messages USING btree (created_at);
 
+CREATE TRIGGER trg_agencies_slug BEFORE INSERT OR UPDATE OF slug, name ON public.agencies FOR EACH ROW WHEN (((new.slug IS NULL) OR (btrim(new.slug) = ''::text) OR (new.slug <> lower(btrim(new.slug))))) EXECUTE FUNCTION agencies_set_slug();
 CREATE TRIGGER trg_set_listing_image_agency_id BEFORE INSERT ON public.listing_images FOR EACH ROW EXECUTE FUNCTION set_listing_image_agency_id();
 CREATE TRIGGER trg_listings_search_document BEFORE INSERT OR UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_search_document();
 CREATE TRIGGER trg_update_listings_timestamp BEFORE UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION update_timestamp_column();

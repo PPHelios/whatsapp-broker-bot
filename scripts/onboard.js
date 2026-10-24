@@ -8,6 +8,7 @@ const path = require("path");
 const { createPool } = require("../lib/db");
 const { runMigrations } = require("../lib/migrate");
 const Onboarding = require("../lib/onboarding");
+const Links = require("../lib/links");
 
 async function main() {
   const file = process.argv[2];
@@ -32,7 +33,8 @@ async function main() {
   try {
     await runMigrations(pool);
     const res = await Onboarding.onboard(pool, input);
-    console.log(`\nAgency id ${res.agencyId}: ${res.created.length} broker(s) added, ${res.updated.length} updated.`);
+    console.log(`\nAgency id ${res.agencyId} (slug ${res.slug}): ${res.created.length} broker(s) added, ${res.updated.length} updated.`);
+    console.log(`Broker web app: ${Links.appUrl("/")}`);
     console.log("Next: send each broker the how-to in docs/pilot/broker-howto-ar.md (they must message the bot first).");
   } finally {
     await pool.end();
