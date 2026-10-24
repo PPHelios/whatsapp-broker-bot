@@ -144,21 +144,15 @@ async function handleInteractive(broker, message, ctx) {
     return "done";
   }
 
-  // 5. FINALIZE & SAVE DRAFT (DRAFT_SAVE / draft_confirm / draft_save_exit)
+  // 5. DRAFT: review (DRAFT_SAVE / draft_save_exit) or commit the staged review (draft_confirm)
   if (
     replyId === "DRAFT_SAVE" ||
     replyId === "draft_confirm" ||
     replyId === "draft_save_exit"
   ) {
-    const { rows: sessions } = await pool.query(
-      "SELECT session_data, expires_at FROM broker_sessions WHERE broker_id = $1 AND session_type = 'draft'",
-      [broker.id]
-    );
+    const draft = await Drafts.getDraft(pool, broker.id, "draft");
 
-    if (
-      sessions.length === 0 ||
-      new Date(sessions[0].expires_at) <= new Date()
-    ) {
+    if (!draft) {
       await reply(
         broker,
         lang === "en"
@@ -168,7 +162,6 @@ async function handleInteractive(broker, message, ctx) {
       return "done";
     }
 
-    const draft = sessions[0].session_data;
     const mediaCount = draft.media_items?.length || 0;
     const textCount = draft.text_notes?.length || 0;
     const voiceCount = draft.voice_buffers?.length || 0;
@@ -182,8 +175,8 @@ async function handleInteractive(broker, message, ctx) {
           : `⚠️ لا يمكن تسجيل الوحدة بالصور فقط (${mediaCount} صور). يرجى إرسال فويس نوت أو رسالة تحتوي على السعر والمشروع.`,
         [
           {
-            id: "draft_confirm",
-            title: lang === "en" ? "Done (Save) ✅" : "تم (حفظ) ✅"
+            id: "DRAFT_SAVE",
+            title: lang === "en" ? "Review ✅" : "مراجعة ✅"
           },
           {
             id: "draft_cancel",
@@ -194,14 +187,11 @@ async function handleInteractive(broker, message, ctx) {
       return "done";
     }
 
-    await reply(
-      broker,
-      lang === "en"
-        ? "⏳ Committing listing to cloud storage and database..."
-        : "⏳ جاري حفظ الوحدة، رفع الصور، وتحديث سجلات المخزون..."
-    );
-
-    return await Drafts.commitDraftToDatabase(broker, draft, ctx);
+    // DRF-03: only a staged review is ever committed; without one, review first (A2).
+    if (replyId === "draft_confirm" && draft.staged_review?.ok) {
+      return await Drafts.commitStagedReview(broker, ctx);
+    }
+    return await Drafts.reviewDraft(broker, ctx);
   }
 
   // 6. DELETION CONFIRMATION WITH 64-BIT ADVISORY LOCK (DEL-02)

@@ -58,3 +58,46 @@ test("down payment % can be derived from the amount; commercial accepts retail/s
 test("unparseable output scores zero", () => {
   expect(scoreExtraction({ area_value: 150, bedrooms: 3 }, null)).toMatchObject({ correct: 0, total: 2 });
 });
+
+describe("Release 1 structured fields", () => {
+  const L = require("../../lib/listing");
+  const cases = require("../eval/cases.json");
+
+  test("a correct new-shape extraction scores the structured fields", () => {
+    const raw = {
+      property_type: "apartment",
+      compound_en: "Mountain View",
+      delivery: { year: 2027 },
+      features: ["north_facing", "corner", "nanny_room"],
+      resale: { cash_paid: 3000000, remaining_amount: 5000000, installment_amount: 250000, installment_frequency: "quarterly" }
+    };
+    const out = { ...raw, ...L.normalizeExtraction(raw) };
+    const r = scoreExtraction(
+      {
+        compound: "Mountain View",
+        delivery_year: 2027,
+        features: ["north_facing", "corner"],
+        nanny_room: true,
+        total_upfront_cash: 3000000,
+        remaining_amount: 5000000,
+        installment_amount: 250000,
+        installment_frequency: "quarterly"
+      },
+      out
+    );
+    expect(r.misses).toEqual([]);
+  });
+
+  test("a missing feature or an invented delivery is a miss", () => {
+    const out = L.normalizeExtraction({ features: ["corner"], delivery: { year: 2027 } });
+    expect(scoreExtraction({ features: ["corner", "north_facing"] }, out).correct).toBe(0);
+    expect(scoreExtraction({ delivery_year: null }, out).correct).toBe(0);
+  });
+
+  test("the eval set has at least 10 text cases covering delivery, features and the resale schedule", () => {
+    const text = cases.text || [];
+    expect(text.length).toBeGreaterThanOrEqual(10);
+    const keys = new Set(text.flatMap((c) => Object.keys(c.expected)));
+    for (const k of ["delivery_year", "is_ready", "features", "remaining_amount", "installment_frequency"]) expect(keys.has(k)).toBe(true);
+  });
+});

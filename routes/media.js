@@ -5,6 +5,7 @@ const sharp = require("sharp");
 const WA = require("../lib/whatsapp");
 const U = require("../lib/util");
 const Drafts = require("../lib/drafts");
+const Supabase = require("../lib/supabase");
 const { reply, replyButtons, react } = require("../lib/dispatcher");
 
 // Constrain Sharp concurrency and memory for Render containers
@@ -105,13 +106,26 @@ async function handleImage(broker, message, ctx) {
     return "done";
   }
 
-  // 5. Atomically append media using Drafts.appendMedia (JSONB operators)
+  // 5. Upload to storage at ingest (the draft keeps only the URL), then append atomically.
+  let storedUrl = null;
+  try {
+    const safeId = String(imageObj.id).replace(/[^A-Za-z0-9_.-]/g, "_");
+    storedUrl = await Supabase.uploadListingImage(
+      broker.agency_id,
+      `drafts/${broker.agency_id}/${broker.id}/${Date.now()}_${safeId}.jpg`,
+      compressedBuffer
+    );
+  } catch (err) {
+    console.warn("Photo upload at ingest failed; kept in the draft:", err.message);
+  }
+
   const mediaResult = await Drafts.appendMedia(
     pool,
     broker.id,
     {
       mediaId: imageObj.id,
       buffer: compressedBuffer,
+      url: storedUrl,
       mimeType: "image/jpeg"
     },
     "draft"

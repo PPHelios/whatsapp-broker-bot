@@ -221,8 +221,8 @@ function createApp({ pool, config = getConfig() }) {
 
           await replyButtons(broker, promptBody, [
             {
-              id: "draft_confirm",
-              title: lang === "en" ? "Done (Save) ✅" : "تم (حفظ) ✅"
+              id: "DRAFT_SAVE",
+              title: lang === "en" ? "Review ✅" : "مراجعة ✅"
             },
             {
               id: "draft_cancel",

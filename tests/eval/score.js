@@ -34,6 +34,8 @@ function pick(out, ...keys) {
 }
 
 const CHECKS = {
+  installment_years: (exp, out) =>
+    num(pick(out, "installment_years")) === exp || num(out.payment_terms?.plans?.[0]?.years) === exp,
   property_type: (exp, out) => (TYPE_SYNONYMS[exp] || [exp]).includes(String(out.property_type || "").toLowerCase()),
   listing_type: (exp, out) => (out.listing_type || "sale") === exp,
   compound: (exp, out) => {
@@ -49,22 +51,33 @@ const CHECKS = {
     const ord = Object.entries(AR_ORDINALS).find(([w]) => norm(raw).includes(norm(w)));
     return ord ? ord[1] === exp : false;
   },
-  finishing: (exp, out) => FINISHING[exp].test(`${pick(out, "finishing_en") || ""} ${pick(out, "finishing") || ""}`),
+  finishing: (exp, out) =>
+    FINISHING[exp].test(`${pick(out, "finishing_en") || ""} ${pick(out, "finishing") || ""} ${pick(out, "furnishing") || ""}`),
   orientation: (exp, out) => {
     const raw = `${pick(out, "orientation_en") || ""} ${pick(out, "orientation") || ""}`;
     return { north: /north|بحري/i, south: /south|قبلي/i, east: /east|شرقي/i, west: /west|غربي/i }[exp].test(raw);
   },
-  nanny_room: (exp, out) => Boolean(pick(out, "has_nanny_room", "nanny_room")) === exp,
+  nanny_room: (exp, out) =>
+    (Boolean(pick(out, "has_nanny_room", "nanny_room")) || (out.feature_keys || []).includes("nanny_room")) === exp,
   ready_to_move: (exp, out) =>
-    (pick(out, "ready_to_move") === true || /فوري|ready|immediate/i.test(String(pick(out, "delivery_date") || ""))) === exp,
-  delivery_date: (exp, out) => String(pick(out, "delivery_date") || "").includes(String(exp)),
+    (pick(out, "ready_to_move", "is_ready") === true || /فوري|ready|immediate/i.test(String(pick(out, "delivery_date") || ""))) === exp,
+  is_ready: (exp, out) => (pick(out, "is_ready") === true ? true : null) === exp,
+  // Expected features must all be present (extra stated features are fine).
+  features: (exp, out) => exp.every((k) => (out.feature_keys || []).includes(k)),
+  features_other_contains: (exp, out) => (out.features_other || []).some((t) => String(t).includes(exp)),
+  installment_amount: (exp, out) => num(pick(out, "installment_value", "installment_amount")) === exp,
+  installment_frequency: (exp, out) => pick(out, "payment_frequency", "installment_frequency") === exp,
+  market: (exp, out) => (out.market || "resale") === exp,
+  furnishing: (exp, out) => pick(out, "furnishing") === exp,
+  delivery_date: (exp, out) =>
+    String(pick(out, "delivery_date") || "").includes(String(exp)) || String(pick(out, "delivery_year") || "") === String(exp),
   bua: (exp, out) => num(pick(out, "bua")) === exp || (num(pick(out, "bua")) === null && num(out.area_value) === exp),
   total_upfront_cash: (exp, out) => [num(pick(out, "total_upfront_cash")), num(pick(out, "down_payment_value"))].includes(exp),
-  remaining_debt: (exp, out) => num(pick(out, "remaining_balance", "remaining_debt")) === exp,
+  remaining_debt: (exp, out) => num(pick(out, "remaining_balance", "remaining_debt", "remaining_amount")) === exp,
   down_payment_pct: (exp, out) => {
     const price = num(out.price_value);
     const dp = num(pick(out, "down_payment_value"));
-    const pct = num(pick(out, "down_payment_pct"));
+    const pct = num(pick(out, "down_payment_pct")) ?? num(out.payment_terms?.plans?.[0]?.down_payment_pct);
     return pct === exp || (price && dp !== null && Math.round((dp / price) * 100) === exp);
   },
   bedrooms: (exp, out) => (exp === null ? [null, 0].includes(num(pick(out, "bedrooms"))) : num(pick(out, "bedrooms")) === exp)

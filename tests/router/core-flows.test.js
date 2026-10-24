@@ -87,7 +87,7 @@ describe("Draft lifecycle (DRF)", () => {
     expect(textOf(replies)).toMatch(/بالصور فقط/);
   });
 
-  test.failing("A1: تم runs AI extraction and shows a review card with the extracted price", async () => {
+  test("A1: تم runs AI extraction and shows a review card with the extracted price", async () => {
     await h.text("broker", "اضافة");
     await h.text("broker", "شقة 150 متر في هايد بارك 3 غرف السعر 8.5 مليون");
     h.AI.respond(() => ({
@@ -103,7 +103,7 @@ describe("Draft lifecycle (DRF)", () => {
     expect(textOf(replies)).not.toMatch(/البيانات التالية مطلوبة/);
   });
 
-  test.failing("A2: tapping Save without a reviewed draft must not create a listing", async () => {
+  test("A2: tapping Save without a reviewed draft must not create a listing", async () => {
     await h.text("broker", "اضافة");
     await h.text("broker", "شقة في التجمع");
     await h.tap("broker", "draft_confirm");

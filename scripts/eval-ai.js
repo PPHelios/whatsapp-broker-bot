@@ -119,7 +119,10 @@ async function runCase(genAI, cfg, c) {
   let parts;
   let transcripts = null;
 
-  if (cfg.twoStep) {
+  if (c.script && !c.files) {
+    // Text case: the broker's written note, no recording.
+    parts = [prompt, { text: `===${fence}===\n${c.script}\n===${fence}===` }];
+  } else if (cfg.twoStep) {
     transcripts = [];
     for (const file of c.files) {
       const r = await callGemini(genAI, [{ text: AI.TRANSCRIPTION_PROMPT }, audioPart(file)], { thinking: cfg.transcribe });
@@ -134,7 +137,9 @@ async function runCase(genAI, cfg, c) {
 
   const r = await callGemini(genAI, parts, { thinking: cfg.extract, json: true });
   add(r.tokens);
-  const out = parseJson(r.text);
+  const raw = parseJson(r.text);
+  // Score what production stores: the normalized extraction (raw kept for the free-text fields).
+  const out = raw ? { ...raw, ...L.normalizeExtraction(raw), details: { ...(raw.details || {}), ...L.normalizeExtraction(raw).details } } : null;
   return { id: c.id, atDoneMs: r.ms, transcribeMs, tokens, transcripts, score: scoreExtraction(c.expected, out), out };
 }
 
@@ -162,10 +167,11 @@ function summarize(cfg, results) {
 }
 
 async function main() {
-  const cases = JSON.parse(fs.readFileSync(path.join(ROOT, "tests", "eval", "cases.json"), "utf8")).voice;
+  const evalSet = JSON.parse(fs.readFileSync(path.join(ROOT, "tests", "eval", "cases.json"), "utf8"));
+  const cases = [...evalSet.voice, ...(evalSet.text || [])];
   const onlyCases = arg("cases", null)?.split(",");
   const selected = cases.filter((c) => !onlyCases || onlyCases.some((p) => c.id.startsWith(p)));
-  const missing = selected.flatMap((c) => c.files).filter((f) => !fs.existsSync(path.join(AUDIO_DIR, f)));
+  const missing = selected.flatMap((c) => c.files || []).filter((f) => !fs.existsSync(path.join(AUDIO_DIR, f)));
   if (missing.length) throw new Error(`Missing recordings: ${missing.join(", ")}`);
 
   const genAI = null; // clients come from EVAL_KEYS (see client())

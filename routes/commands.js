@@ -460,8 +460,17 @@ async function handleCommand(broker, text, ctx) {
     return await getRecentBrokerListing(pool, broker.id, recentBrokerListings);
   };
 
+  // Inside an open draft, a sentence that mentions a code is unit details (B3), not a lookup;
+  // only a bare code ("#HP-201") still opens that unit's card.
+  const isBareCode = /^[#`\[]?[A-Za-z0-9][A-Za-z0-9_\-\.\/]{1,29}[`\]]?$/.test(raw);
+  let draftOpen = null;
+  const inDraft = async () => {
+    if (draftOpen === null) draftOpen = Boolean(await Drafts.getDraft(pool, broker.id, "draft"));
+    return draftOpen;
+  };
+
   // 0. INTERCEPT FORWARDED / PASTED MULTI-LINE LISTING CARDS (Resolves [9:19 PM] Error)
-  if (raw.includes("\n")) {
+  if (raw.includes("\n") && !(await inDraft())) {
     const codeMatch =
       raw.match(
         /(?:كود|الكود|code|unit\s*code|كود\s*الوحدة|الكود\s*الداخلي)\s*[:#]?\s*([A-Za-z0-9_\-\.\/]{3,30})/i
@@ -769,91 +778,8 @@ async function handleCommand(broker, text, ctx) {
       return true;
     }
 
-    await reply(
-      broker,
-      lang === "en"
-        ? "⏳ Reviewing unit specifications and analyzing inputs..."
-        : "⏳ جاري مراجعة مواصفات الوحدة وتحليل المدخلات..."
-    );
-
-    try {
-      const Listing = require("../lib/listing");
-      const validationResult = await Listing.validateDraft(draft, lang, {
-        AI,
-        pool
-      });
-
-      if (!validationResult.valid) {
-        let msg =
-          lang === "en"
-            ? "⚠️ The following required details are missing to complete registration:\n"
-            : "⚠️ البيانات التالية مطلوبة لإتمام تسجيل الوحدة:\n";
-
-        const missingList = Array.isArray(validationResult?.missingFields)
-          ? validationResult.missingFields
-          : Array.isArray(validationResult?.blockers)
-          ? validationResult.blockers.map((b) => b.message)
-          : Object.values(validationResult?.missingFields || {});
-
-        for (const missing of missingList) {
-          msg += `• ${
-            typeof missing === "string"
-              ? missing
-              : missing.message || JSON.stringify(missing)
-          }\n`;
-        }
-        msg +=
-          lang === "en"
-            ? "\nPlease send the missing info, or type *cancel* to abort."
-            : "\nيرجى إرسال البيانات الناقصة، أو اكتب *«إلغاء»* للتراجع عن المسودة.";
-
-        await replyButtons(broker, msg, [
-          {
-            id: "draft_cancel",
-            title: lang === "en" ? "Cancel ❌" : "إلغاء ❌"
-          }
-        ]);
-        return true;
-      }
-
-      const card = T.formatDraftReviewCard(
-        validationResult.extracted,
-        validationResult.extracted.price_value,
-        validationResult,
-        lang
-      );
-
-      await replyButtons(broker, card, [
-        {
-          id: "draft_confirm",
-          title: lang === "en" ? "Confirm & Save ✅" : "تأكيد وحفظ ✅"
-        },
-        {
-          id: "draft_edit",
-          title: lang === "en" ? "Edit ✏️" : "تعديل ✏️"
-        },
-        {
-          id: "draft_cancel",
-          title: lang === "en" ? "Cancel ❌" : "إلغاء ❌"
-        }
-      ]);
-      return true;
-    } catch (err) {
-      console.error("Draft extraction error:", err);
-      await replyButtons(
-        broker,
-        lang === "en"
-          ? "❌ Failed to parse draft specs. Please send unit details clearly in text or cancel."
-          : "❌ حدث خطأ أثناء تحليل مواصفات المسودة. يرجى كتابة البيانات الأساسية في رسالة نصية أو إلغاء المسودة.",
-        [
-          {
-            id: "draft_cancel",
-            title: lang === "en" ? "Cancel ❌" : "إلغاء ❌"
-          }
-        ]
-      );
-      return true;
-    }
+    // DRF-02: AI extraction over every draft input, field rules, staged review card.
+    return (await Drafts.reviewDraft(broker, ctx)) && true;
   }
 
   // 7. INVENTORY SUMMARY & STATS (STATS-01)
@@ -1607,7 +1533,7 @@ async function handleCommand(broker, text, ctx) {
 
   // 16. DIRECT UNIT CODE LOOKUP (ING-04)
   const codeParseResult = T.parseExplicitUnitCode(raw);
-  if (codeParseResult.hasCode && codeParseResult.code) {
+  if (codeParseResult.hasCode && codeParseResult.code && (isBareCode || !(await inDraft()))) {
     const targetCode = T.extractCleanCode(codeParseResult.code);
 
     const { rows } = await pool.query(
