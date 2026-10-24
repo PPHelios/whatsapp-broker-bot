@@ -19,7 +19,7 @@ const PG_COMPAT_PARSERS = {
  * PGlite has a single connection, so the adapter serializes transactions: while a client
  * holds an open transaction, pool.query calls wait until it commits or rolls back.
  */
-async function createTestDb() {
+async function createTestDb({ migrate = true } = {}) {
   // CommonJS builds: Jest cannot import() ESM without experimental VM flags.
   const { PGlite } = require("@electric-sql/pglite");
   const { pg_trgm } = require("@electric-sql/pglite/contrib/pg_trgm");
@@ -104,7 +104,7 @@ async function createTestDb() {
     on: () => {}
   };
 
-  await runMigrations(pool);
+  if (migrate) await runMigrations(pool);
   return { pool, db };
 }
 
