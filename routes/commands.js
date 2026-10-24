@@ -1,13 +1,17 @@
 // routes/commands.js — Text Commands Controller & Lifecycle Handlers
 "use strict";
 
-const WA = require("../lib/whatsapp");
 const T = require("../lib/text");
 const U = require("../lib/util");
 const Flyer = require("../lib/flyer");
 const Drafts = require("../lib/drafts");
 const Vision = require("../lib/vision");
-const { reply, replyButtons } = require("../lib/dispatcher");
+const {
+  reply,
+  replyButtons,
+  replyImage,
+  replyDocument
+} = require("../lib/dispatcher");
 
 /**
  * Validates whether the broker has permission to mutate a listing.
@@ -258,11 +262,7 @@ async function deliverFlyer(
         : `📄 كتالوج الوحدة #${listing.code} (${
             isUnbranded ? "بدون بيانات" : "معتمد بالبيانات"
           })`;
-    await WA.sendWhatsAppImage(
-      broker.phone_normalized || broker.phone_number,
-      cachedUrl,
-      caption
-    );
+    await replyImage(broker, cachedUrl, caption);
     return true;
   }
 
@@ -339,11 +339,10 @@ async function deliverFlyer(
           ? `📄 Luxury Brochure for #${activeListing.code}`
           : `📄 كتالوج الوحدة #${activeListing.code}`;
 
-      await WA.sendWhatsAppImage(
-        broker.phone_normalized || broker.phone_number,
-        publicUrl || flyerBuffer,
-        caption
-      );
+      // A raw Buffer cannot be sent as an image link; a failed upload is a delivery failure.
+      if (!publicUrl) throw new Error("Flyer upload returned no URL");
+      const sent = await replyImage(broker, publicUrl, caption);
+      if (!sent) throw new Error("Flyer image delivery failed");
     } catch (err) {
       console.error("Flyer render failure:", err);
       await releaseBrokerCooldown(pool, broker.id, "flyer", cooldowns);
@@ -1047,14 +1046,15 @@ async function handleCommand(broker, text, ctx) {
           lang
         });
 
-        await WA.sendWhatsAppDocument(
-          broker.phone_normalized,
+        const sent = await replyDocument(
+          broker,
           buf,
           `Inventory_${new Date().toISOString().slice(0, 10)}.xlsx`,
           lang === "en"
             ? "📊 Full Agency Inventory Report"
             : "📊 تقرير مخزون الوكالة المعتمد"
         );
+        if (!sent) throw new Error("Inventory workbook delivery failed");
 
         await logCommandOp(pool, {
           agency_id: broker.agency_id,
@@ -1235,7 +1235,7 @@ async function handleCommand(broker, text, ctx) {
           ? `⚠️ Are you sure you want to permanently delete unit #${listing.code}? Media and brochures will be unlinked.`
           : `⚠️ هل أنت متأكد من رغبتك في حذف الوحدة #${listing.code} نهائياً؟ سيتم مسح كافة ملفات البروشور والوسائط.`;
 
-      await WA.sendWhatsAppButtons(broker.phone_normalized, promptBody, [
+      await replyButtons(broker, promptBody, [
         {
           id: `del_confirm:${listing.id}:${listing.code}`,
           title: lang === "en" ? "Delete 🗑️" : "تأكيد الحذف 🗑️"

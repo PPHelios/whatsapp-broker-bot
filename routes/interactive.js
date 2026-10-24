@@ -1,12 +1,17 @@
 // routes/interactive.js — Interactive Button & List Menu Callbacks Router
 "use strict";
 
-const WA = require("../lib/whatsapp");
 const T = require("../lib/text");
 const U = require("../lib/util");
 const Drafts = require("../lib/drafts");
 const financials = require("../lib/financials");
-const { reply, replyButtons, allowSilentDrop } = require("../lib/dispatcher");
+const {
+  reply,
+  replyButtons,
+  replyList,
+  replyDocument,
+  allowSilentDrop
+} = require("../lib/dispatcher");
 
 /**
  * Validates broker mutation permissions.
@@ -170,8 +175,8 @@ async function handleInteractive(broker, message, ctx) {
 
     // ING-05: Image-only blocker
     if (textCount === 0 && voiceCount === 0) {
-      await WA.sendWhatsAppButtons(
-        broker.phone_normalized,
+      await replyButtons(
+        broker,
         lang === "en"
           ? `⚠️ Cannot save with images only (${mediaCount} photos). Please send a voice note or text with the price and compound.`
           : `⚠️ لا يمكن تسجيل الوحدة بالصور فقط (${mediaCount} صور). يرجى إرسال فويس نوت أو رسالة تحتوي على السعر والمشروع.`,
@@ -398,8 +403,8 @@ async function handleInteractive(broker, message, ctx) {
       }
     ];
 
-    await WA.sendWhatsAppList(
-      broker.phone_normalized,
+    await replyList(
+      broker,
       lang === "en"
         ? `💳 Approved payment schedules for #${listing.code}. Select a plan to generate forwardable client copy:`
         : `💳 مصفوفة أنظمة السداد المعتمدة لوحدة #${listing.code}. اختر النظام لإصدار نص العميل المباشر:`,
@@ -506,14 +511,15 @@ async function handleInteractive(broker, message, ctx) {
           lang
         });
 
-        await WA.sendWhatsAppDocument(
-          broker.phone_normalized,
+        const sent = await replyDocument(
+          broker,
           buffer,
           `Payment_Plans_${listing.code}.xlsx`,
           lang === "en"
             ? `📊 Payment Matrix: Unit #${listing.code}`
             : `📊 جدول مقارنة أنظمة السداد: الوحدة #${listing.code}`
         );
+        if (!sent) throw new Error("Payment plans workbook delivery failed");
       } catch (excelErr) {
         console.error("Multi-plan excel export error:", excelErr);
         await reply(
@@ -587,13 +593,23 @@ async function handleInteractive(broker, message, ctx) {
   }
 
   // 13. CANCEL DRAFT AND EXECUTE SEARCH (COL-01)
-  if (replyId.startsWith("cancel_and_search:")) {
-    const encodedQuery = replyId.split(":")[1];
+  if (replyId === "cancel_and_search" || replyId.startsWith("cancel_and_search:")) {
     let queryText = "";
-    try {
-      queryText = Buffer.from(encodedQuery, "base64").toString("utf8");
-    } catch (e) {
-      console.warn("Base64 query decode error:", e);
+    if (replyId === "cancel_and_search") {
+      const { rows: pending } = await pool.query(
+        `DELETE FROM broker_sessions
+         WHERE broker_id = $1 AND session_type = 'pending_search' AND expires_at > NOW()
+         RETURNING session_data->>'query' AS query`,
+        [broker.id]
+      );
+      queryText = pending[0]?.query || "";
+    } else {
+      // Legacy buttons sent before the query moved server-side carried it base64-encoded.
+      try {
+        queryText = Buffer.from(replyId.split(":")[1], "base64").toString("utf8");
+      } catch (e) {
+        console.warn("Base64 query decode error:", e);
+      }
     }
 
     await pool.query(
@@ -660,14 +676,15 @@ async function handleInteractive(broker, message, ctx) {
           lang
         });
 
-        await WA.sendWhatsAppDocument(
-          broker.phone_normalized,
+        const sent = await replyDocument(
+          broker,
           buf,
           `Inventory_${new Date().toISOString().slice(0, 10)}.xlsx`,
           lang === "en"
             ? "📊 Full Agency Inventory Report"
             : "📊 تقرير مخزون الوكالة المعتمد"
         );
+        if (!sent) throw new Error("Inventory workbook delivery failed");
       } catch (err) {
         console.error("Interactive export failure:", err);
         if (cooldowns) cooldowns.delete(cooldownKey);

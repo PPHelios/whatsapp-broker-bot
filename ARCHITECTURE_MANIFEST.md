@@ -101,11 +101,20 @@ The database runs on PostgreSQL (Supabase) with the `pg_trgm`, `pgcrypto` and `u
 
 ### 5. Conversational UX, WhatsApp Limits & Symmetrical Messaging
 * **Zero Silent Drops:** Every code branch (success, validation failure, DB error, expired session, unsupported media) must return an explicit WhatsApp response. Silence is strictly prohibited.
+* **Single Outbound Path & Delivery Truth:**
+  - Handlers send only through `lib/dispatcher.js`: `reply`, `replyButtons`, `replyList`, `replyImage`, `replyDocument` and `react`. They never call `WA.send*` directly; a test in `tests/unit/whatsapp-client.test.js` enforces this.
+  - A turn counts as answered **only after WhatsApp accepts the message**, i.e. a non-null result. A failed or dropped send leaves the turn unanswered, so `executeGuardedTurn`'s safety net still replies.
+  - A delivered 📸 reaction answers a photo turn.
+  - The single exception is the unregistered-number notice in `server.js`, which runs outside any broker turn.
+* **Background Deliverables:** Work that finishes after the turn (exports, comparison workbooks, flyers, rejection sheets) must check the dispatcher result and send an explicit error reply when delivery fails.
+* **Webhook Batching:** `handleWebhookBody` processes **every** message in every entry and change of a webhook POST, in order (`handleInboundMessage` per message). Bodies with statuses only are ignored.
+* **Unregistered Numbers:** A number with no active broker gets one bilingual registration notice per 24 hours, counted from `inbound_messages`. All of its messages are still recorded.
+* **No Duplicate Sends:** `postWhatsAppApi` retries only explicit HTTP 429/5xx responses. A POST that times out or loses its connection is **not** re-sent, because it may already have been delivered.
 * **WhatsApp Interactive Constraints:**
   - Quick-reply buttons (`interactive: button`) are capped at a maximum of **3 buttons** and **20 UTF-8 characters** per title.
   - For options exceeding 3 (e.g., developer payment plans), the system switches to **Interactive List Menus** (up to 10 rows, 24-character title, 72-character description) or direct text commands.
   - **Meta 24-Hour Expiration Intercept:** If Meta returns error code `131047` (customer service window closed), `postWhatsAppApi` intercepts the response, halts all retry loops immediately, and logs the dropped message to prevent outbound queue blacklisting.
-* **Draft vs. Search Collision Guard (COL-01):** If a broker has an active draft and sends a query with search keywords, the system intercepts the text, base64-encodes the query, and presents an interactive prompt (`CANCEL_AND_SEARCH` vs. `KEEP_DRAFT`).
+* **Draft vs. Search Collision Guard (COL-01):** If a broker has an active draft and sends a query with search keywords, the system intercepts the text and stores it server-side in `broker_sessions` (`session_type = 'pending_search'`, 15-minute TTL). It then presents an interactive prompt with the fixed button ids `cancel_and_search` and `draft_edit`; button ids are capped at 128 chars, so the query never goes inside the id. Legacy `cancel_and_search:<base64>` buttons are still decoded.
 * **Dynamic Median ETAs & Cooldowns:**
   - Resource-intensive actions (brochure rendering, full exports) dispatch an immediate acknowledgment message citing realistic rolling median execution times (calculated from `operation_logs`).
   - Cooldowns are enforced across heavy actions (e.g., 60s for full agency Excel export, 20s for brochure rendering, 45s per agency bulk upload).

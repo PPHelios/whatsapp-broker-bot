@@ -151,6 +151,11 @@
     "lib/dispatcher.js": {
       "reply": ["broker", "text", "opts"],
       "replyButtons": ["broker", "body", "buttons"],
+      "replyList": ["broker", "body", "buttonText", "sections"],
+      "replyImage": ["broker", "mediaIdOrUrl", "caption"],
+      "replyDocument": ["broker", "buffer", "filename", "caption"],
+      "react": ["broker", "messageId", "emoji"],
+      "markReplied": [],
       "allowSilentDrop": ["reason"],
       "executeGuardedTurn": ["broker", "message", "handlerFn"]
     },
@@ -182,7 +187,8 @@
     "agency_id": "Must use 'agency_id' in all SQL queries (SEC-02)",
     "details_json": "Must use 'listings.details' and 'details->>'field''",
     "advisory_lock": "Must use 'SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))' with [String(agency_id), String(code).toUpperCase()]",
-    "session_table": "Must use 'public.broker_sessions' with composite key (broker_id, session_type)",
-    "telemetry_table": "Must use 'public.operation_logs' for structured operational telemetry"
+    "session_table": "Must use 'public.broker_sessions' with composite key (broker_id, session_type); types: draft, edit, search_state, session_context, pending_search, cooldown_*",
+    "telemetry_table": "Must use 'public.operation_logs' for structured operational telemetry",
+    "outbound_messages": "Handlers must send through lib/dispatcher.js reply* / react only; a turn is answered only when WhatsApp accepts the message"
   }
 }

@@ -5,7 +5,7 @@ const sharp = require("sharp");
 const WA = require("../lib/whatsapp");
 const U = require("../lib/util");
 const Drafts = require("../lib/drafts");
-const { reply, replyButtons } = require("../lib/dispatcher");
+const { reply, replyButtons, react } = require("../lib/dispatcher");
 
 // Constrain Sharp concurrency and memory for Render containers
 sharp.concurrency(1);
@@ -117,7 +117,12 @@ async function handleImage(broker, message, ctx) {
     "draft"
   );
 
-  if (mediaResult.limitReached && currentMediaCount >= 15) {
+  // A concurrent burst can pass the pre-check above while the atomic SQL cap drops the photo;
+  // the photo was stored only if its mediaId is in the returned draft.
+  const stored = (mediaResult.draft?.media_items || []).some(
+    (item) => item.mediaId === imageObj.id
+  );
+  if (!mediaResult.ok || !stored) {
     const warningBody =
       lang === "en"
         ? "⚠️ Maximum image limit reached (15 photos per listing). Additional photos were dropped."
@@ -141,16 +146,9 @@ async function handleImage(broker, message, ctx) {
     }
   }
 
-  // 6. Solution 2: Send non-intrusive reaction directly on the photo message bubble
-  // Prevents notification flooding and jumping buttons during multi-image batch ingress
-  const recipient = broker.phone_normalized || broker.phone_number;
-  if (message.id && recipient) {
-    try {
-      await WA.sendWhatsAppReaction(recipient, message.id, "📸");
-    } catch (reactionErr) {
-      console.warn("WhatsApp reaction delivery warning:", reactionErr.message);
-    }
-  }
+  // 6. Non-intrusive acknowledgement: a 📸 reaction on the photo bubble (no text bubble per photo).
+  // A delivered reaction answers the turn, so the safety-net fallback does not fire.
+  await react(broker, message.id, "📸");
 
   return "done";
 }

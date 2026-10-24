@@ -174,8 +174,8 @@ describe("AqarChat Master Safeguards & Regression Guard Suite", () => {
   /* ------------------------------------------------------------------------- */
   describe("4. Media Ingress & Silent Reactions (routes/media.js)", () => {
     test("ING-01: Photo ingress must emit silent WhatsApp emoji reaction (📸)", () => {
-      expect(mediaSrc).toMatch(/sendWhatsAppReaction/);
-      expect(mediaSrc).toMatch(/📸/);
+      // Sent via the dispatcher so a delivered reaction answers the turn (behaviour: tests/router/core-flows).
+      expect(mediaSrc).toMatch(/react\(broker, message\.id, "📸"\)/);
     });
   });
 

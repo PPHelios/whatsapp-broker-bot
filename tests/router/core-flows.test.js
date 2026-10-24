@@ -119,7 +119,7 @@ describe("Photos (ING-01)", () => {
     expect((await h.session("broker")).media_items).toHaveLength(1);
   });
 
-  test.failing("U6/Part 2 C: a photo must not also trigger the 'could not determine action' fallback", async () => {
+  test("U6/Part 2 C: a photo must not also trigger the 'could not determine action' fallback", async () => {
     const replies = await h.photo("broker");
     expect(textOf(replies)).not.toMatch(FALLBACK_AR);
   });
@@ -163,7 +163,7 @@ describe("Lifecycle & deletion (LFC, DEL)", () => {
     expect(await h.query("SELECT 1 FROM listings WHERE id = $1", [listing.id])).toHaveLength(0);
   });
 
-  test.failing("Part 2 C: the delete prompt must not also trigger the fallback bubble", async () => {
+  test("Part 2 C: the delete prompt must not also trigger the fallback bubble", async () => {
     await h.insertListing({ code: "HP-201" });
     expect(textOf(await h.text("broker", "حذف HP-201"))).not.toMatch(FALLBACK_AR);
   });

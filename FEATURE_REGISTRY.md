@@ -72,7 +72,7 @@ This registry documents every user-facing capability, command, interactive callb
 | :--- | :--- | :--- | :--- | :--- |
 | **SCH-01** | Multimodal Search Query | - Text or transcribed voice note.<br>- No active draft/edit session open. | - 3-tier Gemini cascade with exponential jitter backoff.<br>- Deterministic regex fallback (`fallbackParse`) if AI fails.<br>- Hard bathroom filtering against physical column `listings.bathrooms`.<br>- Non-negative integer parsing (`nonNegInt`) allows 0-bedroom studio searches.<br>- **Pass 1 (Strict):** Queries `search_text_normalized` using GIN trigrams and boundary constraints.<br>- **Pass 2 (Relaxed):** If Pass 1 returns 0, auto-widens price/area by $\pm 15\%$ and bedrooms by $\pm 1$, but keeps compound strictly locked. | Streams up to 5 matching unit cards with defensive window count.<br>If Pass 2: prepends close alternative alert. If zero matches: returns helpful guidance with widening suggestions. |
 | **SCH-02** | Search Pagination (`MORE_SEARCH` / `المزيد`) | - Active search state in `broker_sessions` (`session_type = 'search_state'`). | - Reads stored query filters, offset, and total count from PostgreSQL.<br>- Fetches next page (`LIMIT 5 OFFSET offset`).<br>- Updates cursor in `broker_sessions`. | Streams next 5 unit cards with `[المزيد ➡️]` button or confirms end of matching results. |
-| **COL-01** | Draft vs. Search Collision | - Broker sends text/audio with explicit search keywords (`عايز`, `ابحث`, etc.) while a draft is open. | - Intercepts query; detects search intent (property type words alone do not trigger collision).<br>- Encodes query text into Base64.<br>- Halts automatic draft append. | "⚠️ لديك مسودة وحدة قيد الإضافة حالياً. هل تريد إلغاء المسودة والبحث في المخزون بدلاً من ذلك؟"<br>Buttons: `[🔍 إلغاء والبحث]` (`cancel_and_search:<b64>`) / `[📝 إكمال المسودة]` (`draft_edit`). |
+| **COL-01** | Draft vs. Search Collision | - Broker sends text/audio with explicit search keywords (`عايز`, `ابحث`, etc.) while a draft is open. | - Intercepts query; detects search intent (property type words alone do not trigger collision).<br>- Stores the query server-side in `broker_sessions` (`pending_search`, 15-min TTL).<br>- Halts automatic draft append. | "⚠️ لديك مسودة وحدة قيد الإضافة حالياً. هل تريد إلغاء المسودة والبحث في المخزون بدلاً من ذلك؟"<br>Buttons: `[🔍 إلغاء والبحث]` (`cancel_and_search`) / `[📝 إكمال المسودة]` (`draft_edit`). Tapping search runs the full stored query; legacy `cancel_and_search:<b64>` ids still work. |
 
 ---
 
@@ -106,6 +106,7 @@ This registry documents every user-facing capability, command, interactive callb
 | **SYS-01** | Dynamic Help Menu (`مساعدة`, `help`) | - Any incoming text matching help regex. | - Pulls preferred language from broker record.<br>- Returns dynamically compiled command menu reflecting active syntax. | Localized help guide bubble. |
 | **SYS-02** | Language Preference Toggle (`lang ar` / `lang en`) | - Broker command. | - Updates `brokers.preferred_lang` in PostgreSQL.<br>- In-memory context updated. | Localized confirmation of language switch. |
 | **SYS-03** | Mandatory Operational Telemetry | - Every completed or failed operation. | - Asynchronous, non-blocking insert into `operation_logs` recording latencies (`db_ms`, `gemini_ms`, `total_duration_ms`), tokens, model, cost ($USD), and payload metadata.<br>- Rolling percentiles (p50/p90) calculate dynamic status ETAs. | Telemetry stored safely without interrupting user transactions. |
+| **SYS-04** | Unregistered Number | - Sender has no active broker row. | - Message is still recorded in `inbound_messages`.<br>- Notice is sent at most once per 24h per number. | Bilingual "number not registered, ask your agency admin" notice, once per 24h. |
 | **SEC-01** | Webhook Cryptographic Verification | - Inbound HTTP POST to `/webhook`. | - Validates Meta's `X-Hub-Signature-256` HMAC-SHA256 signature against `WHATSAPP_APP_SECRET` using `crypto.timingSafeEqual`. | **Invalid:** HTTP 401 Unauthorized.<br>**Valid:** Proceeds to payload ingestion. |
 | **SEC-02** | Row-Level Tenant Isolation | - Every SQL query across all modules. | - Enforces `WHERE agency_id = $1` on all SELECT, UPDATE, and DELETE statements.<br>- Cross-agency data access is structurally impossible. | Absolute multi-tenant segregation. |
 | **SEC-03** | Startup Crash Recovery & Webhook Deduplication | - Server process boot (`bootRecovery()`) and webhook ingress. | - Ingress inserts `msg_id` into `inbound_messages` (`ON CONFLICT DO NOTHING`) to eliminate duplicate deliveries.<br>- Boot sweep recovers unhandled records (`status = 'new'`) from last 15 mins using `FOR UPDATE SKIP LOCKED`. | Prevents message loss across Render restarts or container cycling. |
@@ -152,8 +153,8 @@ Router tests send real webhook payloads through the production pipeline (`tests/
 | TC-SEC-03 drain returns 503 | ✅ | `webhook-security` |
 | SYS-01 help / SYS-02 language toggle | ✅ | `core-flows` |
 | ING-01 / TC-ING-01 photo stored + 📸 reaction | ✅ | `core-flows` |
-| ING-01 photo must not also send the fallback bubble | 🐞 [U6] | `core-flows` |
-| TC-ING-02 16th photo warning | ⬜ | — (plan Part 2 C) |
+| ING-01 photo must not also send the fallback bubble | ✅ | `core-flows` |
+| TC-ING-02 16th photo warning with Save/Cancel | ✅ | `tests/router/reply-delivery.test.js` |
 | ING-05 / TC-ING-04 image-only draft blocked | ✅ | `core-flows` |
 | ING-06 / TC-ING-05 unsupported media guidance | ✅ (video) | `core-flows` |
 | DRF-01 open draft · DRF-05 cancel · text append | ✅ | `core-flows` |
@@ -161,7 +162,7 @@ Router tests send real webhook payloads through the production pipeline (`tests/
 | DRF-03 commit only a reviewed draft | 🐞 [A2] | `core-flows` |
 | ING-04 `#CODE` unit card | ✅ | `core-flows` |
 | DEL-01/02 delete with confirmation; owner-only | ✅ | `core-flows` |
-| DEL-01 delete prompt without fallback bubble | 🐞 [Part 2 C] | `core-flows` |
+| DEL-01 delete prompt without fallback bubble | ✅ | `core-flows` |
 | LFC-01 mark sold | ✅ | `core-flows` |
 | EDT-03 / TC-EDT-01 inline price edit | ✅ | `core-flows` |
 | EDT-04 / TC-EDT-02 developer price guard | ✅ | `core-flows` |
@@ -176,4 +177,11 @@ Router tests send real webhook payloads through the production pipeline (`tests/
 | Client copy language/format | 🐞 [C1, C3, C4] | `tests/unit/known-defects.test.js` |
 | DB search-text triggers / normalization | 🐞 [D1, D2] | `tests/unit/known-defects.test.js` |
 | Text, Excel, search-SQL, listing helpers | ✅ | `tests/e2e.test.js` |
-| XLS-01…04, DEL-01 flyer, DEL-03…08, STATS-01, COL-01 | ⬜ | — (added with their remediation batches) |
+| Delivery truth: failed send → safety-net reply; list/blocker prompts count as replies | ✅ | `reply-delivery` |
+| DEL-07 export delivered; failed delivery → error reply | ✅ | `reply-delivery` |
+| Webhook batching (all messages processed; statuses ignored) | ✅ | `reply-delivery` |
+| SYS-04 unregistered notice once per 24h | ✅ | `reply-delivery` |
+| COL-01 long query round trip + legacy buttons | ✅ | `reply-delivery` |
+| Graph API: no resend on timeout; 503 retried; 131047 dropped | ✅ | `tests/unit/whatsapp-client.test.js` |
+| Single outbound path (no direct `WA.send*` in handlers) | ✅ | `whatsapp-client` |
+| XLS-01…04, DEL-01 flyer, DEL-03…06/08, STATS-01 | ⬜ | — (added with their remediation batches) |

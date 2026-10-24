@@ -182,7 +182,15 @@ function createApp({ pool }) {
             );
 
           if (hasExplicitSearchIntent) {
-            const encodedQuery = Buffer.from(text).toString("base64");
+            // Button ids are capped at 128 chars, so the query is kept server-side, not in the id.
+            await poolInstance.query(
+              `INSERT INTO broker_sessions (broker_id, session_type, session_data, expires_at)
+               VALUES ($1::uuid, 'pending_search', jsonb_build_object('query', $2::text), NOW() + INTERVAL '15 minutes')
+               ON CONFLICT (broker_id, session_type) DO UPDATE SET
+                 session_data = EXCLUDED.session_data,
+                 expires_at = EXCLUDED.expires_at`,
+              [broker.id, text]
+            );
             const promptBody =
               lang === "en"
                 ? "⚠️ You have an active listing draft in progress. Would you like to discard it and perform your search?"
@@ -190,7 +198,7 @@ function createApp({ pool }) {
 
             await replyButtons(broker, promptBody, [
               {
-                id: `cancel_and_search:${encodedQuery}`,
+                id: "cancel_and_search",
                 title: lang === "en" ? "Search 🔍" : "إلغاء والبحث 🔍"
               },
               {
@@ -308,10 +316,20 @@ function createApp({ pool }) {
    * Processes one verified webhook body: dedupe, broker auth, guarded dispatch, status update.
    */
   async function handleWebhookBody(body) {
-    const entry = body?.entry?.[0];
-    const changes = entry?.changes?.[0]?.value;
-    const message = changes?.messages?.[0];
+    // Meta may batch several entries/changes/messages into one POST; process every message in order.
+    for (const entry of body?.entry || []) {
+      for (const change of entry?.changes || []) {
+        for (const message of change?.value?.messages || []) {
+          await handleInboundMessage(message);
+        }
+      }
+    }
+  }
 
+  /**
+   * Processes one inbound message: dedupe, broker auth, guarded dispatch, status update.
+   */
+  async function handleInboundMessage(message) {
     if (!message || !message.from) return;
 
     const rawPhone = message.from;
@@ -348,10 +366,19 @@ function createApp({ pool }) {
       );
 
       if (brokers.length === 0) {
-        await WA.sendWhatsAppText(
-          normalizedPhone,
-          "⚠️ هذا الرقم غير مسجل كوكيل عقاري معتمد في منصة AqarChat. يرجى التواصل مع إدارة وكالتك لتفعيل حسابك."
+        // Reply to an unknown number at most once per 24h (its messages are all recorded above).
+        const { rows: recent } = await pool.query(
+          `SELECT count(*)::int AS n FROM inbound_messages
+           WHERE phone_key = $1 AND received_at > NOW() - INTERVAL '24 hours'`,
+          [normalizedPhone]
         );
+        if ((recent[0]?.n || 0) <= 1) {
+          await WA.sendWhatsAppText(
+            normalizedPhone,
+            "⚠️ هذا الرقم غير مسجل كوكيل عقاري معتمد في منصة AqarChat. يرجى التواصل مع إدارة وكالتك لتفعيل حسابك.\n" +
+              "⚠️ This number is not registered as an AqarChat broker. Please ask your agency admin to activate your account."
+          );
+        }
         return;
       }
 
@@ -488,6 +515,7 @@ function createApp({ pool }) {
     app,
     state,
     handleWebhookBody,
+    handleInboundMessage,
     dispatchMessage,
     bootRecovery,
     preWarmAssets

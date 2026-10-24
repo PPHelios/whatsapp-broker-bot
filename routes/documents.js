@@ -7,7 +7,7 @@ const WA = require("../lib/whatsapp");
 const T = require("../lib/text");
 const U = require("../lib/util");
 const Excel = require("../lib/excel");
-const { reply } = require("../lib/dispatcher");
+const { reply, replyDocument } = require("../lib/dispatcher");
 
 /**
  * Asynchronous, non-blocking operational telemetry logging helper.
@@ -713,16 +713,23 @@ async function handleDocument(broker, message, ctx) {
           originalFilename: filename
         });
 
-        await WA.sendWhatsAppDocument(
-          broker.phone_normalized,
+        const sent = await replyDocument(
+          broker,
           rejectionBuffer,
           `مرفوضات_${filename}`,
           lang === "en"
             ? "⚠️ Rejected Rows Report"
             : "⚠️ شيت الوحدات المستبعدة مع الأسباب"
         );
+        if (!sent) throw new Error("Rejection workbook delivery failed");
       } catch (docErr) {
         console.error("Failed to send rejection document:", docErr);
+        await reply(
+          broker,
+          lang === "en"
+            ? "⚠️ The rejected-rows report could not be delivered. Please re-send the file to receive it again."
+            : "⚠️ تعذر إرسال شيت الوحدات المستبعدة. يرجى إعادة إرسال الملف لاستلامه مرة أخرى."
+        );
       }
     }
   } catch (err) {
