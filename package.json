@@ -6,12 +6,14 @@
   "scripts": {
     "start": "node server.js",
     "audit:schema": "node scripts/audit-db-schema.js",
+    "test:pipeline": "node --env-file=.env tests/test_search_pipeline.js",
+    "test:search:db": "node --env-file=.env tests/test_search_db.js",
     "test:unit": "node --test tests/e2e.test.js",
     "test:contracts": "jest tests/contract-guard.test.js --runInBand",
     "test:safeguards": "jest tests/safeguards.test.js --runInBand",
     "test:integration": "jest tests/whatsapp-router-draft-machine.test.js --runInBand",
     "test:jest": "jest tests/contract-guard.test.js tests/safeguards.test.js tests/whatsapp-router-draft-machine.test.js --runInBand",
-    "test": "npm run audit:schema && npm run test:unit && npm run test:jest"
+    "test": "npm run audit:schema && npm run test:pipeline && npm run test:unit && npm run test:jest"
   },
   "engines": {
     "node": ">=20.0.0"
