@@ -328,13 +328,7 @@ async function handleInteractive(broker, message, ctx) {
       cooldowns.set(cooldownKey, now + 20000); // 20s cooldown
     }
 
-    await reply(
-      broker,
-      lang === "en"
-        ? `⏳ Rendering luxury brochure for unit #${code}... Estimated time: 4 to 7 seconds.`
-        : `⏳ جاري تجهيز وتصميم الكتالوج المعتمد للوحدة #${code}... الوقت المتوقع: 4 إلى 7 ثوانٍ.`
-    );
-
+    // One message: the flyer itself (the typing indicator covers the render).
     const Flyer = require("../lib/flyer");
     return await Flyer.renderFlyerOnDemand(broker, code, flyerLang, theme, ctx);
   }

@@ -77,6 +77,12 @@ function loadConfig(env = process.env) {
         (isProd && env.DATABASE_SSL !== "false" && !String(env.DATABASE_URL || "").includes("localhost")),
       migrateOnBoot: env.MIGRATE_ON_BOOT !== "false"
     },
+    flyer: {
+      // Rendering runs in a worker thread so satori/sharp never block webhook handling.
+      worker: env.FLYER_WORKER ? env.FLYER_WORKER !== "false" : env.NODE_ENV !== "test",
+      maxQueue: int(env.FLYER_MAX_QUEUE, 6),
+      timeoutMs: int(env.FLYER_TIMEOUT_MS, 45000)
+    },
     ai: {
       prices: parsePrices(env.AI_PRICES_JSON),
       quotas: {

@@ -593,6 +593,7 @@ async function start() {
         console.log(
           "All in-flight turns completed. Closing PostgreSQL pool..."
         );
+        await Flyer.stopFlyerWorker().catch(() => {});
         await pool.end().catch(() => {});
         console.log("Graceful shutdown complete.");
         process.exit(0);

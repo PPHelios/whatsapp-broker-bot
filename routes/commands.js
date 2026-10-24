@@ -5,7 +5,6 @@ const T = require("../lib/text");
 const U = require("../lib/util");
 const Flyer = require("../lib/flyer");
 const Drafts = require("../lib/drafts");
-const Vision = require("../lib/vision");
 const Registry = require("../lib/registry");
 const { cardButtons } = require("../lib/buttons");
 const {
@@ -215,143 +214,10 @@ async function deliverPaymentPlans(listing, broker, lang, pool, ctx) {
 }
 
 /**
- * Reusable Deliverable Handler: Luxury Brochure with Lazy Vision Curation (DEL-01)
+ * DEL-01: flyers have one pipeline (lib/flyer.js renderFlyerOnDemand, A7/V1).
  */
-async function deliverFlyer(
-  listing,
-  isUnbranded,
-  broker,
-  lang,
-  pool,
-  cooldowns,
-  ctx
-) {
-  const targetCode = listing.code;
-  const cooldownRemaining = await checkBrokerCooldown(
-    pool,
-    broker.id,
-    "flyer",
-    cooldowns
-  );
-
-  if (cooldownRemaining > 0) {
-    await reply(
-      broker,
-      lang === "en"
-        ? `⏳ Brochure generation is cooling down. Please wait ${cooldownRemaining}s.`
-        : `⏳ جاري معالجة طلب سابق. يرجى الانتظار ${cooldownRemaining} ثانية.`
-    );
-    return true;
-  }
-
-  await setBrokerCooldown(pool, broker.id, "flyer", 20000, cooldowns);
-
-  const cacheKey = isUnbranded ? "unbranded" : "branded";
-  const cachedUrl = listing.flyer_cache?.[cacheKey];
-
-  if (cachedUrl) {
-    const caption =
-      lang === "en"
-        ? `📄 Luxury Brochure for #${listing.code} (${
-            isUnbranded ? "White-Label" : "Agency Branded"
-          })`
-        : `📄 كتالوج الوحدة #${listing.code} (${
-            isUnbranded ? "بدون بيانات" : "معتمد بالبيانات"
-          })`;
-    await replyImage(broker, cachedUrl, caption);
-    return true;
-  }
-
-  await reply(
-    broker,
-    lang === "en"
-      ? `🎨 Generating luxury brochure for #${listing.code} (100% English)...\n⏱️ Estimated time: ~4 to 8 seconds.`
-      : `🎨 جاري تصميم واعتماد الكتالوج عالي الجودة للوحدة #${listing.code} (إنجليزي 100%)...\n⏱️ الوقت المتوقع: ~4 إلى 8 ثوانٍ.`
-  );
-
-  setImmediate(async () => {
-    const flyerStartTime = Date.now();
-    try {
-      // Lazy Vision Curation (DEL-01): Trigger curation if any listing_images have role = NULL
-      await Vision.ensureListingImagesCurated(listing.id, ctx);
-
-      // Re-fetch listing with curated image_order and hero_position
-      const { rows: refreshedListings } = await pool.query(
-        "SELECT * FROM listings WHERE id = $1 LIMIT 1",
-        [listing.id]
-      );
-      const activeListing = refreshedListings[0] || listing;
-
-      const { rows: agencyRows } = await pool.query(
-        "SELECT * FROM agencies WHERE id = $1 LIMIT 1",
-        [broker.agency_id]
-      );
-      const agency = agencyRows[0] || {};
-
-      const flyerBuffer = await Flyer.generateFlyerBuffer({
-        listing: activeListing,
-        agency,
-        broker: isUnbranded ? null : broker,
-        lang: "en",
-        unbranded: isUnbranded
-      });
-
-      if (!flyerBuffer) {
-        throw new Error("Flyer buffer output was empty");
-      }
-
-      const Supabase = require("../lib/supabase");
-      const storagePath = `flyers/${broker.agency_id}/${activeListing.id}/${
-        isUnbranded ? "unbranded" : "branded"
-      }_${Date.now()}.png`;
-
-      const publicUrl = await Supabase.uploadFlyerImage(
-        broker.agency_id,
-        storagePath,
-        flyerBuffer
-      );
-
-      // Update flyer_cache in listings
-      const updatedCache = {
-        ...(activeListing.flyer_cache || {}),
-        [cacheKey]: publicUrl
-      };
-      await pool.query(
-        "UPDATE listings SET flyer_cache = $1, updated_at = NOW() WHERE id = $2",
-        [JSON.stringify(updatedCache), activeListing.id]
-      );
-
-      await logCommandOp(pool, {
-        agency_id: broker.agency_id,
-        broker_id: broker.id,
-        listing_code: activeListing.code,
-        operation_type: "flyer_render",
-        total_duration_ms: Date.now() - flyerStartTime,
-        metadata: { unbranded: isUnbranded, publicUrl }
-      });
-
-      const caption =
-        lang === "en"
-          ? `📄 Luxury Brochure for #${activeListing.code}`
-          : `📄 كتالوج الوحدة #${activeListing.code}`;
-
-      // A raw Buffer cannot be sent as an image link; a failed upload is a delivery failure.
-      if (!publicUrl) throw new Error("Flyer upload returned no URL");
-      const sent = await replyImage(broker, publicUrl, caption);
-      if (!sent) throw new Error("Flyer image delivery failed");
-    } catch (err) {
-      console.error("Flyer render failure:", err);
-      await releaseBrokerCooldown(pool, broker.id, "flyer", cooldowns);
-      await reply(
-        broker,
-        lang === "en"
-          ? `❌ Could not generate flyer for #${targetCode}. Please ensure unit photos are uploaded.`
-          : `❌ تعذر إنشاء الكتالوج للوحدة #${targetCode}. يرجى التأكد من رفع صور كافية للوحدة.`
-      );
-    }
-  });
-
-  return true;
+async function deliverFlyerFor(listing, isUnbranded, broker, ctx) {
+  return (await Flyer.renderFlyerOnDemand(broker, listing.code, "en", "dark", { ...ctx, unbranded: isUnbranded })) && true;
 }
 
 /**
@@ -479,15 +345,7 @@ async function handleCommand(broker, text, ctx) {
         }
         if (/(?:flyer|كتالوج|بروشور|brochure)/i.test(raw)) {
           const isUnbranded = /unbranded|بدون بيانات/i.test(raw);
-          return await deliverFlyer(
-            listing,
-            isUnbranded,
-            broker,
-            lang,
-            pool,
-            cooldowns,
-            ctx
-          );
+          return await deliverFlyerFor(listing, isUnbranded, broker, ctx);
         }
         if (/(?:client|عميل|نص\s*العميل)/i.test(raw)) {
           const isEn = /client/i.test(raw);
@@ -1004,15 +862,7 @@ async function handleCommand(broker, text, ctx) {
       listing.code,
       recentBrokerListings
     );
-    return await deliverFlyer(
-      listing,
-      isUnbranded,
-      broker,
-      lang,
-      pool,
-      cooldowns,
-      ctx
-    );
+    return await deliverFlyerFor(listing, isUnbranded, broker, ctx);
   }
 
   // 13. DELIVERABLE: CLIENT MARKETING AD COPY (DEL-02)
