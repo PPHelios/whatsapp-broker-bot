@@ -1,5 +1,7 @@
 // tests/test_search_pipeline.js — Automated Pipeline & Bilingual Search Test Suite
 "use strict";
+// Needs DATABASE_URL pointing at a database with the Release 1 migrations applied (npm run migrate)
+// and the fixture listings of agency a0000000-0000-0000-0000-000000000001 (HP-201, MIV-15, ZED-80 ...).
 
 try {
   require("dotenv").config();
@@ -200,6 +202,14 @@ const TEST_SCENARIOS = [
     }
   },
   {
+    name: "TC-PIPE-10: Parity — Arabic and English requests return the same ids in the same order",
+    rawGeminiOutput: { intent: "search", language: "ar", filters: { compound: "هايد بارك", property_types: ["apartment"] } },
+    parityWith: { intent: "search", language: "en", filters: { compound: "Hyde Park", property_types: ["Apartment"] } },
+    options: { limit: 50, offset: 0, relaxed: false },
+    assertFn: (rows, parityRows) =>
+      rows.length > 0 && JSON.stringify(rows.map((r) => r.id)) === JSON.stringify(parityRows.map((r) => r.id))
+  },
+  {
     name: "TC-PIPE-09: Negative Lifecycle Invariant (Sold & Archived Exclusion)",
     rawGeminiOutput: {
       intent: "search",
@@ -237,8 +247,13 @@ async function runPipelineTestSuite() {
       const durationMs = Date.now() - start;
       const returnedCodes = res.rows.map((r) => r.code);
 
-      // 4. Assert invariants
-      const isPass = t.assertFn(res.rows);
+      // 4. Assert invariants (parity scenarios run the second request too)
+      let parityRows = null;
+      if (t.parityWith) {
+        const other = buildSearchQuery(AGENCY_ID, normalizeParsed(t.parityWith), t.options);
+        parityRows = (await pool.query(other.sql, other.params)).rows;
+      }
+      const isPass = t.assertFn(res.rows, parityRows);
 
       if (isPass) {
         passed++;
@@ -250,7 +265,7 @@ async function runPipelineTestSuite() {
         console.error(
           `   Actual Returned: [${returnedCodes.join(", ") || "none"}]`
         );
-        console.error(`   Normalized Compound:`, parsed.filters?.compound);
+        console.error(`   Normalized places:`, JSON.stringify(parsed.filters?.places), "terms:", JSON.stringify(parsed.filters?.place_terms));
         console.error(`   SQL:\n${sql}`);
         console.error(`   Params:`, params);
       }

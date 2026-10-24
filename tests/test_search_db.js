@@ -1,5 +1,7 @@
 // tests/test_search_db.js — Direct PostgreSQL Search Engine Integration Test
 "use strict";
+// Needs DATABASE_URL pointing at a database with the Release 1 migrations applied (npm run migrate)
+// and the fixture listings of agency a0000000-0000-0000-0000-000000000001 (HP-201, MIV-15, ZED-80 ...).
 
 // Automatically load environment variables from .env if present
 try {

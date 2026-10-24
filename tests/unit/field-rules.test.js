@@ -164,3 +164,15 @@ describe("Extraction normalization (never invents)", () => {
     expect(out.details.floor).toBe("الثالث");
   });
 });
+
+describe("Earlier search JSON shape (location_terms)", () => {
+  const Q = require("../../domain/searchQuery");
+  test("location_terms resolve to places when no compound is named", () => {
+    const r = Q.normalizeAiSearch({ filters: { bedrooms_min: 3, bedrooms_max: 3 }, location_terms: ["fifth settlement", "التجمع الخامس"] });
+    expect(r.filters.places).toEqual([{ kind: "area", key: "new_cairo" }]);
+  });
+  test("a named compound is the boundary: area terms do not widen it", () => {
+    const r = Q.normalizeAiSearch({ filters: { compound: "Hyde Park" }, location_terms: ["hyde park", "new cairo"] });
+    expect(r.filters.places).toEqual([{ kind: "compound", key: "hyde_park" }]);
+  });
+});

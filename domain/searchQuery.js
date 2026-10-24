@@ -130,7 +130,15 @@ function normalizeAiSearch(raw) {
   const r = (Array.isArray(raw) ? raw[0] : raw) || {};
   const f = r.filters || {};
   const names = [f.compound, ...(Array.isArray(f.locations) ? f.locations : []), ...(Array.isArray(r.locations) ? r.locations : [])];
-  const { places, terms } = resolvePlaceNames(names);
+  let { places, terms } = resolvePlaceNames(names);
+  // Earlier prompt shape: location_terms. They narrow only when no compound was named
+  // (a named compound is the boundary; broad area words must not widen it).
+  const legacyTerms = Array.isArray(r.location_terms) ? r.location_terms : [];
+  if (legacyTerms.length && !places.some((p) => p.kind === "compound")) {
+    const legacy = resolvePlaceNames(legacyTerms);
+    places = [...places, ...legacy.places];
+    if (!places.length) terms = [...terms, ...legacy.terms];
+  }
   const featureWords = [...(Array.isArray(f.features) ? f.features : []), ...(Array.isArray(f.other_features) ? f.other_features : [])];
   const { keys, other } = Features.classifyFeatures(featureWords);
   const legacyFlags = Features.keysFromDetails({ has_nanny_room: f.nanny_room, has_master_bedroom: f.has_master_bedroom, has_dressing_room: f.has_dressing_room });
