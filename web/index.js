@@ -103,6 +103,8 @@ function mountWeb(app, { pool, config }) {
   // "/app" without the slash is outside the service worker scope; routing is not strict, so check the raw URL.
   app.get("/app", (req, res, next) => (/^\/app(\?|$)/.test(req.originalUrl) ? res.redirect(301, "/app/") : next()));
   app.use("/app", web);
+  // Public unit pages last: /<agency-slug>/<unit-code>?s=<token> (reserved slugs never reach them).
+  require("./routes/publicUnit").mountPublic(app, { pool, assets });
   return { assets };
 }
 

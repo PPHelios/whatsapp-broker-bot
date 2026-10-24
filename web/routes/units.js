@@ -4,6 +4,7 @@
 const Store = require("../../lib/listingStore");
 const Authz = require("../../lib/authz");
 const Describe = require("../../domain/describe");
+const Share = require("../../lib/shareLinks");
 const { html } = require("../html");
 const { resultItem, factList } = require("../views/units");
 
@@ -48,12 +49,46 @@ ${rows.length
     <option value="archive">${L(lang, "📁 أرشفة", "📁 Archive")}</option>
     <option value="price_pct">${L(lang, "💰 تغيير السعر %", "💰 Change price %")}</option>
   </select>
-  <label>% <input name="pct" type="number" step="0.5" min="-50" max="100" style="width:6em"></label>
+  <label>% <input class="narrow" name="pct" type="number" step="0.5" min="-50" max="100"></label>
   <button type="submit">${L(lang, "تطبيق", "Apply")}</button>
 </form>
 <ol class="results">${rows.map((r) => resultItem(r, lang, { selectable: true }))}</ol>`
   : html`<p class="card">${L(lang, "مفيش وحدات هنا.", "No units here.")}</p>`}`
     });
+  });
+
+  /** Share section: a new client link (public page) and the broker's earlier links with their opens. */
+  async function shareSection(broker, listing, lang, fresh = null) {
+    if (listing.status !== "active") return "";
+    const links = await Share.linksFor(pool, broker, listing);
+    const copy = fresh ? `${Describe.clientCopy(listing, broker, { lang: fresh.lang })}\n\n🔗 ${fresh.url}` : null;
+    return html`<section class="card" id="share">
+  <h2>🔗 ${L(lang, "رابط للعميل", "Link for a client")}</h2>
+  ${fresh
+    ? html`<p class="share-url" data-share-url>${fresh.url}</p>
+  <p><a class="btn" href="https://wa.me/?text=${encodeURIComponent(copy)}" rel="noopener">${L(lang, "ابعته على واتساب", "Send on WhatsApp")}</a></p>`
+    : ""}
+  <form method="post" action="/app/units/${encodeURIComponent(listing.code)}/share" class="row">
+    <select name="lang"><option value="ar">عربي</option><option value="en">English</option></select>
+    <button type="submit" class="secondary">${L(lang, "رابط جديد", "New link")}</button>
+  </form>
+  ${links.length
+    ? html`<ul class="muted">${links.map(
+        (k) => html`<li data-link-opens="${k.open_count}">${new Date(k.created_at).toISOString().slice(0, 10)} · ${k.channel} · ${L(lang, `اتفتح ${k.open_count} مرة`, `opened ${k.open_count} time(s)`)}</li>`
+      )}</ul>`
+    : ""}
+  <p class="muted">${L(lang, "الصفحة بتظهر للعميل الصور والمواصفات بس — مفيش بيانات داخلية. هيوصلك تنبيه على واتساب لما يفتحها.", "The page shows clients the photos and facts only — nothing internal. You get a WhatsApp alert when it is opened.")}</p>
+</section>`;
+  }
+
+  web.post("/units/:code/share", async (req, res, next) => {
+    const lang = langOf(req);
+    const { broker } = req.session;
+    const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!listing || !Authz.canView(broker, listing) || listing.status !== "active") return next();
+    const linkLang = req.body.lang === "en" ? "en" : "ar";
+    const fresh = await Share.createShareLink(pool, broker, listing, { channel: "web", lang: linkLang });
+    return page(req, res, { title: listing.code, nav: "units", body: html`<h1>${listing.code}</h1>${await shareSection(broker, listing, lang, { ...fresh, lang: linkLang })}<p><a href="/app/units/${encodeURIComponent(listing.code)}">${L(lang, "رجوع للوحدة", "Back to the unit")}</a></p>` });
   });
 
   web.get("/units/:code", async (req, res, next) => {
@@ -75,7 +110,8 @@ ${rows.length
   <div class="row" id="unit-actions">
     ${Authz.canEdit(broker, listing) ? html`<a class="btn" href="/app/units/${encodeURIComponent(listing.code)}/edit">✏️ ${L(lang, "تعديل", "Edit")}</a>` : ""}
   </div>
-</article>`
+</article>
+${await shareSection(broker, listing, lang)}`
     });
   });
 }

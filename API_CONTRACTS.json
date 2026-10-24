@@ -553,6 +553,25 @@
       "register": ["web", "params"],
       "chatText": ["file"],
       "TEMPLATE_HEADERS": "Array"
+    },
+    "domain/publicUnit.js": {
+      "PUBLIC_FIELDS": "Array",
+      "MAX_IMAGES": "Number",
+      "toPublicUnit": ["listing", "params"],
+      "unavailable": ["listing", "params"]
+    },
+    "lib/shareLinks.js": {
+      "ALERT_EVERY_HOURS": "Number",
+      "BOT_UA": "Object",
+      "isBot": ["ua"],
+      "createShareLink": ["pool", "broker", "listing", "params"],
+      "resolveShareLink": ["pool", "slug", "code", "token"],
+      "recordOpen": ["pool", "resolved", "params"],
+      "clientCopyWithLink": ["pool", "broker", "listing", "lang", "copyText"],
+      "linksFor": ["pool", "broker", "listing"]
+    },
+    "web/routes/publicUnit.js": {
+      "mountPublic": ["app", "params"]
     }
   },
   "invariant_variable_names": {

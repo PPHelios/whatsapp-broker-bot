@@ -48,3 +48,6 @@ th, td { padding: 8px; border-block-end: 1px solid var(--line); text-align: star
 @keyframes spin { to { transform: rotate(360deg); } }
 .offline-banner { display: none; background: var(--warn); color: #fff; text-align: center; padding: 6px; }
 body.is-offline .offline-banner { display: block; }
+.logo { height: 40px; width: auto; }
+input.narrow { width: 6em; }
+.share-url { direction: ltr; word-break: break-all; font-family: monospace; }

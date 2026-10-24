@@ -43,7 +43,7 @@ const HTMX_CONFIG = { includeIndicatorStyles: false, allowEval: false, allowScri
  * Full page. lang "ar" renders RTL; assets(name) gives the versioned static path.
  * @param {Object} p - { title, lang, body, assets, csrf, broker, nav, head, robots }
  */
-function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, nav = null, head = null, robots = "noindex, nofollow" }) {
+function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, nav = null, head = null, robots = "noindex, nofollow", scripts = true, manifest = true }) {
   const en = lang === "en";
   return html`<!doctype html>
 <html lang="${en ? "en" : "ar"}" dir="${en ? "ltr" : "rtl"}">
@@ -55,13 +55,13 @@ function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, 
 <meta name="htmx-config" content="${jsonAttr(HTMX_CONFIG)}">
 ${csrf ? html`<meta name="csrf-token" content="${csrf}">` : ""}
 <title>${title ? `${title} · AqarChat` : "AqarChat"}</title>
-<link rel="manifest" href="/app/manifest.webmanifest">
+${manifest ? html`<link rel="manifest" href="/app/manifest.webmanifest">` : ""}
 <link rel="icon" href="${assets("icons/icon.svg")}" type="image/svg+xml">
 <link rel="apple-touch-icon" href="${assets("icons/icon-192.png")}">
 <link rel="stylesheet" href="${assets("app.css")}">
 ${head || ""}
-<script src="${assets("htmx.min.js")}" defer></script>
-<script src="${assets("app.js")}" defer></script>
+${scripts ? html`<script src="${assets("htmx.min.js")}" defer></script>
+<script src="${assets("app.js")}" defer></script>` : ""}
 </head>
 <body>
 ${broker || nav ? topBar({ broker, nav, lang }) : ""}
