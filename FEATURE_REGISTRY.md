@@ -139,3 +139,41 @@ This registry documents every user-facing capability, command, interactive callb
 * `TC-SEC-01`: Inbound webhooks validated with timing-safe HMAC-SHA256 signature against `WHATSAPP_APP_SECRET`.
 * `TC-SEC-02`: Tenant isolation enforced via strict `agency_id = $1` on all database operations.
 * `TC-SEC-03`: Render `SIGTERM` initiates drain protocol (HTTP 503 response, 25s window for `inFlight` tasks).
+## 11. Test Coverage Map
+Legend: ✅ covered by a passing test · 🐞 known defect pinned as `test.failing` (plan ID in brackets) · ⬜ not yet covered.
+Router tests send real webhook payloads through the production pipeline (`tests/router/`); unit tests live in `tests/unit/` and `tests/e2e.test.js`.
+
+| Feature / TC | Status | Test |
+| :--- | :--- | :--- |
+| SEC-01 / TC-SEC-01 signature verification | ✅ | `tests/router/webhook-security.test.js` |
+| SEC-02 / TC-SEC-02 tenant isolation (lookup, search) | ✅ | `tests/router/core-flows.test.js` |
+| SEC-03 webhook dedup + completed status | ✅ | `core-flows` |
+| SEC-03 crash recovery (`bootRecovery`) | ⬜ | — (plan P0 #3) |
+| TC-SEC-03 drain returns 503 | ✅ | `webhook-security` |
+| SYS-01 help / SYS-02 language toggle | ✅ | `core-flows` |
+| ING-01 / TC-ING-01 photo stored + 📸 reaction | ✅ | `core-flows` |
+| ING-01 photo must not also send the fallback bubble | 🐞 [U6] | `core-flows` |
+| TC-ING-02 16th photo warning | ⬜ | — (plan Part 2 C) |
+| ING-05 / TC-ING-04 image-only draft blocked | ✅ | `core-flows` |
+| ING-06 / TC-ING-05 unsupported media guidance | ✅ (video) | `core-flows` |
+| DRF-01 open draft · DRF-05 cancel · text append | ✅ | `core-flows` |
+| DRF-02 AI extraction + review card | 🐞 [A1] | `core-flows` |
+| DRF-03 commit only a reviewed draft | 🐞 [A2] | `core-flows` |
+| ING-04 `#CODE` unit card | ✅ | `core-flows` |
+| DEL-01/02 delete with confirmation; owner-only | ✅ | `core-flows` |
+| DEL-01 delete prompt without fallback bubble | 🐞 [Part 2 C] | `core-flows` |
+| LFC-01 mark sold | ✅ | `core-flows` |
+| EDT-03 / TC-EDT-01 inline price edit | ✅ | `core-flows` |
+| EDT-04 / TC-EDT-02 developer price guard | ✅ | `core-flows` |
+| EDT-01 `تعديل CODE <instructions>` / prefixed price form | 🐞 [A3, A5] | `core-flows` (A5) |
+| EDT-02 multi-turn edit session | 🐞 [A4] | `core-flows` |
+| SCH-01 search, agency-scoped; AI outage → regex fallback | ✅ | `core-flows` |
+| SCH-01 small talk is not a search | 🐞 [B2] | `core-flows` |
+| SCH-02 / TC-SCH-03 pagination | ⬜ | — (plan B1) |
+| DEL-02 client copy uses the agency's own code | ✅ | `core-flows`, `tests/unit/known-defects.test.js` |
+| SYS-01 help lists only working commands | 🐞 [U1] | `core-flows` |
+| Financial schedules (DEL-04/05) | ✅ baseline · 🐞 [F1–F6, F8] | `tests/unit/known-defects.test.js`, `tests/e2e.test.js` |
+| Client copy language/format | 🐞 [C1, C3, C4] | `tests/unit/known-defects.test.js` |
+| DB search-text triggers / normalization | 🐞 [D1, D2] | `tests/unit/known-defects.test.js` |
+| Text, Excel, search-SQL, listing helpers | ✅ | `tests/e2e.test.js` |
+| XLS-01…04, DEL-01 flyer, DEL-03…08, STATS-01, COL-01 | ⬜ | — (added with their remediation batches) |

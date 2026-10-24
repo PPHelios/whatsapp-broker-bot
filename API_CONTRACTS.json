@@ -1,5 +1,8 @@
 {
   "libraries": {
+    "server.js": {
+      "createApp": ["deps"]
+    },
     "lib/whatsapp.js": {
       "sendWhatsAppText": ["recipient", "text", "opts"],
       "sendWhatsAppButtons": ["recipient", "body", "buttons"],

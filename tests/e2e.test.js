@@ -137,7 +137,8 @@ describe("1. lib/text.js - String, Code Sanitization & Header Guard", () => {
     assert.equal(cardAr.includes("مساحة المباني (BUA):"), true);
     assert.equal(cardAr.includes("مساحة الأرض:"), true);
 
-    const cardEn = T.formatClientListingText(villa, broker, "en");
+    // Labels are WhatsApp-bold (*Label:*); compare on the plain text.
+    const cardEn = T.formatClientListingText(villa, broker, "en").replace(/\*/g, "");
     assert.equal(cardEn.includes("Floor:"), false);
     assert.equal(cardEn.includes("Built-Up Area (BUA): 350 sqm"), true);
     assert.equal(cardEn.includes("Land Area: 500 sqm"), true);

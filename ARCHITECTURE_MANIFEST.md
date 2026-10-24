@@ -6,6 +6,7 @@
   - Image normalization via Sharp must accept an in-memory `Buffer` and return a compressed `Buffer` directly to Supabase Storage.
   - Excel ingestion and rejection workbooks must be handled entirely in-memory using Node.js streaming buffers (`stream.PassThrough` or `Buffer.from`).
   - System fonts (`Cairo-Bold.ttf`, `Cairo-Regular.ttf`) must be pre-warmed into process memory on server boot via `Flyer.loadFont(...)`.
+* **App Factory & Bootstrap:** `server.js` exports `createApp({ pool })`, which builds the Express app and the message pipeline around an injected pg-compatible pool. It returns `{ app, state, handleWebhookBody, dispatchMessage, bootRecovery, preWarmAssets }`. Only `start()` creates the real `pg.Pool`, binds the port and installs signal handlers, and it runs only when `server.js` is executed directly (`require.main === module`).
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
 * **Graceful Termination & Drain Protocol:** On `SIGTERM` or `SIGINT`, the service enters a draining state:
   - Halts acceptance of new incoming webhooks (returns HTTP 503 so Meta Graph retries).
@@ -16,7 +17,9 @@
 ---
 
 ### 2. Verified Database Schema & Data Contracts
-The database runs on PostgreSQL (Supabase) with `pg_trgm` and `uuid-ossp` extensions enabled.
+The database runs on PostgreSQL (Supabase) with the `pg_trgm`, `pgcrypto` and `uuid-ossp` extensions.
+
+**Source of truth:** `db/schema.sql` is the canonical schema: extensions, sequences, functions, tables (including generated columns), constraints, indexes and triggers. It is generated from the live catalog by `npm run schema:export` (`scripts/export-schema.js`, which runs in a READ ONLY transaction) and must not be edited by hand. Regenerate it and commit it whenever the database changes. The test database is built from this file. `SCHEMA_REFERENCE.sql` is the older table-only reference and is superseded.
 
 #### A. Core Tables & Identity
 * **`agencies`**: Stores multi-tenant agencies (`id`, `name`, `logo_url`, `primary_color`, `secondary_color`, `flyer_theme`, `phone`).
@@ -115,3 +118,24 @@ The database runs on PostgreSQL (Supabase) with `pg_trgm` and `uuid-ossp` extens
 * **SEC-03 (Two-Phase Row & Advisory Locks):** Deletions and status transitions must acquire a 64-bit transactional advisory lock and a row lock (`FOR UPDATE`) inside a transaction and re-evaluate `canEdit(broker, listing)` under lock.
 * **SEC-04 (Non-Blocking Storage Purge):** Cloud file deletions (`deleteStorageFiles`) must execute outside the database transaction boundary so storage API latency never blocks the connection pool.
 * **SEC-05 (Excel Sanitization):** Bulk Excel uploads are capped at 5MB, checked for valid magic bytes (`PK\x03\x04`), and cells starting with dangerous characters (`=`, `+`, `-`, `@`, `\t`, `\r`) are sanitized via `sanitizeCellValue` to neutralize formula injection attacks.
+
+---
+
+### 7. Testing, CI & Change Discipline
+* **Every change ships with tests and doc updates.** A change is complete only when it includes tests that cover it and updates to this manifest, `FEATURE_REGISTRY.md` and `API_CONTRACTS.json` where they are affected.
+* **Behaviour tests drive the real router.**
+  - `tests/router/*.test.js` send real webhook payloads through `createApp(...).handleWebhookBody` and assert on the outbound WhatsApp messages and the resulting DB rows.
+  - The external edges are replaced by recording fakes in `tests/harness/`:
+    - `fake-whatsapp.js` records outbound messages and serves inbound media.
+    - `fake-ai.js` returns scripted Gemini answers.
+    - `fake-supabase.js` is an in-memory storage bucket.
+* **Real Postgres in-process:**
+  - `tests/harness/db.js` loads `db/schema.sql` into PGlite (Postgres compiled to WASM, with `pg_trgm`, `pgcrypto` and `uuid-ossp`) behind a `pg.Pool`-compatible adapter. No Docker or external database is needed.
+  - NUMERIC and INT8 come back as strings, exactly like node-pg.
+  - There is one database per test file, reset with `TRUNCATE` between tests.
+* **Known defects are executable.** Confirmed bugs are written as `test.failing(...)`, named with their remediation-plan ID (e.g. `A1`, `F2`, `D1`). The fixing change converts the test to a normal `test(...)`.
+* **Commands:**
+  - `npm run test:ci` runs all offline tests: `node --test` e2e plus every Jest suite.
+  - `npm run test:router` runs only the router behaviour tests.
+  - `npm test` adds the live-schema audit and the live search pipeline, which need `.env`.
+* **CI:** `.github/workflows/test.yml` runs `npm run test:ci` on Node 22 for every push and pull request. Don't merge to `main` with a red build.
