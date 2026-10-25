@@ -43,6 +43,9 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `WA_PRICE_EGP` | no | `0.21` | Price of one WhatsApp message (EGP, with VAT), stored on each `wa_outbound` row for our cost reports. |
 | `SCHEDULER_ENABLED` | no | `true` (off under tests) | Background jobs (follow-ups, match alerts, retention). `false` stops them on this instance. |
 | `BOT_PHONE` | no | — | The bot's WhatsApp number with country code. Only `npm run onboard` reads it, to print each broker's start link (a `bot_phone` in the agency file wins). |
+| `TELEGRAM_BOT_TOKEN` | no | — | The Telegram bot's token (@BotFather). Error alerts and bug reports are sent to the owner through it. Keep it only in Render. |
+| `ALERT_TELEGRAM_CHAT_ID` | no | — | The owner's Telegram chat id: where error alerts and bug reports go. Unset = no alerts (errors are still stored in `error_events`). See §6b for how to find it. |
+| `ALERT_EVERY_MIN` | no | `30` | At most one alert per distinct error (fingerprint) in this many minutes. Bug reports always alert. |
 | `SCHEDULER_TICK_MS` | no | `60000` | How often each instance looks for due jobs (at least 5000). Each job still runs on one instance at a time. |
 
 ## 2. Render
@@ -136,6 +139,19 @@ GROUP BY 1, 2 ORDER BY 1, 2;
 -- Sign-in links that WhatsApp did not deliver (24-hour window closed): the broker should send «دخول»
 SELECT broker_id, created_at FROM operation_logs WHERE operation_type = 'web_login_link' AND status <> 'success' ORDER BY created_at DESC LIMIT 20;
 ```
+
+## 6b. Errors and bug reports (`error_events`)
+
+Every error the service catches is stored in `error_events` and, when `ALERT_TELEGRAM_CHAT_ID` is set, the owner gets a Telegram message (🚨 `#E<id>`): bot turns on WhatsApp and Telegram (the broker sees the same `#E<id>` in the "temporary error" reply), webhook processing, boot recovery, website pages (the error page shows `#E<id>` and a "Report a problem" link), other HTTP routes, scheduler jobs, unhandled rejections and crashes (`source = 'process'`; the process then exits and Render restarts it), and script errors in brokers' browsers (`source = 'client'`, 20 an hour per broker). The same error (same fingerprint: source, type, message without numbers or ids, first frame in our code) alerts at most once per `ALERT_EVERY_MIN`; the alert says how often it happened in the last 24 hours.
+
+Brokers report problems with *bug …* / *بلاغ …* in the bot (a bare *bug*, *بلاغ* or *مشكلة* asks for the description; the next message is the report), or 🐞 "Report a problem" at the bottom of every website page. They get `#R<id>`; the owner gets a 🐞 Telegram message every time (10 reports an hour per broker at most). A report keeps the broker's last actions (`operation_logs` types and statuses of the last 2 hours) and their recent `#E` ids, so it can be traced. Phone numbers (10+ digits) are masked to their last 3 digits before anything is stored or sent.
+
+* **Finding the owner's chat id:** link your own broker account on the Telegram bot, then `SELECT name, telegram_chat_id FROM brokers WHERE telegram_chat_id IS NOT NULL;` and set `ALERT_TELEGRAM_CHAT_ID` to yours in Render. (Before Release 3T: message @userinfobot on Telegram, which replies with your id; you must also send /start to the bot once so it may write to you.)
+* Latest errors: `SELECT id, source, message, path, created_at FROM error_events WHERE kind = 'error' ORDER BY id DESC LIMIT 20;`
+* One error in full: `SELECT * FROM error_events WHERE id = 42;` (the stack, the broker, the message id; then `SELECT payload FROM inbound_messages WHERE msg_id = '<msg_id>';` for what the broker sent).
+* Most frequent this week: `SELECT fingerprint, min(message) AS message, count(*) FROM error_events WHERE kind = 'error' AND created_at > now() - interval '7 days' GROUP BY 1 ORDER BY 3 DESC;`
+* Open bug reports: `SELECT id, source, message, path, metadata, created_at FROM error_events WHERE kind = 'report' AND resolved_at IS NULL ORDER BY id DESC;` Close one with `UPDATE error_events SET resolved_at = now() WHERE id = 42;`
+* Rows are deleted after 90 days by the `privacy` job.
 
 ## 7. Reading `agency_outbound_daily`
 
@@ -234,6 +250,7 @@ If Meta blocks or restricts the bot's number:
 | A sign-in link never arrives (web form) | The broker's 24-hour WhatsApp window is closed; they send «دخول» to the bot instead. |
 | A shared link shows "الصفحة غير موجودة" | Wrong or revoked link, or the unit's code changed; share a new one. Sold units show "مبقتش متاحة". |
 | Web forms answer "Cross-site request refused" (403) | The browser's address differs from `PUBLIC_BASE_URL` (e.g. the custom domain is live but the variable still names onrender.com). Set `PUBLIC_BASE_URL` to the address brokers open. |
+| No Telegram alert for an error | `ALERT_TELEGRAM_CHAT_ID` or `TELEGRAM_BOT_TOKEN` is unset, the owner never sent /start to the bot, or the same error alerted in the last `ALERT_EVERY_MIN` minutes; the row is in `error_events` either way. Logs show `Owner alert failed: …` when Telegram refused. |
 | Flyer requests time out | Worker queue full (`FLYER_MAX_QUEUE`) or a slow render (`FLYER_TIMEOUT_MS`); check memory. |
 
 ## 9. Before Release 4

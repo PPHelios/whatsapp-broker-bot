@@ -8,6 +8,7 @@ const { securityHeaders, sameOrigin } = require("./security");
 const Session = require("./session");
 const { html, layout, withCsrf } = require("./html");
 const Notifications = require("../lib/notifications");
+const ErrorReports = require("../lib/errorReports");
 
 const MANIFEST = {
   name: "WehdatHub",
@@ -125,11 +126,16 @@ function mountWeb(app, { pool, config }) {
       : page(req, res, { title: "غير موجود", body: html`<div class="card"><h1>🔍 الصفحة غير موجودة</h1><p><a href="/app/">الرئيسية</a></p></div>` }, 404)
   );
   // eslint-disable-next-line no-unused-vars
-  web.use((err, req, res, _next) => {
-    console.error("Web request failed:", err.message);
+  web.use(async (err, req, res, _next) => {
+    // Path only (query strings may carry tokens); the owner is alerted with the broker and the page. A 4xx (a too-large
+    // or broken body) is the request's fault, not a bug.
+    const ours = !(err.status >= 400 && err.status < 500);
+    const id = ours ? await ErrorReports.capture(err, { pool, source: "web", broker: req.session?.broker || null, path: `${req.method} ${req.baseUrl}${req.path}` }) : null;
+    const ref = id ? ` #E${id}` : "";
+    const report = req.session ? html`<p><a href="/app/report?from=${encodeURIComponent(req.baseUrl + req.path)}">${req.lang === "en" ? "🐞 Report a problem" : "🐞 بلّغ عن مشكلة"}</a></p>` : "";
     req.lang === "en"
-      ? page(req, res, { title: "Error", body: html`<div class="card notice bad"><h1>❌ A temporary error</h1><p>Try again in a moment.</p></div>` }, 500)
-      : page(req, res, { title: "خطأ", body: html`<div class="card notice bad"><h1>❌ حصل خطأ مؤقت</h1><p>حاول تاني بعد شوية.</p></div>` }, 500);
+      ? page(req, res, { title: "Error", body: html`<div class="card notice bad"><h1>❌ A temporary error${ref}</h1><p>Try again in a moment.</p>${report}</div>` }, 500)
+      : page(req, res, { title: "خطأ", body: html`<div class="card notice bad"><h1>❌ حصل خطأ مؤقت${ref}</h1><p>حاول تاني بعد شوية.</p>${report}</div>` }, 500);
   });
 
   // "/app" without the slash is outside the service worker scope; routing is not strict, so check the raw URL.

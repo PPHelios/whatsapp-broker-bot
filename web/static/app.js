@@ -5,6 +5,31 @@
   document.addEventListener("htmx:configRequest", function (e) {
     if (meta) e.detail.headers["X-CSRF-Token"] = meta.content;
   });
+  // Script errors from our own files go to the server (lib/errorReports.js), at most 5 per page.
+  var sentErrors = 0;
+  function reportError(message, file, line, stack) {
+    if (!meta || sentErrors >= 5) return;
+    if (file && file.indexOf(location.origin + "/app/") !== 0) return; // extensions, other sites
+    sentErrors++;
+    try {
+      fetch("/app/client-error", {
+        method: "POST",
+        credentials: "same-origin",
+        keepalive: true,
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": meta.content },
+        body: JSON.stringify({ message: String(message || "").slice(0, 500), file: file || "", line: line || 0, stack: stack ? String(stack).slice(0, 2000) : "", page: location.pathname })
+      }).catch(function () {});
+    } catch (e) {}
+  }
+  window.addEventListener("error", function (e) {
+    if (e.filename) reportError(e.message, e.filename, e.lineno, e.error && e.error.stack);
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    var r = e.reason || {};
+    var stack = r.stack || "";
+    if (stack.indexOf(location.origin + "/app/") === -1) return;
+    reportError(r.message || String(r), location.origin + "/app/static/app.js", 0, stack);
+  });
   function online() {
     document.body.classList.toggle("is-offline", !navigator.onLine);
   }

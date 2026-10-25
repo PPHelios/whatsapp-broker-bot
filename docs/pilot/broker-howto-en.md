@@ -30,6 +30,8 @@ Send the code (e.g. *VIL-08*) and choose *Client copy* or *Flyer*. The client co
 *🌐 Website*
 Send *login* and you get a link to the WehdatHub website (search, add, import, clients, deals). Details in the website guide.
 
+Something not working? Send *bug* and what happened (e.g. *bug the flyer shows the wrong price*), or tap 🐞 *Report a problem* at the bottom of any website page. You get a number like #R12; if the bot says "temporary error (#E42)", mention that number too.
+
 Type *help* any time. The bot answers in English; you can switch to Arabic on the website (عربي at the top).
 
 *👤 Clients guide*

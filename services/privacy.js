@@ -13,6 +13,7 @@ const Card = require("../domain/leadCard");
 const Stages = require("../domain/leadStages");
 const SearchLink = require("../domain/searchLink");
 const { withTransaction } = require("../lib/db");
+const ErrorReports = require("../lib/errorReports");
 
 const RETENTION_MONTHS = 18;
 const WARN_DAYS = 30;
@@ -212,6 +213,7 @@ const privacyJob = () => ({
     counts: {
       ...(await retentionSweep(pool, { now })),
       ...(await purgeInboundPayloads(pool, { now })),
+      ...(await ErrorReports.purgeOld(pool, { now })),
       telegram_purged: await require("../lib/tgLink").purgeCallbacks(pool)
     }
   })
