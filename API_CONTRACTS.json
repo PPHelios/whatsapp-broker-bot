@@ -262,6 +262,7 @@
       "findByCode": ["db", "agencyId", "code", "params"],
       "findDuplicate": ["db", "agencyId", "l", "params"],
       "createListing": ["db", "broker", "params"],
+      "nextUnitCode": ["db", "agencyId", "propertyType"],
       "addPhotos": ["db", "listing", "urls"],
       "removePhotos": ["db", "listing", "imageIds"],
       "applyListingPatch": ["db", "broker", "params"],
@@ -886,6 +887,13 @@
       "retentionSweep": ["pool", "params"],
       "purgeInboundPayloads": ["pool", "params"],
       "privacyJob": []
+    },
+    "domain/unitCode.js": {
+      "TYPE_LETTER": "Object",
+      "typeLetter": ["propertyType"],
+      "prefixFrom": ["name"],
+      "cleanPrefix": ["raw"],
+      "format": ["prefix", "propertyType", "n"]
     }
   },
   "invariant_variable_names": {

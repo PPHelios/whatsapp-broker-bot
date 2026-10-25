@@ -2,6 +2,7 @@
 "use strict";
 
 const Credits = require("../../lib/credits");
+const UnitCode = require("../../domain/unitCode");
 const { MANAGER_ROLES } = require("../../lib/authz");
 const { html } = require("../html");
 
@@ -34,6 +35,9 @@ function register(web, { pool, page }) {
     const state = await Credits.check(pool, broker);
     const mine = await Credits.usage(pool, broker.agency_id, { brokerId: broker.id });
     const agency = manager ? await Credits.usage(pool, broker.agency_id) : null;
+    const codePrefix = manager
+      ? (await pool.query("SELECT name, code_prefix FROM agencies WHERE id = $1", [broker.agency_id])).rows.map((a) => a.code_prefix || UnitCode.prefixFrom(a.name))[0]
+      : "";
     const cls = state.level === "ok" ? "" : state.level === "warn" ? "warn" : "bad";
     return page(req, res, {
       title: L(lang, "استهلاكي", "My usage"),
@@ -71,6 +75,8 @@ ${manager
   <label>${L(lang, "الرصيد الشهري (رسايل)", "Monthly credits (messages)")} <input type="number" name="monthly" min="0" max="100000" value="${state.limit}"></label>
   <label>${L(lang, "حد يومي لكل وسيط (فاضي = بدون حد)", "Daily cap per broker (empty = off)")} <input type="number" name="daily_cap" min="1" max="10000" value="${state.broker.dailyCap ?? ""}"></label>
   <label>${L(lang, "حد أسبوعي لكل وسيط (فاضي = بدون حد)", "Weekly cap per broker (empty = off)")} <input type="number" name="weekly_cap" min="1" max="50000" value="${state.broker.weeklyCap ?? ""}"></label>
+  <label>${L(lang, "حروف أكواد الوحدات (مثال NH ← NH-V12)", "Unit code letters (e.g. NH → NH-V12)")} <input name="code_prefix" maxlength="4" pattern="[A-Za-z]{1,4}" dir="ltr" value="${codePrefix}"></label>
+  <p class="muted">${L(lang, "للوحدات اللي بتتضاف من غير كود. الأكواد القديمة مش بتتغير.", "For units added without a code. Existing codes don't change.")}</p>
   <button type="submit">${L(lang, "حفظ", "Save")}</button>
 </form>`
   : ""}`
@@ -81,9 +87,10 @@ ${manager
     const { broker } = req.session;
     if (!isManager(broker)) return res.status(403).send("Managers only");
     const monthly = parseInt(req.body.monthly, 10);
+    // A prefix that isn't 1–4 Latin letters keeps the current one.
     await pool.query(
-      "UPDATE agencies SET wa_credits_monthly = $2, wa_broker_daily_cap = $3, wa_broker_weekly_cap = $4 WHERE id = $1",
-      [broker.agency_id, Number.isInteger(monthly) && monthly >= 0 && monthly <= 100000 ? monthly : null, optInt(req.body.daily_cap), optInt(req.body.weekly_cap)]
+      "UPDATE agencies SET wa_credits_monthly = $2, wa_broker_daily_cap = $3, wa_broker_weekly_cap = $4, code_prefix = COALESCE($5, code_prefix) WHERE id = $1",
+      [broker.agency_id, Number.isInteger(monthly) && monthly >= 0 && monthly <= 100000 ? monthly : null, optInt(req.body.daily_cap), optInt(req.body.weekly_cap), UnitCode.cleanPrefix(req.body.code_prefix)]
     );
     return res.redirect(303, "/app/usage?saved=1");
   });

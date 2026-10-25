@@ -255,7 +255,9 @@ CREATE TABLE IF NOT EXISTS public.agencies (
   wa_broker_daily_cap integer,
   wa_broker_weekly_cap integer,
   lead_ref_seq integer DEFAULT 0 NOT NULL,
-  deal_ref_seq integer DEFAULT 0 NOT NULL
+  deal_ref_seq integer DEFAULT 0 NOT NULL,
+  code_prefix text,
+  unit_code_seq integer DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.brokers (
@@ -742,6 +744,7 @@ ALTER TABLE listings ADD CONSTRAINT uq_listings_agency_code UNIQUE (agency_id, c
 ALTER TABLE notifications ADD CONSTRAINT notifications_broker_id_dedupe_key_key UNIQUE (broker_id, dedupe_key);
 ALTER TABLE projects ADD CONSTRAINT uq_agency_project_name UNIQUE (agency_id, name);
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_endpoint_key UNIQUE (endpoint);
+ALTER TABLE agencies ADD CONSTRAINT agencies_code_prefix_check CHECK (((code_prefix IS NULL) OR (code_prefix ~ '^[A-Z]{1,4}$'::text)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_slug_format CHECK (((slug ~ '^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$'::text) AND (NOT (slug = ANY (ARRAY['app'::text, 'api'::text, 'auth'::text, 'login'::text, 'logout'::text, 'webhook'::text, 'health'::text, 'static'::text, 'assets'::text, 'public'::text, 'admin'::text, 's'::text, 'u'::text, 'www'::text, 'aqarchat'::text, 'about'::text, 'help'::text, 'terms'::text, 'privacy'::text, 'pricing'::text, 'blog'::text, 'docs'::text, 'robots'::text, 'favicon'::text, 'manifest'::text, 'sw'::text, 'share'::text, 'new'::text])))));
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_broker_daily_cap_check CHECK (((wa_broker_daily_cap IS NULL) OR (wa_broker_daily_cap > 0)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_broker_weekly_cap_check CHECK (((wa_broker_weekly_cap IS NULL) OR (wa_broker_weekly_cap > 0)));

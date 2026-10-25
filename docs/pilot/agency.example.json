@@ -2,12 +2,14 @@
   "_notes": {
     "bot_phone": "The bot's WhatsApp number with country code. Optional (BOT_PHONE works too); onboard then prints each broker's start link.",
     "lang": "Per broker: ar (default) or en. The bot replies, the website and the start link (مساعدة / help) follow it; each broker can change it later on the website (عربي / English).",
+    "code_prefix": "Optional, 1 to 4 Latin letters: units added without a code get <letters>-<type letter><number>, e.g. PA-V12. Default: the agency's initials.",
     "role": "broker, agent, admin, owner or manager. At least one admin, owner or manager."
   },
   "bot_phone": "+20 100 000 0099",
   "agency": {
     "name": "Pilot Agency",
     "slug": "pilot-agency",
+    "code_prefix": "PA",
     "phone": "0221234567",
     "logo_url": "https://example.com/logo.png",
     "primary_color": "#0B132B",

@@ -109,7 +109,7 @@ describe("Add by voice → review → confirm (plan verification #1)", () => {
     });
     expect(row.confirmed_at).not.toBeNull();
     expect(row.installments_end).not.toBeNull();
-    expect(row.code).toMatch(/^RK-APT-\d{5}$/);
+    expect(row.code).toBe("AL-A1"); // Agency Alpha: initials AL, A for apartment, the agency's first auto code
     expect(await h.session("broker")).toBeNull();
   });
 });

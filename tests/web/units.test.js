@@ -334,3 +334,20 @@ describe("edit a unit on the web", () => {
     expect((await unit("ED-1")).price_value).toBe(9e6);
   });
 });
+
+describe("auto unit codes (NH-V12)", () => {
+  test("managers set the code letters on My usage; brokers can't; bad letters keep the current ones", async () => {
+    const a = await signIn(h, "admin");
+    const page = await a.agent.get("/app/usage");
+    expect(page.text).toContain('name="code_prefix"');
+    expect(page.text).toContain('value="AL"');
+    const save = (agent, csrf, code_prefix) => agent.post("/app/usage/agency").type("form").send({ _csrf: csrf, monthly: "4000", code_prefix });
+    expect((await save(a.agent, a.csrf, "nh")).status).toBe(303);
+    expect((await h.query("SELECT code_prefix FROM agencies WHERE id = $1", [h.AGENCY_A]))[0].code_prefix).toBe("NH");
+    await save(a.agent, a.csrf, "N1!");
+    expect((await h.query("SELECT code_prefix FROM agencies WHERE id = $1", [h.AGENCY_A]))[0].code_prefix).toBe("NH");
+    const b = await signIn(h, "broker");
+    expect((await b.agent.get("/app/usage")).text).not.toContain('name="code_prefix"');
+    expect((await save(b.agent, b.csrf, "XX")).status).toBe(403);
+  });
+});

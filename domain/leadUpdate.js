@@ -88,7 +88,7 @@ Today in Cairo is ${today.weekday} ${today.date}, ${today.time}.${focusName ? ` 
     "date": "YYYY-MM-DD in Cairo (resolve بكرة, بعد بكرة, الجمعة, الجمعة الجاية, الأسبوع الجاي, next Sunday from today)",
     "time": "HH:MM 24-hour, else null (5 بالليل = 17:00, ٥ العصر = 17:00, الصبح = morning)",
     "kind": "viewing" if they will view a unit, else "call",
-    "unit_code": "the unit code if said (like VIL-08, RK-APT-48213), else null"
+    "unit_code": "the unit code if said (like VIL-08, NH-V12), else null"
   },
   "note": "anything else worth keeping, short, else null"
 }
