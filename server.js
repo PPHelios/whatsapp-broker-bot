@@ -791,6 +791,11 @@ async function start() {
     require("./lib/tgSetup").setup().catch(() => {});
     // After the port binds, so health probes never wait on it.
     if (scheduler.start()) console.log(`⏱️ Scheduler on (${scheduler.jobs.length} jobs)`);
+    const keepAwake = require("./lib/keepAwake").createKeepAwake({
+      ...config.keepAwake,
+      url: require("./lib/links").healthUrl()
+    });
+    if (keepAwake.start()) console.log(`☕ Keep-awake ping on (${config.keepAwake.hours} Cairo)`);
   });
 
   /**
