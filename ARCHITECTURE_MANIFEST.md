@@ -27,6 +27,7 @@
   | `007_saved_searches.sql` | `saved_searches` (per broker, agency-scoped; `seen_ids` for the "new" count) |
   | `008_web_imports.sql` | `web_imports`: Excel and group import plans between preview and apply (1 day) |
   | `009_share_links.sql` | `share_links`: client links to public unit pages (token hash, who shared, opens, last alert) |
+  | `010_lock_public_api.sql` | closes Supabase's Data API over `public`: RLS on every table (no policies, deny by default), `anon`/`authenticated` lose all grants now and by default for later tables, `agency_outbound_daily` becomes `security_invoker`. The app is unaffected: it connects as the table owner and uses the service role for Storage |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
 * **Graceful Termination & Drain Protocol:** On `SIGTERM` or `SIGINT`, the service enters a draining state:

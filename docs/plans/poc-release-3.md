@@ -341,12 +341,13 @@ Per broker per working day: light ≈ 20 credits (≈ 440 a month), typical ≈ 
 
 ### 0. Branch and plan
 This plan on `poc/release-3`, revised with the owner's answers and the reviews.
+- **Migration `010_lock_public_api.sql`** (Phase A, 2026-10-25): Supabase's advisor showed `anon` could read every public table through the Data API, including `web_sessions` and `web_login_tokens`. RLS is now on everywhere and the API roles have no grants, also by default for new tables. Every Release 3 table must keep RLS on (`tests/unit/public-api-lockdown.test.js` fails otherwise).
 
 ### 1. Foundation: phone, scheduler, settings
 - `domain/phone.js`: `normalizePhone`, `isEgyptMobile`, `isLandline`, `displayPhone`, `waMeUrl`, `last4`. `lib/util.js` and `lib/onboarding.js` delegate to it (**P1**).
 - `lib/scheduler.js` (**P5**): a 60-second tick in each instance. Each job runs under `pg_try_advisory_lock`, so one instance runs it. It's off under tests, where `tick({ now })` is called with a fixed clock. Every job writes `crm_job_<name>` telemetry (counts only). It starts after the port binds and stops first on drain.
   - Env: `SCHEDULER_ENABLED`, `SCHEDULER_TICK_MS`.
-- **Migration `010_crm_settings.sql`:** `agencies.crm_settings jsonb` (privacy note, quiet hours) and `crm_jobs` (job watermarks).
+- **Migration `011_crm_settings.sql`:** `agencies.crm_settings jsonb` (privacy note, quiet hours) and `crm_jobs` (job watermarks).
 - **Tests:**
   - 25+ phone cases (Arabic digits, `+20`, `0020`, landlines, foreign numbers, junk)
   - existing broker lookups unchanged
@@ -354,7 +355,7 @@ This plan on `poc/release-3`, revised with the owner's answers and the reviews.
   - a failing job doesn't stop the others
 
 ### 2. Notification centre, channel layer and message credits (Q15)
-- **Migration `011_notifications.sql`:**
+- **Migration `012_notifications.sql`:**
   - `notifications`: `id`, `agency_id`, `broker_id`, `kind`, `dedupe_key` (unique per broker), `title`, `body`, `url` (a relative `/app/…` path), `lead_id`/`listing_id` (nullable), `created_at`, `read_at`, `channel` (whatsapp|webpush|inbox), `reason` (chosen|fallback|no_credits|window_closed), `status` (sent|failed|skipped)
   - `push_subscriptions`: `broker_id`, `agency_id`, `endpoint` (unique), `p256dh`, `auth`, `user_agent`, `created_at`, `last_ok_at`, `failed_count`
   - `brokers.notify_prefs jsonb` (per kind: whatsapp|web; quiet hours; default WhatsApp for every kind)
@@ -390,7 +391,7 @@ This plan on `poc/release-3`, revised with the owner's answers and the reviews.
   - no phone number or full name in any push payload
 
 ### 3. The leads data model and service
-- **Migration `012_leads.sql`:**
+- **Migration `013_leads.sql`:**
   - `leads`:
     - identity: `id`, `agency_id`, `ref` (a per-agency number shown as `L-0042`, unique per agency)
     - kind and ownership: `kind`, `assigned_broker_id`, `created_by_broker_id`
@@ -486,7 +487,7 @@ This plan on `poc/release-3`, revised with the owner's answers and the reviews.
   - the Q11 columns in Arabic and English
   - row kinds: new, merge (fills blanks, never overwrites), colleague, invalid (with the reason), erased_before, repeated
 - `lib/sheets.js` `readCsv` (in memory; BOM, comma or semicolon, quotes; 5 MB and 2,000 rows).
-- `services/leadImports.js`: the existing plan → preview → apply-once flow (**migration `013_lead_imports.sql`** adds `leads` to the `web_imports.kind` check). **The apply step runs in the background with a progress bar.**
+- `services/leadImports.js`: the existing plan → preview → apply-once flow (**migration `014_lead_imports.sql`** adds `leads` to the `web_imports.kind` check). **The apply step runs in the background with a progress bar.**
 - The lawful-basis tick is required. Assignment uses the column, or round-robin when ticked.
 - The template is at `/app/leads/import/template.xlsx`.
 - **Tests:**
@@ -502,7 +503,7 @@ This plan on `poc/release-3`, revised with the owner's answers and the reviews.
   - tenant isolation; the upload rate limit
 
 ### 7. Buyer requests, match alerts and the wow loop
-- **Migration `014_buyer_requests.sql`:**
+- **Migration `015_buyer_requests.sql`:**
   - `saved_searches.lead_id`, `alerts_enabled`
   - `lead_matches` (unique per request and unit; status new, alerted, sent_to_client or dismissed)
   - `share_links.lead_id`
@@ -569,7 +570,7 @@ This plan on `poc/release-3`, revised with the owner's answers and the reviews.
   - the AI down → "couldn't read it, use the buttons"
 
 ### 10. Deals and commission (Q10: negotiated per deal)
-- **Migration `015_deals.sql`:**
+- **Migration `016_deals.sql`:**
   - `deals`: lead, listing, closing broker, sale or rent, price, `commission_mode` (amount|pct), `commission_pct`, `commission_total`, external co-broker share, status (pending → signed → paid, or cancelled), client name and phone (cleared on erasure), notes, `version`
   - `deal_splits`: the shares add up exactly
   - an agency check on `lead_id` and `listing_id`
@@ -680,12 +681,17 @@ This plan on `poc/release-3`, revised with the owner's answers and the reviews.
 | WhatsApp (≈ 3,850 credits − 1,000 free; capped at 4,400 + 200 sign-ins) | ≈ 600 EGP, at most ≈ 750 |
 | Over-limit daily notices | ≤ 30 EGP |
 | AI (≈ 75 calls a day; cap 300) | ≈ 85 EGP, at most ≈ 450 |
-| Render Starter | ≈ 350 EGP |
+| Render Starter | ≈ 350 EGP (the pilot runs on Free until after the POC; see below) |
 | **Total** | **≈ 1,050 EGP (at most ≈ 1,600)** |
 
   Prices and the exchange rate (≈ 50 EGP/USD) are checked against the first invoice. The photo-reaction fix (P11) is already counted.
 - **AI calls:** 0 for a contact card, phone lookup, CSV, buttons, matches, reminders, the hot signal and "N clients want this"; 1 for a forwarded-text intake or a typed CRM update; 2 for voice; each under $0.001.
 - **Web push** is free. **Database:** the match sweep is one indexed query per alerting request per tick, with a limit; memory doesn't change.
+
+**Render plan (owner, 2026-10-25): the service stays on Free until after the POC.** Risks that come with it:
+- It sleeps after about 15 minutes idle. The first webhook or page load after that waits 30–60 s (Meta retries the webhook). The owner accepts the slow start.
+- `lib/scheduler.js` runs inside the process, so reminders, follow-ups, match sweeps and the retention purge run only while it is awake. On wake the scheduler must catch up from its `crm_jobs` watermarks: a job that is due runs late, never twice and never skipped. Step 1 tests this.
+- The service was not created from `render.yaml`. It builds with `npm install`, has no `/health` check and runs Node 26 instead of 22. Moving to Starter means creating it from the blueprint (or copying those settings).
 
 ## Security review (done in step 12; recorded in the manifest)
 - **Access:** lead, deal, request, match and notification reads go only through role-scoped services. A grep test refuses direct queries from routes. A lead the broker can't see answers 404; the Q2 copy is the one deliberate exception (a colleague's name, no details).
@@ -739,7 +745,7 @@ This plan on `poc/release-3`, revised with the owner's answers and the reviews.
 - `server.js`: the `contacts` case, starting and stopping the scheduler
 - web, new: routes `leads`, `leadImport`, `deals`, `notifications` and `settings`, with their views
 - web, touched: `web/static/sw.js` (push), the layout (🔔, language switch)
-- `db/migrations/010_crm_settings.sql` … `015_deals.sql`
+- `db/migrations/011_crm_settings.sql` … `016_deals.sql`
 - `config.js`; `package.json` (`web-push`, pinned)
 - `tests/**`, `tests/eval/cases.json`
 - docs:
