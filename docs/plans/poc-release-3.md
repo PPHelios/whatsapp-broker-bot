@@ -704,6 +704,18 @@ This plan on `poc/release-3`, revised with the owner's answers and the reviews.
 - **Abuse:** rate limits on AI intake, writes, imports and exports; daily caps on alerts; pending state server-side only.
 - **Secrets:** `LEAD_HASH_KEY` and the VAPID keys are required in production (fail-fast).
 
+## AI test budget (owner, 2026-10-25)
+- The Gemini key is pay-as-you-go with a $5 balance. **Live testing may spend at most $2 in total.**
+- All automated tests use the fake AI and cost nothing. Money is spent only by `npm run eval:ai` and a few live smoke calls.
+- The eval runner gains `--budget-usd <n>`. It sums `estimated_cost_usd` over the results it has already stored, plus each new call's estimate, and stops before the next call would cross the limit. Each run uses a budget of 1 at most, the total across runs is 2, and the running total goes in `tests/eval/results/` (gitignored).
+- **Plan the spend before running:**
+  - only the production config (no thinking-level sweep)
+  - only the new lead cases (8 extraction + 8 update) plus about 5 regression cases
+  - about 20 calls, roughly $0.10–0.20
+  - a full sweep only on request
+- Report the spend after every run: the estimate, and the Google AI Studio usage page if the owner can check it.
+- The key is stored as `GEMINI_API_KEY_EVAL` and used with `--key-env GEMINI_API_KEY_EVAL`. The runner refuses the production `GEMINI_API_KEY`.
+
 ## Verification
 - `npm run test:ci` green after every step; `npm run eval:ai` at 90% or better on the lead cases, with the paid key.
 - **Manual run on a phone:**
