@@ -57,8 +57,12 @@ function loadConfig(env = process.env) {
   // Until PUBLIC_BASE_URL is set, Render's own https://<service>.onrender.com address is used.
   const baseUrl = String(env.PUBLIC_BASE_URL || "").trim() || String(env.RENDER_EXTERNAL_URL || "").trim();
 
+  // WhatsApp is on unless WHATSAPP_ENABLED says false/0/off/no; switched off, its variables aren't required.
+  const whatsappEnabled = !/^(false|0|off|no)$/i.test(String(env.WHATSAPP_ENABLED || "").trim());
+
   if (isProd) {
-    const missing = REQUIRED_IN_PRODUCTION.filter((k) => !String(k === "PUBLIC_BASE_URL" ? baseUrl : env[k] || "").trim());
+    const required = REQUIRED_IN_PRODUCTION.filter((k) => whatsappEnabled || !k.startsWith("WHATSAPP_"));
+    const missing = required.filter((k) => !String(k === "PUBLIC_BASE_URL" ? baseUrl : env[k] || "").trim());
     if (missing.length) {
       throw new Error(`Missing required environment variables: ${missing.join(", ")}`);
     }
@@ -75,6 +79,7 @@ function loadConfig(env = process.env) {
     publicBaseUrl,
     bodyLimit: env.BODY_LIMIT || "512kb",
     whatsapp: {
+      enabled: whatsappEnabled,
       appSecret: env.WHATSAPP_APP_SECRET || "",
       verifyToken: env.WHATSAPP_VERIFY_TOKEN || "",
       // Unsigned webhooks are accepted only when explicitly allowed outside production.

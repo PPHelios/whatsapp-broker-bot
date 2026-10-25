@@ -57,3 +57,11 @@ test("built-in Gemini prices: Flash $0.75/$3.75 now, $1.50/$7.50 from 1 January 
   expect(estimateCostUsd("gemini-3.6-flash", 1e6, 1e6, DEFAULT_AI_PRICES, new Date("2027-01-01T00:00:00Z"))).toBe(9);
   expect(estimateCostUsd("gemini-3.5-flash-lite", 1e6, 1e6, DEFAULT_AI_PRICES, new Date("2027-06-01T00:00:00Z"))).toBe(2.8);
 });
+
+test("WHATSAPP_ENABLED: on when unset or empty, off for false/0/off/no; off, the WhatsApp variables aren't required", () => {
+  for (const v of [undefined, "", "true", "1", "yes"]) expect(loadConfig({ WHATSAPP_ENABLED: v }).whatsapp.enabled).toBe(true);
+  for (const v of ["false", "FALSE", "0", "off", " no "]) expect(loadConfig({ WHATSAPP_ENABLED: v }).whatsapp.enabled).toBe(false);
+  const noWa = Object.fromEntries(Object.entries(PROD).filter(([k]) => !k.startsWith("WHATSAPP_")));
+  expect(() => loadConfig(noWa)).toThrow(/WHATSAPP_APP_SECRET/);
+  expect(loadConfig({ ...noWa, WHATSAPP_ENABLED: "false" }).whatsapp.enabled).toBe(false);
+});

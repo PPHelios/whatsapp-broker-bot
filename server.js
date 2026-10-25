@@ -123,6 +123,7 @@ function createApp({ pool, config = getConfig(), jobs }) {
    * Meta Webhook Verification Endpoint (GET)
    */
   app.get("/webhook", (req, res) => {
+    if (!config.whatsapp.enabled) return res.sendStatus(404);
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
     const challenge = req.query["hub.challenge"];
@@ -328,6 +329,9 @@ function createApp({ pool, config = getConfig(), jobs }) {
       return res.status(503).send("SERVICE_DRAINING");
     }
 
+    // WhatsApp switched off (WHATSAPP_ENABLED=false): acknowledge so Meta doesn't retry, and do nothing.
+    if (!config.whatsapp.enabled) return res.status(200).send("WHATSAPP_DISABLED");
+
     // 1. Authenticate Meta Signature (SEC-01)
     if (!verifyWebhookSignature(req)) {
       return res.status(401).send("Invalid signature");
@@ -423,7 +427,7 @@ function createApp({ pool, config = getConfig(), jobs }) {
            WHERE phone_key = $1 AND received_at > NOW() - INTERVAL '24 hours'`,
           [normalizedPhone]
         );
-        if ((recent[0]?.n || 0) <= 1) {
+        if ((recent[0]?.n || 0) <= 1 && config.whatsapp.enabled) {
           await WA.sendWhatsAppText(
             normalizedPhone,
             "⚠️ هذا الرقم غير مسجل كوكيل عقاري معتمد في منصة AqarChat. يرجى التواصل مع إدارة وكالتك لتفعيل حسابك.\n" +
