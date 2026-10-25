@@ -368,7 +368,8 @@ CREATE TABLE IF NOT EXISTS public.listings (
   developer_key text,
   area_key text,
   stale_asked_at timestamp with time zone,
-  stale_hidden_at timestamp with time zone
+  stale_hidden_at timestamp with time zone,
+  phase_id uuid
 );
 
 CREATE TABLE IF NOT EXISTS public.listing_images (
@@ -448,11 +449,19 @@ CREATE TABLE IF NOT EXISTS public.projects (
   district text,
   city text,
   delivery_year integer,
-  maintenance_pct numeric DEFAULT 8.0,
+  maintenance_pct numeric,
   collateral jsonb DEFAULT '{}'::jsonb NOT NULL,
   media jsonb DEFAULT '{}'::jsonb NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  updated_at timestamp with time zone DEFAULT now() NOT NULL
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  developer_id uuid,
+  name_en text,
+  status text DEFAULT 'selling'::text NOT NULL,
+  delivery_quarter smallint,
+  delivery_raw text,
+  notes text,
+  prices_updated_at timestamp with time zone,
+  archived_at timestamp with time zone
 );
 
 CREATE TABLE IF NOT EXISTS public.broker_sessions (
@@ -819,6 +828,64 @@ CREATE TABLE IF NOT EXISTS public.ad_spend (
   updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.developers (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid NOT NULL,
+  name text NOT NULL,
+  name_en text,
+  contact_name text,
+  contact_phone text,
+  notes text,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.project_phases (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid NOT NULL,
+  project_id uuid NOT NULL,
+  name text NOT NULL,
+  delivery_year smallint,
+  delivery_quarter smallint,
+  status text DEFAULT 'selling'::text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.project_plans (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid NOT NULL,
+  project_id uuid NOT NULL,
+  phase_id uuid,
+  name text NOT NULL,
+  down_payment_pct numeric(5,2) NOT NULL,
+  years numeric(4,1) DEFAULT 0 NOT NULL,
+  frequency text DEFAULT 'quarterly'::text NOT NULL,
+  discount_pct numeric(5,2) DEFAULT 0 NOT NULL,
+  milestones jsonb DEFAULT '[]'::jsonb NOT NULL,
+  maintenance_pct numeric(5,2),
+  maintenance_due text,
+  maintenance_splits smallint,
+  extra_fees jsonb DEFAULT '[]'::jsonb NOT NULL,
+  position smallint DEFAULT 0 NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.project_materials (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid NOT NULL,
+  project_id uuid NOT NULL,
+  kind text DEFAULT 'other'::text NOT NULL,
+  label text NOT NULL,
+  url text NOT NULL,
+  unit_type text,
+  client_visible boolean DEFAULT false NOT NULL,
+  check_status text,
+  checked_at timestamp with time zone,
+  broken_since timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE app_settings ADD CONSTRAINT app_settings_pkey PRIMARY KEY (key);
@@ -831,6 +898,7 @@ ALTER TABLE crm_jobs ADD CONSTRAINT crm_jobs_pkey PRIMARY KEY (name);
 ALTER TABLE deal_splits ADD CONSTRAINT deal_splits_pkey PRIMARY KEY (deal_id, broker_id);
 ALTER TABLE deals ADD CONSTRAINT deals_pkey PRIMARY KEY (id);
 ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_pkey PRIMARY KEY (id);
+ALTER TABLE developers ADD CONSTRAINT developers_pkey PRIMARY KEY (id);
 ALTER TABLE error_events ADD CONSTRAINT error_events_pkey PRIMARY KEY (id);
 ALTER TABLE inbound_messages ADD CONSTRAINT inbound_messages_pkey PRIMARY KEY (msg_id);
 ALTER TABLE lead_erasures ADD CONSTRAINT lead_erasures_pkey PRIMARY KEY (agency_id, phone_hash);
@@ -846,6 +914,9 @@ ALTER TABLE payment_plans ADD CONSTRAINT payment_plans_pkey PRIMARY KEY (id);
 ALTER TABLE payments ADD CONSTRAINT payments_pkey PRIMARY KEY (id);
 ALTER TABLE processed_batches ADD CONSTRAINT processed_batches_pkey PRIMARY KEY (batch_key);
 ALTER TABLE processed_messages ADD CONSTRAINT processed_messages_pkey PRIMARY KEY (message_id);
+ALTER TABLE project_materials ADD CONSTRAINT project_materials_pkey PRIMARY KEY (id);
+ALTER TABLE project_phases ADD CONSTRAINT project_phases_pkey PRIMARY KEY (id);
+ALTER TABLE project_plans ADD CONSTRAINT project_plans_pkey PRIMARY KEY (id);
 ALTER TABLE projects ADD CONSTRAINT projects_pkey PRIMARY KEY (id);
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_pkey PRIMARY KEY (id);
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_pkey PRIMARY KEY (id);
@@ -903,6 +974,11 @@ ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_lang_check CHECK (((lang 
 ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_name_check CHECK (((length(name) >= 1) AND (length(name) <= 80)));
 ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_phone_e164_check CHECK ((length(phone_e164) <= 20));
 ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_team_size_check CHECK (((team_size IS NULL) OR ((team_size >= 1) AND (team_size <= 1000))));
+ALTER TABLE developers ADD CONSTRAINT developers_contact_name_check CHECK (((contact_name IS NULL) OR (length(contact_name) <= 120)));
+ALTER TABLE developers ADD CONSTRAINT developers_contact_phone_check CHECK (((contact_phone IS NULL) OR (length(contact_phone) <= 30)));
+ALTER TABLE developers ADD CONSTRAINT developers_name_check CHECK (((length(btrim(name)) >= 1) AND (length(btrim(name)) <= 120)));
+ALTER TABLE developers ADD CONSTRAINT developers_name_en_check CHECK (((name_en IS NULL) OR (length(name_en) <= 120)));
+ALTER TABLE developers ADD CONSTRAINT developers_notes_check CHECK (((notes IS NULL) OR (length(notes) <= 1000)));
 ALTER TABLE error_events ADD CONSTRAINT error_events_kind_check CHECK ((kind = ANY (ARRAY['error'::text, 'report'::text])));
 ALTER TABLE lead_events ADD CONSTRAINT lead_events_kind_check CHECK ((kind = ANY (ARRAY['created'::text, 'inquiry'::text, 'assigned'::text, 'stage'::text, 'note'::text, 'contacted'::text, 'follow_up_set'::text, 'follow_up_done'::text, 'request_set'::text, 'match_sent'::text, 'share_opened'::text, 'deal'::text, 'exported'::text, 'merged'::text, 'undo'::text])));
 ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_status_check CHECK ((status = ANY (ARRAY['new'::text, 'alerted'::text, 'sent_to_client'::text, 'dismissed'::text])));
@@ -936,6 +1012,25 @@ ALTER TABLE payments ADD CONSTRAINT payments_kind_check CHECK ((kind = ANY (ARRA
 ALTER TABLE payments ADD CONSTRAINT payments_months_check CHECK (((months >= 1) AND (months <= 12)));
 ALTER TABLE payments ADD CONSTRAINT payments_plan_check CHECK (((plan IS NULL) OR (plan = ANY (ARRAY['solo'::text, 'office'::text, 'agency'::text]))));
 ALTER TABLE payments ADD CONSTRAINT payments_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'cancelled'::text])));
+ALTER TABLE project_materials ADD CONSTRAINT project_materials_check_status_check CHECK (((check_status IS NULL) OR (check_status = ANY (ARRAY['ok'::text, 'broken'::text]))));
+ALTER TABLE project_materials ADD CONSTRAINT project_materials_kind_check CHECK ((kind = ANY (ARRAY['master_plan'::text, 'brochure'::text, 'layout'::text, 'video'::text, 'location'::text, 'website'::text, 'price_sheet'::text, 'other'::text])));
+ALTER TABLE project_materials ADD CONSTRAINT project_materials_label_check CHECK (((length(btrim(label)) >= 1) AND (length(btrim(label)) <= 80)));
+ALTER TABLE project_materials ADD CONSTRAINT project_materials_unit_type_check CHECK (((unit_type IS NULL) OR (length(unit_type) <= 60)));
+ALTER TABLE project_materials ADD CONSTRAINT project_materials_url_check CHECK (((url ~ '^https?://'::text) AND (length(url) <= 1000)));
+ALTER TABLE project_phases ADD CONSTRAINT project_phases_delivery_quarter_check CHECK (((delivery_quarter IS NULL) OR ((delivery_quarter >= 1) AND (delivery_quarter <= 4))));
+ALTER TABLE project_phases ADD CONSTRAINT project_phases_delivery_year_check CHECK (((delivery_year IS NULL) OR ((delivery_year >= 2000) AND (delivery_year <= 2100))));
+ALTER TABLE project_phases ADD CONSTRAINT project_phases_name_check CHECK (((length(btrim(name)) >= 1) AND (length(btrim(name)) <= 80)));
+ALTER TABLE project_phases ADD CONSTRAINT project_phases_status_check CHECK ((status = ANY (ARRAY['launching'::text, 'selling'::text, 'sold_out'::text])));
+ALTER TABLE project_plans ADD CONSTRAINT project_plans_discount_pct_check CHECK (((discount_pct >= (0)::numeric) AND (discount_pct <= (100)::numeric)));
+ALTER TABLE project_plans ADD CONSTRAINT project_plans_down_payment_pct_check CHECK (((down_payment_pct >= (0)::numeric) AND (down_payment_pct <= (100)::numeric)));
+ALTER TABLE project_plans ADD CONSTRAINT project_plans_frequency_check CHECK ((frequency = ANY (ARRAY['monthly'::text, 'quarterly'::text, 'semi_annual'::text, 'annual'::text])));
+ALTER TABLE project_plans ADD CONSTRAINT project_plans_maintenance_due_check CHECK (((maintenance_due IS NULL) OR (maintenance_due = ANY (ARRAY['delivery'::text, 'installments'::text, 'contract'::text]))));
+ALTER TABLE project_plans ADD CONSTRAINT project_plans_maintenance_pct_check CHECK (((maintenance_pct IS NULL) OR ((maintenance_pct >= (0)::numeric) AND (maintenance_pct <= (30)::numeric))));
+ALTER TABLE project_plans ADD CONSTRAINT project_plans_maintenance_splits_check CHECK (((maintenance_splits IS NULL) OR ((maintenance_splits >= 1) AND (maintenance_splits <= 12))));
+ALTER TABLE project_plans ADD CONSTRAINT project_plans_name_check CHECK (((length(btrim(name)) >= 1) AND (length(btrim(name)) <= 80)));
+ALTER TABLE project_plans ADD CONSTRAINT project_plans_years_check CHECK (((years >= (0)::numeric) AND (years <= (20)::numeric)));
+ALTER TABLE projects ADD CONSTRAINT projects_delivery_quarter_check CHECK (((delivery_quarter IS NULL) OR ((delivery_quarter >= 1) AND (delivery_quarter <= 4))));
+ALTER TABLE projects ADD CONSTRAINT projects_status_check CHECK ((status = ANY (ARRAY['launching'::text, 'selling'::text, 'sold_out'::text])));
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_endpoint_check CHECK ((endpoint ~~ 'https://%'::text));
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_name_check CHECK (((length(btrim(name)) >= 1) AND (length(btrim(name)) <= 80)));
 ALTER TABLE search_vocabulary ADD CONSTRAINT search_vocabulary_kind_check CHECK ((kind = ANY (ARRAY['type'::text, 'feature'::text])));
@@ -961,6 +1056,7 @@ ALTER TABLE deals ADD CONSTRAINT deals_closing_broker_id_fkey FOREIGN KEY (closi
 ALTER TABLE deals ADD CONSTRAINT deals_created_by_broker_id_fkey FOREIGN KEY (created_by_broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE deals ADD CONSTRAINT deals_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL;
 ALTER TABLE deals ADD CONSTRAINT deals_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE SET NULL;
+ALTER TABLE developers ADD CONSTRAINT developers_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE error_events ADD CONSTRAINT error_events_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE SET NULL;
 ALTER TABLE error_events ADD CONSTRAINT error_events_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE lead_erasures ADD CONSTRAINT lead_erasures_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
@@ -982,6 +1078,7 @@ ALTER TABLE listings ADD CONSTRAINT fk_listings_agency FOREIGN KEY (agency_id) R
 ALTER TABLE listings ADD CONSTRAINT fk_listings_broker FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE listings ADD CONSTRAINT listings_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE listings ADD CONSTRAINT listings_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id);
+ALTER TABLE listings ADD CONSTRAINT listings_phase_id_fkey FOREIGN KEY (phase_id) REFERENCES project_phases(id) ON DELETE SET NULL;
 ALTER TABLE listings ADD CONSTRAINT listings_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL;
 ALTER TABLE notifications ADD CONSTRAINT notifications_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE notifications ADD CONSTRAINT notifications_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
@@ -989,7 +1086,15 @@ ALTER TABLE notifications ADD CONSTRAINT notifications_merged_into_fkey FOREIGN 
 ALTER TABLE payment_plans ADD CONSTRAINT payment_plans_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
 ALTER TABLE payments ADD CONSTRAINT payments_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE payments ADD CONSTRAINT payments_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE project_materials ADD CONSTRAINT project_materials_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE project_materials ADD CONSTRAINT project_materials_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
+ALTER TABLE project_phases ADD CONSTRAINT project_phases_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE project_phases ADD CONSTRAINT project_phases_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
+ALTER TABLE project_plans ADD CONSTRAINT project_plans_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE project_plans ADD CONSTRAINT project_plans_phase_id_fkey FOREIGN KEY (phase_id) REFERENCES project_phases(id) ON DELETE CASCADE;
+ALTER TABLE project_plans ADD CONSTRAINT project_plans_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 ALTER TABLE projects ADD CONSTRAINT projects_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE projects ADD CONSTRAINT projects_developer_id_fkey FOREIGN KEY (developer_id) REFERENCES developers(id) ON DELETE SET NULL;
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
@@ -1021,6 +1126,7 @@ CREATE INDEX idx_deal_splits_broker ON public.deal_splits USING btree (agency_id
 CREATE INDEX idx_deals_agency_closed ON public.deals USING btree (agency_id, closed_at DESC);
 CREATE INDEX idx_deals_lead ON public.deals USING btree (lead_id) WHERE (lead_id IS NOT NULL);
 CREATE INDEX demo_requests_created_idx ON public.demo_requests USING btree (created_at DESC);
+CREATE UNIQUE INDEX uq_developers_agency_name ON public.developers USING btree (agency_id, lower(btrim(name)));
 CREATE INDEX error_events_fingerprint ON public.error_events USING btree (fingerprint, created_at DESC);
 CREATE INDEX error_events_recent ON public.error_events USING btree (created_at DESC);
 CREATE INDEX inbound_messages_phone_idx ON public.inbound_messages USING btree (phone_key, received_at DESC);
@@ -1048,6 +1154,7 @@ CREATE INDEX idx_listings_dev_code ON public.listings USING btree (agency_id, de
 CREATE INDEX idx_listings_dev_code_norm ON public.listings USING btree (agency_id, upper(developer_unit_code)) WHERE (developer_unit_code IS NOT NULL);
 CREATE INDEX idx_listings_developer_key ON public.listings USING btree (agency_id, developer_key) WHERE (developer_key IS NOT NULL);
 CREATE INDEX idx_listings_feature_keys ON public.listings USING gin (feature_keys);
+CREATE INDEX idx_listings_project ON public.listings USING btree (project_id) WHERE (project_id IS NOT NULL);
 CREATE INDEX idx_listings_search_trgm ON public.listings USING gin (clean_arabic_text(COALESCE(search_text_normalized, search_text, ''::text)) gin_trgm_ops) WITH (fastupdate=off);
 CREATE INDEX idx_listings_unit_check ON public.listings USING btree (agency_id, confirmed_at) WHERE (status = 'active'::text);
 CREATE INDEX listings_agency_code_idx ON public.listings USING btree (agency_id, lower(code));
@@ -1071,6 +1178,12 @@ CREATE INDEX idx_payment_plans_listing ON public.payment_plans USING btree (list
 CREATE INDEX payments_agency_idx ON public.payments USING btree (agency_id, created_at DESC);
 CREATE INDEX payments_pending_idx ON public.payments USING btree (created_at) WHERE (status = 'pending'::text);
 CREATE INDEX idx_processed_messages_created ON public.processed_messages USING btree (created_at);
+CREATE INDEX idx_project_materials_check ON public.project_materials USING btree (checked_at NULLS FIRST);
+CREATE INDEX idx_project_materials_project ON public.project_materials USING btree (project_id, created_at);
+CREATE UNIQUE INDEX uq_project_phases_name ON public.project_phases USING btree (project_id, lower(btrim(name)));
+CREATE INDEX idx_project_plans_project ON public.project_plans USING btree (project_id, "position");
+CREATE INDEX idx_projects_developer ON public.projects USING btree (agency_id, developer_id);
+CREATE UNIQUE INDEX uq_projects_agency_lower_name ON public.projects USING btree (agency_id, lower(btrim(name)));
 CREATE INDEX idx_push_subscriptions_broker ON public.push_subscriptions USING btree (broker_id);
 CREATE INDEX idx_saved_searches_alerts ON public.saved_searches USING btree (agency_id) WHERE alerts_enabled;
 CREATE INDEX idx_saved_searches_broker ON public.saved_searches USING btree (agency_id, broker_id, created_at DESC);

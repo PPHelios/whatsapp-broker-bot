@@ -9,6 +9,7 @@ const LeadRequests = require("../../services/leadRequests");
 const Card = require("../../domain/leadCard");
 const Storage = require("../../lib/supabase");
 const Insights = require("../../services/priceInsights");
+const Catalogue = require("../../services/catalogue");
 const { html } = require("../html");
 const { resultItem, factList } = require("../views/units");
 
@@ -38,6 +39,12 @@ async function wantedSection(pool, broker, listing, lang, csrf) {
 }
 
 /** "EGP 52,000 per m² · 8% above the median of 12 units in Hyde Park" (sale and rent apart; ≥ 5 other units). */
+/** The unit's catalogue project (C1) and its links; internal ones are marked (brokers may use them, clients never see them). */
+function projectLine(p, lang) {
+  return html`<p data-project="${p.id}">🏗️ <a href="/app/catalogue/projects/${p.id}">${lang === "en" ? p.name_en || p.name : p.name}</a>${p.developer_name ? ` · ${p.developer_name}` : ""}</p>
+  ${p.materials.length ? html`<p class="muted">${p.materials.map((m, i) => html`${i ? " · " : ""}<a href="${m.url}" target="_blank" rel="noopener noreferrer">${m.label}</a>${m.client_visible ? "" : " 🔒"}`)}</p>` : ""}`;
+}
+
 function marketLine(m, listing, lang) {
   const n = (x) => Number(x).toLocaleString("en-US");
   const diff = m.diffPct === null || Math.abs(m.diffPct) < 3
@@ -168,6 +175,7 @@ ${rows.length
     if (!listing || !Authz.canView(broker, listing)) return next();
     const images = await imagesOf(pool, listing);
     const market = listing.status === "active" ? await Insights.forUnit(pool, listing) : null;
+    const project = await Catalogue.projectForUnit(pool, listing);
     const status = { active: L(lang, "🟢 متاحة", "🟢 Available"), sold: L(lang, "🔴 مباعة", "🔴 Sold"), archived: L(lang, "📁 مؤرشفة", "📁 Archived") }[listing.status] || listing.status;
     const conf = Describe.compactLine({ code: "", confirmed_at: listing.confirmed_at }, lang).match(/✅ \S+/);
     return page(req, res, {
@@ -177,6 +185,7 @@ ${rows.length
   ${req.query.saved ? html`<p class="notice card ok">✅ ${L(lang, "تم الحفظ", "Saved")}</p>` : ""}
   <h1>${listing.code} · ${status}${conf ? html` <span class="muted">${conf[0]}</span>` : ""}</h1>
   ${factList(listing, lang)}
+  ${project ? projectLine(project, lang) : ""}
   ${market ? marketLine(market, listing, lang) : ""}
   ${images.length ? html`<div class="photos">${images.map((i) => html`<img src="${i.url}" alt="" loading="lazy">`)}</div>` : ""}
   <div class="row" id="unit-actions">
