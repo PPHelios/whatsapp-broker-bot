@@ -59,15 +59,10 @@ Answers given by the owner are marked **(owner)**. Everything else is the recomm
 - A lead a broker captures is assigned to that broker.
 - On reassignment the previous broker loses access. Their events stay in the timeline under their name.
 
-**Q2 Duplicate lead (owner)**
-- **When a broker captures a phone that a colleague already owns:**
-  - The first broker is **not** messaged.
-  - The **managers are notified** (new inquiry, who captured it).
-  - The capturing broker is told the client is already registered with a colleague, and that the manager has been told.
-- **When a manager captures a phone that a broker already owns:**
-  - The owning broker gets the new inquiry ("نفس العميل سأل تاني").
-  - The manager gets a confirmation saying who owns the client.
-- *To confirm:* the owner wrote "send message to second one". This plan reads it as "the broker who owns the client". The owner should confirm that reading.
+**Q2 Lead notifications and duplicates (owner, round 2)**
+- **Whoever adds a lead (a manager or a broker), no other broker is notified, and the managers always are.**
+- A manager who adds a lead and assigns it to a broker: the assigned broker gets the lead card (that's the point of assigning), the managers get the alert, nobody else hears about it. *Assumed; the owner hasn't contradicted it.*
+- A duplicate (the phone already belongs to a colleague's lead): the owning broker is **not** messaged; the managers get one alert with both names and decide (reassign or leave); the capturing broker is told "the client is already registered with a colleague; your manager has been told".
 
 **Q3 Assigning imported leads**
 - The CSV's "assigned broker" column is used when it's present. Rows without it stay unassigned.
@@ -145,13 +140,34 @@ Answers given by the owner are marked **(owner)**. Everything else is the recomm
 - The website card has real Call and WhatsApp buttons.
 - Through the notification centre, a web push opens the lead page, where both buttons are real.
 
-**Q15 Notification channel (owner: "all notifications can be sent via the website")**
-- Every alert lands in the **web inbox** (🔔 with an unread count) and is sent as a **web push**.
-- WhatsApp is used for a notification only when the broker turns it on in their settings ("also on WhatsApp").
-- Replies to what the broker sends the bot stay on WhatsApp, because that's where the broker is typing.
-- This covers assignments, duplicate inquiries, follow-ups, match alerts, "the client opened your link" (it moves off WhatsApp) and the CRM nudges.
-- The sign-in link stays on WhatsApp, because receiving it there is the identity proof.
-- *Cost note:* a broker who never enables push (for example, iPhone users who haven't added the app to the home screen) only sees alerts when they open the site. The guide shows how to enable push. Turning "also on WhatsApp" on adds cost per message (see the Telegram assessment).
+**Q15 Notification channels, credits and limits (owner, rounds 2–4)**
+- **WhatsApp first, website after the limit.** Every notification goes on WhatsApp while the agency has message credits left and the broker's 24-hour window is open. When the credits run out, or the window is closed, it goes to the website (web push and inbox).
+- **One notification, one channel. Never both** (it would feel like spam). It goes on the chosen channel; the other channel is used only when that delivery fails (no credits, window closed, not accepted). The website inbox lists every notification **silently** (no sound, no push), so nothing is lost and nothing is doubled.
+- **No repeats:** each event can notify a broker once (a unique key per event and broker), even with retries or two servers; several alerts in a short time are merged into one message.
+- **Controls:**
+  - Each broker, in `/app/settings`: per notification type (assignment, follow-up, match, client opened a link, hot client, manager alerts), choose WhatsApp or website; quiet hours.
+  - Managers, in agency settings: the monthly credits, live usage, and an optional per-broker daily or weekly cap (off by default), so one person can't use up the agency's credits.
+  - **Notification log (managers):** every alert, who got it, on which channel, why (chosen, fallback, no credits, window closed) and whether it was delivered. Runbook SQL for the same.
+- **Message credits (what brokers see):** 1 credit = 1 WhatsApp message the bot sends; everything that costs counts (replies and notifications). Free things never count: everything on the website, web push, read ticks ("seen") and the typing indicator. A marketing template, if ever used, would count about 18 credits. We also track the cost in EGP, internally only.
+- **Pools:** in the POC all agencies share our one number, so Meta's 1,000 free messages a month are one shared credit for us, and a **global monthly ceiling** caps our total cost. An agency with its own number gets its own pool later.
+- **Starting numbers (database per agency, server-setting defaults):**
+
+| Setting | POC value |
+| --- | --- |
+| Credits per agency per month | **4,000** (5 typical brokers ≈ 3,850) |
+| Warning to managers | 80% |
+| At 100% | notifications move to the website; replies continue |
+| Hard ceiling | 110%: then each broker gets **one** notice a day ("monthly limit reached; do it on the website: <link>", about 0.21 EGP), and after that their messages only get read ticks (free); the website inbox explains why |
+| Global ceiling (all agencies on our number) | 8,000 a month |
+| Sign-in links | not counted in the credits; their own ceiling of 200 a month per agency plus the existing 6 an hour per broker |
+| AI calls | lowered to 300 a day per agency for the POC (typical use is about 75) |
+
+- **Tracking usage:**
+  - Website, "My usage / استهلاكي" (free): my credits today and this month by action (search, add unit, flyer, client copy, CRM), the agency's remaining credits; managers also see each broker.
+  - A one-line hint added to a reply the bot is already sending, once at 50%, 80% and 100% (free: no extra message).
+  - «رصيدي» / `usage` on WhatsApp: a short answer with the link (1 credit).
+- **Before the switch:** at 100% each broker gets one last WhatsApp message: "Alerts now come on the website; turn on notifications and add it to your home screen: <link>". Onboarding covers both from day one.
+- **Sign-in** stays on WhatsApp, even after the credits run out (with its own ceiling). Website-only sign-in (a passkey) comes later.
 
 ## Channel strategy and Telegram assessment
 
@@ -168,14 +184,14 @@ Answers given by the owner are marked **(owner)**. Everything else is the recomm
   - [nonito: Egypt rates](https://www.nonito.io/whatsapp-business-api-pricing/egypt)
   - [chatmaxima: Egypt rates](https://chatmaxima.com/whatsapp-api-pricing/egypt/)
 
-The **1,000 free messages are per phone number, not per agency.** Pilot use is about 3,000 messages a month for 5 brokers:
+The **1,000 free messages are per phone number, not per agency.** A 5-broker agency uses about 3,850 messages a month (usage per action below):
 
 | Setup | WhatsApp cost a month | Share of revenue (1,500–2,000 EGP per agency) |
 | --- | --- | --- |
-| Pilot (1 agency, 1 number, CRM alerts on WhatsApp) | about 420 EGP | about 20–28% |
-| Pilot, alerts moved to web push (Q15) | about 250 EGP | about 13–17% |
-| 10 agencies sharing **one** number, alerts on web push | about 4,000 EGP (≈ 400 per agency) | about 20–27% |
-| 10 agencies, **one number each**, alerts on web push | about 250 EGP each | about 13–17% |
+| Pilot (1 agency, 1 number, everything on WhatsApp) | about 600 EGP | about 30–40% |
+| 10 agencies sharing **one** number | about 7,900 EGP (≈ 790 per agency) | about 40–50% |
+| 10 agencies, **one number each** | about 600 EGP each | about 30–40% |
+| Any of the above with the website doing the browsing and alerts after the credits | lower; the pilot measures how much | |
 
 **Risk, in order:**
 1. **Margin.** Every reply now costs money. A chatty broker costs more than a quiet one, and the plan's price doesn't scale with use.
@@ -194,10 +210,10 @@ The **1,000 free messages are per phone number, not per agency.** Pilot use is a
 | **Where Egyptian brokers work** | **everything: clients, groups, forwards** | used by some, rarely for clients |
 | Intake of client chats and group posts | forward inside the same app | must share across apps (copy, or the share sheet) |
 
-The core habit the product is built on is "forward it to the bot". It only works inside WhatsApp. Moving would remove the main reason brokers use AqarChat, to save a cost that web push already cuts by about 40%.
+The core habit the product is built on is "forward it to the bot". It only works inside WhatsApp. Moving would remove the main reason brokers use AqarChat. The cost is controlled instead with message credits, the website for heavy tasks, and alerts that move to the website when credits run out.
 
 **What Release 3 does instead:**
-1. **The notification centre** (step 2) sends alerts through web push for free. WhatsApp is opt-in per broker.
+1. **The notification centre and message credits** (step 2): alerts go on WhatsApp while the agency has credits, then on the website for free; brokers choose the channel per alert; usage is visible to everyone.
 2. **A channel layer** (step 2) puts outbound alerts and replies behind `lib/channels/` (`whatsapp`, `webpush`, and a `telegram` stub with a contract test). Inbound messages already have one shape (`handleInboundMessage`). That means a Telegram adapter is about 2–3 days of work later, not a rewrite.
 3. **Measurement:** the runbook gets a monthly cost-per-agency query (`wa_outbound` × rate) and a 10% revenue alarm.
 4. **Revisit Telegram, or one number per agency, when any of these happens:**
@@ -207,6 +223,32 @@ The core habit the product is built on is "forward it to the bot". It only works
    - an agency asks for Telegram
    - Then the recommended order is: first **one number per agency** (each gets its own 1,000 free, and the bot speaks with the agency's name); then **Telegram as an opt-in channel for heavy users**, with WhatsApp kept for intake.
 5. **A backup number** is registered and kept warm. The runbook adds the switch-over steps.
+
+### The website as a full backup (owner, round 2)
+If WhatsApp prices spike, WhatsApp could be dropped, so everything a broker does on WhatsApp must also work on the website:
+- Already there: search, add and edit units (with voice), quick updates and bulk edit, client copy and share links, imports and exports, the CRM pages of this release.
+- Added in Release 3: the flyer as a download from the unit page; lead intake by paste; on Android, the installed site appears in WhatsApp's **Share** menu ("Share to AqarChat", the web share target), so forwarding a client message or contact card still works; iPhone users get a paste box (iPhone doesn't allow share targets).
+- A parity test lists every WhatsApp command and the website page that does the same.
+- The remaining gap is sign-in, which needs WhatsApp until a passkey (fingerprint or face) sign-in is added (later; about a day of work).
+- **Telegram and a React Native app** stay future options: both would be adapters on the same services and channel layer, with nothing built for them now beyond the Telegram stub.
+
+### WhatsApp usage per action (from the current code)
+| Action | WhatsApp credits | AI calls |
+| --- | --- | --- |
+| Search (text / voice) | 1 (+1 per "more") | 1 / 2 |
+| Add a unit: open, details, review, save | 4–5 | 1 (+1 per voice note) |
+| 📸 reaction on each photo (today) | 1 per photo (≈ 8 a unit) | 0 |
+| Flyer | 1 | 1 the first time per unit, 0 after |
+| Client copy + link | 1 | 0 |
+| Quick update | 1 | 0 (voice: 1) |
+| Edit | 3 | 1 |
+| CRM: save a lead (confirm + saved) | 2 | 0–1 (voice: 2) |
+| CRM: button tap or notification | 1 each | 0 |
+| Sign-in link | 1 (about once a month) | 0 |
+
+Per broker per working day: light ≈ 20 credits (≈ 440 a month), typical ≈ 35 (≈ 770), heavy ≈ 55 (≈ 1,200). An agency with 5 typical brokers ≈ 3,850 a month, about 600 EGP of WhatsApp after the shared 1,000 free. **Pricing implication:** later plans should include credits per broker (for example 700) plus extra packs.
+
+**Fix P11 (step 2):** the per-photo 📸 reaction is probably billed like a message, which makes it the biggest hidden cost. It is removed; the next reply says "📸 8 photos received" instead.
 
 ## Product review (senior PM, whole product)
 
@@ -223,6 +265,8 @@ The core habit the product is built on is "forward it to the bot". It only works
 | P8 | Onboarding: guides and the welcome message are Arabic only; brokers must message the bot first or the bot can't reply, which is a common pilot failure | English guides, plus a per-broker `wa.me/<bot>?text=help` "start" link printed by `onboard`, step 11 |
 | P9 | Coverage gaps: crash recovery (SEC-03 `bootRecovery`), the WhatsApp Excel upload (XLS-01…04) and STATS-01 have no tests | tests added in step 12 (stabilisation), no behaviour change |
 | P10 | Single WhatsApp number = single point of failure | backup number and runbook steps (channel strategy) |
+| P11 | A 📸 reaction is sent for every photo, each probably billed like a message (≈ 8 a unit) | no per-photo reaction; the next reply counts the photos, step 2 |
+| P12 | The AI quota (2,000 calls a day per agency) allows up to about 3,000 EGP a month in the worst case | POC default 300 a day per agency, step 2 |
 
 ### Missed core CRM features (added to the steps)
 - **Seller and landlord leads.** In Egypt, half of a broker's leads are owners who want to sell or rent out. Leads get `kind` buyer|tenant|seller|landlord. A seller lead offers "➕ add their unit", which opens the draft with the owner's name and phone filled in as internal fields (step 3).
@@ -232,8 +276,8 @@ The core habit the product is built on is "forward it to the bot". It only works
 - **A manager pipeline view.** The web leads page shows counts per stage and overdue follow-ups per broker (step 5). The full dashboard stays in Release 4.
 
 ### Wow features for Release 3 (cheap, high impact)
-1. **"🔥 3 clients want this unit".** When a broker saves a unit, the saved card already in that reply says how many open buyer requests it matches, with one tap to see them and send it. It needs no extra message and no AI call, because it uses the same match SQL (step 7).
-2. **Zero results become a request.** "مفيش نتائج" / "No results" gets a button: **"🔔 Save as client request / سجل طلب للعميل"**. The broker types or forwards the client's number, and AqarChat alerts when a matching unit arrives. This turns a dead end into a lead (step 7).
+1. **"🔥 3 clients want this unit".** When a broker saves a unit, the save confirmation they already get says how many open client requests the unit fits: "🔥 3 clients want this unit: 1 yours, 2 with colleagues" with [See my client] [Send to client]. The broker sees details only for their own clients and **no colleague names**. **Managers** get it with names ("VIL-08 fits 3 clients: Sara (1), Omar (2)"), grouped with their other alerts; a manager who saves the unit sees the names in the save reply. Colleagues whose clients match get their normal match alert. No extra message for the saver and no AI call: it uses the same match SQL (step 7).
+2. **Zero results become a request.** "مفيش نتائج" / "No results" gets a button: **"🔔 Save as client request / سجل طلب للعميل"**. The broker types or forwards the client's number; AqarChat shows what it understood and saves only after **[✅ Confirm]** (rule below), then alerts when a matching unit arrives. This turns a dead end into a lead (step 7).
 3. **One voice note updates the CRM.** «كلمت أحمد، عايز يعاين VIL-08 يوم الجمعة الساعة ٥» / "Called Ahmed, he wants to view VIL-08 Friday at 5" becomes:
    - marked contacted
    - stage moved to viewing
@@ -250,7 +294,8 @@ The core habit the product is built on is "forward it to the bot". It only works
 ### Rules for every CRM surface
 - **No dead ends.** Every message ends with a next action: buttons, or a short typed hint. Every error says what to do next. Every list that is cut off ends with "see all on the website: <link>".
 - **Buttons don't depend on a session.** They carry the lead reference (`L-0042`), and every tap reloads the lead and checks rights. An old button still works days later, or says plainly why it can't ("the lead was reassigned"). That avoids the "session expired" dead end.
-- **Undo instead of confirm** for reversible actions (stage, contacted, follow-up): the confirmation message has **↩️ Undo / تراجع**, valid for 10 minutes. Only irreversible actions confirm first: erase (type the last 4 digits) and recording a deal (review card).
+- **Confirm what the AI understood (owner, round 2).** Anything read by the AI from a voice note or free text (a lead, a client request, a voice CRM update, a no-results request) is shown first as "I understood: …" with **[✅ Confirm] [✏️ Edit] [❌ Cancel]**, and nothing is saved until Confirm. Inputs with no AI (a contact card, a typed number, a CSV, button taps) save directly with Undo.
+- **Undo instead of confirm** for reversible actions with no AI (stage, contacted, follow-up): the confirmation message has **↩️ Undo / تراجع**, valid for 10 minutes. Only irreversible actions confirm first: erase (type the last 4 digits) and recording a deal (review card).
 - **Bilingual everywhere:** the broker's language for copy, any language for input. Mixed Arabic and English names, Arabic digits and English commands all work.
 
 ### Data types handled at intake
@@ -308,34 +353,41 @@ This plan on `poc/release-3`, revised with the owner's answers and the reviews.
   - two concurrent ticks run each job once
   - a failing job doesn't stop the others
 
-### 2. Notification centre and channel layer (Q15)
+### 2. Notification centre, channel layer and message credits (Q15)
 - **Migration `011_notifications.sql`:**
-  - `notifications`: `id`, `agency_id`, `broker_id`, `kind`, `title`, `body`, `url` (a relative `/app/…` path), `lead_id`/`listing_id` (nullable), `created_at`, `read_at`, `delivered` jsonb (per channel: sent|failed|skipped)
+  - `notifications`: `id`, `agency_id`, `broker_id`, `kind`, `dedupe_key` (unique per broker), `title`, `body`, `url` (a relative `/app/…` path), `lead_id`/`listing_id` (nullable), `created_at`, `read_at`, `channel` (whatsapp|webpush|inbox), `reason` (chosen|fallback|no_credits|window_closed), `status` (sent|failed|skipped)
   - `push_subscriptions`: `broker_id`, `agency_id`, `endpoint` (unique), `p256dh`, `auth`, `user_agent`, `created_at`, `last_ok_at`, `failed_count`
-  - `brokers.notify_prefs jsonb` (default `{"whatsapp": false}`)
-- `lib/notifications.js` `notifyBroker(pool, broker, { kind, title, body, url, leadId, listingId })`:
-  1. Write the inbox row first. It always exists.
-  2. Send a web push to every live subscription. Subscriptions that return 404/410 are deleted.
-  3. Send on WhatsApp only when `notify_prefs.whatsapp` is on, through `dispatcher.notify`, which counts it.
+  - `brokers.notify_prefs jsonb` (per kind: whatsapp|web; quiet hours; default WhatsApp for every kind)
+  - `agencies.wa_credits_monthly`, `agencies.wa_broker_daily_cap`, `agencies.wa_broker_weekly_cap` (nullable = server default / off)
+- **Credits (`lib/credits.js`), like the AI quota:** `check(pool, broker, { kind })` reads this month's `wa_outbound` rows for the agency (and the broker's day or week when a cap is on) and the global ceiling; returns `{ allowed, level: ok|warn|limit|ceiling, remaining }`. `dispatcher.deliver` asks it before every send, so every paid message counts (replies and notifications); sign-in links use their own ceiling. Each `wa_outbound` row also stores the price in EGP (config `WA_PRICE_EGP`), for us only.
+  - Limit (100%): notifications go to the website; replies continue.
+  - Ceiling (110%): one notice a day per broker with the website link, then read ticks only (`markAsRead`, free).
+  - The 50/80/100% hint is appended once to a reply already being sent.
+- **`lib/notifications.js` `notifyBroker(pool, broker, { kind, dedupeKey, title, body, url, leadId, listingId })`:**
+  1. Insert the inbox row with `ON CONFLICT (broker_id, dedupe_key) DO NOTHING`; if it already existed, stop (no repeats).
+  2. Pick **one** channel: the broker's preference for this kind, unless quiet hours (hold), no credits or a closed 24-hour window → website.
+  3. Send; if WhatsApp fails, fall back to web push once; record `channel`, `reason`, `status`. Never both.
   4. Telegram is a stub.
-  - It returns the delivery result. Grouping (reminders, alerts) happens before this call, so one grouped alert is one notification.
-- `lib/channels/{whatsapp,webpush,telegram}.js` share one small interface, `send(broker, message) → { ok, id }`. A contract test checks every adapter. `web-push` is added as a pinned dependency. VAPID keys are config (`WEB_PUSH_PUBLIC_KEY`, `WEB_PUSH_PRIVATE_KEY`, `WEB_PUSH_SUBJECT`), required in production.
-- **Moved onto it:** the share-link "opened" alert (WEB-19), which no longer costs a WhatsApp message unless the broker opts in.
+  - Alerts of the same kind within 2 minutes are merged into one before sending.
+- `lib/channels/{whatsapp,webpush,telegram}.js` share one interface, `send(broker, message) → { ok, id }`, with a contract test. `web-push` is a pinned dependency; VAPID keys are config (`WEB_PUSH_PUBLIC_KEY`, `WEB_PUSH_PRIVATE_KEY`, `WEB_PUSH_SUBJECT`), required in production.
+- **Moved onto it:** the share-link "opened" alert (WEB-19).
+- **P11:** no per-photo 📸 reaction; the next reply counts the photos. **P12:** `AI_QUOTA_AGENCY_DAILY` set to 300 for the POC.
 - **Web:**
-  - 🔔 in the top bar with the unread count
-  - `/app/notifications`: list, mark read, open
-  - `/app/settings`: language, push on/off with a test push, "also on WhatsApp"
-  - the service worker gains `push` and `notificationclick` handlers, which open the notification's `/app/` URL. It still never caches pages.
-  - the push payload carries only the title, a short body and the URL. Never a phone number.
+  - 🔔 in the top bar with the unread count; `/app/notifications`
+  - `/app/settings`: language, per-kind channel, quiet hours, push on/off with a test push
+  - `/app/usage`: my usage and the agency's (managers: per broker, caps)
+  - managers: the notification log, agency credits and caps
+  - the service worker gains `push` and `notificationclick` (opens only `/app/` URLs) and the web share target (`/app/share`); it still never caches pages
+  - push payloads carry only a title, a short body and the URL; never a phone number
 - **Tests:**
-  - an inbox row is written for every kind
-  - push sent with a fake push endpoint; 410 removes the subscription
-  - WhatsApp only when the preference is on (and then counted in `wa_outbound`)
-  - the opened alert now goes through the centre
-  - the settings page round trip, with CSRF
-  - the service worker click opens only same-origin `/app/` URLs
+  - exactly one delivery per notification in every case (chosen, fallback after a failed WhatsApp send, no credits, closed window, quiet hours); the same event twice → one notification
+  - merging within 2 minutes
+  - credits: counts every paid send, ignores free ones; warn, limit and ceiling behave as the table says; the daily notice is sent once; per-broker caps; the global ceiling; sign-in links have their own ceiling
+  - the usage page numbers equal `operation_logs`
+  - photos: no reaction per photo, the count in the next reply
+  - push 410 removes the subscription; the share target saves a lead from shared text
+  - settings round trip with CSRF; tenant and broker isolation of the inbox and the log
   - no phone number or full name in any push payload
-  - tenant and broker isolation of the inbox
 
 ### 3. The leads data model and service
 - **Migration `012_leads.sql`:**
@@ -360,7 +412,7 @@ This plan on `poc/release-3`, revised with the owner's answers and the reviews.
   - `releaseBrokerLeads` (**P6**: on deactivation, the leads go to the unassigned pool and managers get one notification)
 - **Tests:**
   - dedupe across 4 spellings and across second numbers
-  - both Q2 paths, with the right people notified and the wrong ones not
+  - the Q2 rules: managers always alerted, no other broker notified, the assignee gets the card, the duplicate owner not messaged
   - role scoping
   - tenant isolation
   - version conflicts
@@ -377,7 +429,7 @@ This plan on `poc/release-3`, revised with the owner's answers and the reviews.
 - `lib/leadIntake.js`:
   - **Contact card** (today ING-06 "unsupported"): an existing lead shows its card (**who is calling?**). A new one offers **[➕ Save as client / حفظ كعميل]**. No AI.
   - **A bare phone number** typed or forwarded: an existing lead shows its card; otherwise the same save offer.
-  - **«ليد» / `lead` + text, or a voice note that starts with those words:** intake through one `lead_extraction` AI call (new route: 15 s deadline, 5 s hedge). If the AI is down, the lead is saved from the regex phone alone and the broker is told.
+  - **«ليد» / `lead` + text, or a voice note that starts with those words:** intake through one `lead_extraction` AI call (new route: 15 s deadline, 5 s hedge), shown as "I understood: …" with **[✅ Confirm] [✏️ Edit] [❌ Cancel]**; saved only on Confirm (2 credits). If the AI is down, the broker is offered to save the phone alone.
   - **«ليد» / `lead` alone** opens a lead draft (30 minutes) that collects the next text, forward or voice note.
   - **A forwarded text with a phone and no unit code:** "Is this a client? / ده عميل؟" **[➕ Save as client] [🔍 Search]**. The text waits server-side (`pending_lead`), never in a button id.
   - Several phones: a "which one is the client?" list. No phone: "send the client's number" (the UX table).
@@ -505,7 +557,7 @@ This plan on `poc/release-3`, revised with the owner's answers and the reviews.
   - `note`
   - `lost_reason`
 - `domain/leadUpdate.js` checks it: the unit code must exist in the agency, the time must be in the future, and an unknown name asks which lead.
-- It's applied as one set of events, and the reply is one message listing what changed, with **↩️ Undo**.
+- The reply is one message listing what will change, with **[✅ Confirm] [✏️ Edit] [❌ Cancel]**; it's applied as one set of events only on Confirm (the AI-read rule).
 - It runs only for brokers' own leads, through `canEditLead`.
 - The eval set gains 8 lead extraction cases and 8 lead update cases (Egyptian Arabic, Arabic-English mix, spoken numbers, relative days such as "بكرة" and "الجمعة الجاية").
 - **Tests:**
@@ -513,7 +565,7 @@ This plan on `poc/release-3`, revised with the owner's answers and the reviews.
   - an ambiguous name → a list
   - a past time → asks again
   - a colleague's lead → refused
-  - undo restores everything
+  - nothing is written before Confirm; Cancel writes nothing
   - the AI down → "couldn't read it, use the buttons"
 
 ### 10. Deals and commission (Q10: negotiated per deal)
@@ -572,7 +624,21 @@ This plan on `poc/release-3`, revised with the owner's answers and the reviews.
   - stages, follow-ups and viewings
   - the one voice note update
   - requests, "🔥 clients want this unit" and "send to client"
-  - notifications and enabling push (with iPhone steps)
+  - notifications and enabling push (with iPhone steps), and choosing WhatsApp or website per notification
+  - **"How WhatsApp credits work"**: 1 bot reply = 1 credit from the agency's monthly balance (search 1, client copy 1, flyer 1, adding a unit ≈ 5, saving a lead 2); free: everything on the website, website notifications, read ticks; where to see usage; what happens at 100% and at the ceiling. The page and the guide read the agency's real numbers from the database.
+  - **"Do these on the website (free)"**:
+
+    | Task | On WhatsApp | On the website |
+    | --- | --- | --- |
+    | Browsing many search results ("more" again and again) | 1 credit per page of 5 | all results, 20 a page, free |
+    | Adding a unit with many details or a back-and-forth | about 5 credits | the form, free |
+    | Editing several fields, or several units | 3 credits each | edit and bulk edit, free |
+    | Many client copies or links | 1 credit each | share button, free |
+    | Excel import/export, group posts import | heavy | free |
+    | Reviewing leads, follow-ups, pipeline | 1 credit per list | free |
+    | Checking many units' status | 1 credit each | units list, free |
+
+    Fine on WhatsApp: one quick search, a quick update, one client copy, forwarding a client, a voice note. Tip: send the details in one message, not five.
   - deals and commission
   - who sees what
   - a client deletion request
@@ -580,12 +646,12 @@ This plan on `poc/release-3`, revised with the owner's answers and the reviews.
 
   The broker and web guides link to them, and `docs.test.js` checks they exist.
 - **`docs/runbook.md`:**
-  - the new env vars: `SCHEDULER_*`, `LEAD_RETENTION_MONTHS`, `INBOUND_PAYLOAD_DAYS`, `LEAD_HASH_KEY`, `WEB_PUSH_*` (also in `render.yaml` as `sync: false`)
+  - the new env vars: `SCHEDULER_*`, `LEAD_RETENTION_MONTHS`, `INBOUND_PAYLOAD_DAYS`, `LEAD_HASH_KEY`, `WEB_PUSH_*`, `WA_CREDITS_MONTHLY` (4000), `WA_CREDITS_CEILING_PCT` (110), `WA_GLOBAL_MONTHLY_CEILING` (8000), `WA_LOGIN_MONTHLY_CEILING` (200), `WA_PRICE_EGP` (secrets in `render.yaml` as `sync: false`)
   - the scheduler
   - handling an export or deletion request
   - `crm_settings`
   - the new `operation_logs` types and notification kinds
-  - **the WhatsApp cost query per agency per month, with the 10% alarm**
+  - **the WhatsApp cost query per agency per month, with the 10% alarm**; setting an agency's credits and caps; reading the notification log
   - the backup number switch-over
   - VAPID key generation and rotation (rotating forces brokers to re-enable push)
   - `LEAD_HASH_KEY` rotation (it weakens the warning for earlier erasures)
@@ -600,26 +666,26 @@ This plan on `poc/release-3`, revised with the owner's answers and the reviews.
 ## Tests that stay green
 - The whole existing suite, plus:
   - router: `leads`, `lead-voice`, `deals`
-  - web: `leads`, `lead-import`, `deals`, `privacy`, `notifications`, `i18n`
-  - unit: `phone`, `lead-domain`, `lead-update`, `commission`, `scheduler`, `channels`
+  - web: `leads`, `lead-import`, `deals`, `privacy`, `notifications`, `usage`, `share-target`, `i18n`, `parity` (every WhatsApp command has a website page)
+  - unit: `phone`, `lead-domain`, `lead-update`, `commission`, `scheduler`, `channels`, `credits`
 - The harness gains `insertLead`, a fixed-clock `tick`, a `contacts` payload builder and a fake web push endpoint.
 - Contract guard, schema reference and docs tests run in every commit.
 
 ## Cost notes
-- **WhatsApp messages per task:**
-  - every broker action is answered in one reply
-  - notifications cost **0 WhatsApp messages by default** (web push and the inbox); with "also on WhatsApp", it's 1 per grouped alert
-  - the "client opened" alerts move off WhatsApp too
-- **Pilot estimate:**
-  - about 2,200 replies a month for 5 brokers, about 250 EGP after the 1,000 free
-  - about 420 EGP if every alert also went on WhatsApp
-- **AI calls:**
-  - 0: contact card, phone lookup, CSV, buttons, matches, reminders, the hot signal, "N clients want this"
-  - 1: forwarded-text intake (`lead_extraction`) or a typed CRM update (`lead_update`)
-  - 2: a voice intake or voice update (with transcription)
-  - each call is under $0.001, counted in the existing daily quotas
-- **Web push** is free. `web-push` is one small dependency.
-- **Database:** the match sweep runs one indexed query per alerting request per tick, with a limit. Memory doesn't change.
+- **WhatsApp:** every broker action is answered in one reply where it can be (credits per action: see the table in the channel strategy). Notifications go on WhatsApp while credits last, then on the website (free). Prices since 1 Oct 2026: service and utility ≈ 0.21 EGP with VAT; marketing ≈ 3.6 EGP (not used).
+- **POC estimate per month (one agency, 5 typical brokers):**
+
+| Item | Estimate |
+| --- | --- |
+| WhatsApp (≈ 3,850 credits − 1,000 free; capped at 4,400 + 200 sign-ins) | ≈ 600 EGP, at most ≈ 750 |
+| Over-limit daily notices | ≤ 30 EGP |
+| AI (≈ 75 calls a day; cap 300) | ≈ 85 EGP, at most ≈ 450 |
+| Render Starter | ≈ 350 EGP |
+| **Total** | **≈ 1,050 EGP (at most ≈ 1,600)** |
+
+  Prices and the exchange rate (≈ 50 EGP/USD) are checked against the first invoice. The photo-reaction fix (P11) is already counted.
+- **AI calls:** 0 for a contact card, phone lookup, CSV, buttons, matches, reminders, the hot signal and "N clients want this"; 1 for a forwarded-text intake or a typed CRM update; 2 for voice; each under $0.001.
+- **Web push** is free. **Database:** the match sweep is one indexed query per alerting request per tick, with a limit; memory doesn't change.
 
 ## Security review (done in step 12; recorded in the manifest)
 - **Access:** lead, deal, request, match and notification reads go only through role-scoped services. A grep test refuses direct queries from routes. A lead the broker can't see answers 404; the Q2 copy is the one deliberate exception (a colleague's name, no details).
@@ -650,7 +716,8 @@ This plan on `poc/release-3`, revised with the owner's answers and the reviews.
   7. `deal L-0001 VIL-08 8.5M commission 2% split 60/40`: whole EGP amounts that add up exactly; the unit is sold and the lead is won.
   8. Switch the web app to English: every CRM page is in English. Onboard a test broker with `lang: en`: an English start link and guide.
   9. As the admin, export and erase. Every CRM row is gone, the deal survives without client fields, and a re-capture warns.
-  10. Search `operation_logs` and the Render logs for Ahmed's phone and name: none. Check `agency_outbound_daily`: no WhatsApp sends for alerts.
+  10. Search `operation_logs` and the Render logs for Ahmed's phone and name: none.
+  11. Set the agency's credits to 50 and use the bot: the hint at 50% and 80%, the switch message at 100%, alerts arriving as web push only (never both), one daily notice at the ceiling, then read ticks; the usage page and the notification log match.
 
 ## Critical files (Release 3)
 - new, pure: `domain/phone.js`, `domain/leadStages.js`, `domain/leadCard.js`, `domain/leadIntake.js`, `domain/leadImport.js`, `domain/leadUpdate.js`, `domain/commission.js`
