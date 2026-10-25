@@ -63,7 +63,11 @@ async function client() {
   return clients.get(name);
 }
 
-async function callGemini(_unused, parts, { thinking, json }) {
+// Levels a model refuses (lib/ai.js THINKING): 3.8 Flash has no MINIMAL, so it runs at LOW (the production setting).
+const THINKING_FLOOR = { "gemini-3.8-flash": { MINIMAL: "LOW" } };
+
+async function callGemini(_unused, parts, { thinking: asked, json }) {
+  const thinking = (THINKING_FLOOR[MODEL] || {})[asked] || asked;
   const config = { temperature: 0.1 };
   if (json) config.responseMimeType = "application/json";
   if (thinking) config.thinkingConfig = { thinkingLevel: thinking };
