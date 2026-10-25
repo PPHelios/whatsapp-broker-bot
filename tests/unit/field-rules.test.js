@@ -81,11 +81,34 @@ describe("Warnings (add/edit only)", () => {
     expect(w).toEqual(["delivery_or_ready"]);
   });
 
-  test("resale installments: amount, frequency, end date, delivery, and a mismatch over 100 EGP", () => {
+  test("resale installments: one installment-details line, delivery or ready, and a mismatch over 100 EGP", () => {
     const l = { ...base, finishing: "x", bathrooms: 2, floor_level: 1, price_value: 10e6, down_payment_value: 4e6, remaining_amount: 5.9e6 };
-    expect(fields(R.evaluate(l).warnings)).toEqual(["installment_value", "payment_frequency", "installments_end", "delivery", "resale_mismatch"]);
+    expect(fields(R.evaluate(l).warnings)).toEqual(["installment_details", "delivery_or_ready", "resale_mismatch"]);
+    expect(fields(R.evaluate({ ...l, installment_value: 250000 }).warnings)).not.toContain("installment_details");
     const within = { ...l, remaining_amount: 6e6 - 100 };
     expect(fields(R.evaluate(within).warnings)).not.toContain("resale_mismatch");
+  });
+
+  test("draft review: a total above the cash paid with no schedule named is asked, not assumed", () => {
+    const l = { ...base, finishing: "x", bathrooms: 2, floor_level: 1, price_value: 15e6, down_payment_value: 13e6 };
+    const asked = R.evaluate(l, { lang: "en", askInstallments: true });
+    expect(asked.ok).toBe(false);
+    expect(fields(asked.blockers)).toEqual(["installments_question"]);
+    expect(R.blockerLine(asked.blockers[0], "en")).toMatch(/remaining 2M paid in installments, or is 13M the cash price/);
+    expect(asked.listing.remaining_amount).toBeUndefined();
+
+    const yes = R.evaluate({ ...l, installments_confirmed: true }, { askInstallments: true });
+    expect(yes.ok).toBe(true);
+    expect(yes.case).toBe("resale_installments");
+    expect(yes.listing.remaining_amount).toBe(2e6);
+
+    const no = R.evaluate({ ...l, installments_confirmed: false }, { askInstallments: true });
+    expect(no.ok).toBe(true);
+    expect(no.case).toBe("resale_cash");
+    expect(no.listing).toMatchObject({ price_value: 13e6, down_payment_value: null });
+
+    // A remaining amount the broker named is never a question.
+    expect(R.evaluate({ ...l, remaining_amount: 2e6 }, { askInstallments: true }).ok).toBe(true);
   });
 
   test("primary: project or developer, delivery, maintenance terms", () => {

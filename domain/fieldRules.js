@@ -27,17 +27,25 @@ function unitKind(propertyType) {
   return "unknown";
 }
 
+const EXPLICIT_INSTALLMENT_FIELDS = ["remaining_amount", "installment_value", "installment_years", "installments_end"];
+
+/** The broker named part of a remaining schedule (not just a total above the cash paid). */
+const explicitInstallments = (l = {}) => EXPLICIT_INSTALLMENT_FIELDS.some((k) => positive(l[k]));
+
+/** Total above the cash paid, with no schedule named: installments, or a cash price below the total? */
+const priceGapOnly = (l = {}) =>
+  !explicitInstallments(l) && positive(l.down_payment_value) && positive(l.price_value) && Number(l.down_payment_value) < Number(l.price_value);
+
 /**
  * Payment case: rent | primary | resale_installments | resale_cash.
- * A resale is "with installments" as soon as any part of a remaining schedule is known.
+ * A resale is "with installments" as soon as any part of a remaining schedule is known. A total above the
+ * cash paid alone counts as installments unless the broker answered "no" (installments_confirmed === false).
  */
 function paymentCase(l = {}) {
   if (l.listing_type === "rent") return "rent";
   if (l.market === "primary") return "primary";
-  const installmentSignals = [l.remaining_amount, l.installment_value, l.installment_years, l.installments_end];
-  if (installmentSignals.some(positive) || (positive(l.down_payment_value) && positive(l.price_value) && Number(l.down_payment_value) < Number(l.price_value))) {
-    return "resale_installments";
-  }
+  if (explicitInstallments(l)) return "resale_installments";
+  if (priceGapOnly(l) && l.installments_confirmed !== false) return "resale_installments";
   return "resale_cash";
 }
 
@@ -63,6 +71,8 @@ const LABELS = {
   installment_value: ["قيمة القسط", "Installment amount"],
   payment_frequency: ["دورية القسط", "Installment frequency"],
   installments_end: ["تاريخ آخر قسط", "Last installment date"],
+  installment_details: ["تفاصيل الأقساط (القسط، الدورية، آخر قسط)", "Installment details (amount, frequency, last date)"],
+  installments_question: ["الباقي أقساط ولا السعر كاش؟", "Is the rest paid in installments, or is it a cash price?"],
   project_or_developer: ["المشروع أو المطور", "Project or developer"],
   maintenance: ["شروط الصيانة", "Maintenance terms"],
   furnishing: ["حالة الفرش", "Furnished status"]
@@ -79,6 +89,11 @@ function item(field, lang, extra = {}) {
  */
 function normalizeForRules(input = {}) {
   const l = { ...input };
+  // "No installments": the cash paid is the cash price.
+  if (l.installments_confirmed === false && priceGapOnly(l)) {
+    l.price_value = Number(l.down_payment_value);
+    l.down_payment_value = null;
+  }
   const kind = unitKind(l.property_type);
   if (kind === "studio") l.bedrooms = 0;
   if (kind === "commercial" || kind === "land") l.bedrooms = null;
@@ -101,11 +116,20 @@ function normalizeForRules(input = {}) {
 /**
  * Evaluates a listing (draft or edited row) against the field table.
  * @param {Object} listing - top-level listing fields (+ details, payment_terms)
- * @param {Object} [opts] - { lang, photoCount }
+ * @param {Object} [opts] - { lang, photoCount, askInstallments }. askInstallments (the WhatsApp draft review):
+ *   a total above the cash paid with no schedule named is a question, not an assumption.
  * @returns {{ ok, blockers, warnings, listing, kind, case }}
  */
-function evaluate(listing = {}, { lang = "ar", photoCount = null } = {}) {
-  const l = normalizeForRules(listing);
+function evaluate(listing = {}, { lang = "ar", photoCount = null, askInstallments = false } = {}) {
+  const question =
+    askInstallments && listing.listing_type !== "rent" && listing.market !== "primary" &&
+    priceGapOnly(listing) && typeof listing.installments_confirmed !== "boolean";
+  const l = normalizeForRules(question ? { ...listing, installments_confirmed: false, price_value: listing.price_value } : listing);
+  if (question) {
+    // Shown as asked: nothing derived until the broker answers.
+    l.price_value = Number(listing.price_value);
+    l.down_payment_value = Number(listing.down_payment_value);
+  }
   const d = l.details || {};
   const kind = unitKind(l.property_type);
   const pcase = paymentCase(l);
@@ -125,6 +149,10 @@ function evaluate(listing = {}, { lang = "ar", photoCount = null } = {}) {
   }
 
   // Price by payment case
+  if (question) {
+    const paid = Number(listing.down_payment_value);
+    blockers.push(item("installments_question", lang, { question: { total: Number(listing.price_value), paid, rest: Number(listing.price_value) - paid } }));
+  }
   if (pcase === "rent") {
     if (!positive(l.price_value)) blockers.push(item("monthly_rent", lang));
   } else if (pcase === "resale_installments") {
@@ -159,10 +187,10 @@ function evaluate(listing = {}, { lang = "ar", photoCount = null } = {}) {
   if (pcase === "resale_cash") {
     if (!hasDelivery(l)) warnings.push(item("delivery_or_ready", lang));
   } else if (pcase === "resale_installments") {
-    if (!positive(l.installment_value)) warnings.push(item("installment_value", lang));
-    if (!present(l.payment_frequency)) warnings.push(item("payment_frequency", lang));
-    if (!present(l.installments_end)) warnings.push(item("installments_end", lang));
-    if (!hasDelivery(l)) warnings.push(item("delivery", lang));
+    const scheduleKnown = positive(l.installment_value) || present(l.payment_frequency) || present(l.installments_end) || positive(l.installment_years);
+    if (!scheduleKnown) warnings.push(item("installment_details", lang));
+    // A resale may already be delivered: "Delivery date" alone is for primary (off-plan) units.
+    if (!hasDelivery(l)) warnings.push(item("delivery_or_ready", lang));
     const mismatch = resaleMismatch(listing);
     if (mismatch) warnings.push({ ...item("resale_two_of_three", lang), field: "resale_mismatch", mismatch });
   } else if (pcase === "primary") {
@@ -186,6 +214,16 @@ function resaleMismatch(l = {}) {
   return diff > MISMATCH_TOLERANCE_EGP ? { total, paid, remaining: rem, diff } : null;
 }
 
+/** 13000000 → "13M" / "13 مليون"; 2500000 → "2.5M". */
+function money(n, lang = "ar") {
+  const v = Number(n);
+  if (v >= 1e6) {
+    const m = Math.round((v / 1e6) * 100) / 100;
+    return lang === "en" ? `${m}M` : `${m} مليون`;
+  }
+  return lang === "en" ? `${v.toLocaleString("en-US")} EGP` : `${v.toLocaleString("en-US")} جنيه`;
+}
+
 /** One warning line, e.g. "⚠️ موعد التسليم غير مسجل". Only for add/edit review screens. */
 function warningLine(w, lang = "ar") {
   if (w.field === "resale_mismatch") {
@@ -200,6 +238,12 @@ function warningLine(w, lang = "ar") {
 
 /** One blocker line for the "still needed" list. */
 function blockerLine(b, lang = "ar") {
+  if (b.field === "installments_question") {
+    const { total, paid, rest } = b.question;
+    return lang === "en"
+      ? `• ❓ Total ${money(total, lang)}, cash ${money(paid, lang)}: is the remaining ${money(rest, lang)} paid in installments, or is ${money(paid, lang)} the cash price?`
+      : `• ❓ الإجمالي ${money(total, lang)} والكاش ${money(paid, lang)}: الباقي ${money(rest, lang)} أقساط، ولا ${money(paid, lang)} هو سعر الكاش؟`;
+  }
   return `• ${lang === "en" ? b.label_en : b.label_ar}`;
 }
 
@@ -215,5 +259,6 @@ module.exports = {
   evaluate,
   resaleMismatch,
   warningLine,
-  blockerLine
+  blockerLine,
+  money
 };
