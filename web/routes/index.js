@@ -15,6 +15,8 @@ const PRIVATE = [
   require("./notifications"),
   require("./settings"),
   require("./usage"),
+  require("./dashboard"),
+  require("./team"),
   require("./report")
 ];
 

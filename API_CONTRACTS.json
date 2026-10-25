@@ -1021,6 +1021,29 @@
       "hiddenMessage": ["broker", "units"],
       "unitCheckJob": []
     },
+    "services/dashboards.js": {
+      "PERIODS": "Array",
+      "isOwner": ["broker", "config"],
+      "isManager": ["b"],
+      "brokerActivity": ["pool", "agencyId", "params"],
+      "agencyDashboard": ["pool", "manager", "params"],
+      "ownerDashboard": ["pool", "broker", "params"],
+      "weekStart": ["at"]
+    },
+    "services/team.js": {
+      "INVITE_ROLES": "Array",
+      "listTeam": ["pool", "manager"],
+      "startLinkFor": ["pool", "manager", "brokerId", "params"],
+      "invite": ["pool", "manager", "input", "opts"],
+      "deactivate": ["pool", "manager", "brokerId", "params"],
+      "inviteText": ["broker", "url", "agencyName"]
+    },
+    "web/routes/dashboard.js": {
+      "register": ["web", "params"]
+    },
+    "web/routes/team.js": {
+      "register": ["web", "params"]
+    },
     "lib/keepAwake.js": {
       "EVERY_MS": "Number",
       "parseHours": ["spec"],

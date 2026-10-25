@@ -2,6 +2,7 @@
 "use strict";
 
 const { html } = require("../html");
+const Dash = require("../../services/dashboards");
 
 function register(web, { page }) {
   web.get("/", (req, res) => {
@@ -17,6 +18,8 @@ function register(web, { page }) {
     <a class="btn secondary" href="/app/leads">${en ? "👤 Leads" : "👤 العملاء"}</a>
     <a class="btn secondary" href="/app/units/new">${en ? "➕ Add a unit" : "➕ إضافة وحدة"}</a>
     <a class="btn secondary" href="/app/import">${en ? "📥 Import" : "📥 استيراد"}</a>
+    ${Dash.isManager(broker) ? html`<a class="btn secondary" href="/app/dashboard">${en ? "📈 Dashboard" : "📈 لوحة الوكالة"}</a>` : ""}
+    ${Dash.isOwner(broker) ? html`<a class="btn secondary" href="/app/owner">${en ? "🛠️ App tracking" : "🛠️ متابعة التطبيق"}</a>` : ""}
   </div>
 </div>`
     });

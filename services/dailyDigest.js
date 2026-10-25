@@ -214,7 +214,7 @@ function digestMessage(manager, d) {
   return {
     title: L(manager, "🌙 ملخص اليوم للوكالة", "🌙 Today at the agency"),
     body: lines.join("\n"),
-    url: "/app/leads",
+    url: "/app/dashboard?days=7",
     buttons: null
   };
 }

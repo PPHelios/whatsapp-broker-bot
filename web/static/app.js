@@ -5,6 +5,11 @@
   document.addEventListener("htmx:configRequest", function (e) {
     if (meta) e.detail.headers["X-CSRF-Token"] = meta.content;
   });
+  // <form data-confirm="…">: ask before a step that can't be undone from the page (deactivating a broker).
+  document.addEventListener("submit", function (e) {
+    var msg = e.target && e.target.getAttribute && e.target.getAttribute("data-confirm");
+    if (msg && !window.confirm(msg)) e.preventDefault();
+  });
   // Script errors from our own files go to the server (lib/errorReports.js), at most 5 per page.
   var sentErrors = 0;
   function reportError(message, file, line, stack) {
