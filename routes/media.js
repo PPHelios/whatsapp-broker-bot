@@ -13,11 +13,58 @@ const { reply, replyButtons, allowSilentDrop, setTurnAction } = require("../lib/
 // Photo normalization (sharp, in memory) is shared with the web uploads.
 const { normalizeImageBuffer } = require("../lib/images");
 
+// Photos being downloaded/uploaded right now, per broker (see waitForPhotos).
+const photosInFlight = new Map();
+
 /**
  * Handles incoming WhatsApp photos (ING-01).
  * Adopts silent reaction acknowledgment (Solution 2) to eliminate chat flooding.
  */
 async function handleImage(broker, message, ctx) {
+  photosInFlight.set(broker.id, (photosInFlight.get(broker.id) || 0) + 1);
+  try {
+    return await ingestImage(broker, message, ctx);
+  } finally {
+    const left = (photosInFlight.get(broker.id) || 1) - 1;
+    if (left > 0) photosInFlight.set(broker.id, left);
+    else photosInFlight.delete(broker.id);
+  }
+}
+
+/**
+ * Waits (up to maxMs) for the broker's photos still downloading or uploading, so a reply that
+ * counts the draft's photos counts the whole burst (single instance: an in-memory count is enough).
+ */
+async function waitForPhotos(brokerId, maxMs = 8000) {
+  const until = Date.now() + maxMs;
+  while (photosInFlight.get(brokerId) && Date.now() < until) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+}
+
+/** One limit warning per draft; the photos dropped after it get no message of their own. */
+async function limitReached(broker, ctx) {
+  const { pool, lang } = ctx;
+  if (!(await Drafts.claimLimitWarning(pool, broker.id, "draft"))) {
+    allowSilentDrop("photo_over_limit");
+    return "done";
+  }
+  const warningBody =
+    lang === "en"
+      ? "⚠️ 15 photos saved (the maximum per listing). Extra photos were not added. Tap below to review or cancel:"
+      : "⚠️ تم حفظ 15 صورة (الحد الأقصى للوحدة). الصور الزيادة لم تُضف. اضغط أدناه للمراجعة أو الإلغاء:";
+
+  await replyButtons(broker, warningBody, [
+    {
+      id: "DRAFT_SAVE",
+      title: lang === "en" ? "Done (Save) ✅" : "تم (حفظ) ✅"
+    },
+    { id: "DRAFT_CANCEL", title: lang === "en" ? "Cancel ❌" : "إلغاء ❌" }
+  ]);
+  return "done";
+}
+
+async function ingestImage(broker, message, ctx) {
   setTurnAction("add_unit");
   const { pool, lang } = ctx;
   const imageObj = message.image;
@@ -47,21 +94,7 @@ async function handleImage(broker, message, ctx) {
   const currentMediaCount = (draft.media_items || []).length;
 
   // 2. Enforce 15-photo ceiling (ING-01) with conversational action buttons (Anti-Dead-End)
-  if (currentMediaCount >= 15) {
-    const warningBody =
-      lang === "en"
-        ? "⚠️ Maximum image limit reached (15 photos per listing). Additional photos were dropped. Tap below to review or cancel:"
-        : "⚠️ تم الوصول للحد الأقصى المسموح به (15 صورة) للوحدة. تم تجاهل الصور الزائدة. اضغط أدناه للاعتماد أو الإلغاء:";
-
-    await replyButtons(broker, warningBody, [
-      {
-        id: "DRAFT_SAVE",
-        title: lang === "en" ? "Done (Save) ✅" : "تم (حفظ) ✅"
-      },
-      { id: "DRAFT_CANCEL", title: lang === "en" ? "Cancel ❌" : "إلغاء ❌" }
-    ]);
-    return "done";
-  }
+  if (currentMediaCount >= 15) return await limitReached(broker, ctx);
 
   // 3. Download from WhatsApp Meta Graph API
   let rawMedia;
@@ -126,21 +159,7 @@ async function handleImage(broker, message, ctx) {
   const stored = (mediaResult.draft?.media_items || []).some(
     (item) => item.mediaId === imageObj.id
   );
-  if (!mediaResult.ok || !stored) {
-    const warningBody =
-      lang === "en"
-        ? "⚠️ Maximum image limit reached (15 photos per listing). Additional photos were dropped."
-        : "⚠️ تم الوصول للحد الأقصى المسموح به (15 صورة) للوحدة. تم تجاهل الصور الزائدة.";
-
-    await replyButtons(broker, warningBody, [
-      {
-        id: "DRAFT_SAVE",
-        title: lang === "en" ? "Done (Save) ✅" : "تم (حفظ) ✅"
-      },
-      { id: "DRAFT_CANCEL", title: lang === "en" ? "Cancel ❌" : "إلغاء ❌" }
-    ]);
-    return "done";
-  }
+  if (!mediaResult.ok || !stored) return await limitReached(broker, ctx);
 
   // If the broker attached a text caption to the image, preserve it atomically in text_notes
   if (imageObj.caption && typeof imageObj.caption === "string") {
@@ -291,5 +310,6 @@ async function handleAudio(broker, message, ctx) {
 
 module.exports = {
   handleImage,
-  handleAudio
+  handleAudio,
+  waitForPhotos
 };

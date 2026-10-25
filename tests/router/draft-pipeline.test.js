@@ -275,6 +275,32 @@ describe("Photos go to storage at ingest", () => {
   });
 });
 
+describe("Photo ceiling and items WhatsApp can't pass on", () => {
+  test("17 photos: 15 kept and one limit warning, not one per extra photo", async () => {
+    await h.text("broker", "add");
+    const warnings = [];
+    for (let i = 0; i < 17; i++) warnings.push(...(await h.photo("broker")));
+    expect((await h.session("broker")).media_items).toHaveLength(15);
+    const limit = warnings.filter((r) => /15/.test(textOf([r])));
+    expect(limit).toHaveLength(1);
+  });
+
+  test("an unsupported item inside a draft says it wasn't added, not the welcome", async () => {
+    await h.text("broker", "add");
+    const replies = await h.send("broker", {
+      type: "unsupported",
+      errors: [{ code: 131051, title: "Message type unknown" }]
+    });
+    expect(textOf(replies)).toMatch(/مسودة|draft/);
+    expect(textOf(replies)).not.toMatch(/أهلاً|Welcome/);
+  });
+
+  test("an unsupported item outside a draft gets a generic notice", async () => {
+    const replies = await h.send("broker", { type: "unsupported", errors: [{ code: 131051 }] });
+    expect(textOf(replies)).toMatch(/غير مدعوم|not supported/);
+  });
+});
+
 describe("Extraction failure keeps the draft", () => {
   test("AI outage: the broker is told, the draft survives, retry works", async () => {
     await h.text("broker", "اضافة");

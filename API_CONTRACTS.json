@@ -180,6 +180,7 @@
       "clearDraft": ["pool", "brokerId", "sessionType"],
       "appendText": ["pool", "brokerId", "text", "sessionType"],
       "photoNote": ["pool", "broker", "lang"],
+      "claimLimitWarning": ["pool", "brokerId", "sessionType"],
       "appendVoice": ["pool", "brokerId", "params", "sessionType"],
       "appendMedia": ["pool", "brokerId", "params", "sessionType"],
       "stageDraftReview": ["pool", "brokerId", "reviewPayload"],

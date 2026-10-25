@@ -26,7 +26,7 @@ function isPhotoMessage(message) {
 
 // Modular Route Controllers
 const { handleCommand } = require("./routes/commands");
-const { handleImage, handleAudio } = require("./routes/media");
+const { handleImage, handleAudio, waitForPhotos } = require("./routes/media");
 const { handleDocument } = require("./routes/documents");
 const { handleInteractive } = require("./routes/interactive");
 const LeadIntake = require("./lib/leadIntake");
@@ -142,6 +142,7 @@ function createApp({ pool, config = getConfig(), jobs }) {
 
     // P11: photos get no message of their own; the next reply in the draft counts them.
     if (!isPhotoMessage(message)) {
+      await waitForPhotos(broker.id);
       const note = await Drafts.photoNote(poolInstance, broker, lang).catch(() => null);
       if (note) setTurnNote(note.text, note.onDelivered);
     }
@@ -302,6 +303,26 @@ function createApp({ pool, config = getConfig(), jobs }) {
       case "contacts":
         // Release 3: a contact card is a lead lookup ("who is calling?") or a save offer (no AI).
         return await LeadIntake.handleContacts(broker, message, ctx);
+
+      case "unsupported": {
+        // WhatsApp couldn't pass the item on (e.g. code 131051: a view-once or some forwarded media).
+        logServerOp(poolInstance, {
+          agency_id: broker.agency_id,
+          broker_id: broker.id,
+          operation_type: "ingress_unsupported_type",
+          metadata: { errors: (message.errors || []).map((e) => e?.code).filter(Boolean) }
+        });
+        const inDraft = Boolean(await Drafts.getDraft(poolInstance, broker.id, "draft"));
+        const body = inDraft
+          ? lang === "en"
+            ? "⚠️ WhatsApp couldn't pass one item to the bot (often a forwarded or view-once photo). It was not added to the draft; please send it again as a normal photo."
+            : "⚠️ واتساب لم يرسل أحد العناصر للبوت (غالباً صورة محوّلة أو صورة عرض مرة واحدة). لم تتم إضافتها للمسودة، أرسلها مرة أخرى كصورة عادية."
+          : lang === "en"
+            ? "⚠️ This message type isn't supported. Type *help* to see what the bot can do."
+            : "⚠️ نوع الرسالة غير مدعوم. اكتب *«مساعدة»* لعرض ما يمكن للبوت فعله.";
+        await reply(broker, body);
+        return "done";
+      }
 
       default:
         logServerOp(poolInstance, {
