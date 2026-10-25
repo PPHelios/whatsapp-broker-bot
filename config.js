@@ -21,8 +21,15 @@ const REQUIRED_IN_PRODUCTION = [
   "WHATSAPP_ACCESS_TOKEN",
   "WHATSAPP_PHONE_NUMBER_ID",
   "GEMINI_API_KEY",
-  "PUBLIC_BASE_URL"
+  "PUBLIC_BASE_URL",
+  "WEB_PUSH_PUBLIC_KEY",
+  "WEB_PUSH_PRIVATE_KEY"
 ];
+
+const num = (v, fallback) => {
+  const n = Number(v);
+  return Number.isFinite(n) && v !== "" && v !== undefined ? n : fallback;
+};
 
 const int = (v, fallback) => {
   const n = Number(v);
@@ -85,6 +92,20 @@ function loadConfig(env = process.env) {
       maxQueue: int(env.FLYER_MAX_QUEUE, 6),
       timeoutMs: int(env.FLYER_TIMEOUT_MS, 45000)
     },
+    // Message credits (1 credit = 1 WhatsApp message the bot sends) and their ceilings.
+    credits: {
+      monthly: int(env.WA_CREDITS_MONTHLY, 4000),
+      warnPct: 80,
+      ceilingPct: int(env.WA_CREDITS_CEILING_PCT, 110),
+      globalMonthly: int(env.WA_GLOBAL_MONTHLY_CEILING, 8000),
+      loginMonthly: int(env.WA_LOGIN_MONTHLY_CEILING, 200),
+      priceEgp: num(env.WA_PRICE_EGP, 0.21)
+    },
+    webPush: {
+      publicKey: env.WEB_PUSH_PUBLIC_KEY || "",
+      privateKey: env.WEB_PUSH_PRIVATE_KEY || "",
+      subject: env.WEB_PUSH_SUBJECT || "mailto:support@aqarchat.com"
+    },
     scheduler: {
       // On by default outside tests; tests call tick({ now }) with a fixed clock instead.
       enabled: env.SCHEDULER_ENABLED ? env.SCHEDULER_ENABLED !== "false" : env.NODE_ENV !== "test",
@@ -93,7 +114,7 @@ function loadConfig(env = process.env) {
     ai: {
       prices: parsePrices(env.AI_PRICES_JSON),
       quotas: {
-        agencyDaily: int(env.AI_QUOTA_AGENCY_DAILY, 2000),
+        agencyDaily: int(env.AI_QUOTA_AGENCY_DAILY, 300),
         brokerDaily: int(env.AI_QUOTA_BROKER_DAILY, 400)
       }
     }

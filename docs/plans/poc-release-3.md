@@ -378,7 +378,7 @@ This plan on `poc/release-3`, revised with the owner's answers and the reviews.
   - `/app/settings`: language, per-kind channel, quiet hours, push on/off with a test push
   - `/app/usage`: my usage and the agency's (managers: per broker, caps)
   - managers: the notification log, agency credits and caps
-  - the service worker gains `push` and `notificationclick` (opens only `/app/` URLs) and the web share target (`/app/share`); it still never caches pages
+  - the service worker gains `push` and `notificationclick` (opens only `/app/` URLs) and the web share target (`/app/share`); it still never caches pages. *(Built: the share target moves to step 5, where it can save a lead.)*
   - push payloads carry only a title, a short body and the URL; never a phone number
 - **Tests:**
   - exactly one delivery per notification in every case (chosen, fallback after a failed WhatsApp send, no credits, closed window, quiet hours); the same event twice → one notification

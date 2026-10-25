@@ -173,9 +173,10 @@ describe("AqarChat Master Safeguards & Regression Guard Suite", () => {
   /* 4. MEDIA INGRESS & SILENT REACTIONS (routes/media.js)                     */
   /* ------------------------------------------------------------------------- */
   describe("4. Media Ingress & Silent Reactions (routes/media.js)", () => {
-    test("ING-01: Photo ingress must emit silent WhatsApp emoji reaction (📸)", () => {
-      // Sent via the dispatcher so a delivered reaction answers the turn (behaviour: tests/router/core-flows).
-      expect(mediaSrc).toMatch(/react\(broker, message\.id, "📸"\)/);
+    test("ING-01 / P11: photo ingress sends no message per photo (no billed reaction); the turn is an allowed silent drop", () => {
+      // The next reply counts the photos (Drafts.photoNote; behaviour: tests/router/core-flows).
+      expect(mediaSrc).not.toMatch(/react\(broker/);
+      expect(mediaSrc).toMatch(/allowSilentDrop\("photo_received"\)/);
     });
   });
 

@@ -7,6 +7,7 @@ const { loadAssets } = require("./assets");
 const { securityHeaders, sameOrigin } = require("./security");
 const Session = require("./session");
 const { html, layout } = require("./html");
+const Notifications = require("../lib/notifications");
 
 const MANIFEST = {
   name: "AqarChat",
@@ -35,7 +36,7 @@ function mountWeb(app, { pool, config }) {
     return res
       .status(status)
       .type("html")
-      .send(String(layout({ assets: assets.url, broker: s?.broker || null, csrf: s?.csrf || null, ...opts, lang })));
+      .send(String(layout({ assets: assets.url, broker: s?.broker || null, csrf: s?.csrf || null, unread: s?.unread || 0, ...opts, lang })));
   };
   // Behind Render's proxy, req.ip is the client from X-Forwarded-For (rate limits).
   if (config.isProd) app.set("trust proxy", 1);
@@ -88,6 +89,13 @@ function mountWeb(app, { pool, config }) {
   for (const p of pages.PUBLIC) p.register(web, ctx);
   const priv = express.Router();
   priv.use(Session.noStore, Session.requireBroker, Session.verifyCsrf);
+  // The 🔔 count in the top bar (pages only; htmx partials don't render the bar).
+  priv.use(async (req, _res, next) => {
+    if (req.method === "GET" && !req.get("HX-Request")) {
+      req.session.unread = await Notifications.unreadCount(pool, req.session.broker).catch(() => 0);
+    }
+    next();
+  });
   for (const p of pages.PRIVATE) p.register(priv, ctx);
   web.use(priv);
 

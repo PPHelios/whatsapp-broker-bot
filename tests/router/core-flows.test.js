@@ -113,10 +113,17 @@ describe("Draft lifecycle (DRF)", () => {
 });
 
 describe("Photos (ING-01)", () => {
-  test("photo is stored in the draft and acknowledged with a reaction", async () => {
-    const replies = await h.photo("broker");
-    expect(replies.some((r) => r.type === "reaction" && r.emoji === "📸")).toBe(true);
-    expect((await h.session("broker")).media_items).toHaveLength(1);
+  test("P11: photos are stored with no message each; the next reply counts them once", async () => {
+    const first = await h.photo("broker", { mediaId: "p1" });
+    const second = await h.photo("broker", { mediaId: "p2" });
+    expect([...first, ...second]).toEqual([]);
+    expect((await h.session("broker")).media_items).toHaveLength(2);
+    const next = await h.text("broker", "شقة في التجمع 3 غرف");
+    expect(textOf(next)).toMatch(/^📸 وصلت 2 صور\./);
+    const again = await h.text("broker", "الدور التالت");
+    expect(textOf(again)).not.toMatch(/📸/);
+    await h.photo("broker", { mediaId: "p3" });
+    expect(textOf(await h.text("broker", "تشطيب سوبر لوكس"))).toMatch(/^📸 وصلت صورة\./);
   });
 
   test("U6/Part 2 C: a photo must not also trigger the 'could not determine action' fallback", async () => {

@@ -10,6 +10,12 @@ const { createTestDb } = require("./db");
 const WA = require("./fake-whatsapp");
 const AI = require("./fake-ai");
 const Storage = require("./fake-supabase");
+const Push = require("./fake-push");
+
+// Web push is configured in tests; the fake records instead of calling a push service.
+process.env.WEB_PUSH_PUBLIC_KEY = process.env.WEB_PUSH_PUBLIC_KEY || "BTestPublicKey";
+process.env.WEB_PUSH_PRIVATE_KEY = process.env.WEB_PUSH_PRIVATE_KEY || "TestPrivateKey";
+require("../../config").resetConfig();
 
 const AGENCY_A = "a0000000-0000-0000-0000-00000000000a";
 const AGENCY_B = "b0000000-0000-0000-0000-00000000000b";
@@ -28,8 +34,9 @@ async function seed(pool) {
   );
   for (const b of Object.values(BROKERS)) {
     await pool.query(
-      `INSERT INTO brokers (id, agency_id, phone_number, name, role, is_active, preferred_lang)
-       VALUES ($1, $2, $3, $4, $5, true, $6)`,
+      // Quiet hours off by default so alerts don't depend on the time of day the suite runs.
+      `INSERT INTO brokers (id, agency_id, phone_number, name, role, is_active, preferred_lang, notify_prefs)
+       VALUES ($1, $2, $3, $4, $5, true, $6, '{"quiet":{"enabled":false}}')`,
       [b.id, b.agency_id, b.phone, b.name, b.role, b.lang]
     );
   }
@@ -108,6 +115,8 @@ async function createHarness() {
   WA.reset();
   AI.reset();
   Storage.reset();
+  Push.reset();
+  Push.install();
   const pool = await freshDb();
   await seed(pool);
   const { createApp } = require("../../server");
@@ -143,6 +152,7 @@ async function createHarness() {
     WA,
     AI,
     Storage,
+    Push,
     BROKERS,
     AGENCY_A,
     AGENCY_B,

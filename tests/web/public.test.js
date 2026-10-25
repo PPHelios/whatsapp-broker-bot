@@ -191,11 +191,13 @@ describe("opened alerts", () => {
     const [{ open_count }] = await h.query("SELECT open_count FROM share_links");
     expect(open_count).toBe(2);
 
+    // Seven hours later (the alert throttle and the notification centre's 2-minute merge window have passed).
     await h.query("UPDATE share_links SET last_alert_at = NOW() - INTERVAL '7 hours'");
+    await h.query("UPDATE notifications SET delivered_at = NOW() - INTERVAL '7 hours' WHERE kind = 'share_opened'");
     await open(path);
     expect(alerts()).toHaveLength(2);
     expect(alerts()[1].text).toMatch(/\(3 مرات\)/);
-    const counted = await h.query("SELECT status, metadata->>'kind' AS kind FROM operation_logs WHERE operation_type = 'wa_outbound' AND metadata->>'kind' = 'share_opened'");
+    const counted = await h.query("SELECT status, metadata->>'kind' AS kind FROM operation_logs WHERE operation_type = 'wa_outbound' AND metadata->>'kind' = 'notify_share_opened'");
     expect(counted).toHaveLength(2);
     expect(await h.query("SELECT count(*)::int AS n FROM operation_logs WHERE operation_type = 'share_opened'")).toEqual([{ n: 3 }]);
   });

@@ -41,9 +41,9 @@ const HTMX_CONFIG = { includeIndicatorStyles: false, allowEval: false, allowScri
 
 /**
  * Full page. lang "ar" renders RTL; assets(name) gives the versioned static path.
- * @param {Object} p - { title, lang, body, assets, csrf, broker, nav, head, robots }
+ * @param {Object} p - { title, lang, body, assets, csrf, broker, nav, head, robots, unread }
  */
-function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, nav = null, head = null, robots = "noindex, nofollow", scripts = true, manifest = true }) {
+function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, nav = null, head = null, robots = "noindex, nofollow", scripts = true, manifest = true, unread = 0 }) {
   const en = lang === "en";
   return html`<!doctype html>
 <html lang="${en ? "en" : "ar"}" dir="${en ? "ltr" : "rtl"}">
@@ -64,7 +64,7 @@ ${scripts ? html`<script src="${assets("htmx.min.js")}" defer></script>
 <script src="${assets("app.js")}" defer></script>` : ""}
 </head>
 <body>
-${broker || nav ? topBar({ broker, nav, lang }) : ""}
+${broker || nav ? topBar({ broker, nav, lang, unread }) : ""}
 <main id="main">${body}</main>
 </body>
 </html>`;
@@ -77,7 +77,7 @@ const NAV = [
   { key: "import", href: "/app/import", ar: "📥 استيراد", en: "📥 Import" }
 ];
 
-function topBar({ broker, nav, lang }) {
+function topBar({ broker, nav, lang, unread = 0 }) {
   const en = lang === "en";
   return html`<header class="top">
   <a class="brand" href="/app/">AqarChat</a>
@@ -85,6 +85,8 @@ function topBar({ broker, nav, lang }) {
     ? html`<nav class="nav">${NAV.map(
         (n) => html`<a href="${n.href}"${n.key === nav ? raw(' aria-current="page"') : ""}>${en ? n.en : n.ar}</a>`
       )}</nav>
+  <a class="bell" href="/app/notifications" aria-label="${en ? "Notifications" : "التنبيهات"}"${nav === "notifications" ? raw(' aria-current="page"') : ""}>🔔${unread ? html`<span class="badge" data-unread="${unread}">${unread > 99 ? "99+" : unread}</span>` : ""}</a>
+  <a href="/app/settings" aria-label="${en ? "Settings" : "الإعدادات"}"${nav === "settings" ? raw(' aria-current="page"') : ""}>⚙️</a>
   <form method="post" action="/app/logout" class="logout"><button type="submit" class="link">${en ? "Sign out" : "خروج"}</button></form>`
     : ""}
 </header>`;

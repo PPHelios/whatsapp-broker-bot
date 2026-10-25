@@ -67,7 +67,8 @@ function register(web, { pool, page }) {
         const lang = broker.preferred_lang || "ar";
         const sent = await notify(broker, t("web_login_link", lang, { url: Links.loginLinkUrl(token), minutes: WebAuth.LOGIN_TOKEN_TTL_MINUTES }), {
           pool,
-          kind: "web_login_link"
+          kind: "web_login_link",
+          action: "sign_in"
         });
         logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_login_link", status: sent ? "success" : "dropped" });
       }

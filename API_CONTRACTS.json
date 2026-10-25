@@ -159,6 +159,10 @@
     },
     "lib/dispatcher.js": {
       "countOutbound": ["broker", "kind", "status"],
+      "setTurnAction": ["action"],
+      "setTurnNote": ["text", "onDelivered"],
+      "turnCredits": [],
+      "claimOnce": ["pool", "broker", "params"],
       "reply": ["broker", "text", "opts"],
       "replyButtons": ["broker", "bodyText", "buttons"],
       "replyList": ["broker", "bodyText", "buttonText", "sections"],
@@ -175,6 +179,7 @@
       "createDraft": ["pool", "brokerId", "agencyId", "brokerPhoneNormalized", "sessionType"],
       "clearDraft": ["pool", "brokerId", "sessionType"],
       "appendText": ["pool", "brokerId", "text", "sessionType"],
+      "photoNote": ["pool", "broker", "lang"],
       "appendVoice": ["pool", "brokerId", "params", "sessionType"],
       "appendMedia": ["pool", "brokerId", "params", "sessionType"],
       "stageDraftReview": ["pool", "brokerId", "reviewPayload"],
@@ -592,6 +597,67 @@
       "waMeUrl": ["raw", "text"],
       "telUrl": ["raw"],
       "last4": ["raw"]
+    },
+    "lib/credits.js": {
+      "LOGIN_KINDS": "Array",
+      "HINT_LEVELS": "Array",
+      "monthKey": ["now"],
+      "dayKey": ["now"],
+      "check": ["pool", "broker", "params"],
+      "canNotify": ["state"],
+      "allowsSend": ["state", "kind"],
+      "hintLevel": ["state"],
+      "usage": ["pool", "agencyId", "params"]
+    },
+    "lib/notifications.js": {
+      "KINDS": "Array",
+      "KIND_LABELS": "Object",
+      "DEFAULT_QUIET": "Object",
+      "MERGE_WINDOW_MS": "Number",
+      "prefsOf": ["broker"],
+      "inQuietHours": ["prefs", "now"],
+      "quietEnd": ["prefs", "now"],
+      "isWindowOpen": ["pool", "broker", "now"],
+      "messageFor": ["rows", "lang"],
+      "deliverRows": ["pool", "broker", "rows", "params"],
+      "notifyBroker": ["pool", "broker", "opts"],
+      "deliverDue": ["pool", "params"],
+      "deliverJob": [],
+      "managersOf": ["pool", "agencyId"],
+      "creditWarning": ["pool", "agencyId", "params"],
+      "listInbox": ["pool", "broker", "params"],
+      "unreadCount": ["pool", "broker"],
+      "markRead": ["pool", "broker", "id"],
+      "agencyLog": ["pool", "manager", "params"],
+      "savePrefs": ["pool", "broker", "params"],
+      "savePushSubscription": ["pool", "broker", "sub", "userAgent"],
+      "removePushSubscription": ["pool", "broker", "endpoint"],
+      "pushCount": ["pool", "broker"]
+    },
+    "lib/channels/whatsapp.js": {
+      "name": "String",
+      "textOf": ["message"],
+      "send": ["broker", "message", "params"]
+    },
+    "lib/channels/webpush.js": {
+      "name": "String",
+      "send": ["broker", "message", "params"],
+      "payloadOf": ["message"],
+      "configured": ["cfg"],
+      "setSenderForTests": ["fn"]
+    },
+    "lib/channels/telegram.js": {
+      "name": "String",
+      "send": ["_broker", "_message", "_deps"]
+    },
+    "web/routes/notifications.js": {
+      "register": ["web", "params"]
+    },
+    "web/routes/settings.js": {
+      "register": ["web", "params"]
+    },
+    "web/routes/usage.js": {
+      "register": ["web", "params"]
     }
   },
   "invariant_variable_names": {

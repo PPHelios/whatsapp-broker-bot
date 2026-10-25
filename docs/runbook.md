@@ -24,11 +24,18 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `MIGRATE_ON_BOOT` | no | `true` | `false` skips migrations at start (then run `npm run migrate` by hand). |
 | `DB_POOL_MAX` / `DB_STATEMENT_TIMEOUT_MS` / `DATABASE_SSL` | no | `10` / `10000` / on in production | Pool size, statement timeout, SSL. |
 | `BODY_LIMIT` | no | `512kb` | JSON and form bodies (uploads have their own limits: 10 MB a photo, 5 MB an Excel file). |
-| `AI_QUOTA_AGENCY_DAILY` / `AI_QUOTA_BROKER_DAILY` | no | `2000` / `400` | Daily AI calls; over the limit the broker is told and nothing is lost. |
+| `AI_QUOTA_AGENCY_DAILY` / `AI_QUOTA_BROKER_DAILY` | no | `300` / `400` | Daily AI calls; over the limit the broker is told and nothing is lost. |
 | `AI_PRICES_JSON` | no | built-in | Model prices for the cost column, e.g. `{"gemini-3.8-flash":{"inPerM":0.3,"outPerM":2.5}}`. |
 | `FLYER_WORKER` / `FLYER_MAX_QUEUE` / `FLYER_TIMEOUT_MS` | no | on / `6` / `45000` | Flyer rendering worker thread. |
 | `SLOW_QUERY_MS` | no | `1000` | Slow-query log threshold. |
 | `WEBHOOK_ALLOW_UNSIGNED` | no | — | Local development only; ignored in production. |
+| `WEB_PUSH_PUBLIC_KEY` / `WEB_PUSH_PRIVATE_KEY` | yes | — | VAPID keys for website notifications (web push). Generate once: `node -e "console.log(require('web-push').generateVAPIDKeys())"`. Rotating them turns push off for every broker until they turn it on again in ⚙️ Settings. |
+| `WEB_PUSH_SUBJECT` | no | `mailto:support@aqarchat.com` | Contact the push services see (a `mailto:` or `https:` URL). |
+| `WA_CREDITS_MONTHLY` | no | `4000` | Message credits per agency per month (1 credit = 1 WhatsApp message the bot sends). An agency's own value in `agencies.wa_credits_monthly` wins. |
+| `WA_CREDITS_CEILING_PCT` | no | `110` | Hard ceiling as a % of the credits: past it a broker gets one notice a day, then read ticks only. |
+| `WA_GLOBAL_MONTHLY_CEILING` | no | `8000` | All agencies on our one number together, per month: reaching it is the ceiling for everyone. |
+| `WA_LOGIN_MONTHLY_CEILING` | no | `200` | Sign-in links per agency per month (not counted in the credits). |
+| `WA_PRICE_EGP` | no | `0.21` | Price of one WhatsApp message (EGP, with VAT), stored on each `wa_outbound` row for our cost reports. |
 | `SCHEDULER_ENABLED` | no | `true` (off under tests) | Background jobs (follow-ups, match alerts, retention). `false` stops them on this instance. |
 | `SCHEDULER_TICK_MS` | no | `60000` | How often each instance looks for due jobs (at least 5000). Each job still runs on one instance at a time. |
 
@@ -47,6 +54,7 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 * A failed migration stops the start (`Migration 00X_… failed: …`) and rolls back that file only; fix it, deploy again.
 * Adding one: new file with the next number, never edit an applied one, keep it idempotent where SQL allows (`IF NOT EXISTS`), run `npm run schema:reference` and commit `SCHEMA_REFERENCE.sql` (a test fails otherwise). There is no automatic down-migration: undo with a new forward migration.
 * Release 2 added `005_agency_slug` … `009_share_links` (slugs, web sign-in and sessions, rate limits, saved searches, imports, share links).
+* Release 3: `012_notifications` (`notifications`, `push_subscriptions`, `brokers.notify_prefs`, agency credits and caps).
 * Release 3 starts with `010_lock_public_api` (Supabase's Data API locked out: RLS on every table, no grants for `anon`/`authenticated`; **every new table must `ENABLE ROW LEVEL SECURITY`**, a test fails otherwise) and `011_crm_settings` (`agencies.crm_settings`, `crm_jobs`).
 
 ## 3b. Scheduler
@@ -131,6 +139,30 @@ WHERE operation_type = 'wa_outbound' AND created_at > now() - interval '30 days'
 ```
 
 Sizing: replies inside the 24-hour window are free up to Meta's monthly allowance per number (about 1,000), then about 0.19 EGP each. Many `failed` rows on one day usually mean an expired access token or brokers outside their 24-hour window (error 131047).
+
+## 7b. Notifications and message credits
+
+* **One notification, one channel.** Each alert is one `notifications` row per broker and event (`UNIQUE (broker_id, dedupe_key)`: never twice). It goes on WhatsApp when the broker chose WhatsApp for that kind (⚙️ Settings), their 24-hour window is open and the agency is below 100% of its credits; otherwise, or when WhatsApp refuses it, as web push; with no push either, it waits in the website inbox (🔔). Alerts of the same kind within 2 minutes go out as one message; quiet hours (default 22:00–08:00 Cairo) hold them until the end. The scheduler job `notifications` releases held and merged ones.
+* **Credits:** every accepted WhatsApp send is a `wa_outbound` row (`metadata`: `kind`, `action`, `egp`). At 50/80/100% a one-line hint rides on a reply already being sent (once per broker per level per month); managers get an 80% and 100% alert. At 100% notifications move to the website and replies continue. At the ceiling (110%, the global ceiling, or a broker's cap) a broker gets one notice a day, then only read ticks. Sign-in links have their own ceiling.
+
+```sql
+-- Credits used this month per agency (Cairo month), with the estimated cost
+SELECT a.name, COALESCE(a.wa_credits_monthly, 4000) AS credits, count(o.*) AS used,
+       round(sum((o.metadata->>'egp')::numeric), 2) AS egp
+FROM agencies a LEFT JOIN operation_logs o ON o.agency_id = a.id AND o.operation_type = 'wa_outbound' AND o.status = 'success'
+ AND o.created_at >= date_trunc('month', now() AT TIME ZONE 'Africa/Cairo') AT TIME ZONE 'Africa/Cairo'
+ AND COALESCE(o.metadata->>'kind', '') <> 'web_login_link'
+GROUP BY a.id ORDER BY used DESC;
+
+-- Set an agency's credits and caps (NULL = server default / off)
+UPDATE agencies SET wa_credits_monthly = 6000, wa_broker_daily_cap = NULL, wa_broker_weekly_cap = 400 WHERE id = '<agency id>';
+
+-- The notification log: who got what, on which channel, why
+SELECT n.created_at, b.name, n.kind, n.channel, n.reason, n.status FROM notifications n JOIN brokers b ON b.id = n.broker_id
+WHERE n.agency_id = '<agency id>' ORDER BY n.created_at DESC LIMIT 50;
+```
+
+* Push subscriptions: `push_subscriptions` (removed when the browser answers 404/410). Turn a broker's push off: `DELETE FROM push_subscriptions WHERE broker_id = '<id>';`
 
 ## 8. Common problems
 

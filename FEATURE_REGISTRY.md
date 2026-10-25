@@ -9,7 +9,7 @@ This registry documents every user-facing capability, command, interactive callb
 
 | Feature ID | Event / Trigger | Pre-Conditions & Constraints | System Execution & Safeguards | Symmetrical Response Contract |
 | :--- | :--- | :--- | :--- | :--- |
-| **ING-01** | Photo Ingress (`type: "image"`) | - Ingress limit: Max 15 photos per unit.<br>- Ephemeral memory only. | - Normalizes buffer via Sharp: auto-rotate via EXIF, fit inside `1600x1600`, JPEG Q82.<br>- Concurrency capped at 1; RAM ceiling at 64MB.<br>- If uncompressed photo sent as document (`mime_type: "image/*"` or `.jpg/.png`), routes to image pipeline.<br>- Evaluates `draft.media_items.length`. If $>15$, additional image dropped immediately.<br>- Non-intrusive acknowledgment: Sends silent reaction (`📸`) to message bubble. | **Success (<15):** Emits silent WhatsApp emoji reaction (`📸`) on photo bubble without disruptive text notifications.<br>**Warning (>15):** "⚠️ تم الوصول للحد الأقصى المسموح به (15 صورة) للوحدة. تم تجاهل الصور الزائدة." accompanied by `[Done (Save) ✅]` / `[Cancel ❌]` buttons to prevent conversational dead ends. |
+| **ING-01** | Photo Ingress (`type: "image"`) | - Ingress limit: Max 15 photos per unit.<br>- Ephemeral memory only. | - Normalizes buffer via Sharp: auto-rotate via EXIF, fit inside `1600x1600`, JPEG Q82.<br>- Concurrency capped at 1; RAM ceiling at 64MB.<br>- If uncompressed photo sent as document (`mime_type: "image/*"` or `.jpg/.png`), routes to image pipeline.<br>- Evaluates `draft.media_items.length`. If $>15$, additional image dropped immediately.<br>- No message per photo (P11, NTF-08): the read tick shows it arrived; the next reply in the draft starts with "📸 N photos received". | **Success (<15):** No message (a reaction would be billed like one); the count rides on the next reply.<br>**Warning (>15):** "⚠️ تم الوصول للحد الأقصى المسموح به (15 صورة) للوحدة. تم تجاهل الصور الزائدة." accompanied by `[Done (Save) ✅]` / `[Cancel ❌]` buttons to prevent conversational dead ends. |
 | **ING-02** | Voice Note Ingress (`type: "voice" / "audio"`) | - Ingress limit: $\le 120\text{s}$ for draft/edit; $\le 45\text{s}$ for search.<br>- OGG/Opus clean MIME. | - If active draft/edit session exists: appends buffer to session array in `broker_sessions`.<br>- If no active session: transcribes buffer via Gemini Audio for property search.<br>- If search audio $>45\text{s}$: rejects audio before calling AI. | **Draft Active:** "🎙️ تم استلام الملاحظة الصوتية وإضافتها للمسودة. اكتب *«تم»* عند الانتهاء." with `[Done (Save) ✅]` / `[Cancel ❌]` buttons.<br>**Audio Over Limit:** "⚠️ تسجيل البحث طويل (الحد الأقصى 45 ثانية)." |
 | **ING-03** | Multiple Voice Processing | - Broker sends 2 or more voice notes during draft or edit. | - Audio buffers stored sequentially in `broker_sessions`.<br>- Commit phase passes all voice buffers as concurrent `inlineData` parts in a single multimodal Gemini call. | Synthesizes specs across all recordings into a single coherent review card. |
 | **ING-04** | Explicit Unit Code Parsing | - Message contains `#`, `code:`, `كود:`, `الكود:`, `كود الوحدة:`, `الكود الداخلي:`. | - Converts Eastern Arabic digits (`٠-٩`) to Western digits.<br>- Enforces alphanumeric `^[A-Za-z0-9_\-\.\/]{2,30}$`.<br>- Rejects Arabic text (`invalidArabic: true`).<br>- Checks DB uniqueness within `agency_id`. | **Valid:** Sets draft code or returns unit details card.<br>**Arabic Error:** "⚠️ كود الوحدة يجب أن يتكون من حروف إنجليزية وأرقام فقط (مثال: #HAS577)."<br>**Conflict:** "⚠️ الكود مستخدم بالفعل لوحدة أخرى." |
@@ -147,9 +147,24 @@ This registry documents every user-facing capability, command, interactive callb
 
 ---
 
+### 10b. Notifications, Channels & Message Credits (`NTF`) — Release 3
+
+| Feature ID | Event / Trigger | Pre-Conditions & Constraints | System Execution & Safeguards | Symmetrical Response Contract |
+| :--- | :--- | :--- | :--- | :--- |
+| **NTF-01** | Notify a broker (`notifyBroker`) | - An event with a dedupe key. | - Inbox row first (`UNIQUE (broker_id, dedupe_key)`); quiet hours hold; 2-minute merge; one channel: WhatsApp (chosen + window open + credits < 100%) → web push → inbox; channel, reason and status recorded. | One message on one channel, or the inbox only; never both. |
+| **NTF-02** | Held and merged delivery (scheduler `notifications`) | - Rows `held`/`queued` with `deliver_after` due. | - Grouped per broker and kind; 5 lines + "and N more"; inactive brokers skipped. | One grouped message. |
+| **NTF-03** | Web push | - Subscription saved from ⚙️ Settings; VAPID keys configured. | - Payload `{ title, body, url }` only; phone-like digits scrubbed; `/app/` URLs only; 404/410 remove the subscription. | Browser notification that opens the page. |
+| **NTF-04** | Inbox and log (`/app/notifications`, `/log`) | - Signed in; the log is managers only. | - Own rows only (broker and agency); open marks read and redirects to an `/app/` path. | 🔔 count in the top bar. |
+| **NTF-05** | Settings (`/app/settings`) | - Signed in, CSRF. | - Language; WhatsApp or website per kind; quiet hours; push on/off; test push. | "Saved". |
+| **NTF-06** | Message credits (`lib/credits.js`) | - Every WhatsApp send through the dispatcher. | - Agency month, global month, broker day/week caps, sign-in ceiling; ok/warn/limit/ceiling; hints once per level; one ceiling notice a day then read ticks only. | Hint lines on existing replies; usage page. |
+| **NTF-07** | Usage (`/app/usage`) | - Signed in; caps form managers only. | - My usage by action today/month; agency meter; per broker (managers); credits and caps saved per agency. | Numbers equal `operation_logs`. |
+| **NTF-08** | Photos without a message (P11) | - A photo in a draft. | - No reaction (billed); allowed silent drop; the next reply in the draft starts with "📸 N photos received". | Read tick only, then the count. |
+
+---
+
 ## 11. QA Test Verification & Traceability Baseline
 
-* `TC-ING-01`: 1–15 photos processed into in-memory buffer; sharp resized to 1600x1600 Q82; silent WhatsApp reaction (`📸`) emitted; zero text bubbles dispatched.
+* `TC-ING-01`: 1–15 photos processed into in-memory buffer; sharp resized to 1600x1600 Q82; no message per photo (P11); the next reply counts them; zero text bubbles dispatched.
 * `TC-ING-02`: Photo 16 rejected; warning dispatched; action buttons `[Save ✅]` / `[Cancel ❌]` preserved.
 * `TC-ING-03`: Voice note $\le 120\text{s}$ appended to session array; search audio $> 45\text{s}$ rejected before AI.
 * `TC-ING-04`: Draft containing only photos blocked upon finalization (`textCount === 0 && voiceCount === 0`).
@@ -199,7 +214,7 @@ Router tests send real webhook payloads through the production pipeline (`tests/
 | WEB-14…16 Excel preview kinds and from → to, nothing written before apply, apply once, conflict after preview, export round trip unchanged, missing units opt-in archive, banner rows and formulas, bad files, private plans; group import from paste and zipped chat export, chatter skipped, duplicates flagged, co-broker internal, quota per post, polling; bulk status and price %, authz, developer guard, validation | ✅ | `tests/web/imports.test.js` |
 | WEB-17…19 link in the client copy (same message, hashed token, none for sold units), OG/noindex/no-referrer/no scripts, allowlist with sentinels and the serializer's exact keys, English page, uniform 404s, 410 for sold, reserved paths, rate limit, alerts (previews and colleagues excluded, 6-hour throttle, English), web share with open counts | ✅ | `tests/web/public.test.js` |
 | Config: production fail-fast, https base URL, prices, quotas | ✅ | `tests/unit/config.test.js` |
-| ING-01 / TC-ING-01 photo stored + 📸 reaction, no fallback bubble | ✅ | `core-flows` |
+| ING-01 / TC-ING-01 / NTF-08 photo stored, no message per photo (P11), the count in the next reply, no fallback bubble | ✅ | `core-flows` |
 | TC-ING-02 16th photo warning with Save/Cancel | ✅ | `tests/router/reply-delivery.test.js` |
 | ING-05 / TC-ING-04 image-only draft blocked | ✅ | `core-flows` |
 | ING-06 / TC-ING-05 unsupported media guidance | ✅ (video) | `core-flows` |
@@ -239,6 +254,10 @@ Router tests send real webhook payloads through the production pipeline (`tests/
 | SYS-07 scheduler: due jobs run once across two instances, failures isolated, stale reclaim, catch-up after sleep, fixed clock | ✅ | `tests/unit/scheduler.test.js` |
 | SYS-08 phone rule: 30+ spellings, kinds, display, links; broker lookups unchanged | ✅ | `tests/unit/phone.test.js` |
 | Supabase Data API locked out (RLS everywhere, no API-role grants, also for later tables) | ✅ | `tests/unit/public-api-lockdown.test.js` |
+| NTF-01/02 one channel per alert (chosen, fallback after a failed send, window closed, no credits, website without push), same event once (also concurrent), 2-minute merge into one grouped message, quiet hours held then released, inactive brokers skipped, /app/ URLs only | ✅ | `tests/web/notifications.test.js` |
+| NTF-03 push payload = title/body/url, phones scrubbed, 410 removes the subscription; channel interface contract; Telegram stub | ✅ | `tests/web/notifications.test.js`, `tests/unit/channels.test.js` |
+| NTF-04/05 inbox, 🔔 count, open → read + redirect, isolation between brokers, CSRF; log managers-only and agency-scoped; settings round trip | ✅ | `tests/web/notifications.test.js` |
+| NTF-06/07 credit levels, hints once per level, manager alert at 80%, ceiling notice once then read ticks only, global ceiling, broker cap, sign-in ceiling, usage page = operation_logs, caps form managers-only | ✅ | `tests/web/notifications.test.js` |
 | Runbook lists every env var; manifest names every migration; broker guides present | ✅ | `tests/unit/docs.test.js` |
 | XLS-01…04 (WhatsApp Excel upload), DEL-03…06/08, STATS-01 | ⬜ | — (the web Excel import WEB-14 is covered) |
 

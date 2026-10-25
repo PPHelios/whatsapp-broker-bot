@@ -15,7 +15,14 @@ const AI = require("./lib/ai");
 const Flyer = require("./lib/flyer");
 const Drafts = require("./lib/drafts");
 const Edits = require("./lib/edits");
-const { executeGuardedTurn, reply, replyButtons } = require("./lib/dispatcher");
+const { executeGuardedTurn, reply, replyButtons, setTurnNote } = require("./lib/dispatcher");
+
+/** A photo, or a photo sent as a document (routed into the draft like one). */
+function isPhotoMessage(message) {
+  if (message.type === "image") return true;
+  const doc = message.type === "document" ? message.document : null;
+  return Boolean(doc) && ((doc.mime_type && doc.mime_type.startsWith("image/")) || /\.(jpe?g|png|webp|heic)$/i.test(doc.filename || ""));
+}
 
 // Modular Route Controllers
 const { handleCommand } = require("./routes/commands");
@@ -129,6 +136,12 @@ function createApp({ pool, config = getConfig(), jobs }) {
    */
   async function dispatchMessage(broker, message, ctx) {
     const { lang, pool: poolInstance } = ctx;
+
+    // P11: photos get no message of their own; the next reply in the draft counts them.
+    if (!isPhotoMessage(message)) {
+      const note = await Drafts.photoNote(poolInstance, broker, lang).catch(() => null);
+      if (note) setTurnNote(note.text, note.onDelivered);
+    }
 
     switch (message.type) {
       case "interactive":
