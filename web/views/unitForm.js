@@ -52,7 +52,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     ${input("compound", L(lang, "الكمبوند *", "Compound *"), v.compound, { extra: ' list="places"' })}
     ${input("district", L(lang, "الحي", "District"), v.district)}
     ${input("city", L(lang, "المدينة", "City"), v.city)}
-    ${input("price_value", L(lang, "السعر * (الإيجار الشهري للإيجار)", "Price * (monthly rent for rentals)"), v.price_value, { extra: ' inputmode="decimal" placeholder="8.5 مليون"' })}
+    ${input("price_value", L(lang, "السعر * (الإيجار الشهري للإيجار)", "Price * (monthly rent for rentals)"), v.price_value, { extra: ` inputmode="decimal" placeholder="${L(lang, "8.5 مليون", "8.5M")}"` })}
     ${select("currency", L(lang, "العملة", "Currency"), v.currency, [["", "EGP"], ["USD", "USD"], ["EUR", "EUR"]])}
     ${select("rent_period", L(lang, "الإيجار", "Rent period"), v.rent_period, [["", "—"], ["monthly", L(lang, "شهري", "Monthly")], ["yearly", L(lang, "سنوي", "Yearly")]])}
     ${input("area_value", L(lang, "المساحة م² * (المباني للفيلات)", "Area m² * (BUA for villas)"), v.area_value, { type: "number", extra: ' min="0" step="any"' })}

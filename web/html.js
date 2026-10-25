@@ -43,7 +43,7 @@ const HTMX_CONFIG = { includeIndicatorStyles: false, allowEval: false, allowScri
  * Full page. lang "ar" renders RTL; assets(name) gives the versioned static path.
  * @param {Object} p - { title, lang, body, assets, csrf, broker, nav, head, robots, unread }
  */
-function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, nav = null, head = null, robots = "noindex, nofollow", scripts = true, manifest = true, unread = 0 }) {
+function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, nav = null, head = null, robots = "noindex, nofollow", scripts = true, manifest = true, unread = 0, langSwitch = false }) {
   const en = lang === "en";
   return html`<!doctype html>
 <html lang="${en ? "en" : "ar"}" dir="${en ? "ltr" : "rtl"}">
@@ -64,7 +64,7 @@ ${scripts ? html`<script src="${assets("htmx.min.js")}" defer></script>
 <script src="${assets("app.js")}" defer></script>` : ""}
 </head>
 <body>
-${broker || nav ? topBar({ broker, nav, lang, unread }) : ""}
+${broker || nav || langSwitch ? topBar({ broker, nav, lang, unread }) : ""}
 <main id="main">${body}</main>
 </body>
 </html>`;
@@ -83,6 +83,7 @@ function topBar({ broker, nav, lang, unread = 0 }) {
   const en = lang === "en";
   return html`<header class="top">
   <a class="brand" href="/app/">AqarChat</a>
+  <a class="lang" data-lang-switch href="?lang=${en ? "ar" : "en"}" hreflang="${en ? "ar" : "en"}" lang="${en ? "ar" : "en"}">${en ? "عربي" : "English"}</a>
   ${broker
     ? html`<nav class="nav">${NAV.map(
         (n) => html`<a href="${n.href}"${n.key === nav ? raw(' aria-current="page"') : ""}>${en ? n.en : n.ar}</a>`

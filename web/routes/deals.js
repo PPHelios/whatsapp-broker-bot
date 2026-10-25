@@ -127,7 +127,7 @@ ${notice ? html`<div class="card notice bad" role="alert">⚠️ ${notice}</div>
   ${lead ? html`<p class="muted">👤 ${Card.displayName(lead, lang)}</p>` : ""}
   <label>${L(lang, "كود الوحدة", "Unit code")}<input name="unit" dir="ltr" value="${v.unit}"></label>
   <label>${L(lang, "النوع", "Type")}<select name="deal_type"><option value="">${L(lang, "زي الوحدة", "As the unit")}</option><option value="sale"${v.deal_type === "sale" ? html` selected` : ""}>${L(lang, "بيع", "Sale")}</option><option value="rent"${v.deal_type === "rent" ? html` selected` : ""}>${L(lang, "إيجار", "Rent")}</option></select></label>
-  <label>${L(lang, "السعر (فاضي = سعر الوحدة)", "Price (empty = the unit's price)")}<input name="price" inputmode="decimal" value="${v.price || ""}" placeholder="8.5 مليون"></label>
+  <label>${L(lang, "السعر (فاضي = سعر الوحدة)", "Price (empty = the unit's price)")}<input name="price" inputmode="decimal" value="${v.price || ""}" placeholder="${L(lang, "8.5 مليون", "8.5M")}"></label>
   <label>${L(lang, "العمولة: نسبة أو مبلغ", "Commission: a % or an amount")}<input name="commission" required value="${v.commission || ""}" placeholder="2% / 170000"></label>
   <fieldset><legend>${L(lang, "وسيط خارجي (اختياري)", "External co-broker (optional)")}</legend>
     <label>${L(lang, "نصيبه: نسبة من العمولة أو مبلغ", "Their share: a % of the commission or an amount")}<input name="external" value="${v.external || ""}" placeholder="10% / 20000"></label>
