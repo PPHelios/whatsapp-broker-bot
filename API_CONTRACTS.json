@@ -153,6 +153,7 @@
     },
     "lib/supabase.js": {
       "supabase": "Object",
+      "downloadListingImage": ["url"],
       "uploadListingImage": ["agencyId", "storagePath", "buffer"],
       "uploadFlyerImage": ["agencyId", "storagePath", "buffer"],
       "deleteStorageFiles": ["paths"]
@@ -173,6 +174,7 @@
       "notifyTelegram": ["broker", "text", "params"],
       "notifyPreferred": ["broker", "text", "opts"],
       "telegramChatOf": ["pool", "broker"],
+      "replyForClient": ["broker", "text", "params"],
       "markReplied": [],
       "allowSilentDrop": ["reason"],
       "executeGuardedTurn": ["broker", "message", "handlerFn", "params"]
@@ -394,6 +396,7 @@
       "seedVocabulary": ["client"]
     },
     "lib/links.js": {
+      "waRedirectUrl": ["token"],
       "withQuery": ["path", "query"],
       "siteOrigin": [],
       "appUrl": ["path", "query"],
@@ -930,11 +933,15 @@
       "findBroker": ["pool", "userId"],
       "encodeCallback": ["pool", "id"],
       "decodeCallback": ["pool", "data"],
-      "purgeCallbacks": ["pool"]
+      "purgeCallbacks": ["pool"],
+      "storeWaLink": ["pool", "url"],
+      "waLinkOf": ["pool", "token"]
     },
     "lib/tgSend.js": {
       "send": ["broker", "op", "body", "params"],
-      "parseMessageRef": ["id"]
+      "parseMessageRef": ["id"],
+      "waButtonUrl": ["pool", "text", "phone", "ready"],
+      "MAX_BUTTON_URL": "Number"
     },
     "lib/media.js": {
       "download": ["id", "mimeHint"]

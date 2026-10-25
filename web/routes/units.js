@@ -7,6 +7,7 @@ const Describe = require("../../domain/describe");
 const Share = require("../../lib/shareLinks");
 const LeadRequests = require("../../services/leadRequests");
 const Card = require("../../domain/leadCard");
+const Storage = require("../../lib/supabase");
 const { html } = require("../html");
 const { resultItem, factList } = require("../views/units");
 
@@ -106,6 +107,49 @@ ${rows.length
     return page(req, res, { title: listing.code, nav: "units", body: html`<h1>${listing.code}</h1>${await shareSection(broker, listing, lang, { ...fresh, lang: linkLang })}<p><a href="/app/units/${encodeURIComponent(listing.code)}">${L(lang, "رجوع للوحدة", "Back to the unit")}</a></p>` });
   });
 
+  // Photos to a client in one tap: the browser's share sheet (navigator.share with files) opens WhatsApp with the
+  // pictures; Telegram can't forward several photos without its own captions and timestamps.
+  web.get("/units/:code/share-media", async (req, res, next) => {
+    const lang = langOf(req);
+    const { broker } = req.session;
+    const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!listing || !Authz.canView(broker, listing) || listing.status !== "active") return next();
+    const images = (await imagesOf(pool, listing)).slice(0, 10);
+    const code = encodeURIComponent(listing.code);
+    const text = Describe.clientCopy(listing, broker, { lang });
+    return page(req, res, {
+      title: listing.code,
+      nav: "units",
+      body: html`<h1>📤 ${L(lang, `صور ${listing.code} للعميل`, `${listing.code} photos for a client`)}</h1>
+<section class="card stack" id="share-media" data-share-text="${text}">
+  ${images.length
+    ? html`<div class="photos">${images.map((i) => html`<img src="/app/units/${code}/photos/${i.id}" alt="" loading="lazy" data-share-photo>`)}</div>
+  <button type="button" data-share-media>📤 ${L(lang, `ابعت ${images.length} صور (واتساب أو أي تطبيق)`, `Send ${images.length} photos (WhatsApp or any app)`)}</button>
+  <p class="muted" data-share-status></p>
+  <p class="muted">${L(lang, "لو الزرار مش شغال على جهازك: اضغط على الصورة مطولاً واحفظها، أو ابعت رابط الوحدة.", "If the button doesn't work on this device: long-press a photo to save it, or send the unit link.")}</p>`
+    : html`<p class="muted">${L(lang, "مفيش صور للوحدة دي.", "This unit has no photos.")}</p>`}
+</section>
+<p><a href="/app/units/${code}">${L(lang, "رجوع للوحدة", "Back to the unit")}</a></p>`
+    });
+  });
+
+  // One of the unit's photos served same-origin (the share page turns them into files for the share sheet).
+  web.get("/units/:code/photos/:id", async (req, res, next) => {
+    const { broker } = req.session;
+    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return next();
+    const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!listing || !Authz.canView(broker, listing)) return next();
+    const { rows } = await pool.query("SELECT url FROM listing_images WHERE id = $1 AND listing_id = $2 AND agency_id = $3", [
+      req.params.id,
+      listing.id,
+      listing.agency_id
+    ]);
+    const file = rows[0] ? await Storage.downloadListingImage(rows[0].url) : null;
+    if (!file) return next();
+    res.set({ "Content-Type": /^image\/(jpeg|png|webp)$/.test(file.mimeType) ? file.mimeType : "image/jpeg", "Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff" });
+    return res.send(file.buffer);
+  });
+
   web.get("/units/:code", async (req, res, next) => {
     const lang = langOf(req);
     const { broker } = req.session;
@@ -124,6 +168,7 @@ ${rows.length
   ${images.length ? html`<div class="photos">${images.map((i) => html`<img src="${i.url}" alt="" loading="lazy">`)}</div>` : ""}
   <div class="row" id="unit-actions">
     ${Authz.canEdit(broker, listing) ? html`<a class="btn" href="/app/units/${encodeURIComponent(listing.code)}/edit">✏️ ${L(lang, "تعديل", "Edit")}</a>` : ""}
+    ${images.length && listing.status === "active" ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(listing.code)}/share-media">📤 ${L(lang, "ابعت الصور للعميل", "Send photos to a client")}</a>` : ""}
   </div>
 </article>
 ${listing.status === "active" ? await wantedSection(pool, broker, listing, lang, req.session.csrf) : ""}

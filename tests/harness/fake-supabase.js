@@ -18,6 +18,11 @@ module.exports = {
     objects.set(pathOf(storagePath), buffer);
     return BASE + pathOf(storagePath);
   },
+  downloadListingImage: async (url) => {
+    if (typeof url !== "string" || !url.startsWith(BASE)) return null;
+    const buffer = objects.get(pathOf(url));
+    return buffer ? { buffer, mimeType: "image/jpeg" } : null;
+  },
   deleteStorageFiles: async (paths = []) => {
     for (const p of paths) objects.delete(pathOf(p));
     return true;

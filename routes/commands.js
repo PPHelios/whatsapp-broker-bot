@@ -10,6 +10,7 @@ const ShareLinks = require("../lib/shareLinks");
 const { cardButtons } = require("../lib/buttons");
 const {
   reply,
+  replyForClient,
   replyButtons,
   replyImage,
   replyDocument
@@ -357,7 +358,7 @@ async function handleCommand(broker, text, ctx) {
             isEn ? "en" : "ar",
             T.formatClientListingText(listing, broker, isEn ? "en" : "ar")
           );
-          await reply(broker, clientCopy);
+          await replyForClient(broker, clientCopy, { lang: broker.preferred_lang === "en" ? "en" : "ar" });
           return true;
         }
         if (/(?:layout|مخطط|collateral|ملفات)/i.test(raw)) {
@@ -919,7 +920,7 @@ async function handleCommand(broker, text, ctx) {
       isEn ? "en" : "ar",
       T.formatClientListingText(listing, broker, isEn ? "en" : "ar")
     );
-    await reply(broker, clientCopy);
+    await replyForClient(broker, clientCopy, { lang: broker.preferred_lang === "en" ? "en" : "ar" });
 
     logCommandOp(pool, {
       agency_id: broker.agency_id,

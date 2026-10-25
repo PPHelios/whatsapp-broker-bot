@@ -367,6 +367,13 @@ function createApp({ pool, config = getConfig(), jobs }) {
     await handleWebhookBody(req.body);
   });
 
+  // "📤 Send on WhatsApp" from Telegram when the wa.me link is too long for a button: a redirect to the stored link.
+  app.get("/go/wa/:token", async (req, res) => {
+    const url = await TgLink.waLinkOf(pool, req.params.token);
+    res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex" });
+    return url ? res.redirect(302, url) : res.status(404).send("Not found");
+  });
+
   /**
    * Telegram webhook (Release 3T): only Telegram knows the secret_token we gave setWebhook, so a request without the
    * matching header is refused (fail closed: without a configured secret nothing is accepted).

@@ -59,4 +59,30 @@
       });
     }).catch(function () { say("Could not turn on."); });
   });
+  // Unit photos to a client (/app/units/<code>/share-media): files through the share sheet, one tap to WhatsApp.
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest ? e.target.closest("[data-share-media]") : null;
+    if (!btn) return;
+    var box = document.getElementById("share-media");
+    var status = box && box.querySelector("[data-share-status]");
+    var say = function (t) { if (status) status.textContent = t; };
+    var imgs = box ? box.querySelectorAll("[data-share-photo]") : [];
+    btn.disabled = true;
+    Promise.all(Array.prototype.map.call(imgs, function (img, i) {
+      return fetch(img.getAttribute("src"), { credentials: "same-origin" })
+        .then(function (r) { return r.ok ? r.blob() : null; })
+        .then(function (b) { return b ? new File([b], "photo-" + (i + 1) + ".jpg", { type: b.type || "image/jpeg" }) : null; });
+    })).then(function (files) {
+      files = files.filter(Boolean);
+      var data = { files: files, text: box.getAttribute("data-share-text") || "" };
+      if (!files.length) return say("No photos could be loaded.");
+      if (!navigator.canShare || !navigator.canShare({ files: files })) return say("This browser can't share photos. Long-press a photo to save it.");
+      return navigator.share(data).catch(function (err) {
+        if (err && err.name === "AbortError") return;
+        // Some apps refuse text with files: try the photos alone.
+        return navigator.share({ files: files });
+      });
+    }).catch(function () { say("Sharing didn't work here. Long-press a photo to save it."); })
+      .then(function () { btn.disabled = false; });
+  });
 })();

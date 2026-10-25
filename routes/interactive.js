@@ -8,6 +8,7 @@ const Drafts = require("../lib/drafts");
 const financials = require("../lib/financials");
 const {
   reply,
+  replyForClient,
   replyButtons,
   replyList,
   replyDocument,
@@ -318,7 +319,7 @@ async function handleInteractive(broker, message, ctx) {
 
     const listing = rows[0];
     const copyText = await ShareLinks.clientCopyWithLink(pool, broker, listing, lang, T.formatClientListingText(listing, broker, lang));
-    await reply(broker, copyText);
+    await replyForClient(broker, copyText, { lang });
     return "done";
   }
 

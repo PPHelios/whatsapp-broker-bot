@@ -199,6 +199,62 @@ describe("notifications on Telegram (step 2)", () => {
   });
 });
 
+describe("getting things to clients (step 3)", () => {
+  const TgSend = require("../../lib/tgSend");
+
+  test("client copy on Telegram carries a Send on WhatsApp button with the text; WhatsApp brokers get plain text", async () => {
+    await h.insertListing({ code: "HP-201" });
+    await h.tgLink("broker");
+    const out = await h.tgTap("broker", "client:HP-201");
+    const msg = out.find((e) => e.method === "sendMessage" && e.keyboard);
+    const btn = msg.keyboard[0][0];
+    expect(btn.text).toMatch(/واتساب|WhatsApp/);
+    expect(btn.url).toMatch(/^https:\/\/wa\.me\/\?text=/);
+    expect(decodeURIComponent(btn.url.split("text=")[1])).toMatch(/HP-201/);
+    expect(h.WA.outbox).toEqual([]);
+
+    await h.query("UPDATE brokers SET telegram_user_id = NULL, telegram_chat_id = NULL");
+    const wa = await h.tap("broker", "client:HP-201");
+    expect(wa.some((r) => r.type === "text" && /HP-201/.test(r.text))).toBe(true);
+  });
+
+  test("a wa.me link too long for a button goes through /go/wa/<token>; unknown tokens are 404", async () => {
+    const short = await TgSend.waButtonUrl(h.pool, "hello", "01000000009");
+    expect(short).toBe("https://wa.me/201000000009?text=hello");
+    const long = await TgSend.waButtonUrl(h.pool, "ش".repeat(1500));
+    const m = long.match(/\/go\/wa\/([A-Za-z0-9_-]{16})$/);
+    expect(m).not.toBeNull();
+    const r = await request(h.app.app).get(`/go/wa/${m[1]}`);
+    expect(r.status).toBe(302);
+    expect(r.headers.location).toMatch(/^https:\/\/wa\.me\/\?text=/);
+    expect((await request(h.app.app).get("/go/wa/AAAAAAAAAAAAAAAA")).status).toBe(404);
+    expect((await request(h.app.app).get("/go/wa/../x")).status).toBe(404);
+  });
+
+  test("the photo share page serves the unit's photos same-origin, for that agency only", async () => {
+    const { signIn } = require("../harness/web");
+    const l = await h.insertListing({ code: "HP-301" });
+    h.Storage.objects.set("u/a.jpg", Buffer.from("JPEGBYTES"));
+    const [img] = await h.query("INSERT INTO listing_images (listing_id, agency_id, position, url) VALUES ($1, $2, 0, $3) RETURNING id", [l.id, h.AGENCY_A, `${h.Storage.BASE}u/a.jpg`]);
+    const [bad] = await h.query("INSERT INTO listing_images (listing_id, agency_id, position, url) VALUES ($1, $2, 1, 'https://evil.example/x.jpg') RETURNING id", [l.id, h.AGENCY_A]);
+    const me = await signIn(h, "broker");
+    const unit = await me.agent.get("/app/units/HP-301");
+    expect(unit.text).toMatch(/href="\/app\/units\/HP-301\/share-media"/);
+    const page = await me.agent.get("/app/units/HP-301/share-media");
+    expect(page.status).toBe(200);
+    expect(page.text).toContain(`src="/app/units/HP-301/photos/${img.id}"`);
+    expect(page.text).toMatch(/data-share-media/);
+    const photo = await me.agent.get(`/app/units/HP-301/photos/${img.id}`);
+    expect(photo.status).toBe(200);
+    expect(photo.headers["content-type"]).toMatch(/image\/jpeg/);
+    expect(photo.body.toString()).toBe("JPEGBYTES");
+    expect((await me.agent.get(`/app/units/HP-301/photos/${bad.id}`)).status).toBe(404);
+    const other = await signIn(h, "rival");
+    expect((await other.agent.get(`/app/units/HP-301/photos/${img.id}`)).status).toBe(404);
+    expect((await other.agent.get("/app/units/HP-301/share-media")).status).toBe(404);
+  });
+});
+
 describe("pieces", () => {
   test("button ids over 64 bytes get a short stored token that decodes back", async () => {
     const long = `ld:undoset:${"1234567890-".repeat(8)}`;
