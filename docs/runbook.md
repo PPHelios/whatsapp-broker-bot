@@ -67,9 +67,9 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 
 ## 4. Onboarding an agency
 
-1. Copy `docs/pilot/agency.example.json`, fill the agency (name, optional `slug` for public links — lower-case letters, digits and dashes — colours, logo `https://` URL) and brokers (name, Egyptian mobile, role `broker`/`admin`/`owner`/`manager`, `ar`/`en`). At least one admin, owner or manager.
-2. `npm run onboard -- my-agency.json --dry-run`, then without `--dry-run`. Re-running is safe (agency by name, brokers by phone). It prints the slug and the web app address.
-3. Each broker must message the bot once (e.g. «مساعدة») before it can reply. Send them `docs/pilot/broker-howto-ar.md` and then `docs/pilot/web-howto-ar.md`.
+1. Copy `docs/pilot/agency.example.json`, fill the agency (name, optional `slug` for public links — lower-case letters, digits and dashes — colours, logo `https://` URL) and brokers (name, Egyptian mobile, role `broker`/`admin`/`owner`/`manager`, `lang` `ar`/`en`). At least one admin, owner or manager. Set `bot_phone` (or `BOT_PHONE`) to the bot's WhatsApp number so `onboard` prints start links. The file's `_notes` explain each field.
+2. `npm run onboard -- my-agency.json --dry-run`, then without `--dry-run`. Re-running is safe (agency by name, brokers by phone). It prints the slug, the web app address and each broker's **start link** (`wa.me/<bot>?text=مساعدة`, or `help` for English brokers).
+3. Each broker must message the bot once before it can reply: send them their start link (one tap, then send). Then the guides in their language: `docs/pilot/broker-howto-ar.md` and `web-howto-ar.md`, or `broker-howto-en.md` and `web-howto-en.md`.
 4. Deactivating a broker: `npm run onboard -- --deactivate my-agency.json 0101…` — the bot stops answering them, their web sessions end at once, their leads go to the unassigned pool and every manager gets one "N leads to reassign" notification (P6). Don't deactivate with a bare `UPDATE brokers SET is_active = false`: their leads would stay with nobody.
 
 ## 5. Rotating secrets

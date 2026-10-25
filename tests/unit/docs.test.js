@@ -35,8 +35,10 @@ test("ARCHITECTURE_MANIFEST.md names every migration", () => {
 test("the broker guides and the runbook exist and point at each other", () => {
   expect(read("docs/pilot/broker-howto-ar.md")).toMatch(/دليل الموقع/);
   expect(read("docs/pilot/web-howto-ar.md")).toMatch(/\*دخول\*/);
+  expect(read("docs/pilot/broker-howto-en.md")).toMatch(/web-howto-en\.md/);
+  expect(read("docs/pilot/web-howto-en.md")).toMatch(/\*login\*/);
   const runbook = read("docs/runbook.md");
-  for (const s of ["agency_outbound_daily", "operation_logs", "npm run migrate", "npm run onboard", "render.yaml", "Rotating secrets", "web-howto-ar.md"]) {
+  for (const s of ["agency_outbound_daily", "operation_logs", "npm run migrate", "npm run onboard", "render.yaml", "Rotating secrets", "web-howto-ar.md", "broker-howto-en.md", "start link"]) {
     expect([s, runbook.includes(s)]).toEqual([s, true]);
   }
 });

@@ -224,7 +224,10 @@
       "ROLES": "Array",
       "normalizeEgyptMobile": ["raw"],
       "validate": ["input"],
-      "onboard": ["pool", "input"]
+      "onboard": ["pool", "input"],
+      "botDigits": ["raw"],
+      "startLink": ["botPhone", "lang"],
+      "startLines": ["plan", "botPhone"]
     },
     "lib/authz.js": {
       "MANAGER_ROLES": "Array",

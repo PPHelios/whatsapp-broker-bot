@@ -28,6 +28,16 @@ async function deactivate(file, phone) {
   }
 }
 
+function printStartLinks(input, plan) {
+  const lines = Onboarding.startLines(plan, input.bot_phone || process.env.BOT_PHONE);
+  if (!lines) {
+    console.log("\nNo start links: set bot_phone in the file or BOT_PHONE (the bot's WhatsApp number) to print them.");
+    return;
+  }
+  console.log("\nStart links (send each broker theirs; one tap opens the chat with the first message typed in):");
+  for (const l of lines) console.log(l);
+}
+
 async function main() {
   if (process.argv[2] === "--deactivate") {
     if (!process.argv[3] || !process.argv[4]) {
@@ -50,6 +60,7 @@ async function main() {
   console.log(`Agency: ${input.agency.name}`);
   for (const b of plan) console.log(`  ${b.role.padEnd(8)} ${b.phone}  ${b.name} (${b.lang})`);
   if (process.argv.includes("--dry-run")) {
+    printStartLinks(input, plan);
     console.log("\nDry run: nothing written.");
     return;
   }
@@ -60,7 +71,9 @@ async function main() {
     const res = await Onboarding.onboard(pool, input);
     console.log(`\nAgency id ${res.agencyId} (slug ${res.slug}): ${res.created.length} broker(s) added, ${res.updated.length} updated.`);
     console.log(`Broker web app: ${Links.appUrl("/")}`);
-    console.log("Next: send each broker the how-to in docs/pilot/broker-howto-ar.md (they must message the bot first).");
+    printStartLinks(input, plan);
+    console.log("\nNext: send each broker the guides in their language (docs/pilot/broker-howto-ar.md + web-howto-ar.md, or the -en versions).");
+    console.log("A broker must message the bot once (the start link does it) before the bot can write to them.");
   } finally {
     await pool.end();
   }
