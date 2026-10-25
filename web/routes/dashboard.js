@@ -29,6 +29,7 @@ const notFound = (req, res, page) =>
 function agencyPage(d, lang) {
   const tile = (label, value, attr) => html`<div class="card tile" data-kpi="${attr}"><div class="muted">${label}</div><strong>${value}</strong></div>`;
   return html`<h1>📈 ${L(lang, "لوحة الوكالة", "Agency dashboard")}</h1>
+<p><a class="btn secondary" href="/app/sources">📣 ${L(lang, "مصادر العملاء وتكلفة الإعلانات", "Lead sources and ad cost")}</a></p>
 <nav class="row" aria-label="${L(lang, "الفترة", "Period")}">${Dash.PERIODS.map(
     (p) => html`<a class="btn ${p === d.days ? "" : "secondary"}" href="/app/dashboard?days=${p}"${p === d.days ? html` aria-current="page"` : ""}>${L(lang, `${p} يوم`, `${p} days`)}</a>`
   )}</nav>

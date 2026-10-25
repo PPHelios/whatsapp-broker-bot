@@ -410,6 +410,7 @@
       "seedVocabulary": ["client"]
     },
     "lib/links.js": {
+      "viewingUrl": ["token"],
       "waRedirectUrl": ["token"],
       "guideUrl": ["lang"],
       "healthUrl": [],
@@ -1145,6 +1146,40 @@
       "openExport": ["params"],
       "storePhotos": ["pool", "broker", "importId", "posts", "entries"],
       "postsFromExport": ["pool", "broker", "importId", "source", "params"]
+    },
+    "services/viewings.js": {
+      "OPEN": "Array",
+      "whenLabel": ["at", "lang"],
+      "unitLabel": ["listing", "lang"],
+      "latestFor": ["db", "agencyId", "leadId"],
+      "schedule": ["pool", "actor", "leadKey", "params"],
+      "byToken": ["db", "token"],
+      "isLive": ["v", "now"],
+      "respond": ["pool", "token", "params"],
+      "calendarEntry": ["v", "params"],
+      "ics": ["v", "entry", "params"],
+      "googleCalendarUrl": ["entry"]
+    },
+    "web/routes/viewing.js": {
+      "register": ["web", "params"]
+    },
+    "services/leadSources.js": {
+      "NONE": "String",
+      "monthOf": ["text", "now"],
+      "monthRange": ["month"],
+      "report": ["pool", "actor", "params"],
+      "saveSpend": ["pool", "actor", "params"]
+    },
+    "services/priceInsights.js": {
+      "MIN_UNITS": "Number",
+      "byPlace": ["db", "agencyId", "params"],
+      "forUnit": ["db", "listing", "params"]
+    },
+    "web/routes/sources.js": {
+      "register": ["web", "params"]
+    },
+    "web/routes/insights.js": {
+      "register": ["web", "params"]
     }
   },
   "invariant_variable_names": {

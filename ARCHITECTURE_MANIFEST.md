@@ -44,6 +44,8 @@
   | `024_demo_requests.sql` | `demo_requests`: "Try it with your agency" requests from the landing page (name, agency, phone, team size); listed on /app/owner, the owner alerted on Telegram |
   | `025_plans_billing.sql` | plans and billing: `agencies.plan`, `paid_until`, `trial_ends_at`, `pilot` (every existing agency), `approval` (self sign-ups wait for the owner), `signed_up_at`; `app_settings` (sign-up switch, where to pay); `payments` (manual InstaPay/bank payments with a reference, confirmed by the owner) |
   | `026_photo_hash_chat_imports.sql` | duplicate-photo flag and chat-export zips: index on `listing_images.phash` (the dHash, `services/photoHash.js`); the private `chat-imports` Storage bucket (200 MB) when run on Supabase |
+  | `027_viewings.sql` | `viewings`: a viewing set on a lead (time, unit, place, client language), the hash of the client's link token, status (proposed, confirmed, reschedule, cancelled) and the client's suggested time and note; deleted with the lead |
+  | `028_ad_spend.sql` | `ad_spend`: what an agency paid per lead source and Cairo month (managers type it on `/app/sources`), for cost per lead and per deal |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
 * **Graceful Termination & Drain Protocol:** On `SIGTERM` or `SIGINT`, the service enters a draining state:

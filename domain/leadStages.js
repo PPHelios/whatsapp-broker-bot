@@ -36,6 +36,9 @@ const FOLLOW_UP_KINDS = ["call", "viewing"];
 const SOURCES = [
   ["WhatsApp", "واتساب"],
   ["Facebook", "فيسبوك"],
+  ["Instagram", "إنستجرام"],
+  ["TikTok", "تيك توك"],
+  ["Google", "جوجل"],
   ["OLX-Dubizzle", "أوليكس-دوبيزل"],
   ["Property Finder", "بروبرتي فايندر"],
   ["Referral", "ترشيح"],

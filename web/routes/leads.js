@@ -8,6 +8,7 @@
 const Leads = require("../../services/leads");
 const LeadRequests = require("../../services/leadRequests");
 const Privacy = require("../../services/privacy");
+const Viewings = require("../../services/viewings");
 const AI = require("../../lib/ai");
 const RateLimit = require("../../lib/rateLimit");
 const Store = require("../../lib/listingStore");
@@ -32,6 +33,37 @@ const TABS = ["all", ...Stages.STAGES, "due_today", "overdue", "no_next_step"];
 const upload = uploads([VOICE]);
 
 Session.allowMultipart(/^\/leads\/extract$/);
+
+const VIEWING_STATUS = {
+  proposed: ["⏳ اتبعتت للعميل، مستنية تأكيده", "⏳ Sent to the client, waiting for confirmation"],
+  confirmed: ["✅ العميل أكّد", "✅ The client confirmed"],
+  reschedule: ["🔁 العميل عايز ميعاد تاني", "🔁 The client asks for another time"],
+  cancelled: ["اتلغت (اتعمل ميعاد أحدث)", "Replaced by a newer viewing"]
+};
+
+/** The lead's viewing: its status and the client's answer, calendar links, and the form that sends a (new) one. */
+function viewingSection({ lead, viewing: v, unit, path, hidden, lang }) {
+  const open = v && Viewings.OPEN.includes(v.status);
+  const entry = open ? Viewings.calendarEntry(v, { lang, forBroker: true, leadLabel: `${Card.refLabel(lead.ref)} · ${Card.displayName(lead, lang)}` }) : null;
+  const at = open && v.status === "reschedule" && v.client_proposed_at ? v.client_proposed_at : open ? v.starts_at : lead.follow_up_kind === "viewing" && lead.follow_up_status === "open" ? lead.next_follow_up_at : null;
+  return html`<section class="card stack" id="viewing"><h2>🏠 ${L(lang, "المعاينة", "Viewing")}</h2>
+  ${v
+    ? html`<div data-viewing-status="${v.status}">
+    <p><strong>${Viewings.whenLabel(v.starts_at, lang)}</strong>${v.place ? ` · 📍 ${v.place}` : ""}${v.code ? ` · ${v.code}` : ""}</p>
+    <p>${VIEWING_STATUS[v.status][lang === "en" ? 1 : 0]}</p>
+    ${v.status === "reschedule" && v.client_proposed_at ? html`<p>${L(lang, "الميعاد اللي اقترحه", "Suggested time")}: <strong>${Viewings.whenLabel(v.client_proposed_at, lang)}</strong></p>` : ""}
+    ${v.status === "reschedule" && v.client_note ? html`<p>💬 ${v.client_note}</p>` : ""}
+    ${open ? html`<div class="row"><a class="btn secondary" href="${path}/viewing.ics">📆 ${L(lang, "أضف لتقويمي", "Add to my calendar")}</a><a class="btn secondary" href="${Viewings.googleCalendarUrl(entry)}" target="_blank" rel="noopener">Google Calendar</a></div>` : ""}
+  </div>`
+    : html`<p class="muted">${L(lang, "حدد ميعاد ووحدة ومكان، وهيتفتح واتساب على شات العميل برسالة فيها لينك يأكد منه أو يختار ميعاد تاني.", "Set a time, unit and place; WhatsApp opens on the client's chat with a link to confirm or pick another time.")}</p>`}
+  <form method="post" action="${path}/viewing" class="grid">${hidden}
+    <label>${L(lang, "إمتى (بتوقيت القاهرة)", "When (Cairo time)")}<input type="datetime-local" name="at" required value="${at ? Stages.toCairoLocal(at) : ""}"></label>
+    <label>${L(lang, "كود الوحدة", "Unit code")}<input name="unit" dir="ltr" value="${(open && v.code) || unit?.code || ""}"></label>
+    <label>${L(lang, "المكان", "Place")}<input name="place" maxlength="200" value="${(open && v.place) || ""}" placeholder="${L(lang, "مثلاً: بوابة 3، هايد بارك", "e.g. Gate 3, Hyde Park")}"></label>
+    <button type="submit">📲 ${v ? L(lang, "ابعت ميعاد جديد للعميل", "Send a new time to the client") : L(lang, "ابعت الميعاد للعميل على واتساب", "Send the time to the client on WhatsApp")}</button>
+  </form>
+</section>`;
+}
 
 async function activeBrokers(pool, agencyId) {
   const { rows } = await pool.query("SELECT id, name FROM brokers WHERE agency_id = $1 AND is_active ORDER BY name", [agencyId]);
@@ -262,6 +294,7 @@ ${rows.length
     const requests = await LeadRequests.listRequests(pool, broker, lead);
     for (const r of requests) r.matches = await LeadRequests.currentMatches(pool, broker.agency_id, r.filters, { limit: 3 });
     const brokers = manager ? await activeBrokers(pool, broker.agency_id) : [];
+    const viewing = await Viewings.latestFor(pool, broker.agency_id, lead.id);
     const unit = lead.follow_up_listing_id ? (await pool.query("SELECT code FROM listings WHERE id = $1 AND agency_id = $2", [lead.follow_up_listing_id, broker.agency_id])).rows[0] : null;
     const path = V.leadPath(lead);
     const hidden = html`<input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="version" value="${lead.version}">`;
@@ -295,6 +328,7 @@ ${V.leadHeader(lead, lang)}
   ${lead.follow_up_status === "open" ? html`<form method="post" action="${path}/follow-up/done">${hidden}<button type="submit" class="secondary">✔️ ${L(lang, "المتابعة خلصت", "Follow-up done")}</button></form>
   <form method="post" action="${path}/follow-up/postpone">${hidden}<button type="submit" class="secondary">📅 ${L(lang, "أجّل يوم", "Postpone a day")}</button></form>` : ""}
 </section>
+${viewingSection({ lead, viewing, unit, path, hidden, lang })}
 ${manager
   ? html`<section class="card" id="privacy"><h2>🔒 ${L(lang, "بيانات العميل (للمدير)", "Client data (managers)")}</h2>
   <p><a class="btn secondary" href="${path}/export">📦 ${L(lang, "تصدير بياناته (zip)", "Export their data (zip)")}</a></p>
@@ -362,7 +396,8 @@ ${V.bottomBar(lead, lang, broker.name)}`
       assigned: L(lang, "✅ اتسلم.", "✅ Assigned."),
       undone: L(lang, "↩️ اتلغى.", "↩️ Undone."),
       request: L(lang, "🔎 الطلب اتحفظ؛ هتتبلغ بالوحدات الجديدة اللي تناسبه.", "🔎 Request saved; you'll hear about new units that fit."),
-      request_removed: L(lang, "🗑️ الطلب اتمسح.", "🗑️ Request removed.")
+      request_removed: L(lang, "🗑️ الطلب اتمسح.", "🗑️ Request removed."),
+      viewing: L(lang, "✅ المعاينة اتحفظت. الرقم ده أرضي، ابعت اللينك بنفسك.", "✅ Viewing saved. This number is a landline; send the link yourself.")
     };
     const key = req.query.saved ? "saved" : req.query.known ? "known" : req.query.done;
     return leadPage(req, res, lead, { notice: done[key] || null, undoEvent: /^\d+$/.test(String(req.query.undo || "")) ? req.query.undo : null });
@@ -377,6 +412,7 @@ ${V.bottomBar(lead, lang, broker.name)}`
       if (!lead) return;
       const version = req.body.version === undefined || req.body.version === "" ? null : Number(req.body.version);
       const r = await run(req, lead, version);
+      if (r.ok && r.redirect) return res.redirect(303, r.redirect);
       if (r.ok || r.unchanged) return res.redirect(303, `${V.leadPath(r.lead || lead)}?done=${doneKey}${r.eventId ? `&undo=${r.eventId}` : ""}`);
       const fresh = (await Leads.getLead(pool, req.session.broker, lead.id)) || lead;
       if (r.conflict) {
@@ -386,6 +422,7 @@ ${V.bottomBar(lead, lang, broker.name)}`
       const why = {
         lost_reason_required: L(lang, "اكتب سبب الضياع.", "Type why it was lost."),
         follow_up_time: L(lang, "اختار تاريخ ووقت.", "Choose a date and time."),
+        past: L(lang, "الميعاد ده عدّى؛ اختار ميعاد جاي.", "That time has passed; choose a future one."),
         unit_not_found: L(lang, "كود الوحدة مش موجود.", "Unit code not found."),
         note_empty: L(lang, "الملاحظة فاضية.", "The note is empty."),
         no_open_follow_up: L(lang, "مفيش متابعة مفتوحة.", "No open follow-up."),
@@ -419,6 +456,28 @@ ${V.bottomBar(lead, lang, broker.name)}`
     },
     "follow_up"
   );
+  write(
+    "viewing",
+    async (req, lead, version) => {
+      const code = String(req.body.unit || "").trim();
+      const listing = code ? await Store.findByCode(pool, actor(req).agency_id, code) : null;
+      if (code && !listing) return { error: "unit_not_found" };
+      const r = await Viewings.schedule(pool, actor(req), lead.id, { at: Stages.fromCairoLocal(req.body.at), listing, place: req.body.place, version, lang: langOf(req) });
+      // WhatsApp opens on the client's chat with the message and the confirm link ready.
+      return r.ok ? { ...r, redirect: r.wa || `${V.leadPath(r.lead || lead)}?done=viewing#viewing` } : r;
+    },
+    "viewing"
+  );
+  web.get("/leads/:ref/viewing.ics", async (req, res, next) => {
+    const lead = await loadOr404(req, next);
+    if (!lead) return;
+    const v = await Viewings.latestFor(pool, req.session.broker.agency_id, lead.id);
+    if (!v || !Viewings.OPEN.includes(v.status)) return next();
+    const entry = Viewings.calendarEntry(v, { lang: langOf(req), forBroker: true, leadLabel: `${Card.refLabel(lead.ref)} · ${Card.displayName(lead, langOf(req))}` });
+    res.type("text/calendar; charset=utf-8");
+    res.set("Content-Disposition", 'attachment; filename="viewing.ics"');
+    return res.send(Viewings.ics(v, entry));
+  });
   write("follow-up/done", (req, lead, version) => Leads.completeFollowUp(pool, actor(req), lead.id, { version }), "follow_up_done");
   write("follow-up/postpone", (req, lead, version) => Leads.postponeFollowUp(pool, actor(req), lead.id, { days: 1, version }), "follow_up");
   write("note", (req, lead, version) => Leads.addNote(pool, actor(req), lead.id, req.body.text, { version }), "note");
