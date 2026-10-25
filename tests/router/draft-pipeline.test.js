@@ -51,7 +51,8 @@ describe("P13: the review card flags a unit already listed", () => {
     await h.text("broker", "اضافة");
     await h.text("broker", "شقة في ميفيدا 200 متر 3 غرف 10 مليون");
     answerExtraction(extraction());
-    const review = await h.text("broker", "تم");
+    const [working, ...review] = await h.text("broker", "تم");
+    expect(working.text).toMatch(/بنراجع بيانات الوحدة/); // the working-on-it line, then the one card
     expect(review).toHaveLength(1);
     expect(textOf(review)).toMatch(/شكلها نفس الوحدة MV-OLD[\s\S]*\/app\/units\/MV-OLD/);
     expect(review[0].buttons.find((b) => b.id === "draft_confirm").title).toBe("احفظ برضه ✅");

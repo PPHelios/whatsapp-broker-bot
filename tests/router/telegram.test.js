@@ -417,13 +417,19 @@ describe("repeated taps and slow steps", () => {
     expect(await h.query("SELECT id FROM listings")).toHaveLength(1);
   });
 
-  test("WhatsApp brokers get no working-on-it line (typing… shows there)", async () => {
+  test("WhatsApp brokers get the working-on-it line before the card too, without using message credits", async () => {
     h.AI.respond((call) => (call.operation === "listing_extraction" ? fields : { intent: "search", filters: {}, locations: [], location_terms: [] }));
     await h.text("broker", "اضافة");
     await h.text("broker", "شقة في ميفيدا");
     const out = await h.text("broker", "تم");
-    expect(out.some((r) => /بنراجع بيانات الوحدة/.test(r.text || ""))).toBe(false);
-    expect(h.TG.outbox.some((e) => e.method === "deleteMessage")).toBe(false);
+    const working = out.findIndex((r) => /بنراجع بيانات الوحدة/.test(r.text || ""));
+    const card = out.findIndex((r) => /ميفيدا|Mivida/.test(r.text || "") && (r.buttons || []).length);
+    expect(working).toBeGreaterThanOrEqual(0);
+    expect(card).toBeGreaterThan(working);
+    expect(h.TG.outbox).toEqual([]);
+    const logs = await h.query("SELECT operation_type, metadata FROM operation_logs WHERE operation_type = 'wa_progress'");
+    expect(logs).toHaveLength(1);
+    expect(logs[0].metadata.egp).toBeUndefined();
   });
 });
 

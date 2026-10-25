@@ -166,7 +166,7 @@
       "claimOnce": ["pool", "broker", "params"],
       "reply": ["broker", "text", "opts"],
       "replyButtons": ["broker", "bodyText", "buttons"],
-      "withProgress": ["broker", "text", "fn"],
+      "withProgress": ["broker", "text", "fn", "params"],
       "replyList": ["broker", "bodyText", "buttonText", "sections"],
       "replyImage": ["broker", "mediaIdOrUrl", "caption"],
       "replyDocument": ["broker", "buffer", "filename", "caption"],
