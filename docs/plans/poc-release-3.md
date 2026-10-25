@@ -267,6 +267,8 @@ Per broker per working day: light ≈ 20 credits (≈ 440 a month), typical ≈ 
 | P10 | Single WhatsApp number = single point of failure | backup number and runbook steps (channel strategy) |
 | P11 | A 📸 reaction is sent for every photo, each probably billed like a message (≈ 8 a unit) | no per-photo reaction; the next reply counts the photos, step 2 |
 | P12 | The AI quota (2,000 calls a day per agency) allows up to about 3,000 EGP a month in the worst case | POC default 300 a day per agency, step 2 |
+| P13 | Unit duplicates are only checked by the web group import (`services/imports.js` `findDuplicate`: same compound and bedrooms, area and price within 5%); the WhatsApp draft, the web add form and posts inside one paste (exact-text hash only) aren't | (a) one shared rule; (b) run it on the WhatsApp draft review card and the web add form: "⚠️ looks like VIL-08" with [Open] and [Save anyway], no extra message; (c) match posts inside one group paste against each other with the rule; (d) no compound → fall back to area or district. About 1 day, step 7 |
+| P14 | `config.js` AI prices were stale (Flash at $0.30/$2.50), so cost logs and the eval budget under-counted about 10× | **Done (2026-10-25):** 3.8/3.6 Flash $0.75/$3.75 per million tokens, $1.50/$7.50 from 1 Jan 2027 (switched by date, no deploy); Flash-Lite $0.30/$2.50. Cost notes refreshed |
 
 ### Missed core CRM features (added to the steps)
 - **Seller and landlord leads.** In Egypt, half of a broker's leads are owners who want to sell or rent out. Leads get `kind` buyer|tenant|seller|landlord. A seller lead offers "➕ add their unit", which opens the draft with the owner's name and phone filled in as internal fields (step 3).
@@ -503,6 +505,7 @@ This plan on `poc/release-3`, revised with the owner's answers and the reviews.
   - tenant isolation; the upload rate limit
 
 ### 7. Buyer requests, match alerts and the wow loop
+- **P13 unit duplicates** (about 1 day): the shared rule on the WhatsApp draft review, the web add form and inside one group paste, with the area/district fallback (see the bugs table).
 - **Migration `015_buyer_requests.sql`:**
   - `saved_searches.lead_id`, `alerts_enabled`
   - `lead_matches` (unique per request and unit; status new, alerted, sent_to_client or dismissed)
@@ -680,12 +683,12 @@ This plan on `poc/release-3`, revised with the owner's answers and the reviews.
 | --- | --- |
 | WhatsApp (≈ 3,850 credits − 1,000 free; capped at 4,400 + 200 sign-ins) | ≈ 600 EGP, at most ≈ 750 |
 | Over-limit daily notices | ≤ 30 EGP |
-| AI (≈ 75 calls a day; cap 300) | ≈ 85 EGP, at most ≈ 450 |
+| AI (≈ 75 calls a day; cap 300) | ≈ 335 EGP now, ≈ 670 from January 2027 (Flash price doubles) |
 | Render Starter | ≈ 350 EGP (the pilot runs on Free until after the POC; see below) |
-| **Total** | **≈ 1,050 EGP (at most ≈ 1,600)** |
+| **Total** | **≈ 1,340 EGP now, ≈ 1,670 from January (worst case at the caps ≈ 2,500, then ≈ 3,840)** |
 
-  Prices and the exchange rate (≈ 50 EGP/USD) are checked against the first invoice. The photo-reaction fix (P11) is already counted.
-- **AI calls:** 0 for a contact card, phone lookup, CSV, buttons, matches, reminders, the hot signal and "N clients want this"; 1 for a forwarded-text intake or a typed CRM update; 2 for voice; each under $0.001.
+  WhatsApp is ≈ 630 EGP at 53.5 EGP/USD. AI assumes ≈ 1,250 tokens in and 400 out per call at the prices in P14, plus 14% VAT, 53.5 EGP/USD. Prices and the exchange rate are checked against the first invoice. The photo-reaction fix (P11) is already counted.
+- **AI calls:** 0 for a contact card, phone lookup, CSV, buttons, matches, reminders, the hot signal and "N clients want this"; 1 for a forwarded-text intake or a typed CRM update; 2 for voice; each about $0.0024 now (≈ $0.005 from January 2027).
 - **Web push** is free. **Database:** the match sweep is one indexed query per alerting request per tick, with a limit; memory doesn't change.
 
 **Render plan (owner, 2026-10-25): the service stays on Free until after the POC.** Risks that come with it:
@@ -717,7 +720,7 @@ This plan on `poc/release-3`, revised with the owner's answers and the reviews.
 - **Plan the spend before running:**
   - only the production config (no thinking-level sweep)
   - only the new lead cases (8 extraction + 8 update) plus about 5 regression cases
-  - about 20 calls, roughly $0.10–0.20
+  - about 20 calls, roughly $0.05–0.10 at the P14 prices
   - a full sweep only on request
 - Report the spend after every run: the estimate, and the Google AI Studio usage page if the owner can check it.
 - The key is stored as `GEMINI_API_KEY_EVAL` and used with `--key-env GEMINI_API_KEY_EVAL`. The runner refuses the production `GEMINI_API_KEY`.

@@ -186,6 +186,8 @@ The POC is delivered as **four releases**. **Release 1, the WhatsApp-only slice,
   - Morning brief: Meta template, "still available?", auto-hide after 30 days. **Submit the templates during Release 2.**
   - Web push.
   - Leaderboard and owner dashboard.
+  - Group import photos: read the images in a chat export `.zip` and attach each to its post by sender and timestamp (the attached-file lines); normalise like ING-01, at most 15 per unit. About 2 days.
+  - Photo duplicate flag: a perceptual hash per image flags a photo already used on another active unit of the agency, on save and on import. About 1 day.
 
 **Deferred until after the pilot:**
 - listing aliases, public ref, RLS
