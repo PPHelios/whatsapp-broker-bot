@@ -138,6 +138,67 @@ describe("turns on Telegram", () => {
   });
 });
 
+describe("notifications on Telegram (step 2)", () => {
+  const N = require("../../lib/notifications");
+  beforeAll(() => {
+    process.env.TELEGRAM_BOT_TOKEN = "123:test";
+    resetConfig();
+  });
+  afterAll(() => {
+    delete process.env.TELEGRAM_BOT_TOKEN;
+    resetConfig();
+  });
+  let seq = 0;
+  const event = (over = {}) => ({ kind: "match", dedupeKey: `tg-ev:${++seq}`, title: "🏠 VIL-08 fits your client", url: "/app/notifications", ...over });
+  const toChat = (who) => h.TG.outbox.filter((e) => e.method === "sendMessage" && e.chatId === String(h.TG_IDS[who]));
+
+  test("a linked broker with no choice gets alerts on Telegram: free, no WhatsApp, no credits", async () => {
+    await h.tgLink("broker");
+    const r = await N.notifyBroker(h.pool, await row("broker"), event());
+    expect(r).toMatchObject({ channel: "telegram", status: "sent" });
+    expect(toChat("broker")).toHaveLength(1);
+    expect(toChat("broker")[0].text).toMatch(/VIL-08 fits your client/);
+    expect(h.WA.outbox).toEqual([]);
+    expect(await h.query("SELECT 1 FROM operation_logs WHERE operation_type = 'wa_outbound'")).toEqual([]);
+    expect((await h.query("SELECT metadata->>'kind' AS kind FROM operation_logs WHERE operation_type = 'tg_outbound'"))[0].kind).toBe("notify_match");
+  });
+
+  test("Telegram chosen but not linked: no Telegram, no WhatsApp; the website inbox keeps it", async () => {
+    await N.savePrefs(h.pool, h.BROKERS.broker, { channels: { match: "telegram" } });
+    const r = await N.notifyBroker(h.pool, await row("broker"), event());
+    expect(r.channel).not.toBe("telegram");
+    expect(h.TG.outbox).toEqual([]);
+    expect(h.WA.outbox).toEqual([]);
+    const [n] = await h.query("SELECT channel, reason FROM notifications WHERE broker_id = $1", [h.BROKERS.broker.id]);
+    expect(n.reason).toBe("not_linked");
+  });
+
+  test("an unlinked broker with no choice still defaults to WhatsApp", async () => {
+    const prefs = N.prefsOf(await row("broker"), { telegramLinked: false });
+    expect(prefs.channels.match).toBe("whatsapp");
+    expect(N.prefsOf(await row("broker"), { telegramLinked: true }).channels.match).toBe("telegram");
+  });
+
+  test("a sign-in link asked for on the website goes to Telegram when linked", async () => {
+    await h.tgLink("broker");
+    const agent = request.agent(h.app.app);
+    const form = await agent.get("/app/login");
+    const pre = form.text.match(/name="_csrf" value="([^"]+)"/)[1];
+    const r = await agent.post("/app/login").type("form").send({ phone: "01000000001", _csrf: pre });
+    expect(r.status).toBe(200);
+    expect(toChat("broker").some((e) => /\/app\/login\/confirm\?t=/.test(e.text))).toBe(true);
+    expect(h.WA.outbox).toEqual([]);
+  });
+
+  test("the settings page offers Telegram when the bot is on", async () => {
+    await h.tgLink("broker");
+    const { signIn } = require("../harness/web");
+    const me = await signIn(h, "broker");
+    const page = await me.agent.get("/app/settings");
+    expect(page.text).toMatch(/<select name="ch_match" data-kind="match"><option value="telegram" selected>/);
+  });
+});
+
 describe("pieces", () => {
   test("button ids over 64 bytes get a short stored token that decodes back", async () => {
     const long = `ld:undoset:${"1234567890-".repeat(8)}`;

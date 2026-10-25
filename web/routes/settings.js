@@ -12,15 +12,17 @@ const HOURS = Array.from({ length: 24 }, (_, h) => h);
 const hh = (h) => `${String(h).padStart(2, "0")}:00`;
 
 async function loadBroker(pool, broker) {
-  const { rows } = await pool.query("SELECT notify_prefs FROM brokers WHERE id = $1 AND agency_id = $2", [broker.id, broker.agency_id]);
-  return { ...broker, notify_prefs: rows[0]?.notify_prefs || {} };
+  const { rows } = await pool.query("SELECT notify_prefs, telegram_chat_id FROM brokers WHERE id = $1 AND agency_id = $2", [broker.id, broker.agency_id]);
+  return { ...broker, notify_prefs: rows[0]?.notify_prefs || {}, telegram_chat_id: rows[0]?.telegram_chat_id || null };
 }
 
 function register(web, { pool, page }) {
   web.get("/settings", async (req, res) => {
     const lang = langOf(req);
     const broker = await loadBroker(pool, req.session.broker);
-    const prefs = Notifications.prefsOf(broker);
+    const tgOn = getConfig().telegram.enabled;
+    const prefs = Notifications.prefsOf(broker, { telegramLinked: tgOn && Boolean(broker.telegram_chat_id) });
+    const opt = (k, v, label) => html`<option value="${v}"${prefs.channels[k] === v ? html` selected` : ""}>${label}</option>`;
     const pushes = await Notifications.pushCount(pool, broker);
     const key = getConfig().webPush.publicKey;
     const saved = req.query.saved === "1";
@@ -45,7 +47,7 @@ ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "�
   )}</p>
   ${Notifications.KINDS.map(
     (k) => html`<label>${Notifications.KIND_LABELS[k][lang === "en" ? 1 : 0]}
-    <select name="ch_${k}" data-kind="${k}"><option value="whatsapp"${prefs.channels[k] === "whatsapp" ? html` selected` : ""}>${L(lang, "واتساب", "WhatsApp")}</option><option value="web"${prefs.channels[k] === "web" ? html` selected` : ""}>${L(lang, "الموقع (ببلاش)", "Website (free)")}</option></select>
+    <select name="ch_${k}" data-kind="${k}">${tgOn ? opt(k, "telegram", L(lang, "تليجرام (ببلاش)", "Telegram (free)")) : ""}${opt(k, "web", L(lang, "الموقع (ببلاش)", "Website (free)"))}${opt(k, "whatsapp", L(lang, "واتساب (من الرصيد)", "WhatsApp (uses credits)"))}</select>
   </label>`
   )}
   <h2>🌙 ${L(lang, "ساعات الهدوء (بتوقيت القاهرة)", "Quiet hours (Cairo time)")}</h2>

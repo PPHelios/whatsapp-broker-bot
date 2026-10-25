@@ -11,7 +11,7 @@ test("every channel has the same interface: name + send(broker, message, deps) â
     expect(typeof ch.send).toBe("function");
     expect(ch.send.length).toBe(3);
   }
-  expect(await Telegram.send({ id: "b" }, { title: "x" }, {})).toEqual({ ok: false, error: "not_configured" });
+  expect(await Telegram.send({ id: "b" }, { title: "x" }, {})).toEqual({ ok: false, error: "not_linked" }); // bot off in unit tests
 });
 
 test("push payload: exactly title, body and an /app/ URL; phone numbers scrubbed; lengths capped", () => {

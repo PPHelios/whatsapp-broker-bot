@@ -170,6 +170,9 @@
       "replyDocument": ["broker", "buffer", "filename", "caption"],
       "react": ["broker", "messageId", "emoji"],
       "notify": ["broker", "text", "params"],
+      "notifyTelegram": ["broker", "text", "params"],
+      "notifyPreferred": ["broker", "text", "opts"],
+      "telegramChatOf": ["pool", "broker"],
       "markReplied": [],
       "allowSilentDrop": ["reason"],
       "executeGuardedTurn": ["broker", "message", "handlerFn", "params"]
@@ -635,7 +638,7 @@
       "KIND_LABELS": "Object",
       "DEFAULT_QUIET": "Object",
       "MERGE_WINDOW_MS": "Number",
-      "prefsOf": ["broker"],
+      "prefsOf": ["broker", "params"],
       "inQuietHours": ["prefs", "now"],
       "quietEnd": ["prefs", "now"],
       "isWindowOpen": ["pool", "broker", "now"],
@@ -669,7 +672,7 @@
     },
     "lib/channels/telegram.js": {
       "name": "String",
-      "send": ["_broker", "_message", "_deps"]
+      "send": ["broker", "message", "params"]
     },
     "web/routes/notifications.js": {
       "register": ["web", "params"]

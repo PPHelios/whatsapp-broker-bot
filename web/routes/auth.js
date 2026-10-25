@@ -6,7 +6,7 @@ const WebAuth = require("../../lib/webAuth");
 const RateLimit = require("../../lib/rateLimit");
 const Links = require("../../lib/links");
 const Onboarding = require("../../lib/onboarding");
-const { notify } = require("../../lib/dispatcher");
+const { notifyPreferred } = require("../../lib/dispatcher");
 const { logOperation } = require("../../lib/db");
 const { t } = require("../../lib/copy");
 const S = require("../session");
@@ -71,7 +71,7 @@ function register(web, { pool, page }) {
       if (broker) {
         const token = await WebAuth.issueLoginToken(pool, broker, { channel: "web" });
         const lang = broker.preferred_lang || "ar";
-        const sent = await notify(broker, t("web_login_link", lang, { url: Links.loginLinkUrl(token), minutes: WebAuth.LOGIN_TOKEN_TTL_MINUTES }), {
+        const sent = await notifyPreferred(broker, t("web_login_link", lang, { url: Links.loginLinkUrl(token), minutes: WebAuth.LOGIN_TOKEN_TTL_MINUTES }), {
           pool,
           kind: "web_login_link",
           action: "sign_in"

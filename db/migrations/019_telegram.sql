@@ -25,3 +25,10 @@ CREATE INDEX IF NOT EXISTS telegram_callbacks_created_idx ON telegram_callbacks 
 
 ALTER TABLE telegram_link_tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE telegram_callbacks ENABLE ROW LEVEL SECURITY;
+
+-- Notifications can now be delivered on Telegram.
+ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_channel_check;
+ALTER TABLE notifications ADD CONSTRAINT notifications_channel_check CHECK (channel IN ('whatsapp', 'webpush', 'inbox', 'telegram'));
+ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_reason_check;
+ALTER TABLE notifications ADD CONSTRAINT notifications_reason_check
+  CHECK (reason IN ('chosen', 'fallback', 'no_credits', 'window_closed', 'quiet_hours', 'merged', 'no_push', 'not_linked'));

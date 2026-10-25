@@ -304,7 +304,7 @@ describe("website: inbox, log, settings, usage, push", () => {
     expect(b.notify_prefs.channels).toMatchObject({ match: "web", assignment: "whatsapp", follow_up: "whatsapp" });
     expect(b.notify_prefs.quiet).toEqual({ enabled: true, start: 23, end: 7 });
     const again = await me.agent.get("/app/settings");
-    expect(again.text).toMatch(/<select name="ch_match" data-kind="match"><option value="whatsapp">WhatsApp<\/option><option value="web" selected>/);
+    expect(again.text).toMatch(/<select name="ch_match" data-kind="match"><option value="web" selected>Website \(free\)<\/option><option value="whatsapp">WhatsApp \(uses credits\)<\/option>/);
   });
 
   test("push: subscribe from the browser, test push, 410 removes the subscription, payload has no phone", async () => {
