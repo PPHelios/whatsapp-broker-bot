@@ -120,7 +120,7 @@ describe("Worker rendering", () => {
 });
 
 test("there is one flyer pipeline (deliverFlyer is gone)", () => {
-  const src = fs.readFileSync(path.join(__dirname, "../../routes/commands.js"), "utf8");
+  const src = fs.readFileSync(path.join(__dirname, "../../routes/commandDeliverables.js"), "utf8");
   expect(src).not.toMatch(/async function deliverFlyer\(/);
   expect(src).toMatch(/renderFlyerOnDemand/);
 });

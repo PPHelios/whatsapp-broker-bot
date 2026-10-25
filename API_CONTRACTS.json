@@ -1183,6 +1183,83 @@
     },
     "web/routes/insights.js": {
       "register": ["web", "params"]
+    },
+    "lib/flyerStyle.js": {
+      "W": "Number",
+      "PAD": "Number",
+      "INNER": "Number",
+      "FLYER_VERSION": "String",
+      "MIN_H": "Number",
+      "MAX_H": "Number",
+      "MAX_PHOTOS": "Number",
+      "normHex": ["c", "fb"],
+      "mix": ["a", "b", "t"],
+      "lum": ["c"],
+      "contrast": ["a", "b"],
+      "readableOn": ["bg"],
+      "ensureContrast": ["fg", "bg", "min"],
+      "makeTheme": ["mode", "P", "S"],
+      "hasArabic": ["s"],
+      "normDigits": ["s"],
+      "clean": ["s"],
+      "en": ["s"],
+      "truncate": ["s", "n"],
+      "titleCase": ["s"],
+      "firstNum": ["vals"],
+      "firstNumOrZero": ["vals"],
+      "firstText": ["vals"],
+      "trimNum": ["n", "d"],
+      "money": ["v"],
+      "abbr": ["v"],
+      "ordinal": ["n"],
+      "formatFloor": ["raw"],
+      "formatPhone": ["raw"]
+    },
+    "lib/flyerAssets.js": {
+      "loadFont": ["filename"],
+      "isPrivateIp": ["ip"],
+      "validateSafeUrl": ["rawUrl"],
+      "fetchBuf": ["src"],
+      "cover": ["buf", "w", "h"],
+      "prepareLogo": ["src"],
+      "logoSlot": ["ratio"],
+      "fitInto": ["w", "h", "maxW", "maxH"]
+    },
+    "lib/flyerModel.js": {
+      "buildFlyerModel": ["params"]
+    },
+    "lib/flyerLayout.js": {
+      "ICONS": "Object",
+      "ROWS_FOR": "Array",
+      "photoLayout": ["n", "opts"],
+      "buildTree": ["model", "T", "photos", "logo", "opts"],
+      "svgHeight": ["svg"],
+      "PASS_LEVELS": "Array",
+      "renderPass": ["model", "T", "bufs", "logo", "opts", "fonts"]
+    },
+    "lib/listingText.js": {
+      "isVillaTypology": ["propertyType"],
+      "isStudioTypology": ["propertyType", "bedrooms"],
+      "normalizeArabicDigits": ["str"],
+      "parseExplicitUnitCode": ["text"],
+      "extractExplicitUnitCode": ["text"],
+      "isLikelyListingMetadata": ["text"],
+      "detectLang": ["text", "fallback"],
+      "isReplaceMode": ["text"],
+      "generateListingCode": ["customCode", "propertyType"]
+    },
+    "lib/listingExtract.js": {
+      "buildListingPrompt": ["targetLang", "fenceToken"],
+      "normalizeExtraction": ["raw", "params"],
+      "findStatedCode": ["texts"],
+      "extractPropertyDetails": ["aiShim", "params"],
+      "buildVisionPrompt": []
+    },
+    "lib/listingValidate.js": {
+      "ROLES": "Array",
+      "checkDraftCompleteness": ["draft", "parsedContext"],
+      "validateDraft": ["inputDraft", "lang", "ctx"],
+      "validateVisionDraft": ["raw", "nImages"]
     }
   },
   "invariant_variable_names": {
