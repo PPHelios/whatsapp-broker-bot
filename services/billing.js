@@ -212,7 +212,35 @@ async function endingSoon(db, { now = new Date(), days = 3 } = {}) {
   return rows;
 }
 
+/** Agencies on a trial, or whose trial ended in the last 30 days without paying (for the owner's "extend" buttons). */
+async function trialAgencies(db, { now = new Date() } = {}) {
+  const { rows } = await db.query(
+    `SELECT id, name, trial_ends_at FROM agencies
+      WHERE NOT pilot AND approval = 'approved' AND trial_ends_at IS NOT NULL AND trial_ends_at > $1::timestamptz - interval '30 days'
+        AND (paid_until IS NULL OR paid_until <= $1)
+      ORDER BY trial_ends_at`,
+    [now.toISOString()]
+  );
+  return rows;
+}
+
+const EXTEND_DAYS = [7, 14];
+
+/** The owner extends an agency's trial by 7 or 14 days from the later of now and its current end. */
+async function extendTrial(db, agencyId, days, { now = new Date() } = {}) {
+  if (!EXTEND_DAYS.includes(Number(days))) return { error: "days" };
+  const { rows } = await db.query(
+    `UPDATE agencies SET trial_ends_at = GREATEST(COALESCE(trial_ends_at, $2::timestamptz), $2::timestamptz) + make_interval(days => $3), updated_at = NOW()
+      WHERE id = $1 AND NOT pilot AND approval = 'approved' RETURNING id, name, trial_ends_at`,
+    [agencyId, now.toISOString(), Number(days)]
+  );
+  return rows[0] ? { ok: true, agency: rows[0] } : { error: "not_found" };
+}
+
 module.exports = {
+  EXTEND_DAYS,
+  trialAgencies,
+  extendTrial,
   MONTHS,
   MAX_PENDING,
   effectivePlan,
