@@ -76,6 +76,13 @@ describe("CSV", () => {
     const cp = Buffer.concat([Buffer.from("name,phone\n"), Buffer.from([0xd3, 0xc7, 0xd1, 0xc9]), Buffer.from(",01012345678\n")]);
     expect((await read(cp)).rows[0].cells.name).toBe("سارة");
   });
+  test("a Meta Leads Center export (UTF-16, tabs, \"p:+20…\" numbers, the campaign as the source)", async () => {
+    const header = "id\tcreated_time\tad_name\tcampaign_name\tform_name\tplatform\tfull_name\tphone_number\temail";
+    const row = "l:123\t2026-10-25T10:00:00+0200\tVillas ad\tNew Cairo Oct\tVilla form\tfb\tSara Ali\tp:+201012345678\ts@x.com";
+    const file = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(`${header}\n${row}\n`, "utf16le")]);
+    const lead = I.rowToLead((await read(file)).rows[0].cells);
+    expect(lead).toMatchObject({ phones: ["+201012345678"], name: "Sara Ali", source: "New Cairo Oct", errors: [] });
+  });
   test("limits: 2,000 rows and 5 MB", async () => {
     const many = "name,phone\n" + Array.from({ length: 2001 }, (_, i) => `n${i},010${String(i).padStart(8, "0")}`).join("\n");
     await expect(read(many)).rejects.toMatchObject({ code: "TOO_MANY_ROWS" });
