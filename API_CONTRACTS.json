@@ -873,6 +873,14 @@
     },
     "web/routes/deals.js": {
       "register": ["web", "params"]
+    },
+    "services/privacy.js": {
+      "RETENTION_MONTHS": "Number",
+      "exportLead": ["pool", "actor", "key", "params"],
+      "eraseLead": ["pool", "actor", "key", "params"],
+      "retentionSweep": ["pool", "params"],
+      "purgeInboundPayloads": ["pool", "params"],
+      "privacyJob": []
     }
   },
   "invariant_variable_names": {

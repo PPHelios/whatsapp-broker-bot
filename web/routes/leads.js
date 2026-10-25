@@ -7,6 +7,7 @@
 
 const Leads = require("../../services/leads");
 const LeadRequests = require("../../services/leadRequests");
+const Privacy = require("../../services/privacy");
 const AI = require("../../lib/ai");
 const RateLimit = require("../../lib/rateLimit");
 const Store = require("../../lib/listingStore");
@@ -114,6 +115,7 @@ function register(web, { pool, page }) {
       title: L(lang, "العملاء", "Leads"),
       nav: "leads",
       body: html`<h1>👤 ${L(lang, "العملاء", "Leads")}</h1>
+${/^L-\d{4,6}$/.test(String(req.query.erased || "")) ? html`<p class="card notice" role="status">🔒 ${L(lang, `العميل ${req.query.erased} اتمسح نهائياً.`, `Client ${req.query.erased} was erased for good.`)}</p>` : ""}
 <div class="row"><a class="btn" href="/app/leads/new">➕ ${L(lang, "عميل جديد", "New lead")}</a> <a class="btn secondary" href="/app/leads/import">📥 ${L(lang, "استيراد من ملف", "Import a file")}</a></div>
 ${pipe
   ? html`<section class="card" id="pipeline"><h2>📊 ${L(lang, "المراحل", "Pipeline")}</h2>
@@ -294,6 +296,16 @@ ${V.leadHeader(lead, lang)}
   ${lead.follow_up_status === "open" ? html`<form method="post" action="${path}/follow-up/done">${hidden}<button type="submit" class="secondary">✔️ ${L(lang, "المتابعة خلصت", "Follow-up done")}</button></form>
   <form method="post" action="${path}/follow-up/postpone">${hidden}<button type="submit" class="secondary">📅 ${L(lang, "أجّل يوم", "Postpone a day")}</button></form>` : ""}
 </section>
+${manager
+  ? html`<section class="card" id="privacy"><h2>🔒 ${L(lang, "بيانات العميل (للمدير)", "Client data (managers)")}</h2>
+  <p><a class="btn secondary" href="${path}/export">📦 ${L(lang, "تصدير بياناته (zip)", "Export their data (zip)")}</a></p>
+  <form method="post" action="${path}/erase" class="row">${hidden}
+    <label>${L(lang, "للمسح النهائي اكتب آخر 4 أرقام من رقمه", "To erase for good, type the last 4 digits of their number")}<input name="confirm" inputmode="numeric" maxlength="4" pattern="[0-9٠-٩]{4}" required dir="ltr"></label>
+    <button type="submit" class="danger">🗑️ ${L(lang, "امسح العميل", "Erase the client")}</button>
+  </form>
+  <p class="muted">${L(lang, "المسح نهائي: العميل وتاريخه وطلباته بيتمسحوا، والصفقات بتفضل من غير اسمه ورقمه.", "Erasing is final: the client, their history and requests are deleted; deals stay without their name and number.")}</p>
+</section>`
+  : ""}
 <section class="card" id="note"><h2>📝 ${L(lang, "ملاحظة", "Note")}</h2>
   <form method="post" action="${path}/note" class="stack">${hidden}<textarea name="text" rows="2" maxlength="1000" required></textarea><button type="submit" class="secondary">${L(lang, "إضافة", "Add")}</button></form>
 </section>
@@ -413,6 +425,33 @@ ${V.bottomBar(lead, lang, broker.name)}`
   write("note", (req, lead, version) => Leads.addNote(pool, actor(req), lead.id, req.body.text, { version }), "note");
   write("contacted", (req, lead, version) => Leads.markContacted(pool, actor(req), lead.id, { version }), "contacted");
   write("assign", (req, lead, version) => Leads.assignLead(pool, actor(req), lead.id, req.body.broker || null, { version }), "assigned");
+  // PDPL (Q9): managers export a client's data (zip, 10 an hour) and erase a client (the last 4 digits).
+  web.get("/leads/:ref/export", async (req, res, next) => {
+    const { broker } = req.session;
+    if (!isManager(broker)) return res.status(403).send(L(langOf(req), "للمديرين بس.", "Managers only."));
+    const gate = await RateLimit.hit(pool, `lead_export:broker:${broker.id}`, RateLimit.LIMITS.leadExportBroker);
+    if (!gate.allowed) return res.set("Retry-After", String(gate.retryAfterSec || 3600)).status(429).send("Too many exports; try again later.");
+    const r = await Privacy.exportLead(pool, broker, req.params.ref);
+    if (r.error === "not_found") return next();
+    if (r.error) return res.status(403).send("Not allowed.");
+    res.set("Cache-Control", "no-store").set("Content-Disposition", `attachment; filename="${r.filename}"`);
+    return res.type("application/zip").send(r.zip);
+  });
+
+  web.post("/leads/:ref/erase", async (req, res, next) => {
+    const lang = langOf(req);
+    const { broker } = req.session;
+    if (!isManager(broker)) return res.status(403).send(L(lang, "للمديرين بس.", "Managers only."));
+    const r = await Privacy.eraseLead(pool, broker, req.params.ref, { confirm: req.body.confirm });
+    if (r.error === "not_found") return next();
+    if (r.error === "confirm") {
+      const lead = await Leads.getLead(pool, broker, req.params.ref);
+      return leadPage(req, res, lead, { status: 422, notice: L(lang, "⚠️ الأرقام مش مطابقة لآخر 4 أرقام من رقم العميل. محدش اتمسح.", "⚠️ Those aren't the last 4 digits of the client's number. Nothing was erased.") });
+    }
+    if (r.error) return res.status(403).send("Not allowed.");
+    return res.redirect(303, `/app/leads?erased=${Card.refLabel(r.ref)}`);
+  });
+
   // "Send to client": a share link with the lead, then WhatsApp opens on the client's chat with the message ready.
   web.post("/leads/:ref/send", async (req, res, next) => {
     if (!(await writeGate(req, res))) return;
