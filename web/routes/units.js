@@ -8,6 +8,7 @@ const Share = require("../../lib/shareLinks");
 const LeadRequests = require("../../services/leadRequests");
 const Card = require("../../domain/leadCard");
 const Storage = require("../../lib/supabase");
+const Insights = require("../../services/priceInsights");
 const { html } = require("../html");
 const { resultItem, factList } = require("../views/units");
 
@@ -36,6 +37,15 @@ async function wantedSection(pool, broker, listing, lang, csrf) {
 </section>`;
 }
 
+/** "EGP 52,000 per m² · 8% above the median of 12 units in Hyde Park" (sale and rent apart; ≥ 5 other units). */
+function marketLine(m, listing, lang) {
+  const n = (x) => Number(x).toLocaleString("en-US");
+  const diff = m.diffPct === null || Math.abs(m.diffPct) < 3
+    ? L(lang, "قريب من", "close to")
+    : m.diffPct > 0 ? L(lang, `أعلى ${m.diffPct}% من`, `${m.diffPct}% above`) : L(lang, `أقل ${-m.diffPct}% من`, `${-m.diffPct}% below`);
+  return html`<p class="muted" data-market="${m.diffPct}">📊 ${n(m.perM2)} ${L(lang, "ج.م للمتر", "EGP per m²")}${listing.listing_type === "rent" ? L(lang, " في الشهر", " a month") : ""} · ${diff} ${L(lang, `وسيط ${m.units} وحدة في ${m.place}`, `the median of ${m.units} units in ${m.place}`)} (${n(m.median)}) · <a href="/app/insights">${L(lang, "أسعار المتر", "Prices per m²")}</a></p>`;
+}
+
 function register(web, { pool, page }) {
   web.get("/units", async (req, res) => {
     const lang = langOf(req);
@@ -55,6 +65,7 @@ function register(web, { pool, page }) {
 <nav class="row card">
   ${tab("active", L(lang, "🟢 متاحة", "🟢 Available"))} ${tab("sold", L(lang, "🔴 مباعة", "🔴 Sold"))} ${tab("archived", L(lang, "📁 مؤرشفة", "📁 Archived"))}
   <a href="/app/units?status=${status}${mine ? "" : "&mine=1"}">${mine ? L(lang, "كل الوكالة", "Whole agency") : L(lang, "وحداتي بس", "Mine only")}</a>
+  <a href="/app/insights">📊 ${L(lang, "أسعار المتر", "Prices per m²")}</a>
 </nav>
 ${rows.length
   ? html`<form id="bulk" method="post" action="/app/units/bulk" class="card row">
@@ -156,6 +167,7 @@ ${rows.length
     const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
     if (!listing || !Authz.canView(broker, listing)) return next();
     const images = await imagesOf(pool, listing);
+    const market = listing.status === "active" ? await Insights.forUnit(pool, listing) : null;
     const status = { active: L(lang, "🟢 متاحة", "🟢 Available"), sold: L(lang, "🔴 مباعة", "🔴 Sold"), archived: L(lang, "📁 مؤرشفة", "📁 Archived") }[listing.status] || listing.status;
     const conf = Describe.compactLine({ code: "", confirmed_at: listing.confirmed_at }, lang).match(/✅ \S+/);
     return page(req, res, {
@@ -165,6 +177,7 @@ ${rows.length
   ${req.query.saved ? html`<p class="notice card ok">✅ ${L(lang, "تم الحفظ", "Saved")}</p>` : ""}
   <h1>${listing.code} · ${status}${conf ? html` <span class="muted">${conf[0]}</span>` : ""}</h1>
   ${factList(listing, lang)}
+  ${market ? marketLine(market, listing, lang) : ""}
   ${images.length ? html`<div class="photos">${images.map((i) => html`<img src="${i.url}" alt="" loading="lazy">`)}</div>` : ""}
   <div class="row" id="unit-actions">
     ${Authz.canEdit(broker, listing) ? html`<a class="btn" href="/app/units/${encodeURIComponent(listing.code)}/edit">✏️ ${L(lang, "تعديل", "Edit")}</a>` : ""}

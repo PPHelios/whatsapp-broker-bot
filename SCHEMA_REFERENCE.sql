@@ -792,6 +792,34 @@ CREATE TABLE IF NOT EXISTS public.payments (
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.viewings (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid NOT NULL,
+  lead_id uuid NOT NULL,
+  broker_id uuid,
+  listing_id uuid,
+  starts_at timestamp with time zone NOT NULL,
+  place text,
+  lang text DEFAULT 'ar'::text NOT NULL,
+  token_hash text NOT NULL,
+  status text DEFAULT 'proposed'::text NOT NULL,
+  client_proposed_at timestamp with time zone,
+  client_note text,
+  responded_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.ad_spend (
+  agency_id uuid NOT NULL,
+  month date NOT NULL,
+  source text NOT NULL,
+  amount_egp bigint NOT NULL,
+  updated_by uuid,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE app_settings ADD CONSTRAINT app_settings_pkey PRIMARY KEY (key);
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (id);
@@ -826,6 +854,7 @@ ALTER TABLE search_vocabulary ADD CONSTRAINT search_vocabulary_pkey PRIMARY KEY 
 ALTER TABLE share_links ADD CONSTRAINT share_links_pkey PRIMARY KEY (token_hash);
 ALTER TABLE telegram_callbacks ADD CONSTRAINT telegram_callbacks_pkey PRIMARY KEY (token);
 ALTER TABLE telegram_link_tokens ADD CONSTRAINT telegram_link_tokens_pkey PRIMARY KEY (token_hash);
+ALTER TABLE viewings ADD CONSTRAINT viewings_pkey PRIMARY KEY (id);
 ALTER TABLE web_imports ADD CONSTRAINT web_imports_pkey PRIMARY KEY (id);
 ALTER TABLE web_login_tokens ADD CONSTRAINT web_login_tokens_pkey PRIMARY KEY (token_hash);
 ALTER TABLE web_rate_limits ADD CONSTRAINT web_rate_limits_pkey PRIMARY KEY (bucket, window_start);
@@ -842,6 +871,10 @@ ALTER TABLE notifications ADD CONSTRAINT notifications_broker_id_dedupe_key_key 
 ALTER TABLE payments ADD CONSTRAINT payments_reference_key UNIQUE (reference);
 ALTER TABLE projects ADD CONSTRAINT uq_agency_project_name UNIQUE (agency_id, name);
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_endpoint_key UNIQUE (endpoint);
+ALTER TABLE viewings ADD CONSTRAINT viewings_token_hash_key UNIQUE (token_hash);
+ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_amount_egp_check CHECK ((amount_egp >= 0));
+ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_month_check CHECK ((EXTRACT(day FROM month) = (1)::numeric));
+ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_source_check CHECK (((length(source) >= 1) AND (length(source) <= 60)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_approval_check CHECK ((approval = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])));
 ALTER TABLE agencies ADD CONSTRAINT agencies_code_prefix_check CHECK (((code_prefix IS NULL) OR (code_prefix ~ '^[A-Z]{1,4}$'::text)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_plan_check CHECK ((plan = ANY (ARRAY['solo'::text, 'office'::text, 'agency'::text, 'free'::text])));
@@ -908,9 +941,15 @@ ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_name_check CHECK (((len
 ALTER TABLE search_vocabulary ADD CONSTRAINT search_vocabulary_kind_check CHECK ((kind = ANY (ARRAY['type'::text, 'feature'::text])));
 ALTER TABLE share_links ADD CONSTRAINT share_links_channel_check CHECK ((channel = ANY (ARRAY['whatsapp'::text, 'web'::text])));
 ALTER TABLE share_links ADD CONSTRAINT share_links_lang_check CHECK ((lang = ANY (ARRAY['ar'::text, 'en'::text])));
+ALTER TABLE viewings ADD CONSTRAINT viewings_client_note_check CHECK (((client_note IS NULL) OR (length(client_note) <= 300)));
+ALTER TABLE viewings ADD CONSTRAINT viewings_lang_check CHECK ((lang = ANY (ARRAY['ar'::text, 'en'::text])));
+ALTER TABLE viewings ADD CONSTRAINT viewings_place_check CHECK (((place IS NULL) OR (length(place) <= 200)));
+ALTER TABLE viewings ADD CONSTRAINT viewings_status_check CHECK ((status = ANY (ARRAY['proposed'::text, 'confirmed'::text, 'reschedule'::text, 'cancelled'::text])));
 ALTER TABLE web_imports ADD CONSTRAINT web_imports_kind_check CHECK ((kind = ANY (ARRAY['excel'::text, 'group'::text, 'leads'::text])));
 ALTER TABLE web_imports ADD CONSTRAINT web_imports_status_check CHECK ((status = ANY (ARRAY['processing'::text, 'ready'::text, 'applied'::text, 'failed'::text])));
 ALTER TABLE web_login_tokens ADD CONSTRAINT web_login_tokens_channel_check CHECK ((channel = ANY (ARRAY['whatsapp'::text, 'web'::text])));
+ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE brokers ADD CONSTRAINT brokers_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
@@ -962,6 +1001,10 @@ ALTER TABLE share_links ADD CONSTRAINT share_links_lead_id_fkey FOREIGN KEY (lea
 ALTER TABLE share_links ADD CONSTRAINT share_links_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
 ALTER TABLE telegram_link_tokens ADD CONSTRAINT telegram_link_tokens_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE telegram_link_tokens ADD CONSTRAINT telegram_link_tokens_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
+ALTER TABLE viewings ADD CONSTRAINT viewings_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE viewings ADD CONSTRAINT viewings_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE viewings ADD CONSTRAINT viewings_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE;
+ALTER TABLE viewings ADD CONSTRAINT viewings_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE SET NULL;
 ALTER TABLE web_imports ADD CONSTRAINT web_imports_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE web_imports ADD CONSTRAINT web_imports_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE web_login_tokens ADD CONSTRAINT web_login_tokens_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
@@ -1036,6 +1079,7 @@ CREATE INDEX idx_share_links_lead ON public.share_links USING btree (lead_id) WH
 CREATE INDEX idx_share_links_listing ON public.share_links USING btree (agency_id, listing_id, created_at DESC);
 CREATE INDEX telegram_callbacks_created_idx ON public.telegram_callbacks USING btree (created_at);
 CREATE INDEX telegram_link_tokens_broker_idx ON public.telegram_link_tokens USING btree (broker_id);
+CREATE INDEX idx_viewings_lead ON public.viewings USING btree (agency_id, lead_id, created_at DESC);
 CREATE INDEX idx_web_imports_broker ON public.web_imports USING btree (agency_id, broker_id, created_at DESC);
 CREATE INDEX idx_web_login_tokens_broker ON public.web_login_tokens USING btree (broker_id, created_at DESC);
 CREATE INDEX idx_web_sessions_broker ON public.web_sessions USING btree (broker_id);
