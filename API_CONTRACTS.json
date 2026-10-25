@@ -936,6 +936,7 @@
       "encodeCallback": ["pool", "id"],
       "decodeCallback": ["pool", "data"],
       "purgeCallbacks": ["pool"],
+      "startLinksForAgency": ["pool", "agencyId", "username"],
       "storeWaLink": ["pool", "url"],
       "waLinkOf": ["pool", "token"]
     },

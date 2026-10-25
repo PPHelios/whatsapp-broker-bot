@@ -31,8 +31,8 @@ function loginForm({ pre, next, message = null, lang = "ar" }) {
   return html`<div class="card">
   <h1>🔐 ${L(lang, "الدخول", "Sign in")}</h1>
   ${message ? html`<p class="notice card">${message}</p>` : ""}
-  <p>${lang === "en" ? html`Send <strong>"login"</strong> to the WehdatHub WhatsApp number and you'll get a sign-in link right away.` : html`ابعت <strong>«دخول»</strong> لرقم WehdatHub على واتساب، وهيوصلك رابط الدخول على طول.`}</p>
-  <p>${L(lang, "أو اكتب رقم الموبايل المسجل وهنبعتلك الرابط على واتساب:", "Or enter your registered mobile number and we'll send the link on WhatsApp:")}</p>
+  <p>${lang === "en" ? html`Send <strong>"login"</strong> to the WehdatHub bot (Telegram, or WhatsApp) and you'll get a sign-in link right away. Inside Telegram, the WehdatHub button opens the website already signed in.` : html`ابعت <strong>«دخول»</strong> لبوت WehdatHub (على تليجرام أو واتساب)، وهيوصلك رابط الدخول على طول. ومن جوه تليجرام، زرار WehdatHub بيفتح الموقع وانت داخل على طول.`}</p>
+  <p>${L(lang, "أو اكتب رقم الموبايل المسجل وهنبعتلك الرابط على البوت:", "Or enter your registered mobile number and we'll send the link through the bot:")}</p>
   <form method="post" action="/app/login" class="stack">
     <input type="hidden" name="_csrf" value="${pre}">
     <input type="hidden" name="next" value="${next}">
@@ -44,7 +44,7 @@ function loginForm({ pre, next, message = null, lang = "ar" }) {
 
 const expiredPage = (lang) => html`<div class="card notice bad">
   <h1>⌛ ${L(lang, "الرابط ده انتهى أو اتستخدم قبل كده", "This link has expired or was already used")}</h1>
-  <p>${lang === "en" ? html`Send <strong>"login"</strong> to the WehdatHub WhatsApp number for a new link.` : html`ابعت <strong>«دخول»</strong> لرقم WehdatHub على واتساب عشان يوصلك رابط جديد.`}</p>
+  <p>${lang === "en" ? html`Send <strong>"login"</strong> to the WehdatHub bot for a new link.` : html`ابعت <strong>«دخول»</strong> لبوت WehdatHub عشان يوصلك رابط جديد.`}</p>
   <p><a href="/app/login">${L(lang, "صفحة الدخول", "Sign-in page")}</a></p>
 </div>`;
 
@@ -91,8 +91,8 @@ function register(web, { pool, page }) {
         lang: req.lang,
         message: L(
           req.lang,
-          "📲 لو الرقم ده مسجل، هيوصلك رابط الدخول على واتساب خلال دقيقة. لو موصلش، ابعت «دخول» للبوت مباشرة.",
-          "📲 If this number is registered, a sign-in link reaches you on WhatsApp within a minute. If not, send \"login\" to the bot directly."
+          "📲 لو الرقم ده مسجل، هيوصلك رابط الدخول على البوت (تليجرام أو واتساب) خلال دقيقة. لو موصلش، ابعت «دخول» للبوت مباشرة.",
+          "📲 If this number is registered, a sign-in link reaches you through the bot (Telegram or WhatsApp) within a minute. If not, send \"login\" to the bot directly."
         )
       })
     });

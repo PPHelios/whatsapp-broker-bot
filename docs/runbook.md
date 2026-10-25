@@ -72,10 +72,19 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 
 ## 4. Onboarding an agency
 
-1. Copy `docs/pilot/agency.example.json`, fill the agency (name, optional `slug` for public links — lower-case letters, digits and dashes — colours, logo `https://` URL) and brokers (name, Egyptian mobile, role `broker`/`admin`/`owner`/`manager`, `lang` `ar`/`en`). At least one admin, owner or manager. Optional `code_prefix` (1–4 Latin letters) sets the agency's unit code letters (`NH` → auto codes `NH-V12`); without it they come from the agency's name and a manager can change them on 📊 My usage. Set `bot_phone` (or `BOT_PHONE`) to the bot's WhatsApp number so `onboard` prints start links. The file's `_notes` explain each field.
+1. Copy `docs/pilot/agency.example.json`, fill the agency (name, optional `slug` for public links — lower-case letters, digits and dashes — colours, logo `https://` URL) and brokers (name, Egyptian mobile, role `broker`/`admin`/`owner`/`manager`, `lang` `ar`/`en`). At least one admin, owner or manager. Optional `code_prefix` (1–4 Latin letters) sets the agency's unit code letters (`NH` → auto codes `NH-V12`); without it they come from the agency's name and a manager can change them on 📊 My usage. Set `telegram_bot` (or `TELEGRAM_BOT_USERNAME`) so `onboard` prints each broker's one-time Telegram start link, and `bot_phone` (or `BOT_PHONE`) for WhatsApp start links. The file's `_notes` explain each field.
 2. `npm run onboard -- my-agency.json --dry-run`, then without `--dry-run`. Re-running is safe (agency by name, brokers by phone). It prints the slug, the web app address and each broker's **start link** (`wa.me/<bot>?text=مساعدة`, or `help` for English brokers).
-3. Each broker must message the bot once before it can reply: send them their start link (one tap, then send). Then the guides in their language: `docs/pilot/broker-howto-ar.md` and `web-howto-ar.md`, or `broker-howto-en.md` and `web-howto-en.md`.
+3. Telegram brokers: send each their Telegram start link privately (one tap on *Start* links their account; one use, 7 days; re-run `onboard` for fresh ones), then `docs/pilot/telegram-howto-ar.md` and `web-howto-ar.md` (or the `-en` versions). WhatsApp brokers must message the bot once before it can reply: send them their start link (one tap, then send), then `docs/pilot/broker-howto-ar.md` and `web-howto-ar.md`, or `broker-howto-en.md` and `web-howto-en.md`.
 4. Deactivating a broker: `npm run onboard -- --deactivate my-agency.json 0101…` — the bot stops answering them, their web sessions end at once, their leads go to the unassigned pool and every manager gets one "N leads to reassign" notification (P6). Don't deactivate with a bare `UPDATE brokers SET is_active = false`: their leads would stay with nobody.
+
+## 4b. Telegram bot
+
+1. In Render, set `TELEGRAM_BOT_TOKEN` (from @BotFather; the owner sets it, never paste it in chat), `TELEGRAM_WEBHOOK_SECRET` (random, see §1) and `TELEGRAM_BOT_USERNAME` (`Wehdat_Hub_bot`). `PUBLIC_BASE_URL` (or Render's own URL) must be `https://`.
+2. Deploy. On every start the server calls `setWebhook` (with the secret), sets the *WehdatHub* menu button (opens `/app/tg`, the website inside Telegram) and the `/help` `/login` commands. Render's log shows `[TELEGRAM] webhook and menu set`; `[TELEGRAM] setup failed: …` means the token or URL is wrong.
+3. Check from any machine: `https://api.telegram.org/bot<token>/getWebhookInfo` shows our URL and `pending_update_count`. Only the owner runs this (it needs the token).
+4. Brokers link with their start link or by tapping *📱 Share my number* in the bot (only their own number counts). Telegram replies, alerts and sign-in links are free (`tg_outbound`, never in the credits).
+5. To switch the WhatsApp bot off, set `WHATSAPP_ENABLED=false` (clients' `wa.me` links and the "Send on WhatsApp" buttons keep working).
+6. Rotating the token: revoke it in @BotFather, put the new one in Render, redeploy. Rotating the secret: change it in Render and redeploy.
 
 ## 5. Rotating secrets
 

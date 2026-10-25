@@ -398,7 +398,7 @@ function createApp({ pool, config = getConfig(), jobs }) {
     shareButton: "📱 ابعت رقمي / Share my number",
     invalid: "⚠️ الرابط ده مش صالح أو اتستخدم قبل كده. اطلب رابط جديد من مديرك، أو اضغط «📱 ابعت رقمي».\n⚠️ This link is invalid or already used. Ask your manager for a new one, or tap \"📱 Share my number\".",
     notOwn: "⚠️ ابعت رقمك إنت من زرار «📱 ابعت رقمي».\n⚠️ Please share your own number with the \"📱 Share my number\" button.",
-    unknown: "⚠️ الرقم ده مش متسجل كوسيط في WehdatHub. كلم مدير وكالتك.\n⚠️ This number isn't registered as an WehdatHub broker. Ask your agency admin.",
+    unknown: "⚠️ الرقم ده مش متسجل كوسيط في WehdatHub. كلم مدير وكالتك.\n⚠️ This number isn't registered as a WehdatHub broker. Ask your agency admin.",
     linked: (b) => (b.preferred_lang === "en" ? `✅ Linked. Welcome, ${b.name}!` : `✅ تم ربط حسابك. أهلاً يا ${b.name}!`)
   };
 
@@ -570,7 +570,7 @@ function createApp({ pool, config = getConfig(), jobs }) {
           await WA.sendWhatsAppText(
             normalizedPhone,
             "⚠️ هذا الرقم غير مسجل كوكيل عقاري معتمد في منصة WehdatHub. يرجى التواصل مع إدارة وكالتك لتفعيل حسابك.\n" +
-              "⚠️ This number is not registered as an WehdatHub broker. Please ask your agency admin to activate your account."
+              "⚠️ This number is not registered as a WehdatHub broker. Please ask your agency admin to activate your account."
           );
         }
         return;

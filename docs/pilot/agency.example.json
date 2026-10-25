@@ -1,10 +1,12 @@
 {
   "_notes": {
+    "telegram_bot": "The Telegram bot's username without @. Optional (TELEGRAM_BOT_USERNAME works too); onboard then prints each broker's one-time Telegram start link.",
     "bot_phone": "The bot's WhatsApp number with country code. Optional (BOT_PHONE works too); onboard then prints each broker's start link.",
     "lang": "Per broker: ar (default) or en. The bot replies, the website and the start link (مساعدة / help) follow it; each broker can change it later on the website (عربي / English).",
     "code_prefix": "Optional, 1 to 4 Latin letters: units added without a code get <letters>-<type letter><number>, e.g. PA-V12. Default: the agency's initials.",
     "role": "broker, agent, admin, owner or manager. At least one admin, owner or manager."
   },
+  "telegram_bot": "Wehdat_Hub_bot",
   "bot_phone": "+20 100 000 0099",
   "agency": {
     "name": "Pilot Agency",

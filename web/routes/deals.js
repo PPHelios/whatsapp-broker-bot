@@ -104,7 +104,7 @@ ${rows.length
     )}</ul>
 <p class="row">${n > 0 ? html`<a href="/app/deals?page=${n - 1}">${L(lang, "→ الأحدث", "← Newer")}</a>` : ""} ${more ? html`<a href="/app/deals?page=${n + 1}">${L(lang, "الأقدم ←", "Older →")}</a>` : ""}</p>`
   : ""}
-<p class="muted">${L(lang, "تسجل الصفقة من صفحة العميل (🤝 سجل صفقة) أو على واتساب: صفقة L-0042 VIL-08 8.5 مليون عمولة 2%", "Record a deal from the lead's page (🤝 Record deal) or on WhatsApp: deal L-0042 VIL-08 8.5M commission 2%")}</p>`
+<p class="muted">${L(lang, "تسجل الصفقة من صفحة العميل (🤝 سجل صفقة) أو للبوت: صفقة L-0042 VIL-08 8.5 مليون عمولة 2%", "Record a deal from the lead's page (🤝 Record deal) or to the bot: deal L-0042 VIL-08 8.5M commission 2%")}</p>`
     });
   });
 

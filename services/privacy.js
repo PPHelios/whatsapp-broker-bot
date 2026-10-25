@@ -208,7 +208,13 @@ async function purgeInboundPayloads(pool, { now = new Date(), batch = 5000 } = {
 const privacyJob = () => ({
   name: "privacy",
   everyMs: 6 * 3600 * 1000,
-  run: async ({ pool, now }) => ({ counts: { ...(await retentionSweep(pool, { now })), ...(await purgeInboundPayloads(pool, { now })) } })
+  run: async ({ pool, now }) => ({
+    counts: {
+      ...(await retentionSweep(pool, { now })),
+      ...(await purgeInboundPayloads(pool, { now })),
+      telegram_purged: await require("../lib/tgLink").purgeCallbacks(pool)
+    }
+  })
 });
 
 module.exports = { RETENTION_MONTHS, exportLead, eraseLead, retentionSweep, purgeInboundPayloads, privacyJob };

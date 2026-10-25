@@ -376,6 +376,27 @@ describe("free messages (step 5)", () => {
   });
 });
 
+describe("onboarding and cleanup (step 6)", () => {
+  test("start links for every active broker of the agency, each usable once", async () => {
+    expect(await TgLink.startLinksForAgency(h.pool, h.AGENCY_A, "")).toEqual([]);
+    const links = await TgLink.startLinksForAgency(h.pool, h.AGENCY_A, "Wehdat_Hub_bot");
+    expect(links.length).toBeGreaterThan(1);
+    expect(links[0].url).toMatch(/^https:\/\/t\.me\/Wehdat_Hub_bot\?start=[A-Za-z0-9_-]{32}$/);
+    const out = await h.tg(6100, { text: `/start ${links[0].url.split("start=")[1]}` });
+    expect(texts(out)).toMatch(/✅/);
+  });
+
+  test("the privacy job drops old callback tokens and spent start-link tokens", async () => {
+    await TgLink.issueLinkToken(h.pool, h.BROKERS.broker);
+    await h.query("UPDATE telegram_link_tokens SET expires_at = NOW() - INTERVAL '2 days'");
+    await h.query("INSERT INTO telegram_callbacks (token, data, created_at) VALUES ('~old', 'x', NOW() - INTERVAL '31 days'), ('~new', 'y', NOW())");
+    const { privacyJob } = require("../../services/privacy");
+    const r = await privacyJob().run({ pool: h.pool, now: new Date() });
+    expect(r.counts.telegram_purged).toBe(2);
+    expect(await h.query("SELECT token FROM telegram_callbacks")).toEqual([{ token: "~new" }]);
+  });
+});
+
 describe("pieces", () => {
   test("button ids over 64 bytes get a short stored token that decodes back", async () => {
     const long = `ld:undoset:${"1234567890-".repeat(8)}`;

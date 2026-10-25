@@ -13,6 +13,7 @@ const PAGE = 20;
 const when = (d) => new Date(d).toISOString().slice(0, 16).replace("T", " ");
 
 const CHANNEL = {
+  telegram: ["تليجرام", "Telegram"],
   whatsapp: ["واتساب", "WhatsApp"],
   webpush: ["إشعار الموقع", "Web push"],
   inbox: ["الصندوق بس", "Inbox only"]
@@ -24,7 +25,8 @@ const REASON = {
   window_closed: ["نافذة الـ24 ساعة مقفولة", "24-hour window closed"],
   quiet_hours: ["ساعات الهدوء", "quiet hours"],
   merged: ["متجمعة مع غيرها", "merged"],
-  no_push: ["الإشعارات مش مفعلة", "push not enabled"]
+  no_push: ["الإشعارات مش مفعلة", "push not enabled"],
+  not_linked: ["تليجرام مش متوصل", "Telegram not linked"]
 };
 const pick = (map, key, lang) => (map[key] ? map[key][lang === "en" ? 1 : 0] : key || "—");
 
@@ -62,7 +64,7 @@ ${rows.length
 </li>`
     )}</ul>
 <p class="row">${n > 0 ? html`<a href="/app/notifications?page=${n - 1}">${L(lang, "→ الأحدث", "← Newer")}</a>` : ""} ${more ? html`<a href="/app/notifications?page=${n + 1}">${L(lang, "الأقدم ←", "Older →")}</a>` : ""}</p>`
-  : html`<p class="card">${L(lang, "مفيش تنبيهات لسه. التنبيهات بتتجمع هنا دايماً، حتى اللي وصلتك على واتساب.", "No notifications yet. Every alert lands here, even the ones you got on WhatsApp.")}</p>`}`
+  : html`<p class="card">${L(lang, "مفيش تنبيهات لسه. التنبيهات بتتجمع هنا دايماً، حتى اللي وصلتك على تليجرام أو واتساب.", "No notifications yet. Every alert lands here, even the ones you got on WhatsApp.")}</p>`}`
     });
   });
 

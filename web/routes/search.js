@@ -31,7 +31,7 @@ async function runFilters(pool, agencyId, filters, page) {
 
 function searchBox(q, lang) {
   return html`<form method="get" action="/app/search" class="card stack" role="search">
-  <label>${L(lang, "اكتب طلبك زي ما بتكتبه على واتساب", "Type your request as you would on WhatsApp")}
+  <label>${L(lang, "اكتب طلبك زي ما بتكتبه للبوت", "Type your request as you would to the bot")}
     <input name="q" value="${q}" placeholder="${L(lang, "شقة 3 غرف في التجمع تحت 9 مليون", "3-bedroom apartment in New Cairo under 9M")}" autocomplete="off"></label>
   <div class="row"><button type="submit">🔍 ${L(lang, "بحث", "Search")}</button><a href="/app/searches">${L(lang, "⭐ البحث المحفوظ", "⭐ Saved searches")}</a></div>
 </form>`;

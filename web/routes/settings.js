@@ -42,8 +42,8 @@ ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "�
   <h2>🔔 ${L(lang, "التنبيهات توصلك فين؟", "Where do alerts reach you?")}</h2>
   <p class="muted">${L(
     lang,
-    "واتساب بيستخدم رصيد رسايل الوكالة؛ الموقع ببلاش. لما رصيد واتساب يخلص أو نافذة الـ24 ساعة تتقفل، التنبيه بيوصل على الموقع. التنبيه بيوصل على قناة واحدة بس، وكله بيتسجل في 🔔.",
-    "WhatsApp uses your agency's message credits; the website is free. When the credits run out or the 24-hour window closes, alerts come on the website. Each alert comes on one channel only, and all of them are kept in 🔔."
+    "تليجرام والموقع ببلاش؛ واتساب بيستخدم رصيد رسايل الوكالة. لما رصيد واتساب يخلص أو نافذة الـ24 ساعة تتقفل، التنبيه بيوصل على الموقع. التنبيه بيوصل على قناة واحدة بس، وكله بيتسجل في 🔔.",
+    "Telegram and the website are free; WhatsApp uses your agency's message credits. When the credits run out or the 24-hour window closes, alerts come on the website. Each alert comes on one channel only, and all of them are kept in 🔔."
   )}</p>
   ${Notifications.KINDS.map(
     (k) => html`<label>${Notifications.KIND_LABELS[k][lang === "en" ? 1 : 0]}

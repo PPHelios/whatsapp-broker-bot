@@ -12,6 +12,7 @@ const { runMigrations } = require("../lib/migrate");
 const Onboarding = require("../lib/onboarding");
 const Links = require("../lib/links");
 const Brokers = require("../services/brokers");
+const TgLink = require("../lib/tgLink");
 
 async function deactivate(file, phone) {
   const input = JSON.parse(fs.readFileSync(path.resolve(file), "utf8"));
@@ -36,6 +37,17 @@ function printStartLinks(input, plan) {
   }
   console.log("\nStart links (send each broker theirs; one tap opens the chat with the first message typed in):");
   for (const l of lines) console.log(l);
+}
+
+/** Telegram start links (one tap links the broker's Telegram to their account; each lasts 7 days, one use). */
+async function printTelegramLinks(pool, agencyId, username) {
+  const links = await TgLink.startLinksForAgency(pool, agencyId, username);
+  if (!links.length) {
+    console.log("\nNo Telegram start links: set telegram_bot in the file or TELEGRAM_BOT_USERNAME (e.g. Wehdat_Hub_bot) to print them.");
+    return;
+  }
+  console.log(`\nTelegram start links (send each broker theirs privately; one use, valid ${TgLink.LINK_TOKEN_DAYS} days; re-run to get new ones):`);
+  for (const l of links) console.log(`${l.name} (${l.phone}): ${l.url}`);
 }
 
 async function main() {
@@ -72,7 +84,8 @@ async function main() {
     console.log(`\nAgency id ${res.agencyId} (slug ${res.slug}): ${res.created.length} broker(s) added, ${res.updated.length} updated.`);
     console.log(`Broker web app: ${Links.appUrl("/")}`);
     printStartLinks(input, plan);
-    console.log("\nNext: send each broker the guides in their language (docs/pilot/broker-howto-ar.md + web-howto-ar.md, or the -en versions).");
+    await printTelegramLinks(pool, res.agencyId, input.telegram_bot || process.env.TELEGRAM_BOT_USERNAME);
+    console.log("\nNext: send each broker the guides in their language (docs/pilot/telegram-howto-ar.md + web-howto-ar.md, or the -en versions).");
     console.log("A broker must message the bot once (the start link does it) before the bot can write to them.");
   } finally {
     await pool.end();

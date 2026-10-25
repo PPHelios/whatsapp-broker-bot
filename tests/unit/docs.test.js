@@ -42,6 +42,8 @@ test("the broker guides and the runbook exist and point at each other", () => {
     for (const s of ["L-0042", "VIL-08", "iOS 16.4", "| --- |"]) expect([lang, s, crm.includes(s)]).toEqual([lang, s, true]);
     expect(read(`docs/pilot/broker-howto-${lang}.md`)).toContain(`crm-howto-${lang}.md`);
     expect(read(`docs/pilot/web-howto-${lang}.md`)).toContain(`crm-howto-${lang}.md`);
+    const tg = read(`docs/pilot/telegram-howto-${lang}.md`);
+    for (const s of [`crm-howto-${lang}.md`, `web-howto-${lang}.md`, "@Wehdat_Hub_bot", "WehdatHub"]) expect([lang, s, tg.includes(s)]).toEqual([lang, s, true]);
   }
   const runbook = read("docs/runbook.md");
   for (const s of ["agency_outbound_daily", "operation_logs", "npm run migrate", "npm run onboard", "render.yaml", "Rotating secrets", "web-howto-ar.md", "broker-howto-en.md", "start link"]) {
