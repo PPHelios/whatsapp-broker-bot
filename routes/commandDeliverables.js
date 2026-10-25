@@ -7,6 +7,7 @@ const Flyer = require("../lib/flyer");
 const ShareLinks = require("../lib/shareLinks");
 const { cardButtons } = require("../lib/buttons");
 const { reply, replyForClient, replyButtons, replyAlbum } = require("../lib/dispatcher");
+const Catalogue = require("../services/catalogue");
 const { logCommandOp, setRecentBrokerListing } = require("./commandState");
 
 /**
@@ -69,7 +70,7 @@ async function deliverFlyerFor(listing, isUnbranded, broker, ctx) {
 /**
  * Reusable Deliverable Handler: Marketing Collateral / Layout (DEL-05)
  */
-async function deliverCollateral(listing, broker, lang) {
+async function deliverCollateral(listing, broker, lang, pool = null) {
   const collateral = listing.collateral || {};
   const links = [];
 
@@ -101,6 +102,10 @@ async function deliverCollateral(listing, broker, lang) {
       }`
     );
   }
+
+  // The unit's catalogue project (C1): its links, internal ones marked 🔒 (never for the client).
+  const project = pool ? await Catalogue.projectForUnit(pool, listing).catch(() => null) : null;
+  for (const m of project?.materials || []) links.push(`🔗 *${m.label}*${m.client_visible ? "" : " 🔒"}: ${m.url}`);
 
   if (!links.length) {
     await reply(
@@ -192,7 +197,7 @@ async function handlePastedCard(broker, raw, ctx) {
         return true;
       }
       if (/(?:layout|مخطط|collateral|ملفات)/i.test(raw)) {
-        return await deliverCollateral(listing, broker, lang);
+        return await deliverCollateral(listing, broker, lang, pool);
       }
 
       // Default: If card contains code with no specific action, treat as direct unit inspection
@@ -401,7 +406,7 @@ async function handleDeliverableCommand(broker, raw, ctx, { resolveTargetCode, s
       listing.code,
       recentBrokerListings
     );
-    return await deliverCollateral(listing, broker, lang);
+    return await deliverCollateral(listing, broker, lang, pool);
   }
 
   return null;

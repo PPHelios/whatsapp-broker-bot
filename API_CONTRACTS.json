@@ -1260,6 +1260,41 @@
       "checkDraftCompleteness": ["draft", "parsedContext"],
       "validateDraft": ["inputDraft", "lang", "ctx"],
       "validateVisionDraft": ["raw", "nImages"]
+    },
+    "services/catalogue.js": {
+      "STATUSES": "Array",
+      "KINDS": "Array",
+      "FREQUENCIES": "Array",
+      "MAINTENANCE_DUE": "Array",
+      "num": ["v"],
+      "listDevelopers": ["db", "actor"],
+      "getDeveloper": ["db", "actor", "id"],
+      "saveDeveloper": ["db", "actor", "input"],
+      "developerByName": ["db", "actor", "name"],
+      "listProjects": ["db", "actor", "params"],
+      "saveProject": ["db", "actor", "input"],
+      "archiveProject": ["db", "actor", "id", "archived"],
+      "getProject": ["db", "actor", "id"],
+      "savePhase": ["db", "actor", "projectId", "input"],
+      "deletePhase": ["db", "actor", "projectId", "phaseId"],
+      "planFields": ["input"],
+      "savePlan": ["db", "actor", "projectId", "input"],
+      "deletePlan": ["db", "actor", "projectId", "planId"],
+      "unitPlan": ["p", "project"],
+      "syncUnits": ["db", "projectId"],
+      "linkUnits": ["db", "actor", "projectId", "params"],
+      "unlinkUnit": ["db", "actor", "projectId", "listingId"],
+      "saveMaterial": ["db", "actor", "projectId", "input"],
+      "setMaterialVisibility": ["db", "actor", "projectId", "materialId", "visible"],
+      "deleteMaterial": ["db", "actor", "projectId", "materialId"],
+      "clientMaterials": ["db", "listing"],
+      "projectForUnit": ["db", "listing"],
+      "linkOpens": ["url", "params"],
+      "checkLinks": ["pool", "params"],
+      "linkCheckJob": []
+    },
+    "web/routes/catalogue.js": {
+      "register": ["web", "params"]
     }
   },
   "invariant_variable_names": {
