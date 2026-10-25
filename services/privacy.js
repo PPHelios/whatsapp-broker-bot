@@ -13,6 +13,7 @@ const Card = require("../domain/leadCard");
 const Stages = require("../domain/leadStages");
 const SearchLink = require("../domain/searchLink");
 const { withTransaction } = require("../lib/db");
+const ErrorReports = require("../lib/errorReports");
 
 const RETENTION_MONTHS = 18;
 const WARN_DAYS = 30;
@@ -208,7 +209,9 @@ async function purgeInboundPayloads(pool, { now = new Date(), batch = 5000 } = {
 const privacyJob = () => ({
   name: "privacy",
   everyMs: 6 * 3600 * 1000,
-  run: async ({ pool, now }) => ({ counts: { ...(await retentionSweep(pool, { now })), ...(await purgeInboundPayloads(pool, { now })) } })
+  run: async ({ pool, now }) => ({
+    counts: { ...(await retentionSweep(pool, { now })), ...(await purgeInboundPayloads(pool, { now })), ...(await ErrorReports.purgeOld(pool, { now })) }
+  })
 });
 
 module.exports = { RETENTION_MONTHS, exportLead, eraseLead, retentionSweep, purgeInboundPayloads, privacyJob };
