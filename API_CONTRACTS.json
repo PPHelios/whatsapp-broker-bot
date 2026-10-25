@@ -677,13 +677,16 @@
       "basisLabel": ["basis", "lang"],
       "isClosed": ["stage"],
       "stageError": ["stage", "lostReason"],
-      "stageAfterContact": ["stage"]
+      "stageAfterContact": ["stage"],
+      "cairoOffsetMinutes": ["at"],
+      "cairoDayAt": ["now", "daysAhead", "hour"]
     },
     "domain/leadCard.js": {
       "refLabel": ["ref"],
       "parseRef": ["text"],
       "displayName": ["lead", "lang"],
       "listLine": ["lead", "lang"],
+      "requestSummary": ["f", "lang"],
       "card": ["lead", "params"],
       "timelineLine": ["ev", "lang"]
     },
@@ -700,7 +703,10 @@
       "setFollowUp": ["pool", "actor", "key", "params"],
       "completeFollowUp": ["pool", "actor", "key", "params"],
       "undo": ["pool", "actor", "eventId", "params"],
+      "noteRequest": ["pool", "actor", "key", "filters", "params"],
       "getLead": ["pool", "actor", "key"],
+      "refExists": ["pool", "actor", "ref"],
+      "dueFollowUps": ["pool", "actor", "params"],
       "findByPhone": ["pool", "actor", "raw"],
       "listLeads": ["pool", "actor", "f", "params"],
       "timeline": ["pool", "actor", "key", "params"],
@@ -708,6 +714,35 @@
     },
     "services/brokers.js": {
       "deactivateBroker": ["pool", "params"]
+    },
+    "domain/leadIntake.js": {
+      "MAX_CHOICES": "Number",
+      "findPhones": ["text"],
+      "parseContactCard": ["contacts"],
+      "looksLikeLead": ["text"],
+      "isBarePhone": ["text"],
+      "matchLeadCommand": ["text"],
+      "matchMyLeads": ["text"],
+      "matchFollowUps": ["text"],
+      "matchAssign": ["text"],
+      "matchRef": ["text"],
+      "buildLeadPrompt": ["lang", "fence"],
+      "normalizeLeadExtraction": ["raw"]
+    },
+    "lib/leadIntake.js": {
+      "cardButtons": ["lead", "lang", "params"],
+      "cardText": ["lead", "lang", "params"],
+      "handleContacts": ["broker", "message", "ctx"],
+      "lookupPhone": ["broker", "text", "ctx"],
+      "offerForward": ["broker", "text", "ctx"],
+      "leadCommand": ["broker", "params", "ctx"],
+      "collect": ["broker", "text", "ctx"],
+      "collectVoice": ["broker", "transcript", "ctx"],
+      "myLeads": ["broker", "ctx"],
+      "followUps": ["broker", "ctx"],
+      "openRef": ["broker", "ref", "ctx"],
+      "assignCommand": ["broker", "params", "ctx"],
+      "handleButton": ["broker", "id", "ctx"]
     }
   },
   "invariant_variable_names": {

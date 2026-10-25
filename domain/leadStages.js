@@ -53,6 +53,25 @@ function stageError(stage, lostReason) {
   return null;
 }
 
+/** Cairo's offset from UTC in minutes at an instant (Egypt has summer time). */
+function cairoOffsetMinutes(at) {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", { timeZone: "Africa/Cairo", hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+      .formatToParts(at)
+      .map((x) => [x.type, x.value])
+  );
+  const local = Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), Number(p.hour), Number(p.minute));
+  return Math.round((local - Math.floor(at.getTime() / 60000) * 60000) / 60000);
+}
+
+/** Q5: the instant that is `hour`:00 Cairo time, `daysAhead` Cairo days after `now` (a date with no time means 10:00). */
+function cairoDayAt(now, daysAhead = 0, hour = 10) {
+  const shifted = new Date(now.getTime() + cairoOffsetMinutes(now) * 60000);
+  const base = Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate() + daysAhead, hour);
+  const guess = new Date(base - 2 * 3600 * 1000);
+  return new Date(base - cairoOffsetMinutes(guess) * 60000);
+}
+
 /** Contacting a new lead moves it to contacted; later stages stay. */
 const stageAfterContact = (stage) => (stage === "new" ? "contacted" : stage);
 
@@ -68,5 +87,7 @@ module.exports = {
   basisLabel,
   isClosed,
   stageError,
-  stageAfterContact
+  stageAfterContact,
+  cairoOffsetMinutes,
+  cairoDayAt
 };

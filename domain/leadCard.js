@@ -5,6 +5,8 @@
 
 const Phone = require("./phone");
 const Stages = require("./leadStages");
+const Describe = require("./describe");
+const Places = require("./places");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 
@@ -27,6 +29,34 @@ function displayName(lead, lang) {
 /** One line for lists: "L-0042 · Ahmed · 🆕 New". */
 function listLine(lead, lang) {
   return `${refLabel(lead.ref)} · ${displayName(lead, lang)} · ${Stages.stageLabel(lead.stage, lang)}`;
+}
+
+/** A client request (canonical search filters) in one line: "Villa · sale · New Cairo or Sheikh Zayed · up to 9M EGP · 3 bedrooms". */
+function requestSummary(f, lang = "ar") {
+  if (!f) return "";
+  const en = lang === "en";
+  const parts = [];
+  const types = (f.property_types || []).map((t) => (Describe.TYPE_LABELS[t] ? Describe.TYPE_LABELS[t][en ? 1 : 0] : t));
+  if (types.length) parts.push(types.join(en ? " or " : " أو "));
+  if (f.listing_type) parts.push(f.listing_type === "rent" ? L(lang, "إيجار", "rent") : L(lang, "بيع", "sale"));
+  const title = (x) => (en ? x.replace(/\b[a-z]/g, (c) => c.toUpperCase()) : x);
+  const places = [...(f.places || []).map((p) => Places.placeName(p.kind, p.key)?.[en ? "en" : "ar"]).filter(Boolean).map(title), ...(f.place_terms || [])];
+  if (places.length) parts.push(places.join(en ? " or " : " أو "));
+  const cur = f.currency || "EGP";
+  if (f.price_min && f.price_max) parts.push(L(lang, `من ${Describe.money(f.price_min, lang, cur)} لـ ${Describe.money(f.price_max, lang, cur)}`, `${Describe.money(f.price_min, lang, cur)} to ${Describe.money(f.price_max, lang, cur)}`));
+  else if (f.price_max) parts.push(L(lang, `لحد ${Describe.money(f.price_max, lang, cur)}`, `up to ${Describe.money(f.price_max, lang, cur)}`));
+  else if (f.price_min) parts.push(L(lang, `من ${Describe.money(f.price_min, lang, cur)}`, `from ${Describe.money(f.price_min, lang, cur)}`));
+  if (f.max_installment) parts.push(L(lang, `قسط لحد ${Describe.money(f.max_installment, lang, cur)}`, `installment up to ${Describe.money(f.max_installment, lang, cur)}`));
+  if (f.max_down_payment) parts.push(L(lang, `مقدم لحد ${Describe.money(f.max_down_payment, lang, cur)}`, `down payment up to ${Describe.money(f.max_down_payment, lang, cur)}`));
+  if (f.bedrooms_min || f.bedrooms_max) {
+    const a = f.bedrooms_min;
+    const b = f.bedrooms_max;
+    const n = a && b && a !== b ? `${a}-${b}` : a || b;
+    parts.push(L(lang, `${n} غرف`, `${n} bedrooms`));
+  }
+  if (f.area_min || f.area_max) parts.push(`${f.area_min || ""}${f.area_min && f.area_max ? "-" : ""}${f.area_max || ""} ${L(lang, "م²", "m²")}`);
+  if (f.delivery_ready) parts.push(L(lang, "استلام فوري", "ready to move"));
+  return parts.join(" · ");
 }
 
 const when = (d) => (d ? new Date(d).toISOString().slice(0, 16).replace("T", " ") : "");
@@ -96,4 +126,4 @@ function timelineLine(ev, lang) {
   return `${when(ev.created_at)} ${text}${who}${ev.undone_at ? L(lang, " (اتلغى)", " (undone)") : ""}`;
 }
 
-module.exports = { refLabel, parseRef, displayName, listLine, card, timelineLine };
+module.exports = { refLabel, parseRef, displayName, listLine, requestSummary, card, timelineLine };

@@ -100,3 +100,72 @@ test("Q10 deal visibility: closing broker, a share holder or a manager; editing:
   expect(Authz.canEditDeal({ id: "m", agency_id: "A", role: "owner" }, deal)).toBe(true);
   expect(Authz.canViewDeal({ id: "m", agency_id: "B", role: "owner" }, deal)).toBe(false);
 });
+
+const Intake = require("../../domain/leadIntake");
+
+test.each([
+  ["كلمني 0101 234 5678 او 01112345678", ["+201012345678", "+201112345678"]],
+  ["+20 101 234 5678", ["+201012345678"]],
+  ["رقمه ٠١٠١٢٣٤٥٦٧٨", ["+201012345678"]],
+  ["تليفون (02) 2555-1234", ["+20225551234"]],
+  ["0020-101-234-5678", ["+201012345678"]],
+  ["+1 415 555 0100", ["+14155550100"]],
+  ["مقدم 500000 قسط 25000 سعر 8500000 مساحة 150", []],
+  ["تسليم 2027 الدور 3", []]
+])("findPhones(%s)", (text, out) => {
+  expect(Intake.findPhones(text)).toEqual(out);
+});
+
+test("contact cards: every number, invalid ones counted; wa_id preferred", () => {
+  const [c] = Intake.parseContactCard([{ name: { formatted_name: "Sara" }, phones: [{ phone: "0101 234 5678" }, { phone: "x" }, { wa_id: "201112345678", phone: "ignored" }] }]);
+  expect(c).toEqual({ name: "Sara", phones: ["+201012345678", "+201112345678"], invalid: 1 });
+});
+
+test("looksLikeLead: a phone and no unit; bare phones", () => {
+  expect(Intake.looksLikeLead("انا احمد رقمي 01012345678 عايز شقة")).toBe(true);
+  expect(Intake.looksLikeLead("شقة 150م 3 غرف بسعر 8.5 مليون 01012345678 كود HP-201")).toBe(false);
+  expect(Intake.looksLikeLead("للبيع شقة 150 متر 3 غرف السعر 8,500,000 تواصل 01012345678")).toBe(false);
+  expect(Intake.looksLikeLead("عايز شقة في التجمع")).toBe(false);
+  expect(Intake.isBarePhone("0101 234 5678")).toBe(true);
+  expect(Intake.isBarePhone("01012345678 hi")).toBe(false);
+});
+
+// Q13: every CRM command has an English form.
+test.each([
+  ["ليد", "lead"],
+  ["عميل جديد", "new lead"],
+  ["عملائي", "my leads"],
+  ["متابعات", "followups"],
+  ["حول L-0042 لـ سارة", "assign L-0042 to Sara"],
+  ["L-0042", "L-0042"]
+])("%s ↔ %s", (ar, en) => {
+  const kind = (t) =>
+    Intake.matchLeadCommand(t) ? "lead" : Intake.matchMyLeads(t) ? "my" : Intake.matchFollowUps(t) ? "fu" : Intake.matchAssign(t) ? "assign" : Intake.matchRef(t) ? "ref" : null;
+  expect(kind(ar)).not.toBeNull();
+  expect(kind(ar)).toBe(kind(en));
+});
+
+test("«عميل CODE» (client copy) and leads/lead are told apart", () => {
+  expect(Intake.matchLeadCommand("عميل HP-201")).toBeNull();
+  expect(Intake.matchLeadCommand("leads")).toBeNull();
+  expect(Intake.matchLeadCommand("ليد: احمد 0101")).toEqual({ rest: "احمد 0101" });
+});
+
+test("the extraction never fills what the AI left empty", () => {
+  expect(Intake.normalizeLeadExtraction({ name: "null", phones: [], kind: "investor", request: {} })).toEqual({ name: null, phones: [], kind: null, source: null, note: null, request: null });
+  const r = Intake.normalizeLeadExtraction({ name: " Ahmed ", phones: ["0101"], kind: "tenant", request: { listing_type: "rent", price_max: 25000 } });
+  expect(r).toMatchObject({ name: "Ahmed", phones: ["0101"], kind: "tenant" });
+  expect(r.request).toMatchObject({ listing_type: "rent", price_max: 25000 });
+  expect(Intake.buildLeadPrompt("ar", "ABCD1234")).toContain("===ABCD1234===");
+});
+
+test("cairoDayAt: 10:00 Cairo N days ahead, across summer time", () => {
+  expect(Stages.cairoDayAt(new Date("2026-10-25T21:30:00Z"), 1, 10).toISOString()).toBe("2026-10-27T07:00:00.000Z");
+  expect(Stages.cairoDayAt(new Date("2026-12-31T23:00:00Z"), 1, 10).toISOString()).toBe("2027-01-02T08:00:00.000Z");
+});
+
+test("request summary in both languages", () => {
+  const f = { listing_type: "sale", property_types: ["villa"], places: [{ kind: "area", key: "new_cairo" }], price_max: 9000000, bedrooms_min: 3, bedrooms_max: 3 };
+  expect(Card.requestSummary(f, "en")).toBe("Villa · sale · New Cairo · up to 9M EGP · 3 bedrooms");
+  expect(Card.requestSummary(f, "ar")).toContain("التجمع الخامس");
+});

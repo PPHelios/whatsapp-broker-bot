@@ -349,7 +349,7 @@ async function completeFollowUp(pool, actor, key, { version = null, now = new Da
 }
 
 /**
- * Reverts a reversible event within 10 minutes, if nothing changed the lead since (else a conflict).
+ * Reverts a reversible event within 10 minutes, if every later change was undone too (else a conflict).
  * @returns {Promise<{ ok, lead } | { error: "not_found"|"forbidden"|"not_undoable"|"undo_expired"|"already_undone" } | { conflict, lead }>}
  */
 async function undo(pool, actor, eventId, { now = new Date() } = {}) {
@@ -366,7 +366,12 @@ async function undo(pool, actor, eventId, { now = new Date() } = {}) {
     if (ev.undone_at) return { error: "already_undone" };
     if (ev.broker_id !== actor.id && !Authz.isManager(actor)) return { error: "forbidden" };
     if (now.getTime() - new Date(ev.created_at).getTime() > UNDO_MS) return { error: "undo_expired" };
-    if (ev.data.version !== lead.version) return { conflict: true, lead };
+    // Undo works like a stack: only if every later change was itself undone (each change is an event).
+    const later = await client.query(
+      "SELECT 1 FROM lead_events WHERE agency_id = $1 AND lead_id = $2 AND id > $3 AND undone_at IS NULL AND kind <> 'undo' LIMIT 1",
+      [actor.agency_id, lead.id, ev.id]
+    );
+    if (later.rows.length) return { conflict: true, lead };
     const prev = ev.data.prev || {};
     const cols = Object.keys(prev);
     const upd = await client.query(
@@ -378,6 +383,12 @@ async function undo(pool, actor, eventId, { now = new Date() } = {}) {
     await addEvent(client, lead, actor.id, "undo", { event_id: ev.id, kind: ev.kind }, now);
     return { ok: true, lead: upd.rows[0] };
   });
+}
+
+/** A buyer's or tenant's request as understood at intake (canonical search filters); step 7 turns it into a saved request. */
+async function noteRequest(pool, actor, key, filters, { now = new Date() } = {}) {
+  if (!filters || typeof filters !== "object") return { error: "request_empty" };
+  return mutate(pool, actor, key, { kind: "request_set", now }, () => ({ fields: {}, data: { filters } }));
 }
 
 /* ---------------------------------------------------------------------- */
@@ -437,6 +448,23 @@ async function listLeads(pool, actor, f = {}, { now = new Date() } = {}) {
     args
   );
   return { rows: rows.slice(0, limit), more: rows.length > limit };
+}
+
+/** True when the agency has a lead with this reference (visible or not): "not yours" rather than "no such lead". */
+async function refExists(pool, actor, ref) {
+  const { rows } = await pool.query("SELECT 1 FROM leads WHERE agency_id = $1 AND ref = $2", [actor.agency_id, ref]);
+  return rows.length > 0;
+}
+
+/** «متابعات»: the broker's own open follow-ups, soonest first, and how many there are. */
+async function dueFollowUps(pool, actor, { limit = 5 } = {}) {
+  const { rows } = await pool.query(
+    `SELECT ${LEAD_COLS}, count(*) OVER () AS total ${FROM_LEADS}
+      WHERE l.agency_id = $1 AND l.assigned_broker_id = $2 AND l.follow_up_status = 'open'
+      ORDER BY l.next_follow_up_at LIMIT $3`,
+    [actor.agency_id, actor.id, limit]
+  );
+  return { rows, total: rows[0]?.total || 0 };
 }
 
 /** The last 20 events (then "older" with beforeId), with the acting broker's name. Null if the lead isn't visible. */
@@ -503,7 +531,10 @@ module.exports = {
   setFollowUp,
   completeFollowUp,
   undo,
+  noteRequest,
   getLead,
+  refExists,
+  dueFollowUps,
   findByPhone,
   listLeads,
   timeline,

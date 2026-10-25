@@ -7,6 +7,7 @@ const Drafts = require("../lib/drafts");
 const Supabase = require("../lib/supabase");
 const Edits = require("../lib/edits");
 const Registry = require("../lib/registry");
+const LeadIntake = require("../lib/leadIntake");
 const { reply, replyButtons, allowSilentDrop, setTurnAction } = require("../lib/dispatcher");
 
 // Photo normalization (sharp, in memory) is shared with the web uploads.
@@ -277,6 +278,9 @@ async function handleAudio(broker, message, ctx) {
     );
     return "done";
   }
+
+  // «ليد …» spoken, or a lead draft waiting for the client: the same intake as text (lib/leadIntake.js).
+  if (await LeadIntake.collectVoice(broker, transcribedText.trim(), ctx)) return "done";
 
   // Spoken quick updates ("اتباعت VIL-08", "سعر VIL-08 9 مليون") run as commands; the rest is a search.
   if (await Registry.dispatch(broker, transcribedText.trim(), ctx, { voice: true })) return "done";

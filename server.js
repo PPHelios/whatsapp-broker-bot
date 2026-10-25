@@ -29,6 +29,7 @@ const { handleCommand } = require("./routes/commands");
 const { handleImage, handleAudio } = require("./routes/media");
 const { handleDocument } = require("./routes/documents");
 const { handleInteractive } = require("./routes/interactive");
+const LeadIntake = require("./lib/leadIntake");
 const { mountWeb } = require("./web");
 const { createScheduler } = require("./lib/scheduler");
 const { buildJobs } = require("./lib/jobs");
@@ -182,6 +183,9 @@ function createApp({ pool, config = getConfig(), jobs }) {
       case "text": {
         const text = message.text?.body?.trim() || "";
 
+        // 0. An open lead draft takes the next message (the client's text, number or a correction).
+        if (await LeadIntake.collect(broker, text, ctx)) return "done";
+
         // 1. Try structured text commands (help, stats, export, sold, delete, price, flyer, plans)
         const handledCommand = await handleCommand(broker, text, ctx);
         if (handledCommand) return "done";
@@ -252,7 +256,10 @@ function createApp({ pool, config = getConfig(), jobs }) {
         // 3. A4: inside an edit session, text is part of the edit (never a search).
         if (await Edits.appendToEdit(broker, ctx, { text })) return "done";
 
-        // 4. Delegate to search & natural language engine
+        // 4. A client's message (a phone, no unit): "Is this a client?" [Save as client] [Search].
+        if (await LeadIntake.offerForward(broker, text, ctx)) return "done";
+
+        // 5. Delegate to search & natural language engine
         return await S.handleSearchMessage(broker, text, ctx);
       }
 
@@ -285,18 +292,8 @@ function createApp({ pool, config = getConfig(), jobs }) {
         return "done";
 
       case "contacts":
-        logServerOp(poolInstance, {
-          agency_id: broker.agency_id,
-          broker_id: broker.id,
-          operation_type: "ingress_unsupported_contacts"
-        });
-        await reply(
-          broker,
-          lang === "en"
-            ? "⚠️ Shared contact cards are not processed by the bot. Please manually type the owner's name and contact number into the listing notes."
-            : "⚠️ جهات الاتصال المرسلة (Contact Cards) غير مدعومة ولا يتم سحبها تلقائياً. يرجى كتابة اسم ورقم المالك يدوياً نصاً داخل ملاحظات الوحدة."
-        );
-        return "done";
+        // Release 3: a contact card is a lead lookup ("who is calling?") or a save offer (no AI).
+        return await LeadIntake.handleContacts(broker, message, ctx);
 
       default:
         logServerOp(poolInstance, {
