@@ -149,6 +149,11 @@ async function handleInteractive(broker, message, ctx) {
     return "done";
   }
 
+  // Answer to the review's "is the rest paid in installments?" question.
+  if (replyId === "draft_inst_yes" || replyId === "draft_inst_no") {
+    return await Drafts.answerInstallments(broker, ctx, replyId === "draft_inst_yes");
+  }
+
   // 5. DRAFT: review (DRAFT_SAVE / draft_save_exit) or commit the staged review (draft_confirm)
   if (
     replyId === "DRAFT_SAVE" ||

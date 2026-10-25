@@ -74,7 +74,7 @@ describe("Add by voice → review → confirm (plan verification #1)", () => {
     expect(card).toMatch(/ناصية/);
     expect(card).toMatch(/غرفة مربية/);
     // Review is the only place warnings appear.
-    expect(card).toMatch(/⚠️ موعد التسليم غير مسجل/);
+    expect(card).toMatch(/⚠️ موعد التسليم \(أو استلام فوري\) غير مسجل/);
     expect(buttonsOf(review)).toEqual(["draft_confirm", "draft_edit", "draft_cancel"]);
 
     const saved = await h.tap("broker", "draft_confirm");
@@ -298,6 +298,43 @@ describe("Photo ceiling and items WhatsApp can't pass on", () => {
   test("an unsupported item outside a draft gets a generic notice", async () => {
     const replies = await h.send("broker", { type: "unsupported", errors: [{ code: 131051 }] });
     expect(textOf(replies)).toMatch(/غير مدعوم|not supported/);
+  });
+});
+
+describe("Installments are asked, not assumed", () => {
+  const gapOnly = () =>
+    extraction({ property_type: "townhouse", area_value: 300, bedrooms: 4, price_value: 15e6, resale: { cash_paid: 13e6 } });
+
+  test("total 15M, cash 13M: the review asks; Yes stores 2M remaining without another AI call", async () => {
+    await h.text("broker", "add");
+    await h.text("broker", "townhouse hyde park 15M requested 13M");
+    answerExtraction(gapOnly());
+    const review = await h.text("broker", "done");
+    expect(textOf(review)).toMatch(/الباقي 2 مليون أقساط/);
+    expect(buttonsOf(review)).toEqual(["draft_inst_yes", "draft_inst_no", "draft_cancel"]);
+
+    const calls = h.AI.calls.length;
+    const answered = await h.tap("broker", "draft_inst_yes");
+    expect(h.AI.calls.length).toBe(calls);
+    expect(textOf(answered)).toMatch(/تفاصيل الأقساط/);
+    expect(buttonsOf(answered)).toEqual(["draft_confirm", "draft_edit", "draft_cancel"]);
+    await h.tap("broker", "draft_confirm");
+    const [row] = await listings();
+    expect(Number(row.remaining_amount)).toBe(2e6);
+    expect(Number(row.price_value)).toBe(15e6);
+  });
+
+  test("No: 13M is the cash price, no installment lines", async () => {
+    await h.text("broker", "add");
+    await h.text("broker", "townhouse hyde park 15M requested 13M");
+    answerExtraction(gapOnly());
+    await h.text("broker", "done");
+    const answered = await h.tap("broker", "draft_inst_no");
+    expect(textOf(answered)).not.toMatch(/أقساط/);
+    await h.tap("broker", "draft_confirm");
+    const [row] = await listings();
+    expect(Number(row.price_value)).toBe(13e6);
+    expect(row.remaining_amount === null || Number(row.remaining_amount) === 0).toBe(true);
   });
 });
 

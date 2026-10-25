@@ -308,7 +308,12 @@ function reviewCard(l, { warnings = [], blockers = [], lang = "ar" } = {}) {
   const lines = [en ? "📋 *Review before saving*" : "📋 *مراجعة قبل الحفظ*", `🔑 \`${l.code}\``, ...factLines(l, lang), ...internalLines(l, lang)];
   if (blockers.length) {
     lines.push("", en ? "⛔ *Still needed to save:*" : "⛔ *ناقص لإتمام الحفظ:*", ...blockers.map((b) => Rules.blockerLine(b, lang)));
-    lines.push(en ? "Send the missing details (text or voice), then tap Review." : "ابعت الناقص (كتابة أو فويس) واضغط مراجعة.");
+    const onlyQuestion = blockers.every((b) => b.field === "installments_question");
+    lines.push(
+      onlyQuestion
+        ? en ? "Tap an answer below." : "اختار الإجابة من الأزرار."
+        : en ? "Send the missing details (text or voice), then tap Review." : "ابعت الناقص (كتابة أو فويس) واضغط مراجعة."
+    );
   }
   if (warnings.length) lines.push("", ...warnings.map((w) => Rules.warningLine(w, lang)));
   if (!blockers.length) {

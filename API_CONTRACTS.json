@@ -187,6 +187,7 @@
       "getStagedReview": ["pool", "brokerId"],
       "invalidateStagedReview": ["pool", "brokerId"],
       "reviewDraft": ["broker", "ctx"],
+      "answerInstallments": ["broker", "ctx", "yes"],
       "commitStagedReview": ["broker", "ctx"],
       "commitDraftToDatabase": ["broker", "_draft", "ctx"],
       "commitDraftToListing": ["broker", "_draft", "ctx"],
@@ -341,7 +342,8 @@
       "evaluate": ["listing", "params"],
       "resaleMismatch": ["l"],
       "warningLine": ["w", "lang"],
-      "blockerLine": ["b", "lang"]
+      "blockerLine": ["b", "lang"],
+      "money": ["n", "lang"]
     },
     "domain/features.js": {
       "FEATURES": "Array",
