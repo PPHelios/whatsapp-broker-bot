@@ -6,11 +6,13 @@
  * Verify against the Gemini pricing page before the pilot; override with AI_PRICES_JSON,
  * e.g. {"gemini-3.8-flash":{"inPerM":0.3,"outPerM":2.5}}.
  */
+// USD per million tokens (Google's paid tier, checked 2026-10-25). `next` is an announced price change.
+const FLASH_2027 = { from: "2027-01-01T00:00:00Z", inPerM: 1.5, outPerM: 7.5 };
 const DEFAULT_AI_PRICES = {
-  "gemini-3.8-flash": { inPerM: 0.3, outPerM: 2.5 },
-  "gemini-3.6-flash": { inPerM: 0.3, outPerM: 2.5 },
-  "gemini-3.5-flash-lite": { inPerM: 0.1, outPerM: 0.4 },
-  default: { inPerM: 0.3, outPerM: 2.5 }
+  "gemini-3.8-flash": { inPerM: 0.75, outPerM: 3.75, next: FLASH_2027 },
+  "gemini-3.6-flash": { inPerM: 0.75, outPerM: 3.75, next: FLASH_2027 },
+  "gemini-3.5-flash-lite": { inPerM: 0.3, outPerM: 2.5 },
+  default: { inPerM: 0.75, outPerM: 3.75, next: FLASH_2027 }
 };
 
 // Required in production; the process refuses to start without them.
@@ -21,8 +23,16 @@ const REQUIRED_IN_PRODUCTION = [
   "WHATSAPP_ACCESS_TOKEN",
   "WHATSAPP_PHONE_NUMBER_ID",
   "GEMINI_API_KEY",
-  "PUBLIC_BASE_URL"
+  "PUBLIC_BASE_URL",
+  "WEB_PUSH_PUBLIC_KEY",
+  "WEB_PUSH_PRIVATE_KEY",
+  "LEAD_HASH_KEY"
 ];
+
+const num = (v, fallback) => {
+  const n = Number(v);
+  return Number.isFinite(n) && v !== "" && v !== undefined ? n : fallback;
+};
 
 const int = (v, fallback) => {
   const n = Number(v);
@@ -85,10 +95,33 @@ function loadConfig(env = process.env) {
       maxQueue: int(env.FLYER_MAX_QUEUE, 6),
       timeoutMs: int(env.FLYER_TIMEOUT_MS, 45000)
     },
+    // Message credits (1 credit = 1 WhatsApp message the bot sends) and their ceilings.
+    credits: {
+      monthly: int(env.WA_CREDITS_MONTHLY, 4000),
+      warnPct: 80,
+      ceilingPct: int(env.WA_CREDITS_CEILING_PCT, 110),
+      globalMonthly: int(env.WA_GLOBAL_MONTHLY_CEILING, 8000),
+      loginMonthly: int(env.WA_LOGIN_MONTHLY_CEILING, 200),
+      priceEgp: num(env.WA_PRICE_EGP, 0.21)
+    },
+    // Keyed hash of an erased client's phone (lead_erasures); outside production a fixed development key.
+    leads: {
+      hashKey: env.LEAD_HASH_KEY || (isProd ? "" : "dev-only-lead-hash-key")
+    },
+    webPush: {
+      publicKey: env.WEB_PUSH_PUBLIC_KEY || "",
+      privateKey: env.WEB_PUSH_PRIVATE_KEY || "",
+      subject: env.WEB_PUSH_SUBJECT || "mailto:support@aqarchat.com"
+    },
+    scheduler: {
+      // On by default outside tests; tests call tick({ now }) with a fixed clock instead.
+      enabled: env.SCHEDULER_ENABLED ? env.SCHEDULER_ENABLED !== "false" : env.NODE_ENV !== "test",
+      tickMs: Math.max(5000, int(env.SCHEDULER_TICK_MS, 60000))
+    },
     ai: {
       prices: parsePrices(env.AI_PRICES_JSON),
       quotas: {
-        agencyDaily: int(env.AI_QUOTA_AGENCY_DAILY, 2000),
+        agencyDaily: int(env.AI_QUOTA_AGENCY_DAILY, 300),
         brokerDaily: int(env.AI_QUOTA_BROKER_DAILY, 400)
       }
     }
@@ -108,8 +141,9 @@ function resetConfig() {
 }
 
 /** Estimated USD cost of one AI call from configured per-model prices. */
-function estimateCostUsd(model, tokensIn = 0, tokensOut = 0, prices = getConfig().ai.prices) {
-  const p = prices[model] || prices.default;
+function estimateCostUsd(model, tokensIn = 0, tokensOut = 0, prices = getConfig().ai.prices, now = new Date()) {
+  const base = prices[model] || prices.default;
+  const p = base.next && now >= new Date(base.next.from) ? base.next : base;
   return Number((((tokensIn || 0) * p.inPerM + (tokensOut || 0) * p.outPerM) / 1e6).toFixed(6));
 }
 

@@ -413,7 +413,7 @@ async function handleCommand(broker, text, ctx) {
   // 3. CANCEL / ABORT DRAFT (DRF-05)
   if (/^(cancel|إلغاء|الغاء|خروج|abort|exit|قفل)$/i.test(lower)) {
     await pool.query(
-      "DELETE FROM broker_sessions WHERE broker_id = $1 AND session_type IN ('draft', 'edit')",
+      "DELETE FROM broker_sessions WHERE broker_id = $1 AND session_type IN ('draft', 'edit', 'lead_draft', 'pending_lead')",
       [broker.id]
     );
     await reply(

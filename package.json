@@ -48,7 +48,8 @@
     "multer": "2.4.0",
     "pg": "8.23.1",
     "satori": "0.10.14",
-    "sharp": "0.35.5"
+    "sharp": "0.35.5",
+    "web-push": "3.6.7"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",

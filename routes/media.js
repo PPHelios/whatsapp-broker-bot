@@ -7,7 +7,8 @@ const Drafts = require("../lib/drafts");
 const Supabase = require("../lib/supabase");
 const Edits = require("../lib/edits");
 const Registry = require("../lib/registry");
-const { reply, replyButtons, react } = require("../lib/dispatcher");
+const LeadIntake = require("../lib/leadIntake");
+const { reply, replyButtons, allowSilentDrop, setTurnAction } = require("../lib/dispatcher");
 
 // Photo normalization (sharp, in memory) is shared with the web uploads.
 const { normalizeImageBuffer } = require("../lib/images");
@@ -17,6 +18,7 @@ const { normalizeImageBuffer } = require("../lib/images");
  * Adopts silent reaction acknowledgment (Solution 2) to eliminate chat flooding.
  */
 async function handleImage(broker, message, ctx) {
+  setTurnAction("add_unit");
   const { pool, lang } = ctx;
   const imageObj = message.image;
 
@@ -148,9 +150,9 @@ async function handleImage(broker, message, ctx) {
     }
   }
 
-  // 6. Non-intrusive acknowledgement: a 📸 reaction on the photo bubble (no text bubble per photo).
-  // A delivered reaction answers the turn, so the safety-net fallback does not fire.
-  await react(broker, message.id, "📸");
+  // 6. No message per photo (P11: a reaction is billed like a message). The read tick already shows it
+  // arrived; the broker's next reply in this draft starts with "📸 N photos received" (Drafts.photoNote).
+  allowSilentDrop("photo_received");
 
   return "done";
 }
@@ -276,6 +278,11 @@ async function handleAudio(broker, message, ctx) {
     );
     return "done";
   }
+
+  // «ليد …» spoken, or a lead draft waiting for the client: the same intake as text (lib/leadIntake.js).
+  if (await LeadIntake.collectVoice(broker, transcribedText.trim(), ctx)) return "done";
+  // Wow 3: a spoken outcome with one of the broker's clients updates the CRM after Confirm.
+  if (await LeadIntake.offerUpdate(broker, transcribedText.trim(), ctx)) return "done";
 
   // Spoken quick updates ("اتباعت VIL-08", "سعر VIL-08 9 مليون") run as commands; the rest is a search.
   if (await Registry.dispatch(broker, transcribedText.trim(), ctx, { voice: true })) return "done";

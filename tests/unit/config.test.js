@@ -50,3 +50,10 @@ test("quotas come from env", () => {
   const c = loadConfig({ AI_QUOTA_AGENCY_DAILY: "50", AI_QUOTA_BROKER_DAILY: "5" });
   expect(c.ai.quotas).toEqual({ agencyDaily: 50, brokerDaily: 5 });
 });
+
+test("built-in Gemini prices: Flash $0.75/$3.75 now, $1.50/$7.50 from 1 January 2027; Flash-Lite $0.30/$2.50", () => {
+  const { DEFAULT_AI_PRICES } = require("../../config");
+  expect(estimateCostUsd("gemini-3.8-flash", 1e6, 1e6, DEFAULT_AI_PRICES, new Date("2026-10-25T00:00:00Z"))).toBe(4.5);
+  expect(estimateCostUsd("gemini-3.6-flash", 1e6, 1e6, DEFAULT_AI_PRICES, new Date("2027-01-01T00:00:00Z"))).toBe(9);
+  expect(estimateCostUsd("gemini-3.5-flash-lite", 1e6, 1e6, DEFAULT_AI_PRICES, new Date("2027-06-01T00:00:00Z"))).toBe(2.8);
+});

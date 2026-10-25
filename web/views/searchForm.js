@@ -37,12 +37,16 @@ function placeList() {
 }
 
 /** The refine form (GET /app/search), prefilled from canonical filters. */
-function refineForm(filters, lang = "ar", { open = false } = {}) {
+/**
+ * The filter form. Search uses it as a GET to /app/search; a lead's request (step 7) as a POST to the lead page
+ * ({ action, method: "post", hidden, summary, submit, clear: null }).
+ */
+function refineForm(filters, lang = "ar", { open = false, action = "/app/search", method = "get", hidden = "", summary = null, submit = null, clear = "/app/search" } = {}) {
   const v = formFromFilters(filters || {}, lang);
   const groups = [...new Set(Features.FEATURES.map((f) => f.group))];
   return html`<details class="card"${open ? raw(" open") : ""}>
-<summary>${L(lang, "🎛️ تعديل البحث", "🎛️ Refine")}</summary>
-<form method="get" action="/app/search" class="stack">
+<summary>${summary || L(lang, "🎛️ تعديل البحث", "🎛️ Refine")}</summary>
+<form method="${method}" action="${action}" class="stack">${hidden}
   <div class="grid">
     ${select("listing_type", L(lang, "بيع / إيجار", "Sale / rent"), v.listing_type, [["", L(lang, "الكل", "Any")], ["sale", L(lang, "بيع", "Sale")], ["rent", L(lang, "إيجار", "Rent")]])}
     ${select("market", L(lang, "برايمري / ريسيل", "Primary / resale"), v.market, [["", L(lang, "الكل", "Any")], ["resale", L(lang, "ريسيل", "Resale")], ["primary", L(lang, "برايمري", "Primary")]])}
@@ -83,7 +87,7 @@ function refineForm(filters, lang = "ar", { open = false } = {}) {
     )}
     <label>${L(lang, "مميزات تانية (افصل بفاصلة)", "Other features (comma separated)")}<input name="other" value="${v.other}"></label>
   </fieldset>
-  <div class="row"><button type="submit">${L(lang, "بحث", "Search")}</button><a class="btn secondary" href="/app/search">${L(lang, "مسح", "Clear")}</a></div>
+  <div class="row"><button type="submit">${submit || L(lang, "بحث", "Search")}</button>${clear ? html`<a class="btn secondary" href="${clear}">${L(lang, "مسح", "Clear")}</a>` : ""}</div>
 </form>
 ${placeList()}
 </details>`;

@@ -23,9 +23,9 @@ function select(name, label, value, options) {
 const freqOptions = (lang) => [["", "—"], ...FREQUENCIES.map((f) => [f, Describe.frequencyLabel(f, lang)])];
 
 /**
- * @param {Object} p - { values (formFromUnit), mode: "new"|"edit", code, version, images, lang, notice, error, review }
+ * @param {Object} p - { values (formFromUnit), mode: "new"|"edit", code, version, images, lang, notice, error, review, duplicate (P13: the save button becomes "Save anyway") }
  */
-function unitForm({ values: v, mode = "new", code = null, version = null, images = [], lang = "ar", notice = null, error = null, review = null, csrf = "" }) {
+function unitForm({ values: v, mode = "new", code = null, version = null, images = [], lang = "ar", notice = null, error = null, review = null, csrf = "", duplicate = null }) {
   const action = mode === "edit" ? `/app/units/${encodeURIComponent(code)}/edit` : "/app/units/new";
   const groups = [...new Set(Features.FEATURES.map((f) => f.group))];
   return html`<form id="unit-form" method="post" action="${action}" enctype="multipart/form-data" class="stack">
@@ -52,7 +52,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     ${input("compound", L(lang, "الكمبوند *", "Compound *"), v.compound, { extra: ' list="places"' })}
     ${input("district", L(lang, "الحي", "District"), v.district)}
     ${input("city", L(lang, "المدينة", "City"), v.city)}
-    ${input("price_value", L(lang, "السعر * (الإيجار الشهري للإيجار)", "Price * (monthly rent for rentals)"), v.price_value, { extra: ' inputmode="decimal" placeholder="8.5 مليون"' })}
+    ${input("price_value", L(lang, "السعر * (الإيجار الشهري للإيجار)", "Price * (monthly rent for rentals)"), v.price_value, { extra: ` inputmode="decimal" placeholder="${L(lang, "8.5 مليون", "8.5M")}"` })}
     ${select("currency", L(lang, "العملة", "Currency"), v.currency, [["", "EGP"], ["USD", "USD"], ["EUR", "EUR"]])}
     ${select("rent_period", L(lang, "الإيجار", "Rent period"), v.rent_period, [["", "—"], ["monthly", L(lang, "شهري", "Monthly")], ["yearly", L(lang, "سنوي", "Yearly")]])}
     ${input("area_value", L(lang, "المساحة م² * (المباني للفيلات)", "Area m² * (BUA for villas)"), v.area_value, { type: "number", extra: ' min="0" step="any"' })}
@@ -128,20 +128,27 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
   <div id="review">${review || ""}</div>
   <div class="row">
     <button type="button" class="secondary" hx-post="/app/units/review" hx-encoding="multipart/form-data" hx-include="#unit-form" hx-target="#review">📋 ${L(lang, "مراجعة", "Review")}</button>
-    <button type="submit" name="action" value="save">✅ ${L(lang, "حفظ", "Save")}</button>
+    ${duplicate
+      ? html`<button type="submit" name="force" value="1">✅ ${L(lang, "احفظ برضه", "Save anyway")}</button>`
+      : html`<button type="submit" name="action" value="save">✅ ${L(lang, "حفظ", "Save")}</button>`}
     ${mode === "edit" ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(code)}">${L(lang, "إلغاء", "Cancel")}</a>` : ""}
   </div>
 </form>`;
 }
 
+/** P13: "looks like VIL-08" with a link to open it. */
+const duplicateNotice = (code, lang) =>
+  html`<p class="notice warn" data-duplicate="${code}">⚠️ ${L(lang, "شكلها نفس الوحدة", "This looks like")} <a href="/app/units/${encodeURIComponent(code)}">${code}</a> ${L(lang, "اللي عندك. لو دي وحدة تانية، احفظ برضه.", "already listed. If it is another unit, save anyway.")}</p>`;
+
 /** Review panel: what blocks saving, the field warnings (only here and in WhatsApp review), the preview. */
-function reviewPanel(evaluation, lang = "ar") {
+function reviewPanel(evaluation, lang = "ar", { duplicate = null } = {}) {
   const { blockers, warnings, listing } = evaluation;
   return html`<section class="card" data-review="${blockers.length ? "blocked" : "ok"}">
   <h2>📋 ${L(lang, "مراجعة قبل الحفظ", "Review before saving")}</h2>
   ${blockers.length
     ? html`<div class="notice bad card"><strong>⛔ ${L(lang, "ناقص لإتمام الحفظ:", "Still needed to save:")}</strong><ul>${blockers.map((b) => html`<li data-blocker="${b.field}">${lang === "en" ? b.label_en : b.label_ar}</li>`)}</ul></div>`
     : html`<p class="ok">✅ ${L(lang, "جاهزة للحفظ.", "Ready to save.")}</p>`}
+  ${duplicate ? duplicateNotice(duplicate, lang) : ""}
   ${warnings.length ? html`<ul class="warn">${warnings.map((w) => html`<li data-warning="${w.field}">${Rules.warningLine(w, lang)}</li>`)}</ul>` : ""}
   ${factList({ ...listing, code: listing.code || "—" }, lang)}
 </section>`;

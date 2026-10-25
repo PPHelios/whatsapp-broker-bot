@@ -52,7 +52,8 @@ function resultsSection({ res, filters, token, page, lang, savedId = null }) {
   const interp = stripStars(formatInterpretation({ filters }, lang));
   const total = Math.min(res.total, Search.SNAPSHOT_MAX);
   if (!res.rows.length) {
-    return html`<div class="card notice"><p>🔍 ${L(lang, "مفيش وحدات مطابقة لـ", "No units match")} <strong>${interp}</strong>. ${L(lang, "جرب ميزانية أوسع أو منطقة قريبة.", "Try a wider budget or a nearby area.")}</p></div>`;
+    return html`<div class="card notice"><p>🔍 ${L(lang, "مفيش وحدات مطابقة لـ", "No units match")} <strong>${interp}</strong>. ${L(lang, "جرب ميزانية أوسع أو منطقة قريبة.", "Try a wider budget or a nearby area.")}</p>
+${filters.code ? "" : html`<p><a class="btn secondary" href="/app/leads/new?request=${token}" data-save-request>🔔 ${L(lang, "احفظه طلب عميل", "Save as a client's request")}</a> <span class="muted">${L(lang, "وهتتبلغ أول ما تنزل وحدة تناسبه.", "You'll hear when a unit fits.")}</span></p>`}</div>`;
   }
   return html`<section id="results">
   ${res.relaxed ? html`<p class="card notice warn">⚠️ ${L(lang, "مفيش تطابق تام — أقرب النتائج لـ", "No exact match — closest units for")} <strong>${interp}</strong></p>` : html`<h2>🔍 ${interp}</h2>`}
@@ -138,7 +139,7 @@ ${refineForm(filters || {}, lang, { open: !filters && !q })}`
     const filters = SearchLink.decodeFilters(String(req.body.f || ""));
     const name = String(req.body.name || "").trim().slice(0, 80);
     if (!filters || !Q.hasAnyFilter({ filters }) || !name) return res.status(400).send("A name and a valid search are required");
-    const { rows } = await pool.query("SELECT count(*)::int AS n FROM saved_searches WHERE agency_id = $1 AND broker_id = $2", [broker.agency_id, broker.id]);
+    const { rows } = await pool.query("SELECT count(*)::int AS n FROM saved_searches WHERE agency_id = $1 AND broker_id = $2 AND lead_id IS NULL", [broker.agency_id, broker.id]);
     if (rows[0].n >= MAX_SAVED) return res.status(409).send(`At most ${MAX_SAVED} saved searches`);
     const out = await Search.runSearch(pool, broker.agency_id, { filters });
     await pool.query(
@@ -152,7 +153,7 @@ ${refineForm(filters || {}, lang, { open: !filters && !q })}`
     const lang = langOf(req);
     const { broker } = req.session;
     const { rows } = await pool.query(
-      "SELECT id, name, filters, seen_ids, last_run_at FROM saved_searches WHERE agency_id = $1 AND broker_id = $2 ORDER BY created_at DESC",
+      "SELECT id, name, filters, seen_ids, last_run_at FROM saved_searches WHERE agency_id = $1 AND broker_id = $2 AND lead_id IS NULL ORDER BY created_at DESC",
       [broker.agency_id, broker.id]
     );
     const items = [];
@@ -185,7 +186,7 @@ ${items.length
     const lang = langOf(req);
     const { broker } = req.session;
     if (!/^[0-9a-f-]{36}$/.test(req.params.id)) return next();
-    const { rows } = await pool.query("SELECT * FROM saved_searches WHERE id = $1 AND agency_id = $2 AND broker_id = $3", [req.params.id, broker.agency_id, broker.id]);
+    const { rows } = await pool.query("SELECT * FROM saved_searches WHERE id = $1 AND agency_id = $2 AND broker_id = $3 AND lead_id IS NULL", [req.params.id, broker.agency_id, broker.id]);
     if (!rows[0]) return next();
     const filters = SearchLink.sanitizeFilters(rows[0].filters);
     const out = await runFilters(pool, broker.agency_id, filters, 1);
@@ -201,7 +202,7 @@ ${items.length
   web.post("/searches/:id/delete", async (req, res) => {
     const { broker } = req.session;
     if (/^[0-9a-f-]{36}$/.test(req.params.id)) {
-      await pool.query("DELETE FROM saved_searches WHERE id = $1 AND agency_id = $2 AND broker_id = $3", [req.params.id, broker.agency_id, broker.id]);
+      await pool.query("DELETE FROM saved_searches WHERE id = $1 AND agency_id = $2 AND broker_id = $3 AND lead_id IS NULL", [req.params.id, broker.agency_id, broker.id]);
     }
     return res.redirect(303, "/app/searches");
   });

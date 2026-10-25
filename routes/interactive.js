@@ -18,6 +18,8 @@ const { canEdit } = require("../lib/authz");
 const Edits = require("../lib/edits");
 const { quickSections } = require("../lib/buttons");
 const { t } = require("../lib/copy");
+const LeadIntake = require("../lib/leadIntake");
+const DealsWA = require("../lib/deals");
 
 /**
  * Non-blocking operational telemetry logging helper.
@@ -89,6 +91,11 @@ async function handleInteractive(broker, message, ctx) {
   if (recentButtonClicks) {
     recentButtonClicks.set(clickKey, now + 3000);
   }
+
+  // CRM lead buttons (ld:*): each reloads the lead and checks rights (lib/leadIntake.js).
+  if (await LeadIntake.handleButton(broker, replyId, ctx)) return "done";
+  // Deal review buttons (dl:*): the deal waits server-side (lib/deals.js).
+  if (await DealsWA.handleButton(broker, replyId, ctx)) return "done";
 
   // 2. DISCARD DRAFT (DRAFT_CANCEL / draft_cancel)
   if (replyId === "DRAFT_CANCEL" || replyId === "draft_cancel") {

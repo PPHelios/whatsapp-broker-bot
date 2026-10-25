@@ -35,8 +35,16 @@ test("ARCHITECTURE_MANIFEST.md names every migration", () => {
 test("the broker guides and the runbook exist and point at each other", () => {
   expect(read("docs/pilot/broker-howto-ar.md")).toMatch(/دليل الموقع/);
   expect(read("docs/pilot/web-howto-ar.md")).toMatch(/\*دخول\*/);
+  expect(read("docs/pilot/broker-howto-en.md")).toMatch(/web-howto-en\.md/);
+  expect(read("docs/pilot/web-howto-en.md")).toMatch(/\*login\*/);
+  for (const lang of ["ar", "en"]) {
+    const crm = read(`docs/pilot/crm-howto-${lang}.md`);
+    for (const s of ["L-0042", "VIL-08", "iOS 16.4", "| --- |"]) expect([lang, s, crm.includes(s)]).toEqual([lang, s, true]);
+    expect(read(`docs/pilot/broker-howto-${lang}.md`)).toContain(`crm-howto-${lang}.md`);
+    expect(read(`docs/pilot/web-howto-${lang}.md`)).toContain(`crm-howto-${lang}.md`);
+  }
   const runbook = read("docs/runbook.md");
-  for (const s of ["agency_outbound_daily", "operation_logs", "npm run migrate", "npm run onboard", "render.yaml", "Rotating secrets", "web-howto-ar.md"]) {
+  for (const s of ["agency_outbound_daily", "operation_logs", "npm run migrate", "npm run onboard", "render.yaml", "Rotating secrets", "web-howto-ar.md", "broker-howto-en.md", "start link"]) {
     expect([s, runbook.includes(s)]).toEqual([s, true]);
   }
 });

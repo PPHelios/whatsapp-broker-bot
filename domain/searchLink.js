@@ -78,7 +78,12 @@ function filtersFromForm(q = {}) {
       listing_type: one(q.listing_type) || null,
       market: one(q.market) || null,
       property_types: many(q.type),
-      compound: one(q.place) || null,
+      // Several places ("التجمع، زايد") round-trip with formFromFilters.
+      locations: String(one(q.place) || "")
+        .split(/\s*[,،]\s*|\s+(?:او|أو|or)\s+/i)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, 8),
       price_min: one(q.price_min),
       price_max: one(q.price_max),
       area_min: one(q.area_min),

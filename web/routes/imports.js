@@ -106,12 +106,14 @@ ${imp.result ? resultCard(imp.result, lang) : ""}
 <form method="post" action="/app/import/${imp.id}/apply" class="stack">
 <ol class="results">${posts.map((p, i) => {
     const r = results[i];
-    const state = !r ? "pending" : r.error ? "error" : r.ok ? (r.duplicate ? "duplicate" : "ok") : "incomplete";
+    const twin = r?.same_as !== undefined && r?.same_as !== null;
+    const state = !r ? "pending" : r.error ? "error" : r.ok ? (r.duplicate || twin ? "duplicate" : "ok") : "incomplete";
     return html`<li class="card" data-post="${i}" data-state="${state}">
-  <div class="row">${!applied && r?.ok ? html`<input type="checkbox" name="rows" value="${i}"${r.duplicate ? "" : raw(" checked")}>` : ""}<strong>${p.sender || L(lang, "بوست", "Post")}</strong> <span class="muted">${p.at || ""}</span></div>
+  <div class="row">${!applied && r?.ok ? html`<input type="checkbox" name="rows" value="${i}"${r.duplicate || twin ? "" : raw(" checked")}>` : ""}<strong>${p.sender || L(lang, "بوست", "Post")}</strong> <span class="muted">${p.at || ""}</span></div>
   <p class="muted">${p.text.slice(0, 280)}</p>
   ${r?.ok ? html`<p>${stripMarkdown(Describe.compactLine({ ...r.fields, code: "" }, lang).replace(/^``\s*·\s*/, ""))}</p>` : ""}
   ${r?.duplicate ? html`<p class="warn">⚠️ ${L(lang, "شكلها نفس الوحدة", "Looks like the same unit as")} <a href="/app/units/${encodeURIComponent(r.duplicate)}">${r.duplicate}</a></p>` : ""}
+  ${twin ? html`<p class="warn">⚠️ ${L(lang, `شكلها نفس الوحدة في بوست ${r.same_as + 1}`, `Looks like the same unit as post ${r.same_as + 1}`)}</p>` : ""}
   ${r && !r.ok && !r.error ? html`<p class="bad">⛔ ${r.blockers.join("، ")}</p>` : ""}
   ${r?.error ? html`<p class="bad">❌ ${r.error === "quota" ? L(lang, "حد الذكاء الاصطناعي اليومي خلص", "Daily AI limit reached") : L(lang, "تعذرت قراءته", "Could not be read")}</p>` : ""}
 </li>`;
@@ -208,6 +210,7 @@ function register(web, { pool, page }) {
     const lang = langOf(req);
     const imp = await Imports.loadImport(pool, req.session.broker, req.params.id);
     if (!imp) return next();
+    if (imp.kind === "leads") return res.redirect(303, `/app/leads/import/${imp.id}`);
     return importPage(req, res, imp.kind === "excel" ? excelPlanPage(imp, lang) : groupPage(imp, lang));
   });
 
@@ -215,7 +218,7 @@ function register(web, { pool, page }) {
     const lang = langOf(req);
     const { broker } = req.session;
     const imp = await Imports.loadImport(pool, broker, req.params.id);
-    if (!imp) return next();
+    if (!imp || imp.kind === "leads") return next();
     const rows = [].concat(req.body.rows || []);
     const result =
       imp.kind === "excel"

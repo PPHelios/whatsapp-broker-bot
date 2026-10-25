@@ -14,6 +14,7 @@ function register(web, { page }) {
   <p class="muted">${agency.name}</p>
   <div class="row">
     <a class="btn" href="/app/search">${en ? "🔍 Search" : "🔍 بحث"}</a>
+    <a class="btn secondary" href="/app/leads">${en ? "👤 Leads" : "👤 العملاء"}</a>
     <a class="btn secondary" href="/app/units/new">${en ? "➕ Add a unit" : "➕ إضافة وحدة"}</a>
     <a class="btn secondary" href="/app/import">${en ? "📥 Import" : "📥 استيراد"}</a>
   </div>

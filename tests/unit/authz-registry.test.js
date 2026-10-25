@@ -36,6 +36,19 @@ test.each([
   expect(hit.args).toEqual(args);
 });
 
+test("routes never query CRM tables directly: lead, deal, request, match and notification reads go through role-scoped services", () => {
+  const fs = require("fs");
+  const path = require("path");
+  const root = path.join(__dirname, "..", "..");
+  const dirs = ["routes", "web/routes", "web/views"];
+  const files = dirs.flatMap((d) => fs.readdirSync(path.join(root, d)).filter((f) => f.endsWith(".js")).map((f) => `${d}/${f}`));
+  expect(files.length).toBeGreaterThan(20);
+  const TABLES = "leads|lead_events|lead_requests|lead_matches|lead_erasures|deals|deal_splits|notifications|push_subscriptions";
+  const direct = new RegExp(`\\b(?:FROM|JOIN|UPDATE|INTO|DELETE\\s+FROM)\\s+(?:${TABLES})\\b`, "i");
+  const offenders = files.filter((f) => direct.test(fs.readFileSync(path.join(root, f), "utf8")));
+  expect(offenders).toEqual([]);
+});
+
 test("sentences that only contain a keyword are not commands", () => {
   for (const t of ["شقة متاحة في التجمع", "عايز فيلا اتباعت قريب", "السعر كام"]) expect(R.find(t, {})).toBeNull();
 });

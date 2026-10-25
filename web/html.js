@@ -41,9 +41,9 @@ const HTMX_CONFIG = { includeIndicatorStyles: false, allowEval: false, allowScri
 
 /**
  * Full page. lang "ar" renders RTL; assets(name) gives the versioned static path.
- * @param {Object} p - { title, lang, body, assets, csrf, broker, nav, head, robots }
+ * @param {Object} p - { title, lang, body, assets, csrf, broker, nav, head, robots, unread }
  */
-function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, nav = null, head = null, robots = "noindex, nofollow", scripts = true, manifest = true }) {
+function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, nav = null, head = null, robots = "noindex, nofollow", scripts = true, manifest = true, unread = 0, langSwitch = false }) {
   const en = lang === "en";
   return html`<!doctype html>
 <html lang="${en ? "en" : "ar"}" dir="${en ? "ltr" : "rtl"}">
@@ -64,7 +64,7 @@ ${scripts ? html`<script src="${assets("htmx.min.js")}" defer></script>
 <script src="${assets("app.js")}" defer></script>` : ""}
 </head>
 <body>
-${broker || nav ? topBar({ broker, nav, lang }) : ""}
+${broker || nav || langSwitch ? topBar({ broker, nav, lang, unread }) : ""}
 <main id="main">${body}</main>
 </body>
 </html>`;
@@ -73,21 +73,38 @@ ${broker || nav ? topBar({ broker, nav, lang }) : ""}
 const NAV = [
   { key: "search", href: "/app/search", ar: "🔍 بحث", en: "🔍 Search" },
   { key: "units", href: "/app/units", ar: "🏠 الوحدات", en: "🏠 Units" },
+  { key: "leads", href: "/app/leads", ar: "👤 العملاء", en: "👤 Leads" },
+  { key: "deals", href: "/app/deals", ar: "🤝 الصفقات", en: "🤝 Deals" },
   { key: "add", href: "/app/units/new", ar: "➕ إضافة", en: "➕ Add" },
   { key: "import", href: "/app/import", ar: "📥 استيراد", en: "📥 Import" }
 ];
 
-function topBar({ broker, nav, lang }) {
+function topBar({ broker, nav, lang, unread = 0 }) {
   const en = lang === "en";
   return html`<header class="top">
   <a class="brand" href="/app/">AqarChat</a>
+  <a class="lang" data-lang-switch href="?lang=${en ? "ar" : "en"}" hreflang="${en ? "ar" : "en"}" lang="${en ? "ar" : "en"}">${en ? "عربي" : "English"}</a>
   ${broker
     ? html`<nav class="nav">${NAV.map(
         (n) => html`<a href="${n.href}"${n.key === nav ? raw(' aria-current="page"') : ""}>${en ? n.en : n.ar}</a>`
       )}</nav>
+  <a class="bell" href="/app/notifications" aria-label="${en ? "Notifications" : "التنبيهات"}"${nav === "notifications" ? raw(' aria-current="page"') : ""}>🔔${unread ? html`<span class="badge" data-unread="${unread}">${unread > 99 ? "99+" : unread}</span>` : ""}</a>
+  <a href="/app/settings" aria-label="${en ? "Settings" : "الإعدادات"}"${nav === "settings" ? raw(' aria-current="page"') : ""}>⚙️</a>
   <form method="post" action="/app/logout" class="logout"><button type="submit" class="link">${en ? "Sign out" : "خروج"}</button></form>`
     : ""}
 </header>`;
 }
 
-module.exports = { SafeHtml, html, raw, escapeHtml, jsonAttr, layout, NAV, HTMX_CONFIG };
+/**
+ * Gives every POST form of a signed-in page the session's CSRF field (unless it already has one), so a plain
+ * form submit passes verifyCsrf like htmx requests do. One field per form: a second would make `_csrf` an array.
+ */
+function withCsrf(pageHtml, csrf) {
+  if (!csrf) return String(pageHtml);
+  const field = `<input type="hidden" name="_csrf" value="${escapeHtml(csrf)}">`;
+  return String(pageHtml).replace(/<form\b[^>]*\bmethod="post"[^>]*>[\s\S]*?<\/form>/gi, (form) =>
+    form.includes('name="_csrf"') ? form : form.replace(">", `>${field}`)
+  );
+}
+
+module.exports = { SafeHtml, html, raw, escapeHtml, jsonAttr, layout, withCsrf, NAV, HTMX_CONFIG };

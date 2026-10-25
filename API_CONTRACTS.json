@@ -159,6 +159,10 @@
     },
     "lib/dispatcher.js": {
       "countOutbound": ["broker", "kind", "status"],
+      "setTurnAction": ["action"],
+      "setTurnNote": ["text", "onDelivered"],
+      "turnCredits": [],
+      "claimOnce": ["pool", "broker", "params"],
       "reply": ["broker", "text", "opts"],
       "replyButtons": ["broker", "bodyText", "buttons"],
       "replyList": ["broker", "bodyText", "buttonText", "sections"],
@@ -175,6 +179,7 @@
       "createDraft": ["pool", "brokerId", "agencyId", "brokerPhoneNormalized", "sessionType"],
       "clearDraft": ["pool", "brokerId", "sessionType"],
       "appendText": ["pool", "brokerId", "text", "sessionType"],
+      "photoNote": ["pool", "broker", "lang"],
       "appendVoice": ["pool", "brokerId", "params", "sessionType"],
       "appendMedia": ["pool", "brokerId", "params", "sessionType"],
       "stageDraftReview": ["pool", "brokerId", "reviewPayload"],
@@ -194,7 +199,7 @@
       "loadConfig": ["env"],
       "getConfig": [],
       "resetConfig": [],
-      "estimateCostUsd": ["model", "tokensIn", "tokensOut", "prices"],
+      "estimateCostUsd": ["model", "tokensIn", "tokensOut", "prices", "now"],
       "publicUrl": ["path"]
     },
     "lib/db.js": {
@@ -219,12 +224,21 @@
       "ROLES": "Array",
       "normalizeEgyptMobile": ["raw"],
       "validate": ["input"],
-      "onboard": ["pool", "input"]
+      "onboard": ["pool", "input"],
+      "botDigits": ["raw"],
+      "startLink": ["botPhone", "lang"],
+      "startLines": ["plan", "botPhone"]
     },
     "lib/authz.js": {
       "MANAGER_ROLES": "Array",
+      "isManager": ["broker"],
       "canView": ["broker", "listing"],
-      "canEdit": ["broker", "listing"]
+      "canEdit": ["broker", "listing"],
+      "canViewLead": ["broker", "lead"],
+      "canEditLead": ["broker", "lead"],
+      "canManageLeads": ["broker"],
+      "canViewDeal": ["broker", "deal"],
+      "canEditDeal": ["broker", "deal"]
     },
     "lib/buttons.js": {
       "BUTTONS": "Object",
@@ -246,6 +260,7 @@
     },
     "lib/listingStore.js": {
       "findByCode": ["db", "agencyId", "code", "params"],
+      "findDuplicate": ["db", "agencyId", "l", "params"],
       "createListing": ["db", "broker", "params"],
       "addPhotos": ["db", "listing", "urls"],
       "removePhotos": ["db", "listing", "imageIds"],
@@ -400,6 +415,7 @@
       "escapeHtml": ["value"],
       "jsonAttr": ["obj"],
       "layout": ["params"],
+      "withCsrf": ["pageHtml", "csrf"],
       "NAV": "Array",
       "HTMX_CONFIG": "Object"
     },
@@ -505,7 +521,7 @@
     },
     "web/views/unitForm.js": {
       "unitForm": ["params"],
-      "reviewPanel": ["evaluation", "lang"]
+      "reviewPanel": ["evaluation", "lang", "params"]
     },
     "web/routes/unitForm.js": {
       "register": ["web", "params"],
@@ -530,7 +546,11 @@
     "lib/sheets.js": {
       "MAX_BYTES": "Number",
       "MAX_ROWS": "Number",
-      "readInventorySheet": ["buffer"]
+      "readInventorySheet": ["buffer"],
+      "readTable": ["buffer", "opts"],
+      "parseCsv": ["text", "limitRows"],
+      "decodeText": ["buffer"],
+      "mapTable": ["rows", "params"]
     },
     "services/imports.js": {
       "describeChanges": ["listing", "patch", "lang"],
@@ -562,16 +582,310 @@
     },
     "lib/shareLinks.js": {
       "ALERT_EVERY_HOURS": "Number",
+      "HOT_OPENS": "Number",
       "BOT_UA": "Object",
       "isBot": ["ua"],
       "createShareLink": ["pool", "broker", "listing", "params"],
       "resolveShareLink": ["pool", "slug", "code", "token"],
       "recordOpen": ["pool", "resolved", "params"],
+      "leadOpened": ["pool", "leadId", "listing"],
       "clientCopyWithLink": ["pool", "broker", "listing", "lang", "copyText"],
       "linksFor": ["pool", "broker", "listing"]
     },
     "web/routes/publicUnit.js": {
       "mountPublic": ["app", "params"]
+    },
+    "lib/jobs.js": {
+      "buildJobs": ["_deps"]
+    },
+    "lib/scheduler.js": {
+      "createScheduler": ["params"],
+      "lockKey": ["name"],
+      "STALE_RUNNING_MS": "Number"
+    },
+    "domain/phone.js": {
+      "toAsciiDigits": ["s"],
+      "normalizePhone": ["raw"],
+      "isEgyptMobile": ["d"],
+      "isLandline": ["d"],
+      "isForeign": ["d"],
+      "toE164": ["raw"],
+      "displayPhone": ["raw"],
+      "waMeUrl": ["raw", "text"],
+      "telUrl": ["raw"],
+      "last4": ["raw"]
+    },
+    "lib/credits.js": {
+      "LOGIN_KINDS": "Array",
+      "HINT_LEVELS": "Array",
+      "monthKey": ["now"],
+      "dayKey": ["now"],
+      "check": ["pool", "broker", "params"],
+      "canNotify": ["state"],
+      "allowsSend": ["state", "kind"],
+      "hintLevel": ["state"],
+      "usage": ["pool", "agencyId", "params"]
+    },
+    "lib/notifications.js": {
+      "KINDS": "Array",
+      "KIND_LABELS": "Object",
+      "DEFAULT_QUIET": "Object",
+      "MERGE_WINDOW_MS": "Number",
+      "prefsOf": ["broker"],
+      "inQuietHours": ["prefs", "now"],
+      "quietEnd": ["prefs", "now"],
+      "isWindowOpen": ["pool", "broker", "now"],
+      "messageFor": ["rows", "lang"],
+      "deliverRows": ["pool", "broker", "rows", "params"],
+      "notifyBroker": ["pool", "broker", "opts"],
+      "deliverDue": ["pool", "params"],
+      "deliverJob": [],
+      "managersOf": ["pool", "agencyId"],
+      "creditWarning": ["pool", "agencyId", "params"],
+      "listInbox": ["pool", "broker", "params"],
+      "unreadCount": ["pool", "broker"],
+      "markRead": ["pool", "broker", "id"],
+      "agencyLog": ["pool", "manager", "params"],
+      "savePrefs": ["pool", "broker", "params"],
+      "savePushSubscription": ["pool", "broker", "sub", "userAgent"],
+      "removePushSubscription": ["pool", "broker", "endpoint"],
+      "pushCount": ["pool", "broker"]
+    },
+    "lib/channels/whatsapp.js": {
+      "name": "String",
+      "textOf": ["message"],
+      "send": ["broker", "message", "params"]
+    },
+    "lib/channels/webpush.js": {
+      "name": "String",
+      "send": ["broker", "message", "params"],
+      "payloadOf": ["message"],
+      "configured": ["cfg"],
+      "setSenderForTests": ["fn"]
+    },
+    "lib/channels/telegram.js": {
+      "name": "String",
+      "send": ["_broker", "_message", "_deps"]
+    },
+    "web/routes/notifications.js": {
+      "register": ["web", "params"]
+    },
+    "web/routes/settings.js": {
+      "register": ["web", "params"]
+    },
+    "web/routes/usage.js": {
+      "register": ["web", "params"]
+    },
+    "domain/leadStages.js": {
+      "STAGES": "Array",
+      "CLOSED": "Array",
+      "KINDS": "Array",
+      "WANTS_UNIT": "Array",
+      "LAWFUL_BASES": "Array",
+      "FOLLOW_UP_KINDS": "Array",
+      "SOURCES": "Array",
+      "sourceLabel": ["source", "lang"],
+      "stageLabel": ["stage", "lang"],
+      "kindLabel": ["kind", "lang"],
+      "basisLabel": ["basis", "lang"],
+      "isClosed": ["stage"],
+      "stageError": ["stage", "lostReason"],
+      "stageAfterContact": ["stage"],
+      "cairoOffsetMinutes": ["at"],
+      "cairoDayAt": ["now", "daysAhead", "hour"],
+      "fromCairoLocal": ["text"],
+      "toCairoLocal": ["at"]
+    },
+    "domain/leadCard.js": {
+      "refLabel": ["ref"],
+      "parseRef": ["text"],
+      "displayName": ["lead", "lang"],
+      "listLine": ["lead", "lang"],
+      "requestSummary": ["f", "lang"],
+      "card": ["lead", "params"],
+      "timelineLine": ["ev", "lang"]
+    },
+    "services/leads.js": {
+      "MAX_PHONES": "Number",
+      "UNDO_MS": "Number",
+      "phoneHash": ["e164"],
+      "wasErased": ["pool", "actor", "e164"],
+      "normalizePhones": ["raw"],
+      "captureLead": ["pool", "actor", "input", "params"],
+      "assignLead": ["pool", "actor", "key", "toBrokerId", "params"],
+      "setStage": ["pool", "actor", "key", "params"],
+      "addNote": ["pool", "actor", "key", "text", "params"],
+      "markContacted": ["pool", "actor", "key", "params"],
+      "setFollowUp": ["pool", "actor", "key", "params"],
+      "completeFollowUp": ["pool", "actor", "key", "params"],
+      "postponeFollowUp": ["pool", "actor", "key", "params"],
+      "applyUpdate": ["pool", "actor", "key", "u", "params"],
+      "undoMany": ["pool", "actor", "eventIds", "params"],
+      "recordDeal": ["client", "actor", "leadId", "params", "now"],
+      "undo": ["pool", "actor", "eventId", "params"],
+      "noteRequest": ["pool", "actor", "key", "filters", "params"],
+      "logMatchSent": ["pool", "actor", "key", "listing", "params"],
+      "getLead": ["pool", "actor", "key"],
+      "refExists": ["pool", "actor", "ref"],
+      "dueFollowUps": ["pool", "actor", "params"],
+      "pipeline": ["pool", "actor", "params"],
+      "findByPhone": ["pool", "actor", "raw"],
+      "listLeads": ["pool", "actor", "f", "params"],
+      "timeline": ["pool", "actor", "key", "params"],
+      "releaseBrokerLeads": ["pool", "agencyId", "brokerId", "params"]
+    },
+    "services/brokers.js": {
+      "deactivateBroker": ["pool", "params"]
+    },
+    "domain/leadIntake.js": {
+      "MAX_CHOICES": "Number",
+      "findPhones": ["text"],
+      "parseContactCard": ["contacts"],
+      "looksLikeLead": ["text"],
+      "isBarePhone": ["text"],
+      "matchLeadCommand": ["text"],
+      "matchMyLeads": ["text"],
+      "matchFollowUps": ["text"],
+      "matchAssign": ["text"],
+      "matchRequestCommand": ["text"],
+      "matchRef": ["text"],
+      "buildLeadPrompt": ["lang", "fence"],
+      "normalizeLeadExtraction": ["raw"]
+    },
+    "lib/leadIntake.js": {
+      "extractLead": ["AI", "params"],
+      "cardButtons": ["lead", "lang", "params"],
+      "cardText": ["lead", "lang", "params"],
+      "handleContacts": ["broker", "message", "ctx"],
+      "lookupPhone": ["broker", "text", "ctx"],
+      "offerForward": ["broker", "text", "ctx"],
+      "leadCommand": ["broker", "params", "ctx"],
+      "collect": ["broker", "text", "ctx"],
+      "collectVoice": ["broker", "transcript", "ctx"],
+      "myLeads": ["broker", "ctx"],
+      "followUps": ["broker", "ctx"],
+      "openRef": ["broker", "ref", "ctx"],
+      "offerUpdate": ["broker", "text", "ctx"],
+      "requestCommand": ["broker", "params", "ctx"],
+      "requestButton": ["pool", "broker", "filters", "lang"],
+      "assignCommand": ["broker", "params", "ctx"],
+      "handleButton": ["broker", "id", "ctx"]
+    },
+    "web/routes/leads.js": {
+      "register": ["web", "params"],
+      "inputOf": ["body", "manager"]
+    },
+    "web/views/leads.js": {
+      "leadRow": ["lead", "lang", "params"],
+      "leadForm": ["params"],
+      "leadHeader": ["lead", "lang"],
+      "bottomBar": ["lead", "lang", "brokerName"],
+      "timelineList": ["rows", "lang", "params"],
+      "leadPath": ["lead", "sub"],
+      "when": ["d", "lang"]
+    },
+    "domain/leadImport.js": {
+      "COLUMNS": "Array",
+      "KEYS": "Array",
+      "columnFor": ["header"],
+      "leadKind": ["v"],
+      "stage": ["v"],
+      "lawfulBasis": ["v"],
+      "budget": ["v"],
+      "phonesIn": ["v"],
+      "rowToLead": ["cells"],
+      "matchBroker": ["value", "brokers"],
+      "warningLabel": ["key", "lang"],
+      "errorLabel": ["key", "lang"]
+    },
+    "services/leadImports.js": {
+      "planLeads": ["pool", "broker", "table", "params"],
+      "savePlan": ["pool", "broker", "plan", "params"],
+      "startApply": ["pool", "broker", "id", "opts"],
+      "waitForApply": ["id"]
+    },
+    "web/routes/leadImports.js": {
+      "register": ["web", "params"],
+      "TEMPLATE_HEADERS": "Array"
+    },
+    "domain/unitDuplicate.js": {
+      "TOLERANCE": "Number",
+      "placeKey": ["l"],
+      "comparable": ["l"],
+      "sameUnit": ["a", "b"]
+    },
+    "services/leadRequests.js": {
+      "MAX_REQUESTS": "Number",
+      "listRequests": ["pool", "actor", "lead"],
+      "currentMatches": ["pool", "agencyId", "filters", "params"],
+      "saveRequest": ["pool", "actor", "leadKey", "rawFilters", "params"],
+      "removeRequest": ["pool", "actor", "leadKey", "requestId"],
+      "whoWants": ["pool", "actor", "listing"],
+      "sendToClient": ["pool", "actor", "leadKey", "listing", "params"]
+    },
+    "services/matchSweep.js": {
+      "DAILY_CAP": "Number",
+      "sweep": ["pool", "params"],
+      "sweepJob": []
+    },
+    "services/followUpReminders.js": {
+      "remindDue": ["pool", "params"],
+      "nudgeUntouched": ["pool", "params"],
+      "reminderMessage": ["broker", "leads"],
+      "nudgeMessage": ["broker", "leads"],
+      "reminderJob": []
+    },
+    "domain/leadUpdate.js": {
+      "looksLikeUpdate": ["text"],
+      "refIn": ["text"],
+      "fold": ["s"],
+      "namesIn": ["text", "leads"],
+      "matchName": ["name", "leads"],
+      "cairoToday": ["now"],
+      "buildUpdatePrompt": ["lang", "fence", "params"],
+      "normalizeUpdate": ["raw"],
+      "followUpAt": ["fu"],
+      "hasChange": ["u"],
+      "checkUpdate": ["u", "params"],
+      "summaryLines": ["u", "lead", "lang", "params"]
+    },
+    "domain/commission.js": {
+      "compute": ["params"],
+      "parsePct": ["text"],
+      "parseSplit": ["text"],
+      "money": ["n", "lang"]
+    },
+    "services/deals.js": {
+      "STATUSES": "Array",
+      "refLabel": ["ref"],
+      "parseRef": ["text"],
+      "statusLabel": ["s", "lang"],
+      "prepare": ["pool", "actor", "input"],
+      "createDeal": ["pool", "actor", "input", "params"],
+      "getDeal": ["pool", "actor", "key"],
+      "listDeals": ["pool", "actor", "params"],
+      "monthlyTotals": ["pool", "actor", "params"],
+      "updateDeal": ["pool", "actor", "key", "change", "params"]
+    },
+    "lib/deals.js": {
+      "parseDealCommand": ["text"],
+      "parseCommission": ["text"],
+      "reviewLines": ["d", "lang"],
+      "dealCommand": ["broker", "params", "ctx"],
+      "collect": ["broker", "text", "ctx"],
+      "handleButton": ["broker", "id", "ctx"],
+      "DEAL": "Object"
+    },
+    "web/routes/deals.js": {
+      "register": ["web", "params"]
+    },
+    "services/privacy.js": {
+      "RETENTION_MONTHS": "Number",
+      "exportLead": ["pool", "actor", "key", "params"],
+      "eraseLead": ["pool", "actor", "key", "params"],
+      "retentionSweep": ["pool", "params"],
+      "purgeInboundPayloads": ["pool", "params"],
+      "privacyJob": []
     }
   },
   "invariant_variable_names": {

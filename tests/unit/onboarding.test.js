@@ -33,6 +33,26 @@ test("validation lists every problem and requires a manager", () => {
   expect(O.validate(example).errors).toEqual([]);
 });
 
+test("start links: per broker language, any bot number form, none without a number; the script prints them", () => {
+  expect(O.startLink("+20 100 000 0099", "ar")).toBe("https://wa.me/201000000099?text=%D9%85%D8%B3%D8%A7%D8%B9%D8%AF%D8%A9");
+  expect(O.startLink("01000000099", "en")).toBe("https://wa.me/201000000099?text=help");
+  expect(O.startLink("+1 555 012 3456", "en")).toBe("https://wa.me/15550123456?text=help");
+  expect(O.startLink("", "ar")).toBeNull();
+  expect(O.startLines(O.validate(example).plan, undefined)).toBeNull();
+  expect(O.validate({ ...example, bot_phone: "12" }).errors).toEqual([expect.stringMatching(/bot_phone/)]);
+  expect(O.startLines(O.validate(example).plan, example.bot_phone)).toEqual([
+    "  Agency Owner (ar): https://wa.me/201000000099?text=%D9%85%D8%B3%D8%A7%D8%B9%D8%AF%D8%A9",
+    "  Broker One (ar): https://wa.me/201000000099?text=%D9%85%D8%B3%D8%A7%D8%B9%D8%AF%D8%A9",
+    "  Broker Two (en): https://wa.me/201000000099?text=help"
+  ]);
+  const out = require("child_process").execFileSync(process.execPath, [require("path").join(__dirname, "../../scripts/onboard.js"), require("path").join(__dirname, "../../docs/pilot/agency.example.json"), "--dry-run"], {
+    encoding: "utf8",
+    env: { ...process.env, BOT_PHONE: "" }
+  });
+  expect(out).toContain("Broker Two (en): https://wa.me/201000000099?text=help");
+  expect(out).toContain("Dry run: nothing written.");
+});
+
 test("onboarding creates the agency and brokers, and re-running updates in place", async () => {
   const first = await O.onboard(db.pool, example);
   expect(first.created).toHaveLength(3);

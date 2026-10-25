@@ -6,7 +6,8 @@ const express = require("express");
 const { loadAssets } = require("./assets");
 const { securityHeaders, sameOrigin } = require("./security");
 const Session = require("./session");
-const { html, layout } = require("./html");
+const { html, layout, withCsrf } = require("./html");
+const Notifications = require("../lib/notifications");
 
 const MANIFEST = {
   name: "AqarChat",
@@ -17,7 +18,9 @@ const MANIFEST = {
   scope: "/app/",
   display: "standalone",
   background_color: "#f6f7f9",
-  theme_color: "#0B132B"
+  theme_color: "#0B132B",
+  // Android: "Share to AqarChat" from WhatsApp opens the add-lead form with the shared text (nothing saved yet).
+  share_target: { action: "/app/share", method: "GET", params: { title: "title", text: "text", url: "url" } }
 };
 
 /**
@@ -31,11 +34,11 @@ function mountWeb(app, { pool, config }) {
   /** Renders a full page; the signed-in broker (top bar, language) and CSRF token come from req. */
   const page = (req, res, opts, status = 200) => {
     const s = req.session;
-    const lang = opts.lang || (s?.broker.preferred_lang === "en" ? "en" : "ar");
+    const lang = opts.lang || (s ? (s.broker.preferred_lang === "en" ? "en" : "ar") : req.lang === "en" ? "en" : "ar");
     return res
       .status(status)
       .type("html")
-      .send(String(layout({ assets: assets.url, broker: s?.broker || null, csrf: s?.csrf || null, ...opts, lang })));
+      .send(withCsrf(layout({ assets: assets.url, broker: s?.broker || null, csrf: s?.csrf || null, unread: s?.unread || 0, ...opts, lang }), s?.csrf));
   };
   // Behind Render's proxy, req.ip is the client from X-Forwarded-For (rate limits).
   if (config.isProd) app.set("trust proxy", 1);
@@ -76,28 +79,57 @@ function mountWeb(app, { pool, config }) {
 
   web.get("/offline", (req, res) =>
     page(req, res, {
-      title: "غير متصل",
-      body: html`<div class="card notice"><h1>📴 مفيش اتصال بالإنترنت</h1><p>الصفحة دي محتاجة إنترنت. أول ما الاتصال يرجع، حاول تاني.</p><p class="muted">You are offline. This page needs a connection.</p></div>`
+      title: "غير متصل / Offline",
+      body: html`<div class="card notice"><h1>📴 مفيش اتصال بالإنترنت</h1><p>الصفحة دي محتاجة إنترنت. أول ما الاتصال يرجع، حاول تاني.</p><p class="muted" lang="en" dir="ltr">You are offline. This page needs a connection.</p></div>`
     })
   );
 
   const ctx = { pool, config, assets, page };
   const pages = require("./routes");
   web.use(Session.loadSession(pool));
+  // P7: ?lang=ar|en on any page switches the language: a cookie before sign-in, the broker's preferred_lang after.
+  web.use(async (req, res, next) => {
+    try {
+      const q = req.method === "GET" ? req.query.lang : null;
+      if (q === "ar" || q === "en") {
+        res.cookie("aq_lang", q, { path: "/app", maxAge: 365 * 24 * 3600 * 1000, sameSite: "lax", secure: Boolean(config.isProd), httpOnly: true });
+        req.cookies.aq_lang = q;
+        if (req.session && req.session.broker.preferred_lang !== q) {
+          await pool.query("UPDATE brokers SET preferred_lang = $2 WHERE id = $1 AND agency_id = $3", [req.session.broker.id, q, req.session.broker.agency_id]);
+          req.session.broker.preferred_lang = q;
+        }
+      }
+      req.lang = req.session ? (req.session.broker.preferred_lang === "en" ? "en" : "ar") : req.cookies.aq_lang === "en" ? "en" : "ar";
+      next();
+    } catch (err) {
+      next(err);
+    }
+  });
   // Sign-in pages are open; everything after them needs a session and a CSRF token on writes.
   for (const p of pages.PUBLIC) p.register(web, ctx);
   const priv = express.Router();
   priv.use(Session.noStore, Session.requireBroker, Session.verifyCsrf);
+  // The 🔔 count in the top bar (pages only; htmx partials don't render the bar).
+  priv.use(async (req, _res, next) => {
+    if (req.method === "GET" && !req.get("HX-Request")) {
+      req.session.unread = await Notifications.unreadCount(pool, req.session.broker).catch(() => 0);
+    }
+    next();
+  });
   for (const p of pages.PRIVATE) p.register(priv, ctx);
   web.use(priv);
 
   web.use((req, res) =>
-    page(req, res, { title: "غير موجود", body: html`<div class="card"><h1>🔍 الصفحة غير موجودة</h1><p><a href="/app/">الرئيسية</a></p></div>` }, 404)
+    req.lang === "en"
+      ? page(req, res, { title: "Not found", body: html`<div class="card"><h1>🔍 Page not found</h1><p><a href="/app/">Home</a></p></div>` }, 404)
+      : page(req, res, { title: "غير موجود", body: html`<div class="card"><h1>🔍 الصفحة غير موجودة</h1><p><a href="/app/">الرئيسية</a></p></div>` }, 404)
   );
   // eslint-disable-next-line no-unused-vars
   web.use((err, req, res, _next) => {
     console.error("Web request failed:", err.message);
-    page(req, res, { title: "خطأ", body: html`<div class="card notice bad"><h1>❌ حصل خطأ مؤقت</h1><p>حاول تاني بعد شوية.</p></div>` }, 500);
+    req.lang === "en"
+      ? page(req, res, { title: "Error", body: html`<div class="card notice bad"><h1>❌ A temporary error</h1><p>Try again in a moment.</p></div>` }, 500)
+      : page(req, res, { title: "خطأ", body: html`<div class="card notice bad"><h1>❌ حصل خطأ مؤقت</h1><p>حاول تاني بعد شوية.</p></div>` }, 500);
   });
 
   // "/app" without the slash is outside the service worker scope; routing is not strict, so check the raw URL.

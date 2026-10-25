@@ -1,6 +1,8 @@
 // scripts/onboard.js — Onboards the pilot agency, its brokers, roles and branding from a JSON file.
 // Usage: node --env-file=.env scripts/onboard.js docs/pilot/agency.example.json [--dry-run]
 // Re-running with the same file is safe (agency matched by name, brokers by phone).
+// A broker leaves: node --env-file=.env scripts/onboard.js --deactivate <agency.json> <phone>
+//   (sign-in stops at once; their leads go to the unassigned pool and the managers are told).
 "use strict";
 
 const fs = require("fs");
@@ -9,8 +11,41 @@ const { createPool } = require("../lib/db");
 const { runMigrations } = require("../lib/migrate");
 const Onboarding = require("../lib/onboarding");
 const Links = require("../lib/links");
+const Brokers = require("../services/brokers");
+
+async function deactivate(file, phone) {
+  const input = JSON.parse(fs.readFileSync(path.resolve(file), "utf8"));
+  const pool = createPool();
+  try {
+    await runMigrations(pool);
+    const a = await pool.query("SELECT id FROM agencies WHERE name = $1", [String(input.agency?.name || "").trim()]);
+    if (!a.rows.length) throw new Error(`Agency not found: ${input.agency?.name}`);
+    const res = await Brokers.deactivateBroker(pool, { agencyId: a.rows[0].id, phone });
+    if (res.error) throw new Error(`No broker with phone ${phone} in this agency`);
+    console.log(`Deactivated ${res.broker.name}: ${res.released} lead(s) moved to the unassigned pool; the managers were notified.`);
+  } finally {
+    await pool.end();
+  }
+}
+
+function printStartLinks(input, plan) {
+  const lines = Onboarding.startLines(plan, input.bot_phone || process.env.BOT_PHONE);
+  if (!lines) {
+    console.log("\nNo start links: set bot_phone in the file or BOT_PHONE (the bot's WhatsApp number) to print them.");
+    return;
+  }
+  console.log("\nStart links (send each broker theirs; one tap opens the chat with the first message typed in):");
+  for (const l of lines) console.log(l);
+}
 
 async function main() {
+  if (process.argv[2] === "--deactivate") {
+    if (!process.argv[3] || !process.argv[4]) {
+      console.error("Usage: node --env-file=.env scripts/onboard.js --deactivate <agency.json> <phone>");
+      process.exit(1);
+    }
+    return deactivate(process.argv[3], process.argv[4]);
+  }
   const file = process.argv[2];
   if (!file) {
     console.error("Usage: node --env-file=.env scripts/onboard.js <agency.json> [--dry-run]");
@@ -25,6 +60,7 @@ async function main() {
   console.log(`Agency: ${input.agency.name}`);
   for (const b of plan) console.log(`  ${b.role.padEnd(8)} ${b.phone}  ${b.name} (${b.lang})`);
   if (process.argv.includes("--dry-run")) {
+    printStartLinks(input, plan);
     console.log("\nDry run: nothing written.");
     return;
   }
@@ -35,7 +71,9 @@ async function main() {
     const res = await Onboarding.onboard(pool, input);
     console.log(`\nAgency id ${res.agencyId} (slug ${res.slug}): ${res.created.length} broker(s) added, ${res.updated.length} updated.`);
     console.log(`Broker web app: ${Links.appUrl("/")}`);
-    console.log("Next: send each broker the how-to in docs/pilot/broker-howto-ar.md (they must message the bot first).");
+    printStartLinks(input, plan);
+    console.log("\nNext: send each broker the guides in their language (docs/pilot/broker-howto-ar.md + web-howto-ar.md, or the -en versions).");
+    console.log("A broker must message the bot once (the start link does it) before the bot can write to them.");
   } finally {
     await pool.end();
   }

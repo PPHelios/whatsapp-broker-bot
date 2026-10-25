@@ -32,3 +32,33 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(fetch(req).catch(() => caches.match(OFFLINE)));
   }
 });
+
+// Web push: payloads carry only a title, a short body and an /app/ URL (lib/channels/webpush.js).
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    data = {};
+  }
+  const url = typeof data.url === "string" && data.url.startsWith("/app/") ? data.url : "/app/notifications";
+  event.waitUntil(
+    self.registration.showNotification(data.title || "AqarChat", { body: data.body || "", data: { url }, icon: "/app/static/icons/icon-192.png", badge: "/app/static/icons/icon-192.png" })
+  );
+});
+
+// A click opens only pages of this site under /app/.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const raw = (event.notification.data && event.notification.data.url) || "/app/notifications";
+  const url = new URL(raw, self.location.origin);
+  const target = url.origin === self.location.origin && url.pathname.startsWith("/app/") ? url.href : `${self.location.origin}/app/notifications`;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const c of list) {
+        if (c.url === target && "focus" in c) return c.focus();
+      }
+      return self.clients.openWindow(target);
+    })
+  );
+});

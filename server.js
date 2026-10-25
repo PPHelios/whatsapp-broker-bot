@@ -15,20 +15,31 @@ const AI = require("./lib/ai");
 const Flyer = require("./lib/flyer");
 const Drafts = require("./lib/drafts");
 const Edits = require("./lib/edits");
-const { executeGuardedTurn, reply, replyButtons } = require("./lib/dispatcher");
+const { executeGuardedTurn, reply, replyButtons, setTurnNote } = require("./lib/dispatcher");
+
+/** A photo, or a photo sent as a document (routed into the draft like one). */
+function isPhotoMessage(message) {
+  if (message.type === "image") return true;
+  const doc = message.type === "document" ? message.document : null;
+  return Boolean(doc) && ((doc.mime_type && doc.mime_type.startsWith("image/")) || /\.(jpe?g|png|webp|heic)$/i.test(doc.filename || ""));
+}
 
 // Modular Route Controllers
 const { handleCommand } = require("./routes/commands");
 const { handleImage, handleAudio } = require("./routes/media");
 const { handleDocument } = require("./routes/documents");
 const { handleInteractive } = require("./routes/interactive");
+const LeadIntake = require("./lib/leadIntake");
+const DealsWA = require("./lib/deals");
 const { mountWeb } = require("./web");
+const { createScheduler } = require("./lib/scheduler");
+const { buildJobs } = require("./lib/jobs");
 
 /**
  * Builds the Express app and message pipeline around an injected pg-compatible pool.
  * Tests pass an in-process Postgres; production passes the lib/db.js pool (see bootstrap below).
  */
-function createApp({ pool, config = getConfig() }) {
+function createApp({ pool, config = getConfig(), jobs }) {
   const APP_SECRET = config.whatsapp.appSecret;
   const VERIFY_TOKEN = config.whatsapp.verifyToken;
 
@@ -128,6 +139,12 @@ function createApp({ pool, config = getConfig() }) {
   async function dispatchMessage(broker, message, ctx) {
     const { lang, pool: poolInstance } = ctx;
 
+    // P11: photos get no message of their own; the next reply in the draft counts them.
+    if (!isPhotoMessage(message)) {
+      const note = await Drafts.photoNote(poolInstance, broker, lang).catch(() => null);
+      if (note) setTurnNote(note.text, note.onDelivered);
+    }
+
     switch (message.type) {
       case "interactive":
         return await handleInteractive(broker, message, ctx);
@@ -166,6 +183,15 @@ function createApp({ pool, config = getConfig() }) {
 
       case "text": {
         const text = message.text?.body?.trim() || "";
+
+        // 0. An open lead draft takes the next message (the client's text, number or a correction).
+        if (await LeadIntake.collect(broker, text, ctx)) return "done";
+
+        // 0a. A deal waiting for its commission takes the next message.
+        if (await DealsWA.collect(broker, text, ctx)) return "done";
+
+        // 0b. Wow 3: "كلمت أحمد، عايز يعاين VIL-08 الجمعة الساعة ٥" about one of the broker's clients → Confirm.
+        if (await LeadIntake.offerUpdate(broker, text, ctx)) return "done";
 
         // 1. Try structured text commands (help, stats, export, sold, delete, price, flyer, plans)
         const handledCommand = await handleCommand(broker, text, ctx);
@@ -237,7 +263,10 @@ function createApp({ pool, config = getConfig() }) {
         // 3. A4: inside an edit session, text is part of the edit (never a search).
         if (await Edits.appendToEdit(broker, ctx, { text })) return "done";
 
-        // 4. Delegate to search & natural language engine
+        // 4. A client's message (a phone, no unit): "Is this a client?" [Save as client] [Search].
+        if (await LeadIntake.offerForward(broker, text, ctx)) return "done";
+
+        // 5. Delegate to search & natural language engine
         return await S.handleSearchMessage(broker, text, ctx);
       }
 
@@ -270,18 +299,8 @@ function createApp({ pool, config = getConfig() }) {
         return "done";
 
       case "contacts":
-        logServerOp(poolInstance, {
-          agency_id: broker.agency_id,
-          broker_id: broker.id,
-          operation_type: "ingress_unsupported_contacts"
-        });
-        await reply(
-          broker,
-          lang === "en"
-            ? "⚠️ Shared contact cards are not processed by the bot. Please manually type the owner's name and contact number into the listing notes."
-            : "⚠️ جهات الاتصال المرسلة (Contact Cards) غير مدعومة ولا يتم سحبها تلقائياً. يرجى كتابة اسم ورقم المالك يدوياً نصاً داخل ملاحظات الوحدة."
-        );
-        return "done";
+        // Release 3: a contact card is a lead lookup ("who is calling?") or a save offer (no AI).
+        return await LeadIntake.handleContacts(broker, message, ctx);
 
       default:
         logServerOp(poolInstance, {
@@ -474,11 +493,15 @@ function createApp({ pool, config = getConfig() }) {
    */
   async function bootRecovery() {
     try {
+      // Claimed in one statement (new → batched), so two instances booting together never replay the same row.
+      // Only `new` rows of the last 15 minutes: `batched` ones belong to a live turn, older ones are stale.
       const { rows: pending } = await pool.query(
-        `SELECT msg_id, phone_key, payload
-       FROM inbound_messages
-       WHERE status = 'new' AND received_at >= NOW() - INTERVAL '15 minutes'
-       FOR UPDATE SKIP LOCKED`
+        `WITH claimed AS (
+           UPDATE inbound_messages SET status = 'batched', attempts = attempts + 1, updated_at = NOW()
+           WHERE status = 'new' AND received_at >= NOW() - INTERVAL '15 minutes'
+           RETURNING msg_id, phone_key, payload, received_at
+         )
+         SELECT msg_id, phone_key, payload FROM claimed ORDER BY received_at`
       );
 
       if (pending.length > 0) {
@@ -487,11 +510,6 @@ function createApp({ pool, config = getConfig() }) {
         );
 
         for (const item of pending) {
-          await pool.query(
-            "UPDATE inbound_messages SET status = 'batched', attempts = attempts + 1, updated_at = NOW() WHERE msg_id = $1",
-            [item.msg_id]
-          );
-
           const messagePayload = item.payload;
           if (messagePayload && messagePayload.from) {
             const normPhone = U.normalizePhone(messagePayload.from);
@@ -536,9 +554,18 @@ function createApp({ pool, config = getConfig() }) {
     }
   }
 
+  // Background jobs (follow-ups, match sweeps, retention…): one tick a minute, each job on one instance.
+  const scheduler = createScheduler({
+    pool,
+    jobs: jobs || buildJobs({ pool, config }),
+    tickMs: config.scheduler.tickMs,
+    enabled: config.scheduler.enabled
+  });
+
   return {
     app,
     state,
+    scheduler,
     handleWebhookBody,
     handleInboundMessage,
     dispatchMessage,
@@ -560,7 +587,7 @@ async function start() {
     if (applied.length) console.log(`[MIGRATE] ${applied.length} migration(s) applied`);
   }
 
-  const { app, state, bootRecovery, preWarmAssets } = createApp({ pool, config });
+  const { app, state, scheduler, bootRecovery, preWarmAssets } = createApp({ pool, config });
 
   // Start Server & Bind Port Immediately for Render Health Probes
   const server = app.listen(config.port, () => {
@@ -569,6 +596,8 @@ async function start() {
     );
     preWarmAssets();
     bootRecovery();
+    // After the port binds, so health probes never wait on it.
+    if (scheduler.start()) console.log(`⏱️ Scheduler on (${scheduler.jobs.length} jobs)`);
   });
 
   /**
@@ -577,6 +606,8 @@ async function start() {
   async function gracefulShutdown(signal) {
     console.log(`Received ${signal}. Initiating Render drain protocol...`);
     state.isDraining = true;
+    // The scheduler stops first: no new job starts while the instance drains.
+    scheduler.stop().catch(() => {});
 
     server.close(() => {
       console.log("HTTP server closed to new connections.");

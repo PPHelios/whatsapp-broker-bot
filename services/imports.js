@@ -13,6 +13,7 @@ const Describe = require("../domain/describe");
 const Features = require("../domain/features");
 const Delivery = require("../domain/delivery");
 const SheetImport = require("../domain/sheetImport");
+const Dup = require("../domain/unitDuplicate");
 const { normalizeCode } = require("../domain/searchQuery");
 const { normalizeSearch } = require("../domain/searchText");
 
@@ -258,21 +259,8 @@ async function applyExcel(pool, broker, id, { rows = [], archive = [], lang = "a
 
 const jobs = new Map(); // import id → promise (tests and graceful shutdown can wait for it)
 
-/** An active unit that looks like the same one (same compound and bedrooms, area and price within 5%). */
-async function findDuplicate(pool, agencyId, l) {
-  if (!l.compound || !l.area_value || !l.price_value) return null;
-  const { rows } = await pool.query(
-    `SELECT code FROM listings
-     WHERE agency_id = $1 AND status = 'active'
-       AND normalize_search(compound) = normalize_search($2)
-       AND coalesce(bedrooms, -1) = coalesce($3::int, -1)
-       AND area_value BETWEEN $4::numeric * 0.95 AND $4::numeric * 1.05
-       AND price_value BETWEEN $5::numeric * 0.95 AND $5::numeric * 1.05
-     ORDER BY confirmed_at DESC NULLS LAST LIMIT 1`,
-    [agencyId, l.compound, l.bedrooms ?? null, l.area_value, l.price_value]
-  );
-  return rows[0]?.code || null;
-}
+/** An active unit that looks like this one (the shared P13 rule). */
+const findDuplicate = (pool, agencyId, l) => Store.findDuplicate(pool, agencyId, l);
 
 /**
  * Extracts every post with the WhatsApp listing extraction (two at a time) and stores the results
@@ -315,6 +303,12 @@ async function processGroup(pool, broker, id, { AI, ctx, lang = "ar" }) {
       })
     )
   );
+  // Posts inside one paste that describe the same unit (the same rule): the later one points at the first.
+  results.forEach((r, i) => {
+    if (!r?.ok || r.duplicate) return;
+    const j = results.findIndex((o, k) => k < i && o?.ok && o.same_as === undefined && Dup.sameUnit(r.fields, o.fields));
+    if (j >= 0) r.same_as = j;
+  });
   await save("ready");
 }
 
