@@ -24,7 +24,10 @@ describe("WehdatHub Master Safeguards & Regression Guard Suite", () => {
   let schemaRefSql = "";
 
   beforeAll(() => {
-    commandsSrc = fs.readFileSync(commandsPath, "utf8");
+    // The command router and the modules split out of it (routes/command*.js).
+    commandsSrc = [commandsPath, ...["commandState", "commandDeliverables", "commandInventory"].map((f) => path.join(rootDir, "routes", `${f}.js`))]
+      .map((f) => fs.readFileSync(f, "utf8"))
+      .join("\n");
     interactiveSrc = fs.readFileSync(interactivePath, "utf8");
     mediaSrc = fs.readFileSync(mediaPath, "utf8");
     searchSrc = fs.readFileSync(searchPath, "utf8");

@@ -58,7 +58,8 @@ describe("Single outbound path (plan #7)", () => {
     const files = [
       ...fs.readdirSync(path.join(root, "routes")).map((f) => `routes/${f}`),
       ...fs.readdirSync(path.join(root, "lib")).map((f) => `lib/${f}`)
-    ].filter((f) => f.endsWith(".js") && !["lib/whatsapp.js", "lib/dispatcher.js"].includes(f));
+      // routes/turns.js: the unregistered-number notice, sent outside any broker turn (moved there from server.js).
+    ].filter((f) => f.endsWith(".js") && !["lib/whatsapp.js", "lib/dispatcher.js", "routes/turns.js"].includes(f));
     const offenders = files.filter((f) =>
       /WA\.send[A-Za-z]+\(/.test(fs.readFileSync(path.join(root, f), "utf8"))
     );
