@@ -131,18 +131,23 @@ async function sendCard(pool, actor, lead, assigneeId, now) {
 
 /**
  * Adds a lead, or finds the one that already has any of its numbers (Q2).
- * @param {Object} input - { phones, name, kind, lang, source, lawfulBasis, consentNote, notes, assignTo, allowErased }
+ * @param {Object} input - { phones, name, kind, lang, source, lawfulBasis, consentNote, notes, assignTo, allowErased, stage, lostReason }
+ *   stage: a new lead's starting stage (imports); a merge never changes the stage.
+ * @param {Object} opts - { now, quiet }: quiet sends no notification and writes no per-lead log (an import reports once)
  * @returns {Promise<{ outcome: "created"|"merged"|"colleague"|"erased_before"|"invalid", lead?, claimed?, error?, notified: Array }>}
  *   claimed: a broker re-captured an unassigned lead, which is now theirs.
  *   colleague: the number is a colleague's lead; it is not returned, its broker is not messaged, the managers are.
  */
-async function captureLead(pool, actor, input = {}, { now = new Date() } = {}) {
+async function captureLead(pool, actor, input = {}, { now = new Date(), quiet = false } = {}) {
   const parsed = normalizePhones(input.phones ?? input.phone);
   if (parsed.error) return { outcome: "invalid", error: parsed.error, notified: [] };
   const kind = input.kind || "buyer";
   if (!Stages.KINDS.includes(kind)) return { outcome: "invalid", error: "kind", notified: [] };
   const basis = input.lawfulBasis || "client_request";
   if (!Stages.LAWFUL_BASES.includes(basis)) return { outcome: "invalid", error: "lawful_basis", notified: [] };
+  const stage = input.stage || "new";
+  const lostReason = stage === "lost" ? cleanText(input.lostReason, 200) || "—" : null;
+  if (Stages.stageError(stage, lostReason)) return { outcome: "invalid", error: "stage", notified: [] };
   const manager = Authz.isManager(actor);
   let assignee = manager ? input.assignTo || null : actor.id;
   if (assignee && assignee !== actor.id) {
@@ -180,9 +185,10 @@ async function captureLead(pool, actor, input = {}, { now = new Date() } = {}) {
       const added = fresh.filter((p) => !taken.includes(p)).slice(0, MAX_PHONES - existing.phones.length);
       const { rows } = await client.query(
         `UPDATE leads SET phones = phones || $3::text[], name = COALESCE(name, $4), assigned_broker_id = $5,
+                source = COALESCE(source, $7), notes = COALESCE(notes, $8),
                 last_activity_at = $6, updated_at = $6, version = version + 1
           WHERE id = $1 AND agency_id = $2 RETURNING *`,
-        [existing.id, actor.agency_id, added, cleanText(input.name, 120), claim ? actor.id : existing.assigned_broker_id, now.toISOString()]
+        [existing.id, actor.agency_id, added, cleanText(input.name, 120), claim ? actor.id : existing.assigned_broker_id, now.toISOString(), cleanText(input.source, 60), cleanText(input.notes, 4000)]
       );
       await addEvent(client, existing, actor.id, "inquiry", { source: cleanText(input.source, 60) }, now);
       if (added.length) await addEvent(client, existing, actor.id, "merged", { added: added.length }, now);
@@ -193,8 +199,8 @@ async function captureLead(pool, actor, input = {}, { now = new Date() } = {}) {
     const seq = await client.query("UPDATE agencies SET lead_ref_seq = lead_ref_seq + 1 WHERE id = $1 RETURNING lead_ref_seq", [actor.agency_id]);
     const { rows } = await client.query(
       `INSERT INTO leads (agency_id, ref, kind, assigned_broker_id, created_by_broker_id, name, phone_e164, phones, lang, source,
-                          lawful_basis, consent_at, consent_note, notes, last_activity_at, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $15, $15) RETURNING *`,
+                          lawful_basis, consent_at, consent_note, notes, stage, lost_reason, last_activity_at, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $16, $17, $15, $15, $15) RETURNING *`,
       [
         actor.agency_id,
         seq.rows[0].lead_ref_seq,
@@ -210,7 +216,9 @@ async function captureLead(pool, actor, input = {}, { now = new Date() } = {}) {
         basis === "consent" ? now.toISOString() : null,
         cleanText(input.consentNote, 300),
         cleanText(input.notes, 4000),
-        now.toISOString()
+        now.toISOString(),
+        stage,
+        lostReason
       ]
     );
     await addEvent(client, rows[0], actor.id, "created", { source: cleanText(input.source, 60), assigned_to: assignee }, now);
@@ -220,6 +228,7 @@ async function captureLead(pool, actor, input = {}, { now = new Date() } = {}) {
   const { lead } = res;
   const ref = Card.refLabel(lead.ref);
   let notified = [];
+  if (quiet) return res.outcome === "colleague" ? { outcome: "colleague", lead: { id: lead.id, ref: lead.ref }, notified } : { outcome: res.outcome, lead, claimed: Boolean(res.claimed), notified };
   if (res.outcome === "created" || res.claimed) {
     const assigneeName = assignee && assignee !== actor.id ? (await brokerById(pool, actor.agency_id, assignee))?.name : null;
     notified = await alertManagers(pool, actor, {

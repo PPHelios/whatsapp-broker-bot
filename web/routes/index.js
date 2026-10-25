@@ -9,6 +9,7 @@ const PRIVATE = [
   require("./imports"),
   require("./unitForm"),
   require("./units"),
+  require("./leadImports"),
   require("./leads"),
   require("./notifications"),
   require("./settings"),

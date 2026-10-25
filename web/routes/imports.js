@@ -208,6 +208,7 @@ function register(web, { pool, page }) {
     const lang = langOf(req);
     const imp = await Imports.loadImport(pool, req.session.broker, req.params.id);
     if (!imp) return next();
+    if (imp.kind === "leads") return res.redirect(303, `/app/leads/import/${imp.id}`);
     return importPage(req, res, imp.kind === "excel" ? excelPlanPage(imp, lang) : groupPage(imp, lang));
   });
 
@@ -215,7 +216,7 @@ function register(web, { pool, page }) {
     const lang = langOf(req);
     const { broker } = req.session;
     const imp = await Imports.loadImport(pool, broker, req.params.id);
-    if (!imp) return next();
+    if (!imp || imp.kind === "leads") return next();
     const rows = [].concat(req.body.rows || []);
     const result =
       imp.kind === "excel"

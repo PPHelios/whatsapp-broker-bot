@@ -541,7 +541,11 @@
     "lib/sheets.js": {
       "MAX_BYTES": "Number",
       "MAX_ROWS": "Number",
-      "readInventorySheet": ["buffer"]
+      "readInventorySheet": ["buffer"],
+      "readTable": ["buffer", "opts"],
+      "parseCsv": ["text", "limitRows"],
+      "decodeText": ["buffer"],
+      "mapTable": ["rows", "params"]
     },
     "services/imports.js": {
       "describeChanges": ["listing", "patch", "lang"],
@@ -763,6 +767,30 @@
       "timelineList": ["rows", "lang", "params"],
       "leadPath": ["lead", "sub"],
       "when": ["d", "lang"]
+    },
+    "domain/leadImport.js": {
+      "COLUMNS": "Array",
+      "KEYS": "Array",
+      "columnFor": ["header"],
+      "leadKind": ["v"],
+      "stage": ["v"],
+      "lawfulBasis": ["v"],
+      "budget": ["v"],
+      "phonesIn": ["v"],
+      "rowToLead": ["cells"],
+      "matchBroker": ["value", "brokers"],
+      "warningLabel": ["key", "lang"],
+      "errorLabel": ["key", "lang"]
+    },
+    "services/leadImports.js": {
+      "planLeads": ["pool", "broker", "table", "params"],
+      "savePlan": ["pool", "broker", "plan", "params"],
+      "startApply": ["pool", "broker", "id", "opts"],
+      "waitForApply": ["id"]
+    },
+    "web/routes/leadImports.js": {
+      "register": ["web", "params"],
+      "TEMPLATE_HEADERS": "Array"
     }
   },
   "invariant_variable_names": {

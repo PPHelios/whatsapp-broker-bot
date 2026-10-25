@@ -110,7 +110,7 @@ function register(web, { pool, page }) {
       title: L(lang, "العملاء", "Leads"),
       nav: "leads",
       body: html`<h1>👤 ${L(lang, "العملاء", "Leads")}</h1>
-<div class="row"><a class="btn" href="/app/leads/new">➕ ${L(lang, "عميل جديد", "New lead")}</a></div>
+<div class="row"><a class="btn" href="/app/leads/new">➕ ${L(lang, "عميل جديد", "New lead")}</a> <a class="btn secondary" href="/app/leads/import">📥 ${L(lang, "استيراد من ملف", "Import a file")}</a></div>
 ${pipe
   ? html`<section class="card" id="pipeline"><h2>📊 ${L(lang, "المراحل", "Pipeline")}</h2>
   <ul class="tags">${Stages.STAGES.map((s) => html`<li data-stage="${s}"><a href="${qs({ tab: s, page: "" })}">${Stages.stageLabel(s, lang)}: ${pipe.stages[s]}</a></li>`)}</ul>

@@ -665,7 +665,7 @@ ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_name_check CHECK (((len
 ALTER TABLE search_vocabulary ADD CONSTRAINT search_vocabulary_kind_check CHECK ((kind = ANY (ARRAY['type'::text, 'feature'::text])));
 ALTER TABLE share_links ADD CONSTRAINT share_links_channel_check CHECK ((channel = ANY (ARRAY['whatsapp'::text, 'web'::text])));
 ALTER TABLE share_links ADD CONSTRAINT share_links_lang_check CHECK ((lang = ANY (ARRAY['ar'::text, 'en'::text])));
-ALTER TABLE web_imports ADD CONSTRAINT web_imports_kind_check CHECK ((kind = ANY (ARRAY['excel'::text, 'group'::text])));
+ALTER TABLE web_imports ADD CONSTRAINT web_imports_kind_check CHECK ((kind = ANY (ARRAY['excel'::text, 'group'::text, 'leads'::text])));
 ALTER TABLE web_imports ADD CONSTRAINT web_imports_status_check CHECK ((status = ANY (ARRAY['processing'::text, 'ready'::text, 'applied'::text, 'failed'::text])));
 ALTER TABLE web_login_tokens ADD CONSTRAINT web_login_tokens_channel_check CHECK ((channel = ANY (ARRAY['whatsapp'::text, 'web'::text])));
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
