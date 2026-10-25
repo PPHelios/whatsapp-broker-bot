@@ -15,6 +15,8 @@ const AI = require("./lib/ai");
 const Flyer = require("./lib/flyer");
 const Drafts = require("./lib/drafts");
 const Edits = require("./lib/edits");
+const ErrorReports = require("./lib/errorReports");
+const BugReports = require("./lib/bugReports");
 const { executeGuardedTurn, reply, replyButtons, setTurnNote } = require("./lib/dispatcher");
 
 /** A photo, or a photo sent as a document (routed into the draft like one). */
@@ -185,6 +187,9 @@ function createApp({ pool, config = getConfig(), jobs }) {
 
       case "text": {
         const text = message.text?.body?.trim() || "";
+
+        // -1. A bug report: *bug …* / *بلاغ …*, or the description after a bare *bug* (lib/bugReports.js).
+        if (await BugReports.handle(broker, text, ctx)) return "done";
 
         // 0. An open lead draft takes the next message (the client's text, number or a correction).
         if (await LeadIntake.collect(broker, text, ctx)) return "done";
@@ -478,7 +483,7 @@ function createApp({ pool, config = getConfig(), jobs }) {
           .catch(() => {});
       }
     } catch (err) {
-      console.error("Critical webhook processing error:", err);
+      await ErrorReports.capture(err, { pool, source: "webhook", msgId: message.id || null, metadata: { type: message.type } });
       if (message.id) {
         await pool
           .query(
@@ -512,6 +517,14 @@ function createApp({ pool, config = getConfig(), jobs }) {
 
   // Release 2: the broker web app (/app/) and the public pages, after /webhook and /health.
   mountWeb(app, { pool, config });
+
+  // Anything else that throws (webhooks, public pages): recorded and alerted, then a plain 500.
+  // eslint-disable-next-line no-unused-vars
+  app.use(async (err, req, res, _next) => {
+    const status = err.status >= 400 && err.status < 500 ? err.status : 500; // 4xx: a bad request (e.g. broken JSON), not our bug
+    if (status === 500) await ErrorReports.capture(err, { pool, source: "http", path: `${req.method} ${req.path}` });
+    if (!res.headersSent) res.status(status).send(status === 500 ? "Error" : "Bad request");
+  });
 
   /**
    * SEC-03: Startup Crash Recovery Sweep
@@ -549,12 +562,7 @@ function createApp({ pool, config = getConfig(), jobs }) {
                 messagePayload,
                 () => dispatchMessage(broker, messagePayload, ctx),
                 { pool }
-              ).catch((e) =>
-                console.warn(
-                  `[BOOT] Recovery execution failed for ${item.msg_id}:`,
-                  e.message
-                )
-              );
+              ).catch((e) => ErrorReports.capture(e, { pool, source: "recovery", broker, msgId: item.msg_id }));
             }
           }
         }
@@ -584,7 +592,8 @@ function createApp({ pool, config = getConfig(), jobs }) {
     pool,
     jobs: jobs || buildJobs({ pool, config }),
     tickMs: config.scheduler.tickMs,
-    enabled: config.scheduler.enabled
+    enabled: config.scheduler.enabled,
+    onError: (err, job) => ErrorReports.capture(err, { pool, source: "job", metadata: { job: job.name } })
   });
 
   return {
@@ -606,6 +615,8 @@ async function start() {
   // Fails fast in production when required configuration is missing.
   const config = getConfig();
   const pool = Db.getPool();
+  // Unhandled rejections and crashes land in error_events and alert the owner (lib/errorReports.js).
+  ErrorReports.installProcessHandlers(pool);
 
   if (config.db.migrateOnBoot) {
     const applied = await runMigrations(pool, { log: (m) => console.log(`[MIGRATE] ${m}`) });

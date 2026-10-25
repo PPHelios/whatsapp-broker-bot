@@ -118,6 +118,12 @@ function loadConfig(env = process.env) {
       privateKey: env.WEB_PUSH_PRIVATE_KEY || "",
       subject: env.WEB_PUSH_SUBJECT || "mailto:support@aqarchat.com"
     },
+    // Error alerts to the owner (lib/errorReports.js): a Telegram message through the bot, to the owner's chat.
+    alerts: {
+      telegramToken: env.TELEGRAM_BOT_TOKEN || "",
+      telegramChatId: String(env.ALERT_TELEGRAM_CHAT_ID || "").trim(),
+      everyMin: Math.max(1, int(env.ALERT_EVERY_MIN, 30))
+    },
     scheduler: {
       // On by default outside tests; tests call tick({ now }) with a fixed clock instead.
       enabled: env.SCHEDULER_ENABLED ? env.SCHEDULER_ENABLED !== "false" : env.NODE_ENV !== "test",

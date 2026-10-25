@@ -897,6 +897,25 @@
       "prefixFrom": ["name"],
       "cleanPrefix": ["raw"],
       "format": ["prefix", "propertyType", "n"]
+    },
+    "lib/errorReports.js": {
+      "capture": ["err", "params"],
+      "submitReport": ["pool", "broker", "params", "params"],
+      "alertOwner": ["text", "params"],
+      "maskPhones": ["text"],
+      "fingerprint": ["source", "name", "message", "frame"],
+      "topFrame": ["stack"],
+      "purgeOld": ["pool", "params"],
+      "installProcessHandlers": ["pool"],
+      "RETENTION_DAYS": "Number",
+      "REPORTS_PER_HOUR": "Number"
+    },
+    "lib/bugReports.js": {
+      "handle": ["broker", "text", "ctx"],
+      "COMMAND": "Object"
+    },
+    "web/routes/report.js": {
+      "register": ["web", "params"]
     }
   },
   "invariant_variable_names": {

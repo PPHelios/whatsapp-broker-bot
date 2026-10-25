@@ -14,7 +14,8 @@ const PRIVATE = [
   require("./deals"),
   require("./notifications"),
   require("./settings"),
-  require("./usage")
+  require("./usage"),
+  require("./report")
 ];
 
 module.exports = { PUBLIC, PRIVATE };

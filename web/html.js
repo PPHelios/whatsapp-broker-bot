@@ -66,6 +66,7 @@ ${scripts ? html`<script src="${assets("htmx.min.js")}" defer></script>
 <body>
 ${broker || nav || langSwitch ? topBar({ broker, nav, lang, unread }) : ""}
 <main id="main">${body}</main>
+${broker ? html`<footer class="foot muted"><a href="/app/report">${en ? "🐞 Report a problem" : "🐞 بلّغ عن مشكلة"}</a></footer>` : ""}
 </body>
 </html>`;
 }
