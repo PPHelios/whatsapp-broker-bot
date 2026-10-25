@@ -4,6 +4,7 @@
 const crypto = require("crypto");
 const ExcelJS = require("exceljs");
 const WA = require("../lib/whatsapp");
+const Media = require("../lib/media");
 const T = require("../lib/text");
 const U = require("../lib/util");
 const Excel = require("../lib/excel");
@@ -181,7 +182,7 @@ async function handleDocument(broker, message, ctx) {
   // Download media buffer from WhatsApp Graph API
   let fileData;
   try {
-    fileData = await WA.downloadWhatsAppMedia(doc.id);
+    fileData = await Media.download(doc.id, doc.mime_type || "");
   } catch (err) {
     console.error("Failed to download document media:", err);
   }

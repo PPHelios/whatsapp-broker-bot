@@ -158,7 +158,7 @@
       "deleteStorageFiles": ["paths"]
     },
     "lib/dispatcher.js": {
-      "countOutbound": ["broker", "kind", "status"],
+      "countOutbound": ["broker", "kind", "status", "operationType"],
       "setTurnAction": ["action"],
       "setTurnNote": ["text", "onDelivered"],
       "turnCredits": [],
@@ -897,6 +897,52 @@
       "prefixFrom": ["name"],
       "cleanPrefix": ["raw"],
       "format": ["prefix", "propertyType", "n"]
+    },
+    "lib/telegram.js": {
+      "MAX_TEXT": "Number",
+      "configured": [],
+      "call": ["method", "params", "params"],
+      "sendMessage": ["chatId", "html", "params"],
+      "editMessage": ["chatId", "messageId", "html", "params"],
+      "sendPhoto": ["chatId", "photo", "captionHtml", "params"],
+      "sendMediaGroup": ["chatId", "urls", "captionHtml"],
+      "sendDocument": ["chatId", "buffer", "filename", "captionHtml"],
+      "answerCallback": ["callbackQueryId", "text"],
+      "sendTyping": ["chatId"],
+      "downloadFile": ["fileId", "mimeHint"],
+      "setWebhook": ["url", "secret"],
+      "setCommands": ["commands", "languageCode"]
+    },
+    "lib/tgIngress.js": {
+      "normalize": ["update"],
+      "startPayload": ["text"],
+      "buttonMessage": ["norm", "id"]
+    },
+    "lib/tgLink.js": {
+      "LINK_TOKEN_DAYS": "Number",
+      "issueLinkToken": ["pool", "broker"],
+      "startLink": ["username", "token"],
+      "linkByToken": ["pool", "token", "ids"],
+      "linkByContact": ["pool", "contact", "ids"],
+      "findBroker": ["pool", "userId"],
+      "encodeCallback": ["pool", "id"],
+      "decodeCallback": ["pool", "data"],
+      "purgeCallbacks": ["pool"]
+    },
+    "lib/tgSend.js": {
+      "send": ["broker", "op", "body", "params"],
+      "parseMessageRef": ["id"]
+    },
+    "lib/media.js": {
+      "download": ["id", "mimeHint"]
+    },
+    "domain/tgFormat.js": {
+      "escapeHtml": ["s"],
+      "toHtml": ["text"],
+      "keyboard": ["buttons", "encode"],
+      "listKeyboard": ["sections", "encode"],
+      "urlButton": ["text", "url"],
+      "label": ["t"]
     }
   },
   "invariant_variable_names": {

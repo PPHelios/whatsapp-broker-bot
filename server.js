@@ -9,6 +9,9 @@ const Db = require("./lib/db");
 const { runMigrations } = require("./lib/migrate");
 
 const WA = require("./lib/whatsapp");
+const TG = require("./lib/telegram");
+const TgLink = require("./lib/tgLink");
+const TgIngress = require("./lib/tgIngress");
 const U = require("./lib/util");
 const S = require("./lib/search");
 const AI = require("./lib/ai");
@@ -365,6 +368,110 @@ function createApp({ pool, config = getConfig(), jobs }) {
   });
 
   /**
+   * Telegram webhook (Release 3T): only Telegram knows the secret_token we gave setWebhook, so a request without the
+   * matching header is refused (fail closed: without a configured secret nothing is accepted).
+   */
+  app.post("/telegram/webhook", async (req, res) => {
+    if (state.isDraining) return res.status(503).send("SERVICE_DRAINING");
+    const secret = config.telegram.webhookSecret;
+    const sent = String(req.get("X-Telegram-Bot-Api-Secret-Token") || "");
+    const ok =
+      Boolean(secret) &&
+      sent.length === secret.length &&
+      crypto.timingSafeEqual(Buffer.from(sent), Buffer.from(secret));
+    if (!ok) return res.sendStatus(401);
+    res.status(200).send("OK");
+    await handleTelegramUpdate(req.body).catch((err) => console.error("Telegram update failed:", err.message));
+  });
+
+  const TG_COPY = {
+    linkAsk:
+      "👋 أهلاً! عشان نوصّل حسابك اضغط «📱 ابعت رقمي» تحت (لازم يكون نفس الرقم المسجل في وكالتك)، أو افتح رابط البداية اللي وصلك من مديرك.\n" +
+      "👋 Hi! To link your account, tap \"📱 Share my number\" below (the number your agency registered), or open the start link your manager sent you.",
+    shareButton: "📱 ابعت رقمي / Share my number",
+    invalid: "⚠️ الرابط ده مش صالح أو اتستخدم قبل كده. اطلب رابط جديد من مديرك، أو اضغط «📱 ابعت رقمي».\n⚠️ This link is invalid or already used. Ask your manager for a new one, or tap \"📱 Share my number\".",
+    notOwn: "⚠️ ابعت رقمك إنت من زرار «📱 ابعت رقمي».\n⚠️ Please share your own number with the \"📱 Share my number\" button.",
+    unknown: "⚠️ الرقم ده مش متسجل كوسيط في AqarChat. كلم مدير وكالتك.\n⚠️ This number isn't registered as an AqarChat broker. Ask your agency admin.",
+    linked: (b) => (b.preferred_lang === "en" ? `✅ Linked. Welcome, ${b.name}!` : `✅ تم ربط حسابك. أهلاً يا ${b.name}!`)
+  };
+
+  async function tgAskToLink(chatId, text = TG_COPY.linkAsk) {
+    await TG.call("sendMessage", {
+      chat_id: chatId,
+      text,
+      reply_markup: { keyboard: [[{ text: TG_COPY.shareButton, request_contact: true }]], resize_keyboard: true, one_time_keyboard: true }
+    }).catch((e) => console.warn("Telegram link prompt failed:", e.message));
+  }
+
+  /** Links an unknown Telegram user (start token or own contact); true when the update was about linking. */
+  async function tgLink(norm) {
+    let res = null;
+    if (norm.start) res = await TgLink.linkByToken(pool, norm.start, norm.ids);
+    else if (norm.contact) res = await TgLink.linkByContact(pool, norm.contact, norm.ids);
+    else {
+      await tgAskToLink(norm.ids.chatId);
+      return null;
+    }
+    if (res.broker) {
+      await TG.call("sendMessage", { chat_id: norm.ids.chatId, text: TG_COPY.linked(res.broker), reply_markup: { remove_keyboard: true } }).catch(() => {});
+      return res.broker;
+    }
+    await tgAskToLink(norm.ids.chatId, res.error === "not_own" ? TG_COPY.notOwn : res.error === "unknown" ? TG_COPY.unknown : TG_COPY.invalid);
+    return null;
+  }
+
+  /** One Telegram update: link if needed, then the same guarded turn as WhatsApp, answered on Telegram. */
+  async function handleTelegramUpdate(update) {
+    const norm = TgIngress.normalize(update);
+    if (!norm) return;
+    if (norm.callbackId) TG.answerCallback(norm.callbackId).catch(() => {});
+
+    let broker = await TgLink.findBroker(pool, norm.ids.userId);
+    let message = norm.message || null;
+    if (!broker) {
+      broker = await tgLink(norm);
+      if (!broker) return;
+      message = { id: `tg:${norm.ids.chatId}:start:${Date.now()}`, from: `tg:${norm.ids.userId}`, type: "text", text: { body: broker.preferred_lang === "en" ? "help" : "مساعدة" } };
+    } else if (norm.start !== undefined) {
+      // /start from a linked broker: the command list.
+      message = { id: `tg:${norm.ids.chatId}:start:${Date.now()}`, from: `tg:${norm.ids.userId}`, type: "text", text: { body: broker.preferred_lang === "en" ? "help" : "مساعدة" } };
+    } else if (norm.callbackId) {
+      const id = await TgLink.decodeCallback(pool, norm.data);
+      if (!id) return;
+      message = TgIngress.buttonMessage(norm, id);
+    }
+    if (!message) return;
+    if (String(broker.telegram_chat_id) !== String(norm.ids.chatId)) {
+      await pool.query("UPDATE brokers SET telegram_chat_id = $2 WHERE id = $1", [broker.id, norm.ids.chatId]);
+    }
+    broker = { ...broker, channel: "telegram", telegram_chat_id: norm.ids.chatId };
+    TG.sendTyping(norm.ids.chatId).catch(() => {});
+    await runTurn(broker, message, `tg:${norm.ids.userId}`);
+  }
+
+  /** Dedupe on the message id, then the guarded turn and its status (shared by WhatsApp and Telegram). */
+  async function runTurn(broker, message, phoneKey) {
+    state.inFlight++;
+    try {
+      const { rows: inserted } = await pool.query(
+        `INSERT INTO inbound_messages (msg_id, phone_key, payload, status, received_at, updated_at)
+         VALUES ($1, $2, $3::jsonb, 'processing', NOW(), NOW())
+         ON CONFLICT (msg_id) DO NOTHING RETURNING msg_id`,
+        [message.id, phoneKey, JSON.stringify(message)]
+      );
+      if (!inserted.length) return;
+      const ctx = await buildTurnContext(broker);
+      await executeGuardedTurn(broker, message, () => dispatchMessage(broker, message, ctx), { pool });
+      await pool.query("UPDATE inbound_messages SET status = 'completed', updated_at = NOW() WHERE msg_id = $1", [message.id]).catch(() => {});
+    } catch (err) {
+      console.error("Critical turn processing error:", err);
+      await pool.query("UPDATE inbound_messages SET status = 'failed', updated_at = NOW() WHERE msg_id = $1", [message.id]).catch(() => {});
+    } finally {
+      state.inFlight--;
+    }
+  }
+
+  /**
    * Processes one verified webhook body: dedupe, broker auth, guarded dispatch, status update.
    */
   async function handleWebhookBody(body) {
@@ -537,8 +644,12 @@ function createApp({ pool, config = getConfig(), jobs }) {
         for (const item of pending) {
           const messagePayload = item.payload;
           if (messagePayload && messagePayload.from) {
-            const normPhone = U.normalizePhone(messagePayload.from);
-            const brokers = await findActiveBroker(normPhone);
+            // Telegram turns ("tg:<user>") replay to the linked broker's chat.
+            const tgUser = String(messagePayload.from).match(/^tg:(\d+)$/)?.[1];
+            const tgBroker = tgUser ? await TgLink.findBroker(pool, tgUser) : null;
+            const brokers = tgUser
+              ? tgBroker ? [{ ...tgBroker, channel: "telegram" }] : []
+              : await findActiveBroker(U.normalizePhone(messagePayload.from));
 
             if (brokers.length > 0) {
               const broker = brokers[0];
@@ -592,6 +703,7 @@ function createApp({ pool, config = getConfig(), jobs }) {
     state,
     scheduler,
     handleWebhookBody,
+    handleTelegramUpdate,
     handleInboundMessage,
     dispatchMessage,
     bootRecovery,

@@ -85,6 +85,12 @@ function loadConfig(env = process.env) {
       // Unsigned webhooks are accepted only when explicitly allowed outside production.
       allowUnsigned: !isProd && env.WEBHOOK_ALLOW_UNSIGNED === "true"
     },
+    // Telegram bot (Release 3T): on when the token is set; the webhook refuses everything without the secret.
+    telegram: {
+      enabled: Boolean(String(env.TELEGRAM_BOT_TOKEN || "").trim()),
+      webhookSecret: env.TELEGRAM_WEBHOOK_SECRET || "",
+      botUsername: String(env.TELEGRAM_BOT_USERNAME || "").replace(/^@/, "").trim()
+    },
     db: {
       url: env.DATABASE_URL || "",
       poolMax: int(env.DB_POOL_MAX, 10),

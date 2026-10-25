@@ -2,6 +2,7 @@
 "use strict";
 
 const WA = require("../lib/whatsapp");
+const Media = require("../lib/media");
 const U = require("../lib/util");
 const Drafts = require("../lib/drafts");
 const Supabase = require("../lib/supabase");
@@ -99,7 +100,7 @@ async function ingestImage(broker, message, ctx) {
   // 3. Download from WhatsApp Meta Graph API
   let rawMedia;
   try {
-    rawMedia = await WA.downloadWhatsAppMedia(imageObj.id);
+    rawMedia = await Media.download(imageObj.id, imageObj.mime_type || "image/jpeg");
   } catch (err) {
     console.error("Failed to download WhatsApp media:", err);
   }
@@ -209,7 +210,7 @@ async function handleAudio(broker, message, ctx) {
   // 2. Download audio buffer from WhatsApp
   let audioData;
   try {
-    audioData = await WA.downloadWhatsAppMedia(audioObj.id);
+    audioData = await Media.download(audioObj.id, audioObj.mime_type || "audio/ogg");
   } catch (err) {
     console.error("Audio download error:", err);
   }

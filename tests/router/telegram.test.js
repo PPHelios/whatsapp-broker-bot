@@ -1,0 +1,163 @@
+// tests/router/telegram.test.js — Telegram as the brokers' bot channel (Release 3T step 1): the webhook secret,
+// linking (start link, own contact only), replies on Telegram (HTML, inline keyboards, no WhatsApp, no credits),
+// button taps through callback_query (long ids via a stored token), media downloads, boot replay.
+"use strict";
+
+jest.mock("../../lib/whatsapp", () => require("../harness/fake-whatsapp"));
+jest.mock("../../lib/telegram", () => require("../harness/fake-telegram"));
+jest.mock("../../lib/ai", () => require("../harness/fake-ai"));
+jest.mock("../../lib/supabase", () => require("../harness/fake-supabase"));
+
+const request = require("supertest");
+const { resetConfig } = require("../../config");
+const { createHarness, closeHarness, settle } = require("../harness/app");
+const TgLink = require("../../lib/tgLink");
+const Fmt = require("../../domain/tgFormat");
+const Media = require("../../lib/media");
+
+jest.setTimeout(60000);
+
+let h;
+beforeEach(async () => {
+  h = await createHarness();
+});
+afterAll(closeHarness);
+
+const row = async (who) => (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS[who].id]))[0];
+const texts = (out) => out.map((e) => e.text || e.caption || "").join("\n");
+
+describe("webhook", () => {
+  afterEach(() => {
+    delete process.env.TELEGRAM_WEBHOOK_SECRET;
+    resetConfig();
+  });
+
+  test("refused without the secret header, or when no secret is configured; accepted with it", async () => {
+    let r = await request(h.app.app).post("/telegram/webhook").send({ update_id: 1 });
+    expect(r.status).toBe(401);
+    process.env.TELEGRAM_WEBHOOK_SECRET = "s3cret-token-value";
+    resetConfig();
+    const app = require("../../server").createApp({ pool: h.pool });
+    r = await request(app.app).post("/telegram/webhook").set("X-Telegram-Bot-Api-Secret-Token", "wrong-token-value!").send({ update_id: 1 });
+    expect(r.status).toBe(401);
+    r = await request(app.app).post("/telegram/webhook").set("X-Telegram-Bot-Api-Secret-Token", "s3cret-token-value").send({ update_id: 1 });
+    expect(r.status).toBe(200);
+  });
+});
+
+describe("linking", () => {
+  test("an unknown user is asked to share their number; someone else's contact and an unregistered number are refused", async () => {
+    const [ask] = await h.tgText(9999, "hello");
+    expect(ask.params.reply_markup.keyboard[0][0].request_contact).toBe(true);
+    const other = await h.tg(9999, { contact: { phone_number: "+201000000001", first_name: "X", user_id: 1234 } });
+    expect(texts(other)).toMatch(/your own number/);
+    const unknown = await h.tg(9999, { contact: { phone_number: "+201099999999", first_name: "X", user_id: 9999 } });
+    expect(texts(unknown)).toMatch(/isn't registered/);
+    expect((await row("broker")).telegram_user_id).toBeNull();
+  });
+
+  test("sharing their own registered number links the broker and shows the command list in their language", async () => {
+    const out = await h.tg(5555, { contact: { phone_number: "+201000000001", first_name: "B", user_id: 5555 } });
+    expect(out[0].text).toMatch(/تم ربط حسابك/);
+    expect(out[0].params.reply_markup.remove_keyboard).toBe(true);
+    expect(out.length).toBeGreaterThan(1); // the help text follows
+    const b = await row("broker");
+    expect(Number(b.telegram_user_id)).toBe(5555);
+    expect(Number(b.telegram_chat_id)).toBe(5555);
+    expect(h.WA.outbox).toEqual([]);
+  });
+
+  test("the start link works once; a used or made-up token is refused; a deactivated broker can't link", async () => {
+    const token = await TgLink.issueLinkToken(h.pool, await row("admin"));
+    expect(TgLink.startLink("aqar_test_bot", token)).toBe(`https://t.me/aqar_test_bot?start=${token}`);
+    const out = await h.tgText(6001, `/start ${token}`);
+    expect(out[0].text).toMatch(/Linked\. Welcome, Agency Admin/);
+    expect(texts(await h.tgText(6002, `/start ${token}`))).toMatch(/invalid or already used/);
+    expect(texts(await h.tgText(6003, "/start abcdefghijklmnopqrstuvwxyz123456"))).toMatch(/invalid/);
+    const t2 = await TgLink.issueLinkToken(h.pool, await row("colleague"));
+    await h.query("UPDATE brokers SET is_active = false WHERE id = $1", [h.BROKERS.colleague.id]);
+    await h.tgText(6004, `/start ${t2}`);
+    expect((await row("colleague")).telegram_user_id).toBeNull();
+  });
+
+  test("linking a Telegram account already tied to another broker moves it", async () => {
+    await h.tgLink("broker");
+    const token = await TgLink.issueLinkToken(h.pool, await row("colleague"));
+    await h.tgText("broker", `/start ${token}`); // a linked user: /start shows help, the token isn't used
+    expect(Number((await row("broker")).telegram_user_id)).toBe(h.TG_IDS.broker);
+    await h.query("UPDATE brokers SET telegram_user_id = NULL WHERE id = $1", [h.BROKERS.broker.id]);
+    await h.tgText("broker", `/start ${token}`);
+    expect(Number((await row("colleague")).telegram_user_id)).toBe(h.TG_IDS.broker);
+  });
+});
+
+describe("turns on Telegram", () => {
+  test("replies go to the chat as HTML, never WhatsApp, and count as tg_outbound without credits", async () => {
+    await h.tgLink("broker");
+    const out = await h.tgText("broker", "مساعدة");
+    expect(out.length).toBeGreaterThan(0);
+    expect(out.every((e) => e.chatId === String(h.TG_IDS.broker))).toBe(true);
+    expect(texts(out)).toMatch(/<b>/);
+    expect(texts(out)).not.toMatch(/(^|[^\w])\*[^*\n]+\*/);
+    expect(h.WA.outbox).toEqual([]);
+    const logs = await h.query("SELECT operation_type, metadata FROM operation_logs WHERE operation_type IN ('tg_outbound', 'wa_outbound')");
+    expect(logs.length).toBeGreaterThan(0);
+    expect(logs.every((l) => l.operation_type === "tg_outbound" && l.metadata.egp === undefined)).toBe(true);
+  });
+
+  test("a contact card offers Save as client with inline buttons; tapping saves the lead", async () => {
+    await h.tgLink("broker");
+    const out = await h.tg("broker", { contact: { phone_number: "+201012345678", first_name: "Sara" } });
+    const msg = out.find((e) => e.keyboard);
+    const save = msg.keyboard.flat().find((b) => b.callback_data.startsWith("ld:save:"));
+    expect(save.text).toMatch(/حفظ كعميل/);
+    await h.tgTap("broker", save.callback_data);
+    const [lead] = await h.query("SELECT name, phones FROM leads");
+    expect(lead.name).toBe("Sara");
+    expect(lead.phones).toEqual(["+201012345678"]);
+  });
+
+  test("a repeated update (Telegram retry) runs once", async () => {
+    await h.tgLink("broker");
+    const update = { message: { message_id: 77, from: { id: h.TG_IDS.broker }, chat: { id: h.TG_IDS.broker, type: "private" }, text: "مساعدة" } };
+    await h.app.handleTelegramUpdate({ update_id: 1, ...update });
+    const n = h.TG.outbox.length;
+    await h.app.handleTelegramUpdate({ update_id: 1, ...update });
+    await settle();
+    expect(h.TG.outbox.filter((e) => e.method === "sendMessage").length).toBe(h.TG.outbox.slice(0, n).filter((e) => e.method === "sendMessage").length);
+  });
+
+  test("boot replays a pending Telegram turn to the linked chat", async () => {
+    await h.tgLink("broker");
+    const msg = { id: `tg:${h.TG_IDS.broker}:900`, from: `tg:${h.TG_IDS.broker}`, type: "text", text: { body: "مساعدة" } };
+    await h.query("INSERT INTO inbound_messages (msg_id, phone_key, payload, status, received_at) VALUES ($1, $2, $3, 'new', NOW())", [msg.id, `tg:${h.TG_IDS.broker}`, JSON.stringify(msg)]);
+    await h.app.bootRecovery();
+    await settle(10);
+    expect(h.TG.outbox.some((e) => e.method === "sendMessage" && e.chatId === String(h.TG_IDS.broker))).toBe(true);
+    expect(h.WA.outbox).toEqual([]);
+  });
+});
+
+describe("pieces", () => {
+  test("button ids over 64 bytes get a short stored token that decodes back", async () => {
+    const long = `ld:undoset:${"1234567890-".repeat(8)}`;
+    const data = await TgLink.encodeCallback(h.pool, long);
+    expect(data).toMatch(/^~/);
+    expect(Buffer.byteLength(data)).toBeLessThanOrEqual(64);
+    expect(await TgLink.decodeCallback(h.pool, data)).toBe(long);
+    expect(await TgLink.encodeCallback(h.pool, "ld:save:abc")).toBe("ld:save:abc");
+    expect(await TgLink.decodeCallback(h.pool, "~unknown")).toBeNull();
+  });
+
+  test("WhatsApp formatting becomes escaped Telegram HTML", () => {
+    expect(Fmt.toHtml("*مرحبا* <x> & _italic_ ~old~ code_name_here 5*3")).toBe("<b>مرحبا</b> &lt;x&gt; &amp; <i>italic</i> <s>old</s> code_name_here 5*3");
+    expect(Fmt.toHtml("```a<b```")).toBe("<pre>a&lt;b</pre>");
+  });
+
+  test("tg: media ids download from Telegram, others from WhatsApp", async () => {
+    h.TG.files.set("FILE1", { buffer: Buffer.from("x"), mimeType: "audio/ogg" });
+    h.WA.media.set("wa1", { buffer: Buffer.from("y"), mimeType: "image/jpeg" });
+    expect((await Media.download("tg:FILE1")).buffer.toString()).toBe("x");
+    expect((await Media.download("wa1")).buffer.toString()).toBe("y");
+  });
+});

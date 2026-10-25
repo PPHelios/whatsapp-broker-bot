@@ -11,6 +11,7 @@ const WA = require("./fake-whatsapp");
 const AI = require("./fake-ai");
 const Storage = require("./fake-supabase");
 const Push = require("./fake-push");
+const TG = require("./fake-telegram");
 
 // Web push is configured in tests; the fake records instead of calling a push service.
 process.env.WEB_PUSH_PUBLIC_KEY = process.env.WEB_PUSH_PUBLIC_KEY || "BTestPublicKey";
@@ -113,6 +114,7 @@ async function closeHarness() {
 
 async function createHarness() {
   WA.reset();
+  TG.reset();
   AI.reset();
   Storage.reset();
   Push.reset();
@@ -146,10 +148,37 @@ async function createHarness() {
     return WA.outbox.slice(start);
   }
 
+  // Telegram (Release 3T): each seeded broker has a fixed Telegram user id; tg() drives handleTelegramUpdate.
+  const TG_IDS = Object.fromEntries(Object.keys(BROKERS).map((k, i) => [k, 7000 + i]));
+  const tgUser = (who) => (typeof who === "number" ? who : TG_IDS[who]);
+  let tgSeq = 0;
+  async function tgUpdate(update) {
+    const start = TG.outbox.length;
+    await app.handleTelegramUpdate({ update_id: ++tgSeq, ...update });
+    await settle();
+    return TG.outbox.slice(start).filter((e) => e.method !== "sendChatAction" && e.method !== "answerCallbackQuery");
+  }
+  const tg = (who, fields) => {
+    const id = tgUser(who);
+    return tgUpdate({ message: { message_id: ++tgSeq, from: { id, is_bot: false, first_name: "T" }, chat: { id, type: "private" }, date: Math.floor(Date.now() / 1000), ...fields } });
+  };
+
   const h = {
     pool,
     app,
     WA,
+    TG,
+    TG_IDS,
+    tg,
+    tgText: (who, text) => tg(who, { text }),
+    tgTap: (who, data) => {
+      const id = tgUser(who);
+      return tgUpdate({ callback_query: { id: `cb${++tgSeq}`, from: { id }, message: { message_id: 1, chat: { id, type: "private" } }, data } });
+    },
+    /** Links seeded brokers' Telegram accounts directly in the database. */
+    async tgLink(...whos) {
+      for (const who of whos) await pool.query("UPDATE brokers SET telegram_user_id = $2, telegram_chat_id = $2 WHERE id = $1", [BROKERS[who].id, TG_IDS[who]]);
+    },
     AI,
     Storage,
     Push,

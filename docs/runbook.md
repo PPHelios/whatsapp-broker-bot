@@ -11,6 +11,9 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `NODE_ENV` | yes | — | `production` on Render (set by the blueprint). |
 | `DATABASE_URL` | yes | — | Supabase Postgres connection string (the pooler URL works). |
 | `PUBLIC_BASE_URL` | yes* | `RENDER_EXTERNAL_URL` | Every link the app sends (sign-in links, "refine and see all", client share links, OG tags) is built from it. Must be `https://`. *While unset, Render's own `RENDER_EXTERNAL_URL` (`https://<service>.onrender.com`) is used. Set it to `https://www.aqarchat.com` once the domain points at Render: every new link moves; links already sent keep their old host. |
+| `TELEGRAM_BOT_TOKEN` | for Telegram | — | The bot's token from @BotFather. Set it yourself in Render; never paste it in chat. Without it the Telegram bot is off. |
+| `TELEGRAM_WEBHOOK_SECRET` | with the token | — | A random string (`node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`) given to `setWebhook`; Telegram echoes it in `X-Telegram-Bot-Api-Secret-Token` and every other request is refused. Changing it means running `setWebhook` again. |
+| `TELEGRAM_BOT_USERNAME` | with the token | — | The bot's @username (without @), used to build the brokers' `t.me/<bot>?start=…` start links. |
 | `WHATSAPP_ENABLED` | no | on | `false` (or `0`/`off`/`no`) switches the WhatsApp bot off: the webhook answers 200 and does nothing, nothing is sent on WhatsApp (alerts go to web push and the website inbox), and the `WHATSAPP_*` variables stop being required. Unset or empty = on. Clients' `wa.me` links and share pages don't depend on it. |
 | `WHATSAPP_APP_SECRET` | yes | — | Meta app secret; every webhook must carry a valid `X-Hub-Signature-256` (fail-closed). |
 | `WHATSAPP_VERIFY_TOKEN` | yes | — | The token you type in Meta when subscribing the webhook (`GET /webhook`). |
