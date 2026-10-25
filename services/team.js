@@ -12,6 +12,10 @@ const { getConfig } = require("../config");
 
 const INVITE_ROLES = ["broker", "manager"];
 const isManager = (b) => MANAGER_ROLES.includes(String(b?.role || "").toLowerCase());
+const TOP_ROLES = ["admin", "owner"];
+/** A manager may act on brokers and managers; only an admin or owner may act on an admin or owner. */
+const mayActOn = (actor, targetRole) =>
+  !TOP_ROLES.includes(String(targetRole || "").toLowerCase()) || TOP_ROLES.includes(String(actor?.role || "").toLowerCase());
 
 /** The agency's brokers with what the team page shows (no client data). */
 async function listTeam(pool, manager) {
@@ -26,14 +30,19 @@ async function listTeam(pool, manager) {
   return rows;
 }
 
-/** A start link for one of the manager's brokers: { url, broker } or { error }. */
+/**
+ * A start link for one of the manager's brokers: { url, broker } or { error }. Never for someone already on Telegram
+ * (tapping a link moves the account to whoever taps it) and never for a role above the manager's.
+ */
 async function startLinkFor(pool, manager, brokerId, { username = getConfig().telegram.botUsername } = {}) {
   if (!isManager(manager)) return { error: "forbidden" };
   if (!TgLink.startLink(username, "x")) return { error: "no_bot" };
-  const { rows } = await pool.query("SELECT id, agency_id, name, phone_number, is_active, telegram_chat_id FROM brokers WHERE id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
+  const { rows } = await pool.query("SELECT id, agency_id, name, role, phone_number, is_active, telegram_chat_id FROM brokers WHERE id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
   const broker = rows[0];
   if (!broker) return { error: "not_found" };
+  if (!mayActOn(manager, broker.role)) return { error: "rank" };
   if (!broker.is_active) return { error: "inactive" };
+  if (broker.telegram_chat_id) return { error: "linked" };
   return { url: TgLink.startLink(username, await TgLink.issueLinkToken(pool, broker)), broker };
 }
 
@@ -55,6 +64,7 @@ async function invite(pool, manager, input = {}, opts = {}) {
   let brokerId;
   let created = false;
   if (found[0] && found[0].agency_id !== manager.agency_id) return { error: "phone_taken" };
+  if (found[0] && !mayActOn(manager, found[0].role)) return { error: "rank" };
   if (found[0]) {
     // One of ours: bring them back; an admin or owner keeps their role.
     const keep = !INVITE_ROLES.includes(String(found[0].role || "").toLowerCase());
@@ -73,10 +83,13 @@ async function invite(pool, manager, input = {}, opts = {}) {
   return { ok: true, broker: b[0], url: link.url || null, created, noBot: link.error === "no_bot" };
 }
 
-/** Deactivates one of the manager's brokers (never themselves); their leads go to the unassigned pool. */
+/** Deactivates one of the manager's brokers (never themselves, never a role above theirs); their leads go to the unassigned pool. */
 async function deactivate(pool, manager, brokerId, { now = new Date() } = {}) {
   if (!isManager(manager)) return { error: "forbidden" };
   if (brokerId === manager.id) return { error: "self" };
+  const { rows } = await pool.query("SELECT role FROM brokers WHERE id = $1 AND agency_id = $2", [brokerId, manager.agency_id]);
+  if (!rows[0]) return { error: "not_found" };
+  if (!mayActOn(manager, rows[0].role)) return { error: "rank" };
   return Brokers.deactivateBroker(pool, { agencyId: manager.agency_id, brokerId, actorId: manager.id, now });
 }
 

@@ -17,6 +17,7 @@ CREATE SEQUENCE IF NOT EXISTS public.push_subscriptions_id_seq;
 CREATE OR REPLACE FUNCTION public.agencies_set_slug()
  RETURNS trigger
  LANGUAGE plpgsql
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   base text;
@@ -42,6 +43,7 @@ CREATE OR REPLACE FUNCTION public.agency_slug_base(p_name text, p_id uuid)
  RETURNS text
  LANGUAGE sql
  IMMUTABLE
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
   SELECT CASE
     WHEN s = '' OR s = ANY (ARRAY['app', 'api', 'auth', 'login', 'logout', 'webhook', 'health', 'static', 'assets', 'public', 'admin', 's', 'u', 'www', 'aqarchat', 'about', 'help', 'terms', 'privacy', 'pricing', 'blog', 'docs', 'robots', 'favicon', 'manifest', 'sw', 'share', 'new']) THEN 'agency-' || left(replace(p_id::text, '-', ''), 8)
@@ -53,11 +55,13 @@ CREATE OR REPLACE FUNCTION public.clean_arabic_text(input_text text)
  RETURNS text
  LANGUAGE sql
  IMMUTABLE PARALLEL SAFE
+ SET search_path TO 'public', 'pg_temp'
 AS $function$ SELECT public.normalize_search(input_text) $function$;
 
 CREATE OR REPLACE FUNCTION public.deal_shares_balance()
  RETURNS trigger
  LANGUAGE plpgsql
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   d uuid;
@@ -83,6 +87,7 @@ END $function$;
 CREATE OR REPLACE FUNCTION public.deal_splits_same_agency()
  RETURNS trigger
  LANGUAGE plpgsql
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM deals WHERE id = NEW.deal_id AND agency_id = NEW.agency_id)
@@ -95,6 +100,7 @@ END $function$;
 CREATE OR REPLACE FUNCTION public.deals_same_agency()
  RETURNS trigger
  LANGUAGE plpgsql
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
   IF NEW.lead_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM leads WHERE id = NEW.lead_id AND agency_id = NEW.agency_id) THEN
@@ -112,6 +118,7 @@ END $function$;
 CREATE OR REPLACE FUNCTION public.leads_same_agency()
  RETURNS trigger
  LANGUAGE plpgsql
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
   IF NEW.assigned_broker_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM brokers WHERE id = NEW.assigned_broker_id AND agency_id = NEW.agency_id) THEN
@@ -129,6 +136,7 @@ END $function$;
 CREATE OR REPLACE FUNCTION public.listings_search_document()
  RETURNS trigger
  LANGUAGE plpgsql
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   d jsonb := COALESCE(NEW.details, '{}'::jsonb);
@@ -188,6 +196,7 @@ CREATE OR REPLACE FUNCTION public.match_place(p_kind text, p_text text)
  RETURNS compound_synonyms
  LANGUAGE sql
  STABLE
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
   SELECT s.* FROM compound_synonyms s
   WHERE s.kind = p_kind
@@ -200,12 +209,14 @@ CREATE OR REPLACE FUNCTION public.normalize_arabic(t text)
  RETURNS text
  LANGUAGE sql
  IMMUTABLE PARALLEL SAFE
+ SET search_path TO 'public', 'pg_temp'
 AS $function$ SELECT public.normalize_search(t) $function$;
 
 CREATE OR REPLACE FUNCTION public.normalize_search(t text)
  RETURNS text
  LANGUAGE sql
  IMMUTABLE PARALLEL SAFE
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
   SELECT btrim(regexp_replace(
     regexp_replace(
@@ -219,6 +230,7 @@ $function$;
 CREATE OR REPLACE FUNCTION public.set_listing_image_agency_id()
  RETURNS trigger
  LANGUAGE plpgsql
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
   IF NEW.agency_id IS NULL THEN
@@ -231,6 +243,7 @@ $function$;
 CREATE OR REPLACE FUNCTION public.update_timestamp_column()
  RETURNS trigger
  LANGUAGE plpgsql
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
     NEW.updated_at = NOW();

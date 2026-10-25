@@ -13,6 +13,7 @@ const { html } = require("../html");
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const INVITES = { limit: 30, windowSec: 24 * 3600 };
+const LINKS = { limit: 30, windowSec: 24 * 3600 };
 
 const ERRORS = {
   name: ["اكتب الاسم.", "Enter the name."],
@@ -24,6 +25,8 @@ const ERRORS = {
   self: ["مينفعش توقف نفسك.", "You can't deactivate yourself."],
   no_bot: ["بوت تيليجرام مش متظبط (TELEGRAM_BOT_USERNAME).", "The Telegram bot isn't set up (TELEGRAM_BOT_USERNAME)."],
   rate: ["دعوات كتير النهارده؛ جرب بكرة.", "Too many invites today; try tomorrow."],
+  linked: ["الوسيط مربوط بتيليجرام بالفعل.", "This broker is already on Telegram."],
+  rank: ["الأدمن والمالك يتداروا من الأدمن أو المالك بس.", "Only an admin or owner can manage an admin or owner."],
   forbidden: ["للمديرين بس.", "Managers only."]
 };
 const errorText = (code, lang) => (ERRORS[code] || ERRORS.forbidden)[lang === "en" ? 1 : 0];
@@ -88,7 +91,7 @@ function register(web, { pool, page }) {
     const rl = await RateLimit.hit(pool, `team_invite:agency:${manager.agency_id}`, INVITES);
     if (!rl.allowed) return render(req, res, { notice: bad("rate", lang) }, 429);
     const r = await Team.invite(pool, manager, { name: req.body.name, phone: req.body.phone, role: req.body.role, lang: req.body.lang });
-    if (r.error) return render(req, res, { notice: bad(r.error, lang) }, r.error === "forbidden" ? 403 : 400);
+    if (r.error) return render(req, res, { notice: bad(r.error, lang) }, ["forbidden", "rank"].includes(r.error) ? 403 : 400);
     const notice = html`<p class="card notice ok" role="status">✅ ${r.created ? L(lang, `اتضاف ${r.broker.name}.`, `${r.broker.name} added.`) : L(lang, `${r.broker.name} رجع للفريق.`, `${r.broker.name} is back on the team.`)}${r.noBot ? html` ${errorText("no_bot", lang)}` : ""}</p>`;
     return render(req, res, { notice, link: r.url ? linkCard(r.broker, r.url, req.session.agency.name, lang) : null });
   });
@@ -96,8 +99,11 @@ function register(web, { pool, page }) {
   web.post("/team/:id/link", async (req, res) => {
     const lang = langOf(req);
     if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return render(req, res, { notice: bad("not_found", lang) }, 404);
+    if (!MANAGER_ROLES.includes(String(req.session.broker.role || "").toLowerCase())) return forbidden(req, res);
+    const rl = await RateLimit.hit(pool, `team_link:agency:${req.session.broker.agency_id}`, LINKS);
+    if (!rl.allowed) return render(req, res, { notice: bad("rate", lang) }, 429);
     const r = await Team.startLinkFor(pool, req.session.broker, req.params.id);
-    if (r.error) return render(req, res, { notice: bad(r.error, lang) }, r.error === "forbidden" ? 403 : 400);
+    if (r.error) return render(req, res, { notice: bad(r.error, lang) }, ["forbidden", "rank"].includes(r.error) ? 403 : 400);
     const { rows } = await pool.query("SELECT id, name, phone_number, preferred_lang FROM brokers WHERE id = $1", [r.broker.id]);
     return render(req, res, { link: linkCard(rows[0], r.url, req.session.agency.name, lang) });
   });
@@ -106,7 +112,7 @@ function register(web, { pool, page }) {
     const lang = langOf(req);
     if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return render(req, res, { notice: bad("not_found", lang) }, 404);
     const r = await Team.deactivate(pool, req.session.broker, req.params.id);
-    if (r.error) return render(req, res, { notice: bad(r.error, lang) }, r.error === "forbidden" ? 403 : 400);
+    if (r.error) return render(req, res, { notice: bad(r.error, lang) }, ["forbidden", "rank"].includes(r.error) ? 403 : 400);
     return render(req, res, {
       notice: html`<p class="card notice ok" role="status">✅ ${L(lang, `${r.broker.name} اتوقف؛ ${r.released} عميل رجعوا للمديرين.`, `${r.broker.name} deactivated; ${r.released} leads went back to the managers.`)}</p>`
     });
