@@ -6,6 +6,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
+CREATE SEQUENCE IF NOT EXISTS public.lead_events_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.listing_code_seq;
 CREATE SEQUENCE IF NOT EXISTS public.notifications_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.operation_logs_id_seq;
@@ -51,6 +52,23 @@ CREATE OR REPLACE FUNCTION public.clean_arabic_text(input_text text)
  LANGUAGE sql
  IMMUTABLE PARALLEL SAFE
 AS $function$ SELECT public.normalize_search(input_text) $function$;
+
+CREATE OR REPLACE FUNCTION public.leads_same_agency()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF NEW.assigned_broker_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM brokers WHERE id = NEW.assigned_broker_id AND agency_id = NEW.agency_id) THEN
+    RAISE EXCEPTION 'lead % assigned to a broker of another agency', NEW.id USING ERRCODE = '23514';
+  END IF;
+  IF NEW.created_by_broker_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM brokers WHERE id = NEW.created_by_broker_id AND agency_id = NEW.agency_id) THEN
+    RAISE EXCEPTION 'lead % created by a broker of another agency', NEW.id USING ERRCODE = '23514';
+  END IF;
+  IF NEW.follow_up_listing_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM listings WHERE id = NEW.follow_up_listing_id AND agency_id = NEW.agency_id) THEN
+    RAISE EXCEPTION 'lead % follow-up on a unit of another agency', NEW.id USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $function$;
 
 CREATE OR REPLACE FUNCTION public.listings_search_document()
  RETURNS trigger
@@ -180,7 +198,8 @@ CREATE TABLE IF NOT EXISTS public.agencies (
   crm_settings jsonb DEFAULT '{}'::jsonb NOT NULL,
   wa_credits_monthly integer,
   wa_broker_daily_cap integer,
-  wa_broker_weekly_cap integer
+  wa_broker_weekly_cap integer,
+  lead_ref_seq integer DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.brokers (
@@ -523,6 +542,55 @@ CREATE TABLE IF NOT EXISTS public.push_subscriptions (
   failed_count integer DEFAULT 0 NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.leads (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid NOT NULL,
+  ref integer NOT NULL,
+  kind text DEFAULT 'buyer'::text NOT NULL,
+  assigned_broker_id uuid,
+  created_by_broker_id uuid,
+  name text,
+  phone_e164 text NOT NULL,
+  phones text[] DEFAULT '{}'::text[] NOT NULL,
+  lang text,
+  source text,
+  lawful_basis text NOT NULL,
+  consent_at timestamp with time zone,
+  consent_note text,
+  stage text DEFAULT 'new'::text NOT NULL,
+  lost_reason text,
+  notes text,
+  next_follow_up_at timestamp with time zone,
+  follow_up_kind text,
+  follow_up_listing_id uuid,
+  follow_up_note text,
+  follow_up_status text,
+  hot_at timestamp with time zone,
+  last_contact_at timestamp with time zone,
+  last_activity_at timestamp with time zone DEFAULT now() NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  version integer DEFAULT 1 NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.lead_events (
+  id bigint DEFAULT nextval('lead_events_id_seq'::regclass) NOT NULL,
+  agency_id uuid NOT NULL,
+  lead_id uuid NOT NULL,
+  broker_id uuid,
+  kind text NOT NULL,
+  data jsonb DEFAULT '{}'::jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  undone_at timestamp with time zone
+);
+
+CREATE TABLE IF NOT EXISTS public.lead_erasures (
+  agency_id uuid NOT NULL,
+  phone_hash text NOT NULL,
+  erased_at timestamp with time zone DEFAULT now() NOT NULL,
+  erased_by_broker_id uuid
+);
+
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (id);
 ALTER TABLE broker_search_state ADD CONSTRAINT broker_search_state_pkey PRIMARY KEY (phone_key);
@@ -531,6 +599,9 @@ ALTER TABLE brokers ADD CONSTRAINT brokers_pkey PRIMARY KEY (id);
 ALTER TABLE compound_synonyms ADD CONSTRAINT compound_synonyms_pkey PRIMARY KEY (kind, key, synonym);
 ALTER TABLE crm_jobs ADD CONSTRAINT crm_jobs_pkey PRIMARY KEY (name);
 ALTER TABLE inbound_messages ADD CONSTRAINT inbound_messages_pkey PRIMARY KEY (msg_id);
+ALTER TABLE lead_erasures ADD CONSTRAINT lead_erasures_pkey PRIMARY KEY (agency_id, phone_hash);
+ALTER TABLE lead_events ADD CONSTRAINT lead_events_pkey PRIMARY KEY (id);
+ALTER TABLE leads ADD CONSTRAINT leads_pkey PRIMARY KEY (id);
 ALTER TABLE listing_drafts ADD CONSTRAINT listing_drafts_pkey PRIMARY KEY (broker_id);
 ALTER TABLE listing_images ADD CONSTRAINT listing_images_pkey PRIMARY KEY (id);
 ALTER TABLE listings ADD CONSTRAINT listings_pkey PRIMARY KEY (id);
@@ -551,6 +622,8 @@ ALTER TABLE web_rate_limits ADD CONSTRAINT web_rate_limits_pkey PRIMARY KEY (buc
 ALTER TABLE web_sessions ADD CONSTRAINT web_sessions_pkey PRIMARY KEY (id_hash);
 ALTER TABLE brokers ADD CONSTRAINT brokers_phone_key UNIQUE (phone_number);
 ALTER TABLE brokers ADD CONSTRAINT uq_broker_phone UNIQUE (agency_id, phone_number);
+ALTER TABLE leads ADD CONSTRAINT leads_agency_id_phone_e164_key UNIQUE (agency_id, phone_e164);
+ALTER TABLE leads ADD CONSTRAINT leads_agency_id_ref_key UNIQUE (agency_id, ref);
 ALTER TABLE listings ADD CONSTRAINT uq_listings_agency_code UNIQUE (agency_id, code);
 ALTER TABLE notifications ADD CONSTRAINT notifications_broker_id_dedupe_key_key UNIQUE (broker_id, dedupe_key);
 ALTER TABLE projects ADD CONSTRAINT uq_agency_project_name UNIQUE (agency_id, name);
@@ -562,6 +635,21 @@ ALTER TABLE agencies ADD CONSTRAINT agencies_wa_credits_monthly_check CHECK (((w
 ALTER TABLE brokers ADD CONSTRAINT brokers_role_check CHECK ((role = ANY (ARRAY['broker'::text, 'agent'::text, 'admin'::text, 'owner'::text, 'manager'::text])));
 ALTER TABLE compound_synonyms ADD CONSTRAINT compound_synonyms_kind_check CHECK ((kind = ANY (ARRAY['compound'::text, 'developer'::text, 'area'::text])));
 ALTER TABLE crm_jobs ADD CONSTRAINT crm_jobs_last_status_check CHECK ((last_status = ANY (ARRAY['running'::text, 'success'::text, 'failed'::text])));
+ALTER TABLE lead_events ADD CONSTRAINT lead_events_kind_check CHECK ((kind = ANY (ARRAY['created'::text, 'inquiry'::text, 'assigned'::text, 'stage'::text, 'note'::text, 'contacted'::text, 'follow_up_set'::text, 'follow_up_done'::text, 'request_set'::text, 'match_sent'::text, 'share_opened'::text, 'deal'::text, 'exported'::text, 'merged'::text, 'undo'::text])));
+ALTER TABLE leads ADD CONSTRAINT leads_check CHECK (((stage <> 'lost'::text) OR (lost_reason IS NOT NULL)));
+ALTER TABLE leads ADD CONSTRAINT leads_check1 CHECK ((phone_e164 = phones[1]));
+ALTER TABLE leads ADD CONSTRAINT leads_follow_up_kind_check CHECK ((follow_up_kind = ANY (ARRAY['call'::text, 'viewing'::text])));
+ALTER TABLE leads ADD CONSTRAINT leads_follow_up_status_check CHECK ((follow_up_status = ANY (ARRAY['open'::text, 'done'::text])));
+ALTER TABLE leads ADD CONSTRAINT leads_kind_check CHECK ((kind = ANY (ARRAY['buyer'::text, 'tenant'::text, 'seller'::text, 'landlord'::text])));
+ALTER TABLE leads ADD CONSTRAINT leads_lang_check CHECK ((lang = ANY (ARRAY['ar'::text, 'en'::text])));
+ALTER TABLE leads ADD CONSTRAINT leads_lawful_basis_check CHECK ((lawful_basis = ANY (ARRAY['client_request'::text, 'consent'::text, 'existing_client'::text])));
+ALTER TABLE leads ADD CONSTRAINT leads_name_check CHECK (((name IS NULL) OR (length(name) <= 120)));
+ALTER TABLE leads ADD CONSTRAINT leads_notes_check CHECK (((notes IS NULL) OR (length(notes) <= 4000)));
+ALTER TABLE leads ADD CONSTRAINT leads_phone_e164_check CHECK ((phone_e164 ~ '^\+[1-9][0-9]{7,14}$'::text));
+ALTER TABLE leads ADD CONSTRAINT leads_phones_check CHECK (((cardinality(phones) >= 1) AND (cardinality(phones) <= 3)));
+ALTER TABLE leads ADD CONSTRAINT leads_ref_check CHECK ((ref > 0));
+ALTER TABLE leads ADD CONSTRAINT leads_source_check CHECK (((source IS NULL) OR (length(source) <= 60)));
+ALTER TABLE leads ADD CONSTRAINT leads_stage_check CHECK ((stage = ANY (ARRAY['new'::text, 'contacted'::text, 'interested'::text, 'viewing'::text, 'negotiation'::text, 'won'::text, 'lost'::text])));
 ALTER TABLE listings ADD CONSTRAINT listings_delivery_month_check CHECK (((delivery_month >= 1) AND (delivery_month <= 12)));
 ALTER TABLE listings ADD CONSTRAINT listings_delivery_quarter_check CHECK (((delivery_quarter >= 1) AND (delivery_quarter <= 4)));
 ALTER TABLE listings ADD CONSTRAINT listings_furnishing_check CHECK ((furnishing = ANY (ARRAY['furnished'::text, 'semi_furnished'::text, 'unfurnished'::text])));
@@ -583,6 +671,15 @@ ALTER TABLE web_login_tokens ADD CONSTRAINT web_login_tokens_channel_check CHECK
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE brokers ADD CONSTRAINT brokers_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE lead_erasures ADD CONSTRAINT lead_erasures_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE lead_erasures ADD CONSTRAINT lead_erasures_erased_by_broker_id_fkey FOREIGN KEY (erased_by_broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE lead_events ADD CONSTRAINT lead_events_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE lead_events ADD CONSTRAINT lead_events_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE lead_events ADD CONSTRAINT lead_events_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE;
+ALTER TABLE leads ADD CONSTRAINT leads_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE leads ADD CONSTRAINT leads_assigned_broker_id_fkey FOREIGN KEY (assigned_broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE leads ADD CONSTRAINT leads_created_by_broker_id_fkey FOREIGN KEY (created_by_broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE leads ADD CONSTRAINT leads_follow_up_listing_id_fkey FOREIGN KEY (follow_up_listing_id) REFERENCES listings(id) ON DELETE SET NULL;
 ALTER TABLE listing_images ADD CONSTRAINT listing_images_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE listing_images ADD CONSTRAINT listing_images_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
 ALTER TABLE listings ADD CONSTRAINT fk_listings_agency FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
@@ -615,6 +712,10 @@ CREATE UNIQUE INDEX brokers_phone_normalized_uidx ON public.brokers USING btree 
 CREATE INDEX idx_compound_synonyms_norm ON public.compound_synonyms USING btree (synonym_norm);
 CREATE INDEX inbound_messages_phone_idx ON public.inbound_messages USING btree (phone_key, received_at DESC);
 CREATE INDEX inbound_messages_status_idx ON public.inbound_messages USING btree (status, received_at);
+CREATE INDEX idx_lead_events_lead ON public.lead_events USING btree (lead_id, created_at DESC, id DESC);
+CREATE INDEX idx_leads_assigned ON public.leads USING btree (agency_id, assigned_broker_id, last_activity_at DESC);
+CREATE INDEX idx_leads_follow_up ON public.leads USING btree (next_follow_up_at) WHERE (follow_up_status = 'open'::text);
+CREATE INDEX idx_leads_phones ON public.leads USING gin (phones);
 CREATE INDEX idx_listing_drafts_updated ON public.listing_drafts USING btree (updated_at);
 CREATE INDEX listing_images_agency_idx ON public.listing_images USING btree (agency_id);
 CREATE INDEX listing_images_listing_idx ON public.listing_images USING btree (listing_id, "position");
@@ -658,6 +759,7 @@ CREATE INDEX idx_web_login_tokens_broker ON public.web_login_tokens USING btree 
 CREATE INDEX idx_web_sessions_broker ON public.web_sessions USING btree (broker_id);
 
 CREATE TRIGGER trg_agencies_slug BEFORE INSERT OR UPDATE OF slug, name ON public.agencies FOR EACH ROW WHEN (((new.slug IS NULL) OR (btrim(new.slug) = ''::text) OR (new.slug <> lower(btrim(new.slug))))) EXECUTE FUNCTION agencies_set_slug();
+CREATE TRIGGER trg_leads_same_agency BEFORE INSERT OR UPDATE OF agency_id, assigned_broker_id, created_by_broker_id, follow_up_listing_id ON public.leads FOR EACH ROW EXECUTE FUNCTION leads_same_agency();
 CREATE TRIGGER trg_set_listing_image_agency_id BEFORE INSERT ON public.listing_images FOR EACH ROW EXECUTE FUNCTION set_listing_image_agency_id();
 CREATE TRIGGER trg_listings_search_document BEFORE INSERT OR UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_search_document();
 CREATE TRIGGER trg_update_listings_timestamp BEFORE UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION update_timestamp_column();

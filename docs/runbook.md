@@ -30,6 +30,7 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `SLOW_QUERY_MS` | no | `1000` | Slow-query log threshold. |
 | `WEBHOOK_ALLOW_UNSIGNED` | no | — | Local development only; ignored in production. |
 | `WEB_PUSH_PUBLIC_KEY` / `WEB_PUSH_PRIVATE_KEY` | yes | — | VAPID keys for website notifications (web push). Generate once: `node -e "console.log(require('web-push').generateVAPIDKeys())"`. Rotating them turns push off for every broker until they turn it on again in ⚙️ Settings. |
+| `LEAD_HASH_KEY` | yes | dev key outside production | Secret for the keyed hash (HMAC-SHA256) of an erased client's phone in `lead_erasures`, so a re-capture can say "this client asked to be deleted" without keeping the number. Generate once: `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`. Never rotate it casually: earlier erasures stop matching. |
 | `WEB_PUSH_SUBJECT` | no | `mailto:support@aqarchat.com` | Contact the push services see (a `mailto:` or `https:` URL). |
 | `WA_CREDITS_MONTHLY` | no | `4000` | Message credits per agency per month (1 credit = 1 WhatsApp message the bot sends). An agency's own value in `agencies.wa_credits_monthly` wins. |
 | `WA_CREDITS_CEILING_PCT` | no | `110` | Hard ceiling as a % of the credits: past it a broker gets one notice a day, then read ticks only. |
@@ -69,7 +70,7 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 1. Copy `docs/pilot/agency.example.json`, fill the agency (name, optional `slug` for public links — lower-case letters, digits and dashes — colours, logo `https://` URL) and brokers (name, Egyptian mobile, role `broker`/`admin`/`owner`/`manager`, `ar`/`en`). At least one admin, owner or manager.
 2. `npm run onboard -- my-agency.json --dry-run`, then without `--dry-run`. Re-running is safe (agency by name, brokers by phone). It prints the slug and the web app address.
 3. Each broker must message the bot once (e.g. «مساعدة») before it can reply. Send them `docs/pilot/broker-howto-ar.md` and then `docs/pilot/web-howto-ar.md`.
-4. Deactivating a broker: `UPDATE brokers SET is_active = false WHERE phone_normalized = '2010…';` — the bot stops answering them and their web sessions end at once.
+4. Deactivating a broker: `npm run onboard -- --deactivate my-agency.json 0101…` — the bot stops answering them, their web sessions end at once, their leads go to the unassigned pool and every manager gets one "N leads to reassign" notification (P6). Don't deactivate with a bare `UPDATE brokers SET is_active = false`: their leads would stay with nobody.
 
 ## 5. Rotating secrets
 
@@ -80,6 +81,7 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `WHATSAPP_VERIFY_TOKEN` | Change in Render, redeploy, then re-verify the webhook in Meta with the new value. | Only used when (re)subscribing. |
 | `GEMINI_API_KEY` | Google AI Studio → create a key in the billed project → update in Render → redeploy → delete the old key. | While no key works, search falls back to the local parser and adding by AI asks to retry. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project settings → API → roll the key → update in Render → redeploy. | Photo uploads fail until updated. |
+| `LEAD_HASH_KEY` | Only if it leaked. Set the new value in Render and redeploy. | Clients erased before the change are no longer recognized on re-capture. |
 | `DATABASE_URL` password | Supabase → Database → reset the password → update `DATABASE_URL` → redeploy. | The service cannot start without it. |
 
 Web sign-in has no shared secret to rotate: tokens and sessions are random and stored only as hashes.

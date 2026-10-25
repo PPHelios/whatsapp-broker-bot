@@ -228,8 +228,14 @@
     },
     "lib/authz.js": {
       "MANAGER_ROLES": "Array",
+      "isManager": ["broker"],
       "canView": ["broker", "listing"],
-      "canEdit": ["broker", "listing"]
+      "canEdit": ["broker", "listing"],
+      "canViewLead": ["broker", "lead"],
+      "canEditLead": ["broker", "lead"],
+      "canManageLeads": ["broker"],
+      "canViewDeal": ["broker", "deal"],
+      "canEditDeal": ["broker", "deal"]
     },
     "lib/buttons.js": {
       "BUTTONS": "Object",
@@ -658,6 +664,50 @@
     },
     "web/routes/usage.js": {
       "register": ["web", "params"]
+    },
+    "domain/leadStages.js": {
+      "STAGES": "Array",
+      "CLOSED": "Array",
+      "KINDS": "Array",
+      "WANTS_UNIT": "Array",
+      "LAWFUL_BASES": "Array",
+      "FOLLOW_UP_KINDS": "Array",
+      "stageLabel": ["stage", "lang"],
+      "kindLabel": ["kind", "lang"],
+      "basisLabel": ["basis", "lang"],
+      "isClosed": ["stage"],
+      "stageError": ["stage", "lostReason"],
+      "stageAfterContact": ["stage"]
+    },
+    "domain/leadCard.js": {
+      "refLabel": ["ref"],
+      "parseRef": ["text"],
+      "displayName": ["lead", "lang"],
+      "listLine": ["lead", "lang"],
+      "card": ["lead", "params"],
+      "timelineLine": ["ev", "lang"]
+    },
+    "services/leads.js": {
+      "MAX_PHONES": "Number",
+      "UNDO_MS": "Number",
+      "phoneHash": ["e164"],
+      "normalizePhones": ["raw"],
+      "captureLead": ["pool", "actor", "input", "params"],
+      "assignLead": ["pool", "actor", "key", "toBrokerId", "params"],
+      "setStage": ["pool", "actor", "key", "params"],
+      "addNote": ["pool", "actor", "key", "text", "params"],
+      "markContacted": ["pool", "actor", "key", "params"],
+      "setFollowUp": ["pool", "actor", "key", "params"],
+      "completeFollowUp": ["pool", "actor", "key", "params"],
+      "undo": ["pool", "actor", "eventId", "params"],
+      "getLead": ["pool", "actor", "key"],
+      "findByPhone": ["pool", "actor", "raw"],
+      "listLeads": ["pool", "actor", "f", "params"],
+      "timeline": ["pool", "actor", "key", "params"],
+      "releaseBrokerLeads": ["pool", "agencyId", "brokerId", "params"]
+    },
+    "services/brokers.js": {
+      "deactivateBroker": ["pool", "params"]
     }
   },
   "invariant_variable_names": {

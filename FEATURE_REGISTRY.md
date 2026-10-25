@@ -160,6 +160,18 @@ This registry documents every user-facing capability, command, interactive callb
 | **NTF-07** | Usage (`/app/usage`) | - Signed in; caps form managers only. | - My usage by action today/month; agency meter; per broker (managers); credits and caps saved per agency. | Numbers equal `operation_logs`. |
 | **NTF-08** | Photos without a message (P11) | - A photo in a draft. | - No reaction (billed); allowed silent drop; the next reply in the draft starts with "📸 N photos received". | Read tick only, then the count. |
 
+### 10c. CRM Leads (`CRM`) — Release 3
+
+| Feature ID | Event / Trigger | Pre-Conditions & Constraints | System Execution & Safeguards | Symmetrical Response Contract |
+| :--- | :--- | :--- | :--- | :--- |
+| **CRM-01** | Capture a lead (`captureLead`) | - A valid phone (any spelling; up to 3); kind; lawful basis. | - One lead per number per agency across all its numbers; per-agency lock; a broker's lead is theirs; erased numbers flagged. | created / merged / colleague / erased_before / invalid. |
+| **CRM-02** | Q2 notifications | - A lead created, claimed or a colleague duplicate. | - Every manager but the actor alerted; the assignee gets the card; the duplicate's owner and other brokers hear nothing. | Inbox rows through the notification centre. |
+| **CRM-03** | Q1 visibility | - Any read or change. | - Assigned broker or manager; unassigned = managers; other agency = not found; reassigned = access lost, events kept. | `null` / `forbidden` / `not_found`. |
+| **CRM-04** | Stage, note, contacted, follow-up | - Rights; optional version. | - Any stage to any other; lost needs a reason; one open follow-up; viewing unit in the agency; stale version = conflict; every change one event. | The updated lead and the event id. |
+| **CRM-05** | Undo | - The actor's own event (or a manager), within 10 minutes, lead unchanged since. | - Restores the stored previous fields; `undo` event; expired, undone or changed = refused. | ↩️ result or the reason. |
+| **CRM-06** | Lists, search, who is calling | - Signed-in broker. | - Role-scoped SQL; pages of 20; filters; name, digits or `L-0042`; a colleague's number only flagged. | Rows + `more`; `{ lead, elsewhere }`. |
+| **CRM-07** | A broker leaves (P6) | - `onboard --deactivate`. | - Inactive at once; leads to the unassigned pool with events; one manager notification with the count. | "N leads to reassign". |
+
 ---
 
 ## 11. QA Test Verification & Traceability Baseline
@@ -258,6 +270,9 @@ Router tests send real webhook payloads through the production pipeline (`tests/
 | NTF-03 push payload = title/body/url, phones scrubbed, 410 removes the subscription; channel interface contract; Telegram stub | ✅ | `tests/web/notifications.test.js`, `tests/unit/channels.test.js` |
 | NTF-04/05 inbox, 🔔 count, open → read + redirect, isolation between brokers, CSRF; log managers-only and agency-scoped; settings round trip | ✅ | `tests/web/notifications.test.js` |
 | NTF-06/07 credit levels, hints once per level, manager alert at 80%, ceiling notice once then read ticks only, global ceiling, broker cap, sign-in ceiling, usage page = operation_logs, caps form managers-only | ✅ | `tests/web/notifications.test.js` |
+| CRM-01/02 dedupe across 4 spellings and second numbers, numbers added up to 3, Q2 (managers alerted, assignee card, owner of a duplicate not messaged, no other broker), claim of an unassigned lead, erased numbers, no PII in operation_logs | ✅ | `tests/crm/leads.test.js` |
+| CRM-03/06 role scoping, tenant isolation (also in the database trigger), search, filters, pages, who is calling; every lead query scoped by agency | ✅ | `tests/crm/leads.test.js` |
+| CRM-04/05/07 stage rules, version conflicts, follow-ups, undo inside/after 10 minutes and after a later change, reassignment, deactivation releases leads; stage/card/authz rules | ✅ | `tests/crm/leads.test.js`, `tests/unit/lead-domain.test.js` |
 | Runbook lists every env var; manifest names every migration; broker guides present | ✅ | `tests/unit/docs.test.js` |
 | XLS-01…04 (WhatsApp Excel upload), DEL-03…06/08, STATS-01 | ⬜ | — (the web Excel import WEB-14 is covered) |
 

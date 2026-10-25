@@ -23,7 +23,8 @@ const REQUIRED_IN_PRODUCTION = [
   "GEMINI_API_KEY",
   "PUBLIC_BASE_URL",
   "WEB_PUSH_PUBLIC_KEY",
-  "WEB_PUSH_PRIVATE_KEY"
+  "WEB_PUSH_PRIVATE_KEY",
+  "LEAD_HASH_KEY"
 ];
 
 const num = (v, fallback) => {
@@ -100,6 +101,10 @@ function loadConfig(env = process.env) {
       globalMonthly: int(env.WA_GLOBAL_MONTHLY_CEILING, 8000),
       loginMonthly: int(env.WA_LOGIN_MONTHLY_CEILING, 200),
       priceEgp: num(env.WA_PRICE_EGP, 0.21)
+    },
+    // Keyed hash of an erased client's phone (lead_erasures); outside production a fixed development key.
+    leads: {
+      hashKey: env.LEAD_HASH_KEY || (isProd ? "" : "dev-only-lead-hash-key")
     },
     webPush: {
       publicKey: env.WEB_PUSH_PUBLIC_KEY || "",
