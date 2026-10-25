@@ -397,6 +397,7 @@
     },
     "lib/links.js": {
       "waRedirectUrl": ["token"],
+      "telegramWebhookUrl": [],
       "withQuery": ["path", "query"],
       "siteOrigin": [],
       "appUrl": ["path", "query"],
@@ -467,7 +468,7 @@
       "SESSION_COOKIE": [],
       "PRE_COOKIE": [],
       "parseCookies": ["header"],
-      "setSessionCookie": ["res", "sid"],
+      "setSessionCookie": ["res", "sid", "params"],
       "clearSessionCookie": ["res"],
       "loadSession": ["pool"],
       "noStore": ["_req", "res", "next"],
@@ -953,6 +954,15 @@
       "listKeyboard": ["sections", "encode"],
       "urlButton": ["text", "url"],
       "label": ["t"]
+    },
+    "lib/tgSetup.js": {
+      "setup": ["params"],
+      "COMMANDS": "Object"
+    },
+    "domain/tgInitData.js": {
+      "MAX_AGE_SEC": "Number",
+      "verify": ["initData", "botToken", "params"],
+      "sign": ["fields", "botToken"]
     }
   },
   "invariant_variable_names": {

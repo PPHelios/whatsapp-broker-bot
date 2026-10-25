@@ -740,6 +740,7 @@ async function start() {
     );
     preWarmAssets();
     bootRecovery();
+    require("./lib/tgSetup").setup().catch(() => {});
     // After the port binds, so health probes never wait on it.
     if (scheduler.start()) console.log(`⏱️ Scheduler on (${scheduler.jobs.length} jobs)`);
   });

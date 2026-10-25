@@ -85,4 +85,22 @@
     }).catch(function () { say("Sharing didn't work here. Long-press a photo to save it."); })
       .then(function () { btn.disabled = false; });
   });
+  // Mini App sign-in (/app/tg): Telegram puts its signed initData in the URL fragment as tgWebAppData.
+  (function () {
+    var box = document.getElementById("tg-signin");
+    if (!box) return;
+    var fail = function () { var p = box.querySelector("[data-tg-status]"); if (p) p.hidden = false; };
+    var data = new URLSearchParams(location.hash.slice(1)).get("tgWebAppData");
+    if (!data) return fail();
+    var framed = "0";
+    try { framed = window.top !== window.self ? "1" : "0"; } catch (e) { framed = "1"; }
+    fetch("/app/tg/session", {
+      method: "POST",
+      credentials: "same-origin",
+      body: new URLSearchParams({ initData: data, framed: framed, next: box.getAttribute("data-next") || "/app/" })
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { if (j && j.next) location.replace(j.next); else fail(); })
+      .catch(fail);
+  })();
 })();

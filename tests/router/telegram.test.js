@@ -255,6 +255,104 @@ describe("getting things to clients (step 3)", () => {
   });
 });
 
+describe("the website inside Telegram (Mini App, step 4)", () => {
+  const TgInit = require("../../domain/tgInitData");
+  const TOKEN = "123:test";
+  beforeAll(() => {
+    process.env.TELEGRAM_BOT_TOKEN = TOKEN;
+    resetConfig();
+  });
+  afterAll(() => {
+    delete process.env.TELEGRAM_BOT_TOKEN;
+    resetConfig();
+  });
+  const now = () => Math.floor(Date.now() / 1000);
+  const initFor = (userId, over = {}) => TgInit.sign({ auth_date: String(now()), query_id: `q${userId}${Math.random()}`, user: JSON.stringify({ id: userId, first_name: "B" }), ...over }, TOKEN);
+  const post = (agent, initData, extra = {}) => agent.post("/app/tg/session").type("form").send({ initData, ...extra });
+
+  test("initData checks: Telegram's signature, fresh auth_date, a real user", () => {
+    const good = initFor(42);
+    expect(TgInit.verify(good, TOKEN)).toMatchObject({ userId: 42 });
+    expect(TgInit.verify(good, "999:other")).toBeNull();
+    expect(TgInit.verify(good.replace("42", "43"), TOKEN)).toBeNull();
+    expect(TgInit.verify(initFor(42, { auth_date: String(now() - 7200) }), TOKEN)).toBeNull();
+    expect(TgInit.verify(initFor(42, { user: "{}" }), TOKEN)).toBeNull();
+    expect(TgInit.verify("", TOKEN)).toBeNull();
+    expect(TgInit.verify(good, "")).toBeNull();
+  });
+
+  test("a linked broker opening the website from the bot is signed in; once per initData", async () => {
+    await h.tgLink("broker");
+    const page = await request(h.app.app).get("/app/tg?next=/app/leads");
+    expect(page.status).toBe(200);
+    expect(page.text).toMatch(/id="tg-signin" data-next="\/app\/leads"/);
+    const agent = request.agent(h.app.app);
+    const data = initFor(h.TG_IDS.broker);
+    const r = await post(agent, data, { next: "/app/leads" });
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({ next: "/app/leads" });
+    expect(r.headers["set-cookie"].join(";")).toMatch(/aq_sid=/);
+    expect((await agent.get("/app/")).status).toBe(200);
+    expect((await post(request.agent(h.app.app), data)).status).toBe(403); // replay
+    const [op] = await h.query("SELECT broker_id FROM operation_logs WHERE operation_type = 'web_login_telegram'");
+    expect(op.broker_id).toBe(h.BROKERS.broker.id);
+  });
+
+  test("refused: unlinked Telegram users, bad signatures, other sites", async () => {
+    const r1 = await post(request.agent(h.app.app), initFor(777001));
+    expect(r1.status).toBe(403);
+    expect(r1.body.error).toBe("not_linked");
+    await h.tgLink("broker");
+    const forged = TgInit.sign({ auth_date: String(now()), user: JSON.stringify({ id: h.TG_IDS.broker }) }, "999:attacker");
+    expect((await post(request.agent(h.app.app), forged)).status).toBe(403);
+    const cross = await request(h.app.app).post("/app/tg/session").set("Sec-Fetch-Site", "cross-site").type("form").send({ initData: initFor(h.TG_IDS.broker) });
+    expect(cross.status).toBe(403);
+    const evil = await post(request.agent(h.app.app), initFor(h.TG_IDS.broker), { next: "https://evil.example" });
+    expect(evil.body).toEqual({ next: "/app/" });
+  });
+
+  test("the iframe case gets a SameSite=None cookie over https only", () => {
+    const S = require("../../web/session");
+    expect(typeof S.setSessionCookie).toBe("function");
+    const set = [];
+    S.setSessionCookie({ cookie: (n, v, o) => set.push(o) }, "sid", { crossSite: true });
+    expect(set[0].sameSite).toBe("lax"); // tests run on http://localhost
+  });
+});
+
+describe("boot setup", () => {
+  const Setup = require("../../lib/tgSetup");
+  afterEach(() => {
+    for (const k of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET", "PUBLIC_BASE_URL"]) delete process.env[k];
+    resetConfig();
+  });
+
+  test("registers the webhook, the WehdatHub menu button and the commands only when fully configured", async () => {
+    expect(await Setup.setup({ log: () => {} })).toEqual({ ok: false, skipped: "no_token" });
+    process.env.TELEGRAM_BOT_TOKEN = "123:test";
+    resetConfig();
+    expect(await Setup.setup({ log: () => {} })).toEqual({ ok: false, skipped: "no_secret" });
+    process.env.TELEGRAM_WEBHOOK_SECRET = "s3cret-token-value";
+    resetConfig();
+    expect(await Setup.setup({ log: () => {} })).toEqual({ ok: false, skipped: "not_https" });
+    process.env.PUBLIC_BASE_URL = "https://wehdathub.example";
+    resetConfig();
+    expect(await Setup.setup({ log: () => {} })).toEqual({ ok: true });
+    const hook = h.TG.outbox.find((e) => e.method === "setWebhook");
+    expect(hook).toMatchObject({ url: "https://wehdathub.example/telegram/webhook", secret: "s3cret-token-value" });
+    const menu = h.TG.outbox.find((e) => e.method === "setChatMenuButton");
+    expect(menu.params.menu_button.web_app.url).toBe("https://wehdathub.example/app/tg");
+    expect(h.TG.outbox.filter((e) => e.method === "setMyCommands")).toHaveLength(2);
+  });
+
+  test("/help from the command menu reaches the router as help", async () => {
+    await h.tgLink("broker");
+    const out = await h.tgText(h.TG_IDS.broker, "/help@Wehdat_Hub_bot");
+    expect(out.length).toBeGreaterThan(0);
+    expect(texts(out)).not.toMatch(/\/help/);
+  });
+});
+
 describe("pieces", () => {
   test("button ids over 64 bytes get a short stored token that decodes back", async () => {
     const long = `ld:undoset:${"1234567890-".repeat(8)}`;

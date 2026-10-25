@@ -9,6 +9,8 @@ const Onboarding = require("../../lib/onboarding");
 const { notifyPreferred } = require("../../lib/dispatcher");
 const { logOperation } = require("../../lib/db");
 const { t } = require("../../lib/copy");
+const TgInit = require("../../domain/tgInitData");
+const TgLink = require("../../lib/tgLink");
 const S = require("../session");
 const { html } = require("../html");
 
@@ -94,6 +96,39 @@ function register(web, { pool, page }) {
         )
       })
     });
+  });
+
+  // Mini App: the website opened from the Telegram bot. The page hands Telegram's signed initData (from the URL
+  // fragment, which never reaches us otherwise) to POST /tg/session, which signs the linked broker in.
+  web.get("/tg", S.noStore, (req, res) =>
+    page(req, res, {
+      title: "WehdatHub",
+      body: html`<div class="card" id="tg-signin" data-next="${S.safeNext(req.query.next)}">
+  <h1>⏳ ${L(req.lang, "بنفتح WehdatHub…", "Opening WehdatHub…")}</h1>
+  <p class="muted" data-tg-status hidden>${L(
+    req.lang,
+    "افتح الموقع من زرار WehdatHub في بوت تليجرام، أو ادخل برابط «دخول».",
+    "Open the website from the WehdatHub button in the Telegram bot, or sign in with a \"login\" link."
+  )} <a href="/app/login">${L(req.lang, "الدخول", "Sign in")}</a></p>
+</div>`
+    })
+  );
+
+  web.post("/tg/session", S.noStore, async (req, res) => {
+    const gate = await RateLimit.hit(pool, `login_confirm:ip:${req.ip}`, RateLimit.LIMITS.loginConfirmIp);
+    if (!gate.allowed) return res.status(429).json({ error: "too_many" });
+    const v = TgInit.verify(String(req.body.initData || ""), process.env.TELEGRAM_BOT_TOKEN || "");
+    if (!v) return res.status(403).json({ error: "invalid" });
+    // Each signed initData signs in once (a copied one can't be replayed within its hour).
+    const once = await RateLimit.hit(pool, `tg_initdata:${v.hash}`, { limit: 1, windowSec: TgInit.MAX_AGE_SEC });
+    if (!once.allowed) return res.status(403).json({ error: "used" });
+    const broker = await TgLink.findBroker(pool, v.userId);
+    if (!broker) return res.status(403).json({ error: "not_linked" });
+    if (req.sid) await WebAuth.revokeSession(pool, req.sid);
+    const { sid } = await WebAuth.createSession(pool, broker, { userAgent: req.get("user-agent") });
+    S.setSessionCookie(res, sid, { crossSite: req.body.framed === "1" });
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_login_telegram" });
+    return res.json({ next: S.safeNext(req.body.next) });
   });
 
   web.get("/login/confirm", S.noStore, async (req, res) => {

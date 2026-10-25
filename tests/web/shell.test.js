@@ -33,13 +33,13 @@ test("/app redirects into the service worker scope; pages are Arabic RTL with ht
   expect(page.text).toMatch(/<meta name="htmx-config" content="\{&quot;includeIndicatorStyles&quot;:false,&quot;allowEval&quot;:false,/);
 });
 
-test("pages carry a strict CSP (no inline script), no framing, nosniff and a same-origin referrer policy", async () => {
+test("pages carry a strict CSP (no inline script), framing only by Telegram Web, nosniff and a same-origin referrer policy", async () => {
   const r = await request(web).get("/app/login");
   const csp = r.headers["content-security-policy"];
   expect(csp).toMatch(/script-src 'self'(;|$)/);
   expect(csp).not.toMatch(/unsafe-inline|unsafe-eval/);
-  expect(csp).toMatch(/frame-ancestors 'none'/);
-  expect(r.headers["x-frame-options"]).toBe("DENY");
+  expect(csp).toMatch(/frame-ancestors 'self' https:\/\/web\.telegram\.org;/);
+  expect(r.headers["x-frame-options"]).toBeUndefined(); // CSP frame-ancestors decides (Telegram Web only)
   expect(r.headers["x-content-type-options"]).toBe("nosniff");
   expect(r.headers["referrer-policy"]).toBe("same-origin");
   expect(r.text).not.toMatch(/<script>(?!<\/script>)/); // no inline scripts

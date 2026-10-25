@@ -21,10 +21,17 @@ function parseCookies(header) {
   return out;
 }
 
-const cookieOpts = (maxAgeMs) => ({ httpOnly: true, sameSite: "lax", secure: secure(), path: "/", maxAge: maxAgeMs });
+// crossSite: the website inside Telegram Web's iframe (Mini App) only gets its cookie with SameSite=None (https only).
+const cookieOpts = (maxAgeMs, { crossSite = false } = {}) => ({
+  httpOnly: true,
+  sameSite: crossSite && secure() ? "none" : "lax",
+  secure: secure(),
+  path: "/",
+  maxAge: maxAgeMs
+});
 
-function setSessionCookie(res, sid) {
-  res.cookie(SESSION_COOKIE(), sid, cookieOpts(WebAuth.SESSION_DAYS * 24 * 3600 * 1000));
+function setSessionCookie(res, sid, { crossSite = false } = {}) {
+  res.cookie(SESSION_COOKIE(), sid, cookieOpts(WebAuth.SESSION_DAYS * 24 * 3600 * 1000, { crossSite }));
 }
 function clearSessionCookie(res) {
   res.clearCookie(SESSION_COOKIE(), { path: "/", secure: secure(), sameSite: "lax", httpOnly: true });

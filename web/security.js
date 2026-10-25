@@ -1,4 +1,4 @@
-// web/security.js — Headers for every web page (CSP, no framing, no referrer leaks) and the same-origin check
+// web/security.js — Headers for every web page (CSP, framing only by Telegram Web, no referrer leaks) and the same-origin check
 "use strict";
 
 const Links = require("../lib/links");
@@ -15,7 +15,8 @@ const CSP = [
   "base-uri 'self'",
   // "Send to client" posts, then redirects to WhatsApp (wa.me forwards to api.whatsapp.com).
   "form-action 'self' https://wa.me https://api.whatsapp.com",
-  "frame-ancestors 'none'",
+  // Telegram Web shows the Mini App (the website opened from the bot) in an iframe; nobody else may frame us.
+  "frame-ancestors 'self' https://web.telegram.org",
   "manifest-src 'self'",
   "worker-src 'self'"
 ].join("; ");
@@ -25,7 +26,6 @@ function securityHeaders(_req, res, next) {
   res.set({
     "Content-Security-Policy": CSP,
     "X-Content-Type-Options": "nosniff",
-    "X-Frame-Options": "DENY",
     "Referrer-Policy": "same-origin",
     "Permissions-Policy": "microphone=(self), camera=(), geolocation=(), payment=()",
     "Cross-Origin-Opener-Policy": "same-origin"
