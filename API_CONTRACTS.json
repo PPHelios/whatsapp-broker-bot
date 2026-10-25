@@ -173,6 +173,7 @@
       "withProgress": ["broker", "text", "fn", "params"],
       "replyList": ["broker", "bodyText", "buttonText", "sections"],
       "replyImage": ["broker", "mediaIdOrUrl", "caption"],
+      "replyAlbum": ["broker", "items"],
       "replyDocument": ["broker", "buffer", "filename", "caption"],
       "react": ["broker", "messageId", "emoji"],
       "notify": ["broker", "text", "params"],
@@ -271,6 +272,8 @@
       "matchEdit": ["text"]
     },
     "lib/listingStore.js": {
+      "photosOf": ["db", "listing", "params"],
+      "coverPhotos": ["db", "agencyId", "listings"],
       "findByCode": ["db", "agencyId", "code", "params"],
       "findDuplicate": ["db", "agencyId", "l", "params"],
       "createListing": ["db", "broker", "params"],
@@ -647,6 +650,7 @@
     "lib/notifications.js": {
       "KINDS": "Array",
       "KIND_LABELS": "Object",
+      "DAILY_KINDS": "Array",
       "DEFAULT_QUIET": "Object",
       "MERGE_WINDOW_MS": "Number",
       "prefsOf": ["broker", "params"],
@@ -843,14 +847,18 @@
     },
     "services/matchSweep.js": {
       "DAILY_CAP": "Number",
+      "TELEGRAM_DAILY_CAP": "Number",
+      "DROP_MIN_PCT": "Number",
       "sweep": ["pool", "params"],
       "sweepJob": []
     },
     "services/followUpReminders.js": {
       "remindDue": ["pool", "params"],
       "nudgeUntouched": ["pool", "params"],
+      "nudgeInterested": ["pool", "params"],
       "reminderMessage": ["broker", "leads"],
       "nudgeMessage": ["broker", "leads"],
+      "interestMessage": ["broker", "leads"],
       "reminderJob": []
     },
     "domain/leadUpdate.js": {
@@ -990,6 +998,28 @@
       "MAX_AGE_SEC": "Number",
       "verify": ["initData", "botToken", "params"],
       "sign": ["fields", "botToken"]
+    },
+    "services/dailyDigest.js": {
+      "BRIEF_HOURS": "Array",
+      "DIGEST_HOURS": "Array",
+      "cairoDay": ["now"],
+      "briefData": ["pool", "broker", "now"],
+      "briefMessage": ["broker", "data"],
+      "digestData": ["pool", "agencyId", "now"],
+      "digestMessage": ["manager", "d"],
+      "sendBriefs": ["pool", "params"],
+      "sendDigests": ["pool", "params"],
+      "digestJob": []
+    },
+    "services/unitChecks.js": {
+      "ASK_AFTER_DAYS": "Number",
+      "HIDE_AFTER_DAYS": "Number",
+      "askStale": ["pool", "params"],
+      "hideStale": ["pool", "params"],
+      "pendingFor": ["pool", "broker", "params"],
+      "askMessage": ["broker", "units"],
+      "hiddenMessage": ["broker", "units"],
+      "unitCheckJob": []
     },
     "lib/keepAwake.js": {
       "EVERY_MS": "Number",

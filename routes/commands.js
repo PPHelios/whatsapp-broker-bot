@@ -13,6 +13,7 @@ const {
   replyForClient,
   replyButtons,
   replyImage,
+  replyAlbum,
   replyDocument
 } = require("../lib/dispatcher");
 
@@ -280,9 +281,15 @@ async function deliverCollateral(listing, broker, lang) {
 /**
  * Reusable Deliverable Handler: Direct Unit Code Inspection Card (ING-04)
  */
-async function deliverUnitInspectionCard(listing, broker, lang) {
+async function deliverUnitInspectionCard(listing, broker, lang, pool = null) {
   const detailsCard = T.formatInternalListingDetails(listing, lang);
   const buttons = cardButtons(listing, lang);
+
+  // Telegram (6.4): the unit's photos as an album above the card (free there; WhatsApp keeps text only).
+  if (pool && broker.channel === "telegram") {
+    const urls = await require("../lib/listingStore").photosOf(pool, listing).catch(() => []);
+    if (urls.length) await replyAlbum(broker, urls.map((url, i) => ({ url, caption: i === 0 ? `#${listing.code}` : "" })));
+  }
 
   await replyButtons(broker, detailsCard, buttons);
   return true;
@@ -366,7 +373,7 @@ async function handleCommand(broker, text, ctx) {
         }
 
         // Default: If card contains code with no specific action, treat as direct unit inspection
-        return await deliverUnitInspectionCard(listing, broker, lang);
+        return await deliverUnitInspectionCard(listing, broker, lang, pool);
       }
     }
   }
@@ -1040,7 +1047,7 @@ async function handleCommand(broker, text, ctx) {
         listing.code,
         recentBrokerListings
       );
-      return await deliverUnitInspectionCard(listing, broker, lang);
+      return await deliverUnitInspectionCard(listing, broker, lang, pool);
     }
   }
 

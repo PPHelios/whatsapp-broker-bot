@@ -3,7 +3,8 @@
 // instances never remind twice, and tells each lead's current broker once per run, grouped (5 lines and "and N
 // more"). A single reminder carries [✅ Done] [📅 Postpone]; a viewing carries the unit's compact line and its place.
 // Quiet hours hold the message until they end (lib/notifications.js). A new lead nobody has contacted 24 hours after
-// it arrived gets one nudge to its broker.
+// it arrived gets one nudge to its broker. A lead marked Interested with no follow-up planned and nothing happening for
+// 24 hours gets one nudge too (6.5), again only after new activity and another quiet day.
 "use strict";
 
 const crypto = require("crypto");
@@ -173,6 +174,55 @@ async function nudgeUntouched(pool, { now = new Date(), limit = BATCH } = {}) {
   return { nudged: claimed.length, brokers };
 }
 
+const INTEREST_QUIET_MS = 24 * 3600 * 1000;
+
+/** The nudge for one broker's interested leads with no next step. */
+function interestMessage(broker, leads) {
+  const lang = en(broker) ? "en" : "ar";
+  if (leads.length === 1) {
+    const lead = leads[0];
+    const ref = Card.refLabel(lead.ref);
+    return {
+      title: L(broker, `👍 ${Card.displayName(lead, lang)} (${ref}) مهتم ومفيش متابعة متحددة`, `👍 ${Card.displayName(lead, lang)} (${ref}) is interested but has no follow-up`),
+      body: lead.phone_e164 ? `📞 ${Phone.displayPhone(lead.phone_e164)}` : "",
+      url: `/app/leads/${ref}`,
+      leadId: lead.id,
+      buttons: [
+        { id: `ld:fu:${ref}`, title: L(broker, "📅 متابعة", "📅 Follow-up") },
+        { id: `ld:called:${ref}`, title: L(broker, "📞 كلمته", "📞 Called") }
+      ]
+    };
+  }
+  const lines = leads.slice(0, LINES).map((l) => `• ${Card.refLabel(l.ref)} ${Card.displayName(l, lang)}`);
+  if (leads.length > LINES) lines.push(L(broker, `…و${leads.length - LINES} كمان`, `…and ${leads.length - LINES} more`));
+  return {
+    title: L(broker, `👍 ${leads.length} عملاء مهتمين ومفيش متابعة متحددة`, `👍 ${leads.length} interested clients with no follow-up`),
+    body: lines.join("\n"),
+    url: "/app/leads?stage=interested",
+    buttons: null
+  };
+}
+
+/** One nudge per interested lead with no open follow-up and no activity for 24 hours (again after new activity). */
+async function nudgeInterested(pool, { now = new Date(), limit = BATCH } = {}) {
+  const claimed = await withTransaction(pool, async (client) => {
+    const { rows } = await client.query(
+      `SELECT id FROM leads
+        WHERE stage = 'interested' AND assigned_broker_id IS NOT NULL AND follow_up_status IS DISTINCT FROM 'open'
+          AND last_activity_at <= $1 AND (interest_nudged_at IS NULL OR interest_nudged_at < last_activity_at)
+        ORDER BY last_activity_at, id LIMIT $2 FOR UPDATE SKIP LOCKED`,
+      [new Date(now.getTime() - INTEREST_QUIET_MS).toISOString(), limit]
+    );
+    if (!rows.length) return [];
+    // A stamp, not activity: last_activity_at and version stay.
+    const upd = await client.query("UPDATE leads SET interest_nudged_at = $2 WHERE id = ANY($1::uuid[]) RETURNING *", [rows.map((r) => r.id), now.toISOString()]);
+    return upd.rows.sort((a, b) => a.ref - b.ref);
+  });
+  if (!claimed.length) return { nudged: 0, brokers: 0 };
+  const brokers = await tellBrokers(pool, groupByBroker(claimed), interestMessage, "interest", "interest_nudged_at", now);
+  return { nudged: claimed.length, brokers };
+}
+
 /** The scheduler job entry (lib/jobs.js). */
 const reminderJob = () => ({
   name: "follow_up_reminders",
@@ -180,8 +230,9 @@ const reminderJob = () => ({
   run: async ({ pool, now }) => {
     const r = await remindDue(pool, { now });
     const n = await nudgeUntouched(pool, { now });
-    return { counts: { reminded: r.reminded, nudged: n.nudged, brokers: r.brokers + n.brokers } };
+    const i = await nudgeInterested(pool, { now });
+    return { counts: { reminded: r.reminded, nudged: n.nudged, interest: i.nudged, brokers: r.brokers + n.brokers + i.brokers } };
   }
 });
 
-module.exports = { remindDue, nudgeUntouched, reminderMessage, nudgeMessage, reminderJob };
+module.exports = { remindDue, nudgeUntouched, nudgeInterested, reminderMessage, nudgeMessage, interestMessage, reminderJob };

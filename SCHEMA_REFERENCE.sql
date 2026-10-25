@@ -345,7 +345,9 @@ CREATE TABLE IF NOT EXISTS public.listings (
   code_norm text GENERATED ALWAYS AS (upper(translate(btrim(code), '٠١٢٣٤٥٦٧٨٩'::text, '0123456789'::text))) STORED,
   compound_key text,
   developer_key text,
-  area_key text
+  area_key text,
+  stale_asked_at timestamp with time zone,
+  stale_hidden_at timestamp with time zone
 );
 
 CREATE TABLE IF NOT EXISTS public.listing_images (
@@ -638,7 +640,8 @@ CREATE TABLE IF NOT EXISTS public.leads (
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
   version integer DEFAULT 1 NOT NULL,
   follow_up_reminded_at timestamp with time zone,
-  nudged_at timestamp with time zone
+  nudged_at timestamp with time zone,
+  interest_nudged_at timestamp with time zone
 );
 
 CREATE TABLE IF NOT EXISTS public.lead_events (
@@ -667,7 +670,8 @@ CREATE TABLE IF NOT EXISTS public.lead_matches (
   listing_id uuid NOT NULL,
   status text DEFAULT 'new'::text NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  alerted_at timestamp with time zone
+  alerted_at timestamp with time zone,
+  alerted_price numeric(14,0)
 );
 
 CREATE TABLE IF NOT EXISTS public.deals (
@@ -930,6 +934,7 @@ CREATE INDEX idx_listings_dev_code_norm ON public.listings USING btree (agency_i
 CREATE INDEX idx_listings_developer_key ON public.listings USING btree (agency_id, developer_key) WHERE (developer_key IS NOT NULL);
 CREATE INDEX idx_listings_feature_keys ON public.listings USING gin (feature_keys);
 CREATE INDEX idx_listings_search_trgm ON public.listings USING gin (clean_arabic_text(COALESCE(search_text_normalized, search_text, ''::text)) gin_trgm_ops) WITH (fastupdate=off);
+CREATE INDEX idx_listings_unit_check ON public.listings USING btree (agency_id, confirmed_at) WHERE (status = 'active'::text);
 CREATE INDEX listings_agency_code_idx ON public.listings USING btree (agency_id, lower(code));
 CREATE INDEX listings_agency_status_created_idx ON public.listings USING btree (agency_id, status, created_at DESC);
 CREATE INDEX listings_agency_status_idx ON public.listings USING btree (agency_id, status);
