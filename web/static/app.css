@@ -61,3 +61,10 @@ input.narrow { width: 6em; }
 .meter.warn > span { background: var(--warn); } .meter.bad > span { background: var(--bad); }
 .pre { white-space: pre-line; }
 meter { width: 100%; height: 14px; }
+.bottom-bar { position: sticky; inset-block-end: 0; display: flex; gap: 6px; justify-content: space-between; padding: 8px; background: var(--brand); border-radius: 10px 10px 0 0; z-index: 5; }
+.bottom-bar .btn { flex: 1; text-align: center; padding: 10px 6px; }
+.bottom-bar .btn.secondary { background: #fff; }
+.bad-text { color: var(--bad); }
+.timeline { padding-inline-start: 18px; }
+.tabs a[aria-current="page"] { font-weight: 700; text-decoration: underline; }
+form.inline { display: inline; }

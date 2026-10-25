@@ -73,6 +73,7 @@ ${broker || nav ? topBar({ broker, nav, lang, unread }) : ""}
 const NAV = [
   { key: "search", href: "/app/search", ar: "🔍 بحث", en: "🔍 Search" },
   { key: "units", href: "/app/units", ar: "🏠 الوحدات", en: "🏠 Units" },
+  { key: "leads", href: "/app/leads", ar: "👤 العملاء", en: "👤 Leads" },
   { key: "add", href: "/app/units/new", ar: "➕ إضافة", en: "➕ Add" },
   { key: "import", href: "/app/import", ar: "📥 استيراد", en: "📥 Import" }
 ];

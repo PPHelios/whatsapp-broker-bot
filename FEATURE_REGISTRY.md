@@ -175,6 +175,10 @@ This registry documents every user-facing capability, command, interactive callb
 | **CRM-10** | Forwarded client text | - A phone, no unit code, not a unit post. | - "Is this a client?" [➕ Save as client] [🔍 Search]; the text waits server-side. | One message. |
 | **CRM-11** | The card and its buttons | - Any card. | - Number + wa.me link; [📞 Called] [📅 Follow-up] [🔄 Stage] (seller first card: [➕ Add their unit], owner prefilled); reload + rights on every tap; ↩️ Undo (a stack, 10 minutes). | One message per tap. |
 | **CRM-12** | CRM commands (Q13) | - Arabic or English. | - my leads, followups, L-0042, assign … to … (managers), help lists both. | One message. |
+| **CRM-13** | Web leads list (`/app/leads`) | - Signed in. | - Role-scoped; tabs, search, filters, pages of 20; managers' pipeline and overdue per broker. | List with empty state and first action. |
+| **CRM-14** | Web add lead (`/app/leads/new`) | - CSRF; 120 writes/min. | - Fill from message or voice (AI, 20/10 min, typed fields kept); duplicate notice before saving; Q2 outcomes (merged → that lead, colleague → 409 + manager told, erased → tick to confirm). | Redirect to the lead page. |
+| **CRM-15** | Web lead page (`/app/leads/<ref>`) | - Visible lead (else 404). | - Real Call/WhatsApp, stage, follow-up (Cairo time, unit), note, assign (managers), timeline; version check (409), Undo. | One page; notices on the page. |
+| **CRM-16** | Web share target (`/app/share`) | - Android installed site; signed in. | - Shared text prefilled with its numbers; nothing saved. | The add form. |
 | **CRM-07** | A broker leaves (P6) | - `onboard --deactivate`. | - Inactive at once; leads to the unassigned pool with events; one manager notification with the count. | "N leads to reassign". |
 
 ---
@@ -279,6 +283,7 @@ Router tests send real webhook payloads through the production pipeline (`tests/
 | CRM-03/06 role scoping, tenant isolation (also in the database trigger), search, filters, pages, who is calling; every lead query scoped by agency | ✅ | `tests/crm/leads.test.js` |
 | CRM-04/05/07 stage rules, version conflicts, follow-ups, undo inside/after 10 minutes and after a later change, reassignment, deactivation releases leads; stage/card/authz rules | ✅ | `tests/crm/leads.test.js`, `tests/unit/lead-domain.test.js` |
 | CRM-08…12 contact card new/existing (0 AI), bare number incl. a colleague's (Q2 copy only), «ليد» + text (1 AI call, fenced), lead draft + Edit + Cancel, voice = text, several phones → list, no phone → completion without another AI call, Q2 duplicate, AI down, forwards (offer, Save, Search), units and «عميل CODE» unchanged, phone inside a unit draft, buttons (Called + suggested follow-up, undo stack, stage + lost reason, old buttons, reassignment), seller → add their unit prefilled, both languages of every command, one message per turn | ✅ | `tests/router/leads.test.js` |
+| CRM-13…16 web list scoping (broker, manager, other agency), search/tabs, English page, pipeline managers-only, create + merge + colleague 409, duplicate notice, validation, fill from message (typed fields kept, AI down), share target, tel/wa.me buttons, escaping, 404 across brokers and agencies, stage/follow-up/note round trips + Undo, conflict with a WhatsApp tap (409), assignment managers-only, CSRF, no-store | ✅ | `tests/web/leads.test.js` |
 | Runbook lists every env var; manifest names every migration; broker guides present | ✅ | `tests/unit/docs.test.js` |
 | XLS-01…04 (WhatsApp Excel upload), DEL-03…06/08, STATS-01 | ⬜ | — (the web Excel import WEB-14 is covered) |
 

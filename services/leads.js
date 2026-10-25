@@ -416,7 +416,7 @@ async function findByPhone(pool, actor, raw) {
 
 /**
  * Pages of 20, newest activity first. Brokers see only their own leads; managers all, with a broker filter.
- * @param {Object} f - { q (name, phone digits or L- ref), stage, kind, source, brokerId ("none" = unassigned), noNextStep, overdue, offset, limit }
+ * @param {Object} f - { q (name, phone digits or L- ref), stage, kind, source, brokerId ("none" = unassigned), noNextStep, overdue, dueToday, offset, limit }
  */
 async function listLeads(pool, actor, f = {}, { now = new Date() } = {}) {
   const where = ["l.agency_id = $1"];
@@ -433,6 +433,10 @@ async function listLeads(pool, actor, f = {}, { now = new Date() } = {}) {
   if (f.source) add("l.source = ?", String(f.source));
   if (f.noNextStep) where.push("l.follow_up_status IS DISTINCT FROM 'open' AND l.stage NOT IN ('won', 'lost')");
   if (f.overdue) add("l.follow_up_status = 'open' AND l.next_follow_up_at < ?", now.toISOString());
+  if (f.dueToday) {
+    add("l.follow_up_status = 'open' AND l.next_follow_up_at >= ?", Stages.cairoDayAt(now, 0, 0).toISOString());
+    add("l.next_follow_up_at < ?", Stages.cairoDayAt(now, 1, 0).toISOString());
+  }
   const q = String(f.q || "").trim();
   if (q) {
     const ref = Card.parseRef(q);
@@ -465,6 +469,31 @@ async function dueFollowUps(pool, actor, { limit = 5 } = {}) {
     [actor.agency_id, actor.id, limit]
   );
   return { rows, total: rows[0]?.total || 0 };
+}
+
+/** Managers' pipeline: leads per stage and overdue follow-ups per broker (null for a broker). */
+async function pipeline(pool, actor, { now = new Date() } = {}) {
+  if (!Authz.canManageLeads(actor)) return null;
+  const stages = await pool.query("SELECT stage, count(*)::int AS n FROM leads WHERE agency_id = $1 GROUP BY stage", [actor.agency_id]);
+  const overdue = await pool.query(
+    `SELECT l.assigned_broker_id AS broker_id, b.name, count(*)::int AS n
+       FROM leads l LEFT JOIN brokers b ON b.id = l.assigned_broker_id AND b.agency_id = l.agency_id
+      WHERE l.agency_id = $1 AND l.follow_up_status = 'open' AND l.next_follow_up_at < $2
+      GROUP BY l.assigned_broker_id, b.name ORDER BY n DESC`,
+    [actor.agency_id, now.toISOString()]
+  );
+  const byStage = Object.fromEntries(Stages.STAGES.map((s) => [s, 0]));
+  for (const r of stages.rows) byStage[r.stage] = r.n;
+  return { stages: byStage, overdue: overdue.rows };
+}
+
+/** The requests noted for a lead (request_set events, newest first). */
+async function requestsOf(pool, actor, lead) {
+  const { rows } = await pool.query(
+    "SELECT id, data, created_at FROM lead_events WHERE agency_id = $1 AND lead_id = $2 AND kind = 'request_set' AND undone_at IS NULL ORDER BY id DESC LIMIT 5",
+    [actor.agency_id, lead.id]
+  );
+  return rows;
 }
 
 /** The last 20 events (then "older" with beforeId), with the acting broker's name. Null if the lead isn't visible. */
@@ -535,6 +564,8 @@ module.exports = {
   getLead,
   refExists,
   dueFollowUps,
+  pipeline,
+  requestsOf,
   findByPhone,
   listLeads,
   timeline,

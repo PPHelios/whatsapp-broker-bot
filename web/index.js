@@ -18,7 +18,9 @@ const MANIFEST = {
   scope: "/app/",
   display: "standalone",
   background_color: "#f6f7f9",
-  theme_color: "#0B132B"
+  theme_color: "#0B132B",
+  // Android: "Share to AqarChat" from WhatsApp opens the add-lead form with the shared text (nothing saved yet).
+  share_target: { action: "/app/share", method: "GET", params: { title: "title", text: "text", url: "url" } }
 };
 
 /**

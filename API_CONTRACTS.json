@@ -672,6 +672,8 @@
       "WANTS_UNIT": "Array",
       "LAWFUL_BASES": "Array",
       "FOLLOW_UP_KINDS": "Array",
+      "SOURCES": "Array",
+      "sourceLabel": ["source", "lang"],
       "stageLabel": ["stage", "lang"],
       "kindLabel": ["kind", "lang"],
       "basisLabel": ["basis", "lang"],
@@ -679,7 +681,9 @@
       "stageError": ["stage", "lostReason"],
       "stageAfterContact": ["stage"],
       "cairoOffsetMinutes": ["at"],
-      "cairoDayAt": ["now", "daysAhead", "hour"]
+      "cairoDayAt": ["now", "daysAhead", "hour"],
+      "fromCairoLocal": ["text"],
+      "toCairoLocal": ["at"]
     },
     "domain/leadCard.js": {
       "refLabel": ["ref"],
@@ -707,6 +711,8 @@
       "getLead": ["pool", "actor", "key"],
       "refExists": ["pool", "actor", "ref"],
       "dueFollowUps": ["pool", "actor", "params"],
+      "pipeline": ["pool", "actor", "params"],
+      "requestsOf": ["pool", "actor", "lead"],
       "findByPhone": ["pool", "actor", "raw"],
       "listLeads": ["pool", "actor", "f", "params"],
       "timeline": ["pool", "actor", "key", "params"],
@@ -730,6 +736,7 @@
       "normalizeLeadExtraction": ["raw"]
     },
     "lib/leadIntake.js": {
+      "extractLead": ["AI", "params"],
       "cardButtons": ["lead", "lang", "params"],
       "cardText": ["lead", "lang", "params"],
       "handleContacts": ["broker", "message", "ctx"],
@@ -743,6 +750,19 @@
       "openRef": ["broker", "ref", "ctx"],
       "assignCommand": ["broker", "params", "ctx"],
       "handleButton": ["broker", "id", "ctx"]
+    },
+    "web/routes/leads.js": {
+      "register": ["web", "params"],
+      "inputOf": ["body", "manager"]
+    },
+    "web/views/leads.js": {
+      "leadRow": ["lead", "lang", "params"],
+      "leadForm": ["params"],
+      "leadHeader": ["lead", "lang"],
+      "bottomBar": ["lead", "lang", "brokerName"],
+      "timelineList": ["rows", "lang", "params"],
+      "leadPath": ["lead", "sub"],
+      "when": ["d", "lang"]
     }
   },
   "invariant_variable_names": {

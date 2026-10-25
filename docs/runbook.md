@@ -166,6 +166,13 @@ WHERE n.agency_id = '<agency id>' ORDER BY n.created_at DESC LIMIT 50;
 
 * Push subscriptions: `push_subscriptions` (removed when the browser answers 404/410). Turn a broker's push off: `DELETE FROM push_subscriptions WHERE broker_id = '<id>';`
 
+## 7c. Leads (CRM)
+
+* Leads live in `leads` (one row per client per agency; `phones` holds up to 3 numbers), their history in `lead_events` (append-only; an undo is a new event). Names and phones never go to `operation_logs` (`lead_capture` rows carry the outcome and the `L-` reference only).
+* Who has what: `SELECT assigned_broker_id, stage, count(*) FROM leads WHERE agency_id = '<id>' GROUP BY 1, 2;`
+* A broker leaves: `npm run onboard -- --deactivate <agency.json> <phone>` (see §4).
+* **Share target:** on Android, once the site is installed, WhatsApp's Share menu offers AqarChat; the shared text opens `/app/share` → the add-lead form (nothing is saved until the broker taps Save). The text travels in the URL (GET), so it can appear in the browser history of that phone.
+
 ## 8. Common problems
 
 | Symptom | Cause and fix |

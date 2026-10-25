@@ -31,6 +31,21 @@ const BASIS_LABELS = {
 };
 
 const FOLLOW_UP_KINDS = ["call", "viewing"];
+
+// Q12: a common list plus Other (free text); the stored value is the English name, any other text is kept as typed.
+const SOURCES = [
+  ["WhatsApp", "واتساب"],
+  ["Facebook", "فيسبوك"],
+  ["OLX-Dubizzle", "أوليكس-دوبيزل"],
+  ["Property Finder", "بروبرتي فايندر"],
+  ["Referral", "ترشيح"],
+  ["Walk-in", "زيارة المكتب"],
+  ["Call", "مكالمة"]
+];
+const sourceLabel = (source, lang) => {
+  const hit = SOURCES.find(([en]) => en === source);
+  return hit ? hit[lang === "en" ? 0 : 1] : source || "";
+};
 const LOST_REASON_MAX = 200;
 
 const pick = (labels, key, lang) => (labels[key] ? labels[key][lang === "en" ? 1 : 0] : key);
@@ -72,6 +87,23 @@ function cairoDayAt(now, daysAhead = 0, hour = 10) {
   return new Date(base - cairoOffsetMinutes(guess) * 60000);
 }
 
+/** "2026-11-02T15:00" or "2026-11-02" (10:00) typed in Cairo time → the instant; null if invalid. */
+function fromCairoLocal(text) {
+  const m = String(text || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?$/);
+  if (!m) return null;
+  const base = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), m[4] === undefined ? 10 : Number(m[4]), m[5] === undefined ? 0 : Number(m[5]));
+  if (Number.isNaN(base)) return null;
+  const at = new Date(base - cairoOffsetMinutes(new Date(base - 2 * 3600 * 1000)) * 60000);
+  return Number.isNaN(at.getTime()) ? null : at;
+}
+
+/** An instant → "2026-11-02T15:00" in Cairo time (for datetime-local inputs). */
+function toCairoLocal(at) {
+  if (!at) return "";
+  const d = new Date(at);
+  return new Date(d.getTime() + cairoOffsetMinutes(d) * 60000).toISOString().slice(0, 16);
+}
+
 /** Contacting a new lead moves it to contacted; later stages stay. */
 const stageAfterContact = (stage) => (stage === "new" ? "contacted" : stage);
 
@@ -82,6 +114,8 @@ module.exports = {
   WANTS_UNIT,
   LAWFUL_BASES,
   FOLLOW_UP_KINDS,
+  SOURCES,
+  sourceLabel,
   stageLabel,
   kindLabel,
   basisLabel,
@@ -89,5 +123,7 @@ module.exports = {
   stageError,
   stageAfterContact,
   cairoOffsetMinutes,
-  cairoDayAt
+  cairoDayAt,
+  fromCairoLocal,
+  toCairoLocal
 };
