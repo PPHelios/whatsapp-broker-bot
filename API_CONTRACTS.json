@@ -806,6 +806,11 @@
       "currentMatches": ["pool", "agencyId", "filters", "params"],
       "saveRequest": ["pool", "actor", "leadKey", "rawFilters", "params"],
       "removeRequest": ["pool", "actor", "leadKey", "requestId"]
+    },
+    "services/matchSweep.js": {
+      "DAILY_CAP": "Number",
+      "sweep": ["pool", "params"],
+      "sweepJob": []
     }
   },
   "invariant_variable_names": {
