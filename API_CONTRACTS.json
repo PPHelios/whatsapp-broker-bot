@@ -257,6 +257,7 @@
     },
     "lib/listingStore.js": {
       "findByCode": ["db", "agencyId", "code", "params"],
+      "findDuplicate": ["db", "agencyId", "l", "params"],
       "createListing": ["db", "broker", "params"],
       "addPhotos": ["db", "listing", "urls"],
       "removePhotos": ["db", "listing", "imageIds"],
@@ -516,7 +517,7 @@
     },
     "web/views/unitForm.js": {
       "unitForm": ["params"],
-      "reviewPanel": ["evaluation", "lang"]
+      "reviewPanel": ["evaluation", "lang", "params"]
     },
     "web/routes/unitForm.js": {
       "register": ["web", "params"],
@@ -791,6 +792,12 @@
     "web/routes/leadImports.js": {
       "register": ["web", "params"],
       "TEMPLATE_HEADERS": "Array"
+    },
+    "domain/unitDuplicate.js": {
+      "TOLERANCE": "Number",
+      "placeKey": ["l"],
+      "comparable": ["l"],
+      "sameUnit": ["a", "b"]
     }
   },
   "invariant_variable_names": {

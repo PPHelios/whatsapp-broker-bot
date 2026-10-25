@@ -59,6 +59,29 @@ function post(agent, url, csrf, fields = {}, { photos = [], voice = null, header
 
 const unit = async (code) => (await h.query("SELECT * FROM listings WHERE code_norm = upper($1)", [code]))[0];
 
+describe("P13: a unit that looks like one already listed", () => {
+  test("the review panel and the save warn once; Save anyway saves", async () => {
+    await h.insertListing({ code: "HP-OLD", compound: "Hyde Park", area_value: 152, bedrooms: 3, price_value: 8.4e6 });
+    const { agent, csrf } = await signIn(h, "broker");
+    const review = await post(agent, "/app/units/review", csrf, FULL, { header: true });
+    expect(review.text).toMatch(/data-duplicate="HP-OLD"/);
+    const first = await post(agent, "/app/units/new", csrf, { ...FULL, code: "HP-NEW" });
+    expect(first.status).toBe(409);
+    expect(first.text).toMatch(/href="\/app\/units\/HP-OLD"/);
+    expect(first.text).toMatch(/name="force" value="1"/);
+    expect(await unit("HP-NEW")).toBeUndefined();
+    const anyway = await post(agent, "/app/units/new", csrf, { ...FULL, code: "HP-NEW", force: "1" });
+    expect(anyway.status).toBe(303);
+    expect(await unit("HP-NEW")).toBeTruthy();
+  });
+
+  test("another agency's unit is never a duplicate", async () => {
+    await h.insertListing({ code: "RIVAL-1", agency_id: h.AGENCY_B, broker_id: h.BROKERS.rival.id, compound: "Hyde Park", area_value: 150, bedrooms: 3, price_value: 8.5e6 });
+    const { agent, csrf } = await signIn(h, "broker");
+    expect((await post(agent, "/app/units/new", csrf, { ...FULL, code: "HP-NEW" })).status).toBe(303);
+  });
+});
+
 describe("add a unit on the web", () => {
   test("the form lists every field, feature and the CSRF token", async () => {
     const { agent, csrf } = await signIn(h, "broker");

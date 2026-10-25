@@ -131,7 +131,8 @@ function register(web, { pool, page }) {
     const current = existing ? (await imagesOf(pool, existing)).filter((i) => !removeIds.includes(i.id)).length : 0;
     const form = Form.unitFromForm(req.body);
     const ev = evaluate({ existing, form, lang, photoCount: current + filesOf(req, "photos").length });
-    return res.type("html").send(String(reviewPanel({ ...ev, listing: { ...ev.listing, code: existing?.code || form.code } }, lang)));
+    const duplicate = ev.ok ? await Store.findDuplicate(pool, req.session.broker.agency_id, ev.listing, { excludeId: existing?.id }) : null;
+    return res.type("html").send(String(reviewPanel({ ...ev, listing: { ...ev.listing, code: existing?.code || form.code } }, lang, { duplicate })));
   });
 
   // ✅ Create: the field table must pass; insert-only (a used code is refused, never overwritten).
@@ -141,9 +142,17 @@ function register(web, { pool, page }) {
     const form = Form.unitFromForm(req.body);
     const files = filesOf(req, "photos").slice(0, MAX_PHOTOS);
     const ev = evaluate({ existing: null, form, lang, photoCount: files.length });
-    const again = (status, error) =>
-      formPage(req, res, { mode: "new", values: Form.formFromUnit({ ...ev.listing, code: form.code }), review: reviewPanel({ ...ev, listing: { ...ev.listing, code: form.code } }, lang), error }, status);
+    const again = (status, error, duplicate = null) =>
+      formPage(req, res, { mode: "new", values: Form.formFromUnit({ ...ev.listing, code: form.code }), review: reviewPanel({ ...ev, listing: { ...ev.listing, code: form.code } }, lang, { duplicate }), error, duplicate }, status);
     if (!ev.ok) return again(422, L10n(lang, "⛔ في بيانات ناقصة. كملها واضغط حفظ.", "⛔ Some required details are missing."));
+    // P13: a unit that looks like one already listed asks once; "Save anyway" sends force=1.
+    if (req.body.force !== "1") {
+      const duplicate = await Store.findDuplicate(pool, broker.agency_id, ev.listing);
+      if (duplicate) {
+        const photosNote = files.length ? L10n(lang, " (اختار الصور تاني قبل الحفظ.)", " (Choose the photos again before saving.)") : "";
+        return again(409, L10n(lang, `⚠️ شكلها نفس الوحدة ${duplicate}.${photosNote}`, `⚠️ This looks like ${duplicate}.${photosNote}`), duplicate);
+      }
+    }
 
     const photos = await storePhotos(broker, files);
     const client = await pool.connect();

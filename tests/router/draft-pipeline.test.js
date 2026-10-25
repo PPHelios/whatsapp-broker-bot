@@ -45,6 +45,21 @@ function answerExtraction(fields) {
 const buttonsOf = (replies) => replies.flatMap((r) => r.buttons || []).map((b) => b.id);
 const listings = () => h.query("SELECT * FROM listings ORDER BY created_at");
 
+describe("P13: the review card flags a unit already listed", () => {
+  test("a warning with the unit's link on the same card; Confirm becomes Save anyway and saves", async () => {
+    await h.insertListing({ code: "MV-OLD", compound: "ميفيدا", area_value: 205, bedrooms: 3, price_value: 9.8e6 });
+    await h.text("broker", "اضافة");
+    await h.text("broker", "شقة في ميفيدا 200 متر 3 غرف 10 مليون");
+    answerExtraction(extraction());
+    const review = await h.text("broker", "تم");
+    expect(review).toHaveLength(1);
+    expect(textOf(review)).toMatch(/شكلها نفس الوحدة MV-OLD[\s\S]*\/app\/units\/MV-OLD/);
+    expect(review[0].buttons.find((b) => b.id === "draft_confirm").title).toBe("احفظ برضه ✅");
+    await h.tap("broker", "draft_confirm");
+    expect(await listings()).toHaveLength(2);
+  });
+});
+
 describe("Add by voice → review → confirm (plan verification #1)", () => {
   test("resale installment unit 'بحري ناصية فيها غرفة مربية', no delivery", async () => {
     await h.text("broker", "اضافة");

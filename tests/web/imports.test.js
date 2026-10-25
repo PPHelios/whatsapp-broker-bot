@@ -179,6 +179,18 @@ describe("group import (forwarded posts and chat exports)", () => {
     });
   }
 
+  test("P13: two posts of the same unit inside one paste: the later one points at the first and is not ticked", async () => {
+    scripted();
+    const { agent, csrf } = await signIn(h, "broker");
+    const text = ["شقة للبيع في ميفيدا 200 متر 3 غرف بحري السعر 12 مليون", "ميفيدا شقة 3 غرف 200م بحري 12 مليون للبيع"].join("\n\n\n");
+    const id = importId(await agent.post("/app/import/group").field("_csrf", csrf).field("text", text));
+    await Imports.waitForGroupImport(id);
+    const page = await agent.get(`/app/import/${id}`);
+    expect(page.text).toMatch(/data-post="0" data-state="ok"/);
+    expect(page.text).toMatch(/data-post="1" data-state="duplicate"[\s\S]*شكلها نفس الوحدة في بوست 1/);
+    expect(page.text).toMatch(/name="rows" value="1">/);
+  });
+
   test("pasted posts: listings are read, chatter skipped, duplicates of existing units flagged; selected ones are added", async () => {
     await h.insertListing({ code: "HP-OLD", compound: "Hyde Park", area_value: 152, bedrooms: 3, price_value: 8.4e6 });
     scripted();
