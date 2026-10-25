@@ -166,6 +166,7 @@
       "claimOnce": ["pool", "broker", "params"],
       "reply": ["broker", "text", "opts"],
       "replyButtons": ["broker", "bodyText", "buttons"],
+      "withProgress": ["broker", "text", "fn"],
       "replyList": ["broker", "bodyText", "buttonText", "sections"],
       "replyImage": ["broker", "mediaIdOrUrl", "caption"],
       "replyDocument": ["broker", "buffer", "filename", "caption"],
@@ -984,6 +985,13 @@
       "MAX_AGE_SEC": "Number",
       "verify": ["initData", "botToken", "params"],
       "sign": ["fields", "botToken"]
+    },
+    "lib/tapGuard.js": {
+      "createTapGuard": ["params"],
+      "tapId": ["message"],
+      "toast": ["reason", "lang"],
+      "REPEAT_WINDOW_MS": "Number",
+      "STALE_MS": "Number"
     }
   },
   "invariant_variable_names": {

@@ -12,6 +12,7 @@ const AI = require("./fake-ai");
 const Storage = require("./fake-supabase");
 const Push = require("./fake-push");
 const TG = require("./fake-telegram");
+const TapGuard = require("../../lib/tapGuard");
 
 // Web push is configured in tests; the fake records instead of calling a push service.
 process.env.WEB_PUSH_PUBLIC_KEY = process.env.WEB_PUSH_PUBLIC_KEY || "BTestPublicKey";
@@ -122,7 +123,15 @@ async function createHarness() {
   const pool = await freshDb();
   await seed(pool);
   const { createApp } = require("../../server");
-  const app = createApp({ pool });
+  // Taps run on a test clock that moves past the repeat window before each inbound message (a person's pace);
+  // h.sameMoment() keeps the next message at the same moment (a double tap).
+  const clock = { at: 0, hold: false };
+  const tapGuard = TapGuard.createTapGuard({ now: () => clock.at });
+  const pace = () => {
+    if (clock.hold) clock.hold = false;
+    else clock.at += TapGuard.REPEAT_WINDOW_MS + 1;
+  };
+  const app = createApp({ pool, tapGuard });
   let seq = 0;
 
   /** Sends one inbound WhatsApp message through the real webhook pipeline; returns the replies. */
@@ -143,6 +152,7 @@ async function createHarness() {
       ]
     };
     const start = WA.outbox.length;
+    pace();
     await app.handleWebhookBody(body);
     await settle();
     return WA.outbox.slice(start);
@@ -154,6 +164,7 @@ async function createHarness() {
   let tgSeq = 0;
   async function tgUpdate(update) {
     const start = TG.outbox.length;
+    pace();
     await app.handleTelegramUpdate({ update_id: ++tgSeq, ...update });
     await settle();
     return TG.outbox.slice(start).filter((e) => e.method !== "sendChatAction" && e.method !== "answerCallbackQuery");
@@ -169,6 +180,7 @@ async function createHarness() {
     WA,
     TG,
     TG_IDS,
+    sameMoment: () => (clock.hold = true),
     tg,
     tgText: (who, text) => tg(who, { text }),
     tgTap: (who, data) => {
