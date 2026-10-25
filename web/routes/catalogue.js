@@ -6,6 +6,8 @@
 const Catalogue = require("../../services/catalogue");
 const Commission = require("../../domain/commission");
 const { isManager } = require("../../lib/authz");
+const PriceSheets = require("../../services/priceSheets");
+const { pricesSection, pricesNotice } = require("./priceSheets");
 const { html } = require("../html");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
@@ -61,7 +63,8 @@ const FIELD = {
   label: ["اكتب اسم اللينك.", "Type the link's label."],
   kind: ["اختار نوع اللينك.", "Pick the link type."],
   url: ["اللينك لازم يبدأ بـ https://", "The link must start with https://"],
-  codes: ["اكتب كود وحدة واحد على الأقل.", "Type at least one unit code."]
+  codes: ["اكتب كود وحدة واحد على الأقل.", "Type at least one unit code."],
+  duplicate_code: ["في وحدتين بنفس كود المطور في المشروع ده؛ كود المطور بيحدد الوحدة جوه المشروع.", "Two units would share a developer unit code in this project; inside a project the developer's code decides."]
 };
 const errorText = (r, lang) => {
   if (r.error === "duplicate") return L(lang, "الاسم ده موجود قبل كده.", "That name is already used.");
@@ -171,7 +174,7 @@ function planForm(lang, projectId, phases, pl = {}) {
 </form>`;
 }
 
-function projectPage(lang, manager, data, developers, { notice = null } = {}) {
+function projectPage(lang, manager, data, developers, { notice = null, prices = null } = {}) {
   const { project: p, developer: d, phases, plans, materials, units } = data;
   const base = `/app/catalogue/projects/${p.id}`;
   const phaseName = (id) => phases.find((x) => x.id === id)?.name;
@@ -184,6 +187,7 @@ ${notice || ""}
   <p>🏢 ${d ? d.name : "—"}${manager && d?.contact_name ? ` · ${d.contact_name}` : ""}${manager && d?.contact_phone ? html` · <a href="tel:${d.contact_phone}" dir="ltr" data-developer-contact>${d.contact_phone}</a>` : ""}</p>
   ${manager && p.notes ? html`<p class="muted">🔒 ${p.notes}</p>` : ""}
 </section>
+${prices || ""}
 ${manager ? html`<details class="card"><summary>✏️ ${L(lang, "تعديل المشروع", "Edit project")}</summary>${projectForm(lang, developers, p, base)}
   <form method="post" action="${base}/archive"><input type="hidden" name="archived" value="${p.archived_at ? "0" : "1"}"><button type="submit" class="secondary">${p.archived_at ? L(lang, "رجّعه من الأرشيف", "Restore") : L(lang, "أرشفة المشروع", "Archive project")}</button></form></details>` : ""}
 
@@ -260,8 +264,14 @@ function register(web, { pool, page }) {
     const actor = req.session.broker;
     const data = await Catalogue.getProject(pool, actor, req.params.id);
     if (!data) return notFound(req, res);
-    const developers = isManager(actor) ? await Catalogue.listDevelopers(pool, actor) : [];
-    return page(req, res, { title: data.project.name, body: projectPage(lang, isManager(actor), data, developers, { notice: notice || savedNotice(req) }) }, status);
+    const manager = isManager(actor);
+    const [developers, sheets, increases] = await Promise.all([
+      manager ? Catalogue.listDevelopers(pool, actor) : [],
+      manager ? PriceSheets.listSheets(pool, actor, data.project.id) : [],
+      PriceSheets.listIncreases(pool, actor, data.project.id)
+    ]);
+    const prices = pricesSection(lang, manager, { project: data.project, units: data.units, sheets, increases, phases: data.phases });
+    return page(req, res, { title: data.project.name, body: projectPage(lang, manager, data, developers, { notice: notice || pricesNotice(req.query, lang) || savedNotice(req), prices }) }, status);
   };
 
   /** Runs a service write and answers: 403, 404, the page again with the error (400), or a redirect. */

@@ -21,7 +21,8 @@ const PRIVATE = [
   require("./report"),
   require("./sources"),
   require("./insights"),
-  require("./catalogue")
+  require("./catalogue"),
+  require("./priceSheets")
 ];
 
 module.exports = { PUBLIC, PRIVATE };

@@ -1295,6 +1295,40 @@
     },
     "web/routes/catalogue.js": {
       "register": ["web", "params"]
+    },
+    "domain/priceSheet.js": {
+      "COLUMNS": "Array",
+      "columnFor": ["header"],
+      "areaRange": ["v"],
+      "rowToEntry": ["cells"],
+      "modelKey": ["e"],
+      "listingModelKey": ["l"],
+      "perM2": ["price", "area"],
+      "preview": ["rows", "existing"]
+    },
+    "services/priceSheets.js": {
+      "STALE_DAYS": "Number",
+      "upload": ["pool", "actor", "projectId", "buffer", "params"],
+      "getSheet": ["db", "actor", "projectId", "sheetId"],
+      "listSheets": ["db", "actor", "projectId", "params"],
+      "apply": ["pool", "actor", "projectId", "sheetId", "params"],
+      "discard": ["pool", "actor", "projectId", "sheetId"],
+      "history": ["db", "listing", "params"],
+      "noteEdit": ["db", "listing", "price", "params"],
+      "scheduleIncrease": ["pool", "actor", "projectId", "params"],
+      "cancelIncrease": ["pool", "actor", "projectId", "increaseId"],
+      "listIncreases": ["db", "actor", "projectId"],
+      "applyIncrease": ["pool", "inc", "params"],
+      "applyDueIncreases": ["pool", "params"],
+      "freshness": ["project", "params"],
+      "staleReminders": ["pool", "params"],
+      "pricesJob": [],
+      "fieldsFor": ["entry", "project", "phase"]
+    },
+    "web/routes/priceSheets.js": {
+      "register": ["web", "params"],
+      "pricesSection": ["lang", "manager", "params"],
+      "pricesNotice": ["query", "lang"]
     }
   },
   "invariant_variable_names": {

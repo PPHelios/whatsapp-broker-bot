@@ -225,7 +225,7 @@ async function getProject(db, actor, id) {
     db.query("SELECT * FROM project_materials WHERE project_id = $1 ORDER BY created_at", [id]).then((r) => r.rows),
     db
       .query(
-        `SELECT id, code, property_type, area_value, bedrooms, price_value, status, phase_id, developer_unit_code
+        `SELECT id, code, property_type, area_value, bedrooms, price_value, status, phase_id, developer_unit_code, inventory_type, details
          FROM listings WHERE project_id = $1 AND agency_id = $2 ORDER BY status, code LIMIT 200`,
         [id, actor.agency_id]
       )
@@ -457,11 +457,18 @@ async function linkUnits(db, actor, projectId, { codes = [], phaseId = null } = 
   }
   const wanted = [...new Set([].concat(codes).flatMap((c) => String(c || "").split(/[\s,،]+/)).map((c) => normalizeArabicDigits(c).replace(/^#/, "").toUpperCase()).filter(Boolean))].slice(0, 200);
   if (!wanted.length) return bad("codes");
-  const { rows } = await db.query(
-    `UPDATE listings SET project_id = $3, phase_id = $4, version = version + 1, updated_at = now()
-     WHERE agency_id = $1 AND code_norm = ANY($2::text[]) RETURNING code_norm`,
-    [actor.agency_id, wanted, project.id, phase]
-  );
+  let rows;
+  try {
+    ({ rows } = await db.query(
+      `UPDATE listings SET project_id = $3, phase_id = $4, version = version + 1, updated_at = now()
+       WHERE agency_id = $1 AND code_norm = ANY($2::text[]) RETURNING code_norm`,
+      [actor.agency_id, wanted, project.id, phase]
+    ));
+  } catch (e) {
+    // Two units with one developer unit code can't share a project (C3: the developer's code decides).
+    if (e.code === "23505") return bad("duplicate_code");
+    throw e;
+  }
   await syncUnits(db, project.id);
   const found = new Set(rows.map((r) => r.code_norm));
   return { ok: true, linked: rows.length, missing: wanted.filter((c) => !found.has(c)) };
@@ -562,7 +569,7 @@ async function clientMaterials(db, listing) {
 async function projectForUnit(db, listing) {
   if (!listing?.project_id) return null;
   const { rows } = await db.query(
-    `SELECT p.id, p.name, p.name_en, p.status, d.name AS developer_name FROM projects p LEFT JOIN developers d ON d.id = p.developer_id
+    `SELECT p.id, p.name, p.name_en, p.status, p.prices_updated_at, d.name AS developer_name FROM projects p LEFT JOIN developers d ON d.id = p.developer_id
      WHERE p.id = $1 AND p.agency_id = $2`,
     [listing.project_id, listing.agency_id]
   );

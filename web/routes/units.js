@@ -10,6 +10,8 @@ const Card = require("../../domain/leadCard");
 const Storage = require("../../lib/supabase");
 const Insights = require("../../services/priceInsights");
 const Catalogue = require("../../services/catalogue");
+const PriceSheets = require("../../services/priceSheets");
+const Commission = require("../../domain/commission");
 const { html } = require("../html");
 const { resultItem, factList } = require("../views/units");
 
@@ -41,8 +43,15 @@ async function wantedSection(pool, broker, listing, lang, csrf) {
 /** "EGP 52,000 per m² · 8% above the median of 12 units in Hyde Park" (sale and rent apart; ≥ 5 other units). */
 /** The unit's catalogue project (C1) and its links; internal ones are marked (brokers may use them, clients never see them). */
 function projectLine(p, lang) {
-  return html`<p data-project="${p.id}">🏗️ <a href="/app/catalogue/projects/${p.id}">${lang === "en" ? p.name_en || p.name : p.name}</a>${p.developer_name ? ` · ${p.developer_name}` : ""}</p>
+  const fresh = PriceSheets.freshness(p);
+  return html`<p data-project="${p.id}">🏗️ <a href="/app/catalogue/projects/${p.id}">${lang === "en" ? p.name_en || p.name : p.name}</a>${p.developer_name ? ` · ${p.developer_name}` : ""}${p.prices_updated_at ? html` · <span data-prices-fresh="${fresh}">${fresh === "stale" ? "⚠️ " : "🏷️ "}${L(lang, "أسعار شيت", "prices of")} <span dir="ltr">${new Date(p.prices_updated_at).toISOString().slice(0, 10)}</span>${fresh === "stale" ? L(lang, " (السعر ممكن يكون اتغير)", " (price may have changed)") : ""}</span>` : ""}</p>
   ${p.materials.length ? html`<p class="muted">${p.materials.map((m, i) => html`${i ? " · " : ""}<a href="${m.url}" target="_blank" rel="noopener noreferrer">${m.label}</a>${m.client_visible ? "" : " 🔒"}`)}</p>` : ""}`;
+}
+
+/** The unit's price history (C2), when its price changed at least once. */
+function historyLine(rows, lang) {
+  if (rows.length < 2) return "";
+  return html`<details data-price-history><summary>📈 ${L(lang, "تاريخ السعر", "Price history")}</summary><ul>${rows.map((r) => html`<li><span dir="ltr">${new Date(r.changed_at).toISOString().slice(0, 10)}</span>: ${Commission.money(r.price, lang)}</li>`)}</ul></details>`;
 }
 
 function marketLine(m, listing, lang) {
@@ -175,7 +184,7 @@ ${rows.length
     if (!listing || !Authz.canView(broker, listing)) return next();
     const images = await imagesOf(pool, listing);
     const market = listing.status === "active" ? await Insights.forUnit(pool, listing) : null;
-    const project = await Catalogue.projectForUnit(pool, listing);
+    const [project, prices] = await Promise.all([Catalogue.projectForUnit(pool, listing), PriceSheets.history(pool, listing)]);
     const status = { active: L(lang, "🟢 متاحة", "🟢 Available"), sold: L(lang, "🔴 مباعة", "🔴 Sold"), archived: L(lang, "📁 مؤرشفة", "📁 Archived") }[listing.status] || listing.status;
     const conf = Describe.compactLine({ code: "", confirmed_at: listing.confirmed_at }, lang).match(/✅ \S+/);
     return page(req, res, {
@@ -187,6 +196,7 @@ ${rows.length
   ${factList(listing, lang)}
   ${project ? projectLine(project, lang) : ""}
   ${market ? marketLine(market, listing, lang) : ""}
+  ${historyLine(prices, lang)}
   ${images.length ? html`<div class="photos">${images.map((i) => html`<img src="${i.url}" alt="" loading="lazy">`)}</div>` : ""}
   <div class="row" id="unit-actions">
     ${Authz.canEdit(broker, listing) ? html`<a class="btn" href="/app/units/${encodeURIComponent(listing.code)}/edit">✏️ ${L(lang, "تعديل", "Edit")}</a>` : ""}
