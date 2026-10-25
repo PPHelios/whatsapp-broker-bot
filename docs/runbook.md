@@ -15,7 +15,7 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `WHATSAPP_VERIFY_TOKEN` | yes | — | The token you type in Meta when subscribing the webhook (`GET /webhook`). |
 | `WHATSAPP_ACCESS_TOKEN` | yes | — | System-user token for the Cloud API. |
 | `WHATSAPP_PHONE_NUMBER_ID` | yes | — | The bot number's id. |
-| `WHATSAPP_API_VERSION` | no | `v20.0` | Graph API version. |
+| `WHATSAPP_API_VERSION` | no | `v25.0` | Graph API version (v25.0 released February 2026; Meta supports a version for about two years, so bump it yearly and check the WhatsApp changelog first). |
 | `GEMINI_API_KEY` | yes | — | Production Gemini key (billing on, budget alert set). The eval never uses it. |
 | `SUPABASE_URL` | yes for photos | — | Storage project URL (bucket `listing-images`). Without it storage runs in a mock mode: photos are not kept. |
 | `SUPABASE_SERVICE_ROLE_KEY` | yes for photos | — | Storage key (server only; never in the browser). `SUPABASE_ANON_KEY` is a fallback. |
@@ -38,6 +38,7 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `WA_LOGIN_MONTHLY_CEILING` | no | `200` | Sign-in links per agency per month (not counted in the credits). |
 | `WA_PRICE_EGP` | no | `0.21` | Price of one WhatsApp message (EGP, with VAT), stored on each `wa_outbound` row for our cost reports. |
 | `SCHEDULER_ENABLED` | no | `true` (off under tests) | Background jobs (follow-ups, match alerts, retention). `false` stops them on this instance. |
+| `BOT_PHONE` | no | — | The bot's WhatsApp number with country code. Only `npm run onboard` reads it, to print each broker's start link (a `bot_phone` in the agency file wins). |
 | `SCHEDULER_TICK_MS` | no | `60000` | How often each instance looks for due jobs (at least 5000). Each job still runs on one instance at a time. |
 
 ## 2. Render
@@ -93,7 +94,9 @@ Web sign-in has no shared secret to rotate: tokens and sessions are random and s
 
 Every operation writes one row (success or failure): `agency_id`, `broker_id`, `listing_code`, `operation_type`, `status`, `error_code`, timings (`total_duration_ms`, `gemini_ms`, `db_ms`, …), tokens, `model_used`, `estimated_cost_usd`, `metadata` (JSON), `created_at`. **Never delete or truncate it**; it is the audit trail and the AI quota reads it.
 
-Useful `operation_type` values: `search_query` (`metadata.channel` text|voice|web), `search_parse`, `listing_extraction`, `audio_transcription`, `vision_curation` (AI calls with tokens and cost), `draft_review`, `draft_commit`, `listing_edit`, `listing_price_update`, `listing_status_*`, `wa_outbound` (every WhatsApp send), `web_login_link`, `web_login`, `web_unit_create`, `web_unit_edit`, `web_unit_extract`, `web_import_plan`, `web_import_apply`, `web_bulk_edit`, `share_opened`.
+Useful `operation_type` values: `search_query` (`metadata.channel` text|voice|web), `search_parse`, `listing_extraction`, `audio_transcription`, `vision_curation` (AI calls with tokens and cost), `draft_review`, `draft_commit`, `listing_edit`, `listing_price_update`, `listing_status_*`, `wa_outbound` (every WhatsApp send), `web_login_link`, `web_login`, `web_unit_create`, `web_unit_edit`, `web_unit_extract`, `web_import_plan`, `web_import_apply`, `web_bulk_edit`, `share_opened`. Release 3: `lead_capture` and `lead_import` (outcome and `L-` reference only, never a name or phone), `web_lead_extract`, `crm_job_<name>` (one row per scheduler run), `bulk_excel_import` (WhatsApp Excel upload), `command_inventory_stats`.
+
+Notification kinds (`notifications.kind`): `assignment`, `follow_up` (reminders, viewings and the 24-hour nudge), `match`, `share_opened`, `hot_client`, `manager_alert` (credits, leads to reassign, retention warnings).
 
 ```sql
 -- Failures in the last 24 hours
@@ -164,6 +167,28 @@ SELECT n.created_at, b.name, n.kind, n.channel, n.reason, n.status FROM notifica
 WHERE n.agency_id = '<agency id>' ORDER BY n.created_at DESC LIMIT 50;
 ```
 
+**The 10% alarm.** Check weekly: an agency whose month-to-date pace ends the month more than 10% over its credits reaches the hard ceiling (110%) before the month ends, and its brokers drop to read ticks. Raise its credits, or move its heavy work to the website (the CRM guide's "Do these on the website" table), before that happens.
+
+```sql
+-- Projected month-end use vs credits; alarm when over 110%
+WITH m AS (
+  SELECT date_trunc('month', now() AT TIME ZONE 'Africa/Cairo') AS start,
+         extract(day FROM now() AT TIME ZONE 'Africa/Cairo') AS day,
+         extract(day FROM date_trunc('month', now() AT TIME ZONE 'Africa/Cairo') + interval '1 month - 1 day') AS days
+)
+SELECT a.name, COALESCE(a.wa_credits_monthly, 4000) AS credits, count(o.*) AS used,
+       round(count(o.*) / m.day * m.days) AS projected,
+       round(count(o.*) / m.day * m.days / COALESCE(a.wa_credits_monthly, 4000) * 100) AS projected_pct,
+       round(sum((o.metadata->>'egp')::numeric), 2) AS egp_so_far
+FROM agencies a CROSS JOIN m
+LEFT JOIN operation_logs o ON o.agency_id = a.id AND o.operation_type = 'wa_outbound' AND o.status = 'success'
+ AND o.created_at >= m.start AT TIME ZONE 'Africa/Cairo' AND COALESCE(o.metadata->>'kind', '') <> 'web_login_link'
+GROUP BY a.id, m.day, m.days
+HAVING count(o.*) / m.day * m.days > 1.1 * COALESCE(a.wa_credits_monthly, 4000)
+ORDER BY projected_pct DESC;
+```
+
+* `agencies.crm_settings` (JSON, default `{}`) is reserved for per-agency CRM options; nothing reads it yet, so leave it empty.
 * Push subscriptions: `push_subscriptions` (removed when the browser answers 404/410). Turn a broker's push off: `DELETE FROM push_subscriptions WHERE broker_id = '<id>';`
 
 ## 7c. Leads (CRM)
@@ -176,6 +201,14 @@ WHERE n.agency_id = '<agency id>' ORDER BY n.created_at DESC LIMIT 50;
 * **Client privacy (PDPL):** a client asks for their data: a manager opens the client on the website and taps 📦 Export (a zip; 10 an hour). A client asks to be deleted: a manager types the last 4 digits of the client's number under 🗑️ Erase; this cannot be undone, and deals keep only the unit and the money. The `privacy` job erases clients with no activity for 18 months (managers get a warning 30 days before) and clears stored WhatsApp payloads after 7 days. Its last run: `SELECT last_started_at, last_status FROM crm_jobs WHERE name = 'privacy';` Never clear `operation_logs`; it holds no client names or numbers.
 * **Importing a client list:** `/app/leads/import` (CSV or Excel, up to 2,000 rows; template at `/app/leads/import/template.xlsx`). The preview writes nothing; Import runs in the background, so the broker can leave the page. A stuck import: `SELECT id, status, result FROM web_imports WHERE kind = 'leads' ORDER BY created_at DESC LIMIT 5;` — a restart mid-way leaves it `processing` with `result.done` rows saved (each row is its own transaction, so nothing is half-written); the rest is re-imported by uploading the same file again (already-saved rows show as merges).
 * **Share target:** on Android, once the site is installed, WhatsApp's Share menu offers AqarChat; the shared text opens `/app/share` → the add-lead form (nothing is saved until the broker taps Save). The text travels in the URL (GET), so it can appear in the browser history of that phone.
+
+## 7d. Switching to the backup number
+
+If Meta blocks or restricts the bot's number:
+1. In WhatsApp Manager add the backup number to the same WhatsApp Business account, verify it and give it the display name.
+2. Set `WHATSAPP_PHONE_NUMBER_ID` to the new number's id (and `BOT_PHONE` to the number) in Render; redeploy. The access token and webhook stay the same.
+3. Run `npm run onboard -- <agency.json>` again for each agency: it changes nothing in the data and prints new start links. Send each broker theirs: the bot can't write first on a new number (no 24-hour window yet).
+4. Old client share links keep working (they point at the website, not the number). Approved message templates belong to the account, not the number.
 
 ## 8. Common problems
 
@@ -192,4 +225,6 @@ WHERE n.agency_id = '<agency id>' ORDER BY n.created_at DESC LIMIT 50;
 
 ## 9. Before Release 4
 
-**Submit the Meta message templates now** (Meta Business → WhatsApp Manager → Message templates): the Release 4 morning brief and the "still available?" check are sent outside the 24-hour window, which only approved templates allow, and approval can take days.
+**Submit the Meta message templates now** (Meta Business → WhatsApp Manager → Message templates): the Release 4 morning brief and the "still available?" check are sent outside the 24-hour window, which only approved templates allow, and approval can take days. Submit:
+* the morning brief and the "still available?" check (Release 4);
+* **utility** templates for the follow-up reminder and the match alert, for brokers who chose WhatsApp for those notifications, so they arrive even when the broker hasn't written to the bot for 24 hours (today they fall back to web push or the inbox).

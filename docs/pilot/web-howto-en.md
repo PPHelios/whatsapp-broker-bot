@@ -39,3 +39,5 @@ The *Client copy* on WhatsApp includes a link to the unit's page (photos and det
 👀 You get a WhatsApp alert when the client opens the link.
 
 Any problem? Send *help* to the bot or talk to your agency manager.
+
+Clients, follow-ups, deals and credits in detail: `docs/pilot/crm-howto-en.md`.

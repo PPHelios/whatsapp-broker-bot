@@ -31,3 +31,6 @@ Send the code (e.g. *VIL-08*) and choose *Client copy* or *Flyer*. The client co
 Send *login* and you get a link to the AqarChat website (search, add, import, clients, deals). Details in the website guide.
 
 Type *help* any time. The bot answers in English; you can switch to Arabic on the website (عربي at the top).
+
+*👤 Clients guide*
+The full guide to clients, follow-ups, deals and credits: `docs/pilot/crm-howto-en.md`.
