@@ -70,3 +70,7 @@ meter { width: 100%; height: 14px; }
 form.inline { display: inline; }
 progress { width: 100%; height: 14px; accent-color: var(--brand); }
 .foot { text-align: center; padding: 16px 12px 28px; }
+/* Dashboards (7.2, 5.4): KPI tiles and wide tables that scroll sideways on phones. */
+.tile strong { display: block; font-size: 1.4rem; margin-top: 4px; }
+.scroll { overflow-x: auto; }
+.scroll table { min-width: 640px; }

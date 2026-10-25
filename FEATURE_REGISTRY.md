@@ -324,6 +324,9 @@ Router tests send real webhook payloads through the production pipeline (`tests/
 | UNIT-CHECK-01 "still available?" after 21 days unconfirmed (one unit: Still available / Sold / Archive; several: Review list), daytime only, developer models skipped, archived at 30 days and told, Still available brings it back, confirmed units never archived | ✅ | `tests/crm/unit-checks.test.js` |
 | TG-PHOTOS-01 unit card album on Telegram (hero first, no documents, ≤ 10, one photo as a photo), search covers captioned "N. CODE" matching the list, none on WhatsApp | ✅ | `tests/router/telegram-photos.test.js` |
 | ALERTS-01 price drop of 2%+ on a matched unit alerts once (not 1%, not dismissed); match cap lifted on Telegram (safety ceiling 50), kept on WhatsApp; interested lead with no follow-up nudged once per quiet day | ✅ | `tests/crm/more-alerts.test.js` |
+| DASH-01 agency dashboard (managers): pipeline, period totals, leaderboard ranked by deals → commission → moves with response time; own agency only; no client names or phones; brokers 403 | ✅ | `tests/web/dashboard.test.js` |
+| DASH-02 owner dashboard `/app/owner` (OWNER_BROKER_IDS only, 404 for everyone else): weekly active agencies/brokers, units/leads/deals, errors/reports, AI calls and cost per agency, open errors, jobs | ✅ | `tests/web/dashboard.test.js` |
+| TEAM-01 managers invite from the website: broker created in their agency, one-time Telegram start link (hash stored, wa.me send button), links once; bad input, other agency's mobile, owner role and non-managers refused; new link; deactivate (not self) releases leads; bring back | ✅ | `tests/web/team.test.js` |
 | P4.4 keep-awake self-ping: off unless `KEEP_AWAKE=true`, Cairo window wraps midnight, failures swallowed | ✅ | `tests/unit/keep-awake.test.js` |
 | Routes never query CRM tables directly (grep guard over `routes/`, `web/routes/`, `web/views/`) | ✅ | `tests/unit/authz-registry.test.js` |
 

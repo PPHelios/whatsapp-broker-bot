@@ -135,6 +135,10 @@ function loadConfig(env = process.env) {
       enabled: env.SCHEDULER_ENABLED ? env.SCHEDULER_ENABLED !== "false" : env.NODE_ENV !== "test",
       tickMs: Math.max(5000, int(env.SCHEDULER_TICK_MS, 60000))
     },
+    // The product owner's broker ids (OWNER_BROKER_IDS, comma-separated): only they see /app/owner (services/dashboards.js).
+    owner: {
+      brokerIds: String(env.OWNER_BROKER_IDS || "").split(",").map((s) => s.trim().toLowerCase()).filter((s) => /^[0-9a-f-]{36}$/.test(s))
+    },
     // Self-ping so Render Free doesn't sleep (lib/keepAwake.js). Off unless KEEP_AWAKE=true: free hours are capped.
     keepAwake: {
       enabled: /^(true|1|on|yes)$/i.test(String(env.KEEP_AWAKE || "").trim()),
