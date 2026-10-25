@@ -25,11 +25,12 @@ function leadRow(lead, lang, { manager = false, now = new Date() } = {}) {
 </li>`;
 }
 
-/** The add form. values: { message, name, phone1..3, kind, source, source_other, lawful_basis, notes, assign_to } */
+/** The add form. values: { message, name, phone1..3, kind, source, source_other, lawful_basis, notes, assign_to, request (a search token saved as the client's request) } */
 function leadForm({ values: v = {}, lang = "ar", csrf = "", brokers = null, notice = null, error = null, duplicate = null, erased = false }) {
   const known = Stages.SOURCES.some(([en]) => en === v.source);
   return html`<form id="lead-form" method="post" action="/app/leads/new" class="stack">
   <input type="hidden" name="_csrf" value="${csrf}">
+  ${v.request ? html`<input type="hidden" name="request" value="${v.request}">` : ""}
   ${notice ? html`<p class="card notice">${notice}</p>` : ""}
   ${error ? html`<p class="card notice bad" role="alert">${error}</p>` : ""}
   <section class="card stack">

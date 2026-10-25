@@ -15,6 +15,7 @@ const Stages = require("../../domain/leadStages");
 const Intake = require("../../domain/leadIntake");
 const Phone = require("../../domain/phone");
 const SearchLink = require("../../domain/searchLink");
+const Q = require("../../domain/searchQuery");
 const { isManager } = require("../../lib/authz");
 const { logOperation } = require("../../lib/db");
 const Session = require("../session");
@@ -161,7 +162,18 @@ ${rows.length
     return { message: text, phone1: phones[0] ? Phone.displayPhone(phones[0]) : "", phone2: phones[1] ? Phone.displayPhone(phones[1]) : "" };
   };
 
-  web.get("/leads/new", (req, res) => formPage(req, res, { values: req.query.text ? prefill(String(req.query.text).slice(0, 4000)) : {} }));
+  web.get("/leads/new", (req, res) => {
+    // Wow 2: "🔔 Save as client request" from a search with no results carries the search here.
+    const filters = req.query.request ? SearchLink.decodeFilters(String(req.query.request)) : null;
+    if (filters && Q.hasAnyFilter({ filters })) {
+      const lang = langOf(req);
+      return formPage(req, res, {
+        values: { request: String(req.query.request), kind: filters.listing_type === "rent" ? "tenant" : "buyer" },
+        notice: `🔔 ${L(lang, "الطلب اللي هيتحفظ للعميل:", "The request saved for this client:")} ${Card.requestSummary(filters, lang)}`
+      });
+    }
+    return formPage(req, res, { values: req.query.text ? prefill(String(req.query.text).slice(0, 4000)) : {} });
+  });
 
   // Web share target (Android: "Share to AqarChat"): the shared text opens the add form, nothing is saved yet.
   web.get("/share", (req, res) => {
@@ -213,6 +225,10 @@ ${rows.length
     const { broker } = req.session;
     const values = { ...req.body };
     const r = await Leads.captureLead(pool, broker, inputOf(req.body, isManager(broker)));
+    if ((r.outcome === "created" || r.outcome === "merged") && req.body.request) {
+      const filters = SearchLink.decodeFilters(String(req.body.request));
+      if (filters) await LeadRequests.saveRequest(pool, broker, r.lead.id, filters);
+    }
     if (r.outcome === "created") return res.redirect(303, `${V.leadPath(r.lead)}?saved=1`);
     if (r.outcome === "merged") return res.redirect(303, `${V.leadPath(r.lead)}?known=1`);
     if (r.outcome === "colleague") {
@@ -243,7 +259,7 @@ ${rows.length
     const beforeId = /^\d+$/.test(String(req.query.before || "")) ? req.query.before : null;
     const tl = await Leads.timeline(pool, broker, lead.id, { beforeId });
     const requests = await LeadRequests.listRequests(pool, broker, lead);
-    for (const r of requests) r.matches = await LeadRequests.currentMatches(pool, broker.agency_id, r.filters, { limit: 1 });
+    for (const r of requests) r.matches = await LeadRequests.currentMatches(pool, broker.agency_id, r.filters, { limit: 3 });
     const brokers = manager ? await activeBrokers(pool, broker.agency_id) : [];
     const unit = lead.follow_up_listing_id ? (await pool.query("SELECT code FROM listings WHERE id = $1 AND agency_id = $2", [lead.follow_up_listing_id, broker.agency_id])).rows[0] : null;
     const path = V.leadPath(lead);
@@ -292,7 +308,12 @@ ${Stages.WANTS_UNIT.includes(lead.kind) || requests.length
   ${requests.length
     ? html`<ul>${requests.map(
         (r) => html`<li data-request="${r.id}">${Card.requestSummary(r.filters, lang)} · <a href="/app/search?f=${SearchLink.encodeFilters(r.filters)}">🏠 ${r.matches.total} ${L(lang, "وحدة مناسبة", "fit now")}</a>${r.alerts_enabled ? ` · 🔔` : ""}
-  <form method="post" action="${path}/requests/delete" class="inline">${hidden}<input type="hidden" name="request" value="${r.id}"><button type="submit" class="link">🗑️ ${L(lang, "امسح", "Remove")}</button></form></li>`
+  <form method="post" action="${path}/requests/delete" class="inline">${hidden}<input type="hidden" name="request" value="${r.id}"><button type="submit" class="link">🗑️ ${L(lang, "امسح", "Remove")}</button></form>
+  ${r.matches.rows.length
+    ? html`<ul>${r.matches.rows.slice(0, 3).map(
+        (u) => html`<li data-match="${u.code}"><a href="/app/units/${encodeURIComponent(u.code)}">${u.code}</a> <form method="post" action="${path}/send" class="inline" target="_blank">${hidden}<input type="hidden" name="code" value="${u.code}"><button type="submit" class="link">💬 ${L(lang, "ابعت للعميل", "Send to client")}</button></form></li>`
+      )}</ul>`
+    : ""}</li>`
       )}</ul>`
     : html`<p class="muted">${L(lang, "مفيش طلب لسه. ضيف طلب وهبلغك أول ما تنزل وحدة تناسبه.", "No request yet. Add one and you'll hear when a unit that fits comes in.")}</p>`}
   ${requests.length < LeadRequests.MAX_REQUESTS
@@ -389,6 +410,17 @@ ${V.bottomBar(lead, lang, broker.name)}`
   write("note", (req, lead, version) => Leads.addNote(pool, actor(req), lead.id, req.body.text, { version }), "note");
   write("contacted", (req, lead, version) => Leads.markContacted(pool, actor(req), lead.id, { version }), "contacted");
   write("assign", (req, lead, version) => Leads.assignLead(pool, actor(req), lead.id, req.body.broker || null, { version }), "assigned");
+  // "Send to client": a share link with the lead, then WhatsApp opens on the client's chat with the message ready.
+  web.post("/leads/:ref/send", async (req, res, next) => {
+    if (!(await writeGate(req, res))) return;
+    const lead = await loadOr404(req, next);
+    if (!lead) return;
+    const unit = await Store.findByCode(pool, actor(req).agency_id, String(req.body.code || ""));
+    const r = await LeadRequests.sendToClient(pool, actor(req), lead.id, unit, { lang: langOf(req) });
+    if (r.ok) return res.redirect(303, r.url);
+    if (r.error === "forbidden") return res.status(403).send(L(langOf(req), "مش مسموح.", "Not allowed."));
+    return leadPage(req, res, lead, { status: 422, notice: `⚠️ ${L(langOf(req), "الوحدة دي مش متاحة.", "This unit isn't available.")}` });
+  });
   write("requests", (req, lead) => LeadRequests.saveRequest(pool, actor(req), lead.id, SearchLink.filtersFromForm(req.body)), "request");
   write("requests/delete", (req, lead) => LeadRequests.removeRequest(pool, actor(req), lead.id, req.body.request), "request_removed");
   write(

@@ -8,6 +8,7 @@ const Leads = require("./leads");
 const Search = require("./search");
 const Authz = require("../lib/authz");
 const Card = require("../domain/leadCard");
+const Phone = require("../domain/phone");
 const Q = require("../domain/searchQuery");
 const SearchLink = require("../domain/searchLink");
 const { withTransaction } = require("../lib/db");
@@ -101,4 +102,50 @@ async function removeRequest(pool, actor, leadKey, requestId) {
   return rowCount ? { ok: true, lead } : { error: "not_found" };
 }
 
-module.exports = { MAX_REQUESTS, listRequests, currentMatches, saveRequest, removeRequest };
+/**
+ * "🔥 N clients want this unit": the agency's open leads with an alerting request this unit fits (the same SQL as
+ * search, on this unit only). The count is the agency's; the leads listed are only those the broker may see.
+ * @returns {Promise<{ total, leads: [{ id, ref, name, phone_e164 }], others }>}
+ */
+async function whoWants(pool, actor, listing) {
+  if (!listing?.id || listing.agency_id !== actor.agency_id) return { total: 0, leads: [], others: 0 };
+  const { rows } = await pool.query(
+    `SELECT s.filters, l.id, l.ref, l.name, l.phone_e164, l.agency_id, l.assigned_broker_id
+       FROM saved_searches s JOIN leads l ON l.id = s.lead_id AND l.agency_id = s.agency_id
+      WHERE s.agency_id = $1 AND s.alerts_enabled AND l.stage NOT IN ('won', 'lost')
+      ORDER BY l.last_activity_at DESC`,
+    [actor.agency_id]
+  );
+  const fits = new Map();
+  for (const r of rows) {
+    if (fits.has(r.id)) continue;
+    const { sql, params } = Search.buildSearchQuery(actor.agency_id, { filters: SearchLink.sanitizeFilters(r.filters) }, { onlyIds: [listing.id], limit: 1 });
+    if ((await pool.query(sql, params)).rows.length) fits.set(r.id, r);
+  }
+  const all = [...fits.values()];
+  const visible = all.filter((l) => Authz.canViewLead(actor, l)).map(({ id, ref, name, phone_e164 }) => ({ id, ref, name, phone_e164 }));
+  return { total: all.length, leads: visible, others: all.length - visible.length };
+}
+
+/**
+ * "Send to client / ابعت للعميل": the client copy and a share link that carries the lead (so the client's opens
+ * count for the hot signal), as a wa.me link to the client's number; a match_sent event; the match marked sent.
+ * @returns {Promise<{ ok, url, lead } | { error: "not_found"|"forbidden"|"unit" }>}
+ */
+async function sendToClient(pool, actor, leadKey, listing, { lang = "ar", now = new Date() } = {}) {
+  const lead = await Leads.getLead(pool, actor, leadKey);
+  if (!lead) return { error: "not_found" };
+  if (!Authz.canEditLead(actor, lead)) return { error: "forbidden" };
+  if (!listing || listing.agency_id !== actor.agency_id || listing.status !== "active") return { error: "unit" };
+  const clientLang = lead.lang || lang;
+  const T = require("../lib/text");
+  const ShareLinks = require("../lib/shareLinks");
+  const { url } = await ShareLinks.createShareLink(pool, actor, listing, { channel: "whatsapp", lang: clientLang, leadId: lead.id });
+  const text = `${T.formatClientListingText(listing, actor, clientLang)}\n\n🔗 ${clientLang === "en" ? "Photos and details" : "الصور والتفاصيل"}: ${url}`;
+  const wa = Phone.waMeUrl(lead.phone_e164, text);
+  await pool.query("UPDATE lead_matches SET status = 'sent_to_client' WHERE agency_id = $1 AND lead_id = $2 AND listing_id = $3", [actor.agency_id, lead.id, listing.id]);
+  const ev = await Leads.logMatchSent(pool, actor, lead.id, listing, { now });
+  return { ok: true, url: wa, lead: ev.lead || lead };
+}
+
+module.exports = { MAX_REQUESTS, listRequests, currentMatches, saveRequest, removeRequest, whoWants, sendToClient };

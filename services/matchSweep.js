@@ -49,6 +49,7 @@ async function alertBroker(pool, broker, hits, { now, sweepKey }) {
     url: single ? `/app/leads/${Card.refLabel(single.ref)}#requests` : "/app/leads",
     leadId: single?.id || null,
     listingId: hits.length === 1 ? hits[0].listing.id : null,
+    buttons: hits.length === 1 ? [{ id: `ld:send:${Card.refLabel(single.ref)}:${hits[0].listing.code}`, title: L(broker, "💬 ابعت للعميل", "💬 Send to client") }] : null,
     now
   });
 }

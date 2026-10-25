@@ -578,11 +578,13 @@
     },
     "lib/shareLinks.js": {
       "ALERT_EVERY_HOURS": "Number",
+      "HOT_OPENS": "Number",
       "BOT_UA": "Object",
       "isBot": ["ua"],
       "createShareLink": ["pool", "broker", "listing", "params"],
       "resolveShareLink": ["pool", "slug", "code", "token"],
       "recordOpen": ["pool", "resolved", "params"],
+      "leadOpened": ["pool", "leadId", "listing"],
       "clientCopyWithLink": ["pool", "broker", "listing", "lang", "copyText"],
       "linksFor": ["pool", "broker", "listing"]
     },
@@ -713,6 +715,7 @@
       "completeFollowUp": ["pool", "actor", "key", "params"],
       "undo": ["pool", "actor", "eventId", "params"],
       "noteRequest": ["pool", "actor", "key", "filters", "params"],
+      "logMatchSent": ["pool", "actor", "key", "listing", "params"],
       "getLead": ["pool", "actor", "key"],
       "refExists": ["pool", "actor", "ref"],
       "dueFollowUps": ["pool", "actor", "params"],
@@ -754,6 +757,7 @@
       "followUps": ["broker", "ctx"],
       "openRef": ["broker", "ref", "ctx"],
       "requestCommand": ["broker", "params", "ctx"],
+      "requestButton": ["pool", "broker", "filters", "lang"],
       "assignCommand": ["broker", "params", "ctx"],
       "handleButton": ["broker", "id", "ctx"]
     },
@@ -805,7 +809,9 @@
       "listRequests": ["pool", "actor", "lead"],
       "currentMatches": ["pool", "agencyId", "filters", "params"],
       "saveRequest": ["pool", "actor", "leadKey", "rawFilters", "params"],
-      "removeRequest": ["pool", "actor", "leadKey", "requestId"]
+      "removeRequest": ["pool", "actor", "leadKey", "requestId"],
+      "whoWants": ["pool", "actor", "listing"],
+      "sendToClient": ["pool", "actor", "leadKey", "listing", "params"]
     },
     "services/matchSweep.js": {
       "DAILY_CAP": "Number",

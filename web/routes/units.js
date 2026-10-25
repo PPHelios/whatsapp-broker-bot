@@ -5,6 +5,8 @@ const Store = require("../../lib/listingStore");
 const Authz = require("../../lib/authz");
 const Describe = require("../../domain/describe");
 const Share = require("../../lib/shareLinks");
+const LeadRequests = require("../../services/leadRequests");
+const Card = require("../../domain/leadCard");
 const { html } = require("../html");
 const { resultItem, factList } = require("../views/units");
 
@@ -18,6 +20,19 @@ async function imagesOf(pool, listing) {
     listing.agency_id
   ]);
   return rows;
+}
+
+/** Wow 1: "🔥 N clients want this unit", the broker's own listed with Send (the count is the agency's). */
+async function wantedSection(pool, broker, listing, lang, csrf) {
+  const w = await LeadRequests.whoWants(pool, broker, listing);
+  if (!w.total) return "";
+  return html`<section class="card" id="wanted"><h2>🔥 ${L(lang, `${w.total} عملاء عايزين الوحدة دي`, `${w.total} clients want this unit`)}</h2>
+  <ul>${w.leads.map(
+    (l) => html`<li data-lead="${Card.refLabel(l.ref)}"><a href="/app/leads/${Card.refLabel(l.ref)}">${Card.refLabel(l.ref)} · ${Card.displayName(l, lang)}</a>
+    <form method="post" action="/app/leads/${Card.refLabel(l.ref)}/send" class="inline" target="_blank"><input type="hidden" name="_csrf" value="${csrf}"><input type="hidden" name="code" value="${listing.code}"><button type="submit" class="link">💬 ${L(lang, "ابعت للعميل", "Send to client")}</button></form></li>`
+  )}</ul>
+  ${w.others ? html`<p class="muted">👥 ${L(lang, `و${w.others} مع زملائك.`, `And ${w.others} with your colleagues.`)}</p>` : ""}
+</section>`;
 }
 
 function register(web, { pool, page }) {
@@ -111,6 +126,7 @@ ${rows.length
     ${Authz.canEdit(broker, listing) ? html`<a class="btn" href="/app/units/${encodeURIComponent(listing.code)}/edit">✏️ ${L(lang, "تعديل", "Edit")}</a>` : ""}
   </div>
 </article>
+${listing.status === "active" ? await wantedSection(pool, broker, listing, lang, req.session.csrf) : ""}
 ${await shareSection(broker, listing, lang)}`
     });
   });

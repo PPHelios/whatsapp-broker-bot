@@ -108,7 +108,7 @@ function timelineLine(ev, lang) {
       case "request_set":
         return L(lang, "🔎 الطلب اتحدث", "🔎 Request updated");
       case "match_sent":
-        return L(lang, `🏠 وحدة مناسبة: ${d.code || ""}`, `🏠 Match: ${d.code || ""}`);
+        return L(lang, `📤 اتبعتله ${d.code || "وحدة"}`, `📤 Sent ${d.code || "a unit"}`);
       case "share_opened":
         return L(lang, `👀 فتح ${d.code || "الرابط"}`, `👀 Opened ${d.code || "the link"}`);
       case "deal":

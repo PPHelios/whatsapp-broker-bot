@@ -400,6 +400,11 @@ async function noteRequest(pool, actor, key, filters, { now = new Date(), reques
   return mutate(pool, actor, key, { kind: "request_set", now }, () => ({ fields: {}, data: { filters, ...(requestId ? { request_id: requestId } : {}) } }));
 }
 
+/** A unit sent to the client (services/leadRequests.js sendToClient): on the timeline, not undoable. */
+async function logMatchSent(pool, actor, key, listing, { now = new Date() } = {}) {
+  return mutate(pool, actor, key, { kind: "match_sent", now }, () => ({ fields: {}, data: { listing_id: listing.id, code: listing.code } }));
+}
+
 /* ---------------------------------------------------------------------- */
 /* Reads (role-scoped in SQL)                                              */
 /* ---------------------------------------------------------------------- */
@@ -561,6 +566,7 @@ module.exports = {
   completeFollowUp,
   undo,
   noteRequest,
+  logMatchSent,
   getLead,
   refExists,
   dueFollowUps,

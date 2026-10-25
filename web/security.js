@@ -13,7 +13,8 @@ const CSP = [
   "font-src 'self'",
   "object-src 'none'",
   "base-uri 'self'",
-  "form-action 'self'",
+  // "Send to client" posts, then redirects to WhatsApp (wa.me forwards to api.whatsapp.com).
+  "form-action 'self' https://wa.me https://api.whatsapp.com",
   "frame-ancestors 'none'",
   "manifest-src 'self'",
   "worker-src 'self'"
