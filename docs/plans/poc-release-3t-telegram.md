@@ -7,7 +7,7 @@
 ## What I need from Haytham
 
 1. **Create the bot in @BotFather** (`/newbot`):
-   - name "AqarChat" (or the final brand)
+   - name "WehdatHub" (or the final brand)
    - a username ending in `bot`
    - photo, about text and description in Arabic
 2. **Put the token in Render** yourself, as `TELEGRAM_BOT_TOKEN`. Don't paste it in chat. I set `TELEGRAM_WEBHOOK_SECRET` and run `setWebhook`.

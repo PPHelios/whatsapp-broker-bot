@@ -36,7 +36,7 @@ describe("the link comes from WhatsApp and opens a confirm page", () => {
     expect(rows).toEqual([{ token_hash: WebAuth.sha256(token), channel: "whatsapp", broker_id: h.BROKERS.broker.id, fresh: true }]);
     expect(JSON.stringify(rows)).not.toContain(token);
     // English brokers get English copy; "login" works too.
-    expect(textOf(await h.text("admin", "login"))).toMatch(/Your AqarChat sign-in link/);
+    expect(textOf(await h.text("admin", "login"))).toMatch(/Your WehdatHub sign-in link/);
     // The help menu lists it (U1: help shows only working commands).
     expect(textOf(await h.text("broker", "مساعدة"))).toMatch(/\*دخول\*/);
   });

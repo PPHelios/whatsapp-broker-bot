@@ -4,7 +4,7 @@ Copy this message and send it to each English-speaking broker after running `scr
 
 ---
 
-Hi 👋 this is *AqarChat*, your inventory assistant on WhatsApp.
+Hi 👋 this is *WehdatHub*, your inventory assistant on WhatsApp.
 
 *▶️ Start here*
 Tap your start link and press send (it says *help*). The bot answers with the list of commands.
@@ -28,7 +28,7 @@ Forward a client's message or contact card, or type "lead Sara 0101…". Send a 
 Send the code (e.g. *VIL-08*) and choose *Client copy* or *Flyer*. The client copy has a link to the unit's page, and you get an alert when the client opens it.
 
 *🌐 Website*
-Send *login* and you get a link to the AqarChat website (search, add, import, clients, deals). Details in the website guide.
+Send *login* and you get a link to the WehdatHub website (search, add, import, clients, deals). Details in the website guide.
 
 Type *help* any time. The bot answers in English; you can switch to Arabic on the website (عربي at the top).
 

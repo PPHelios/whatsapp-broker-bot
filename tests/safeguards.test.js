@@ -6,7 +6,7 @@ const path = require("path");
 
 const rootDir = path.resolve(__dirname, "..");
 
-describe("AqarChat Master Safeguards & Regression Guard Suite", () => {
+describe("WehdatHub Master Safeguards & Regression Guard Suite", () => {
   const commandsPath = path.join(rootDir, "routes", "commands.js");
   const interactivePath = path.join(rootDir, "routes", "interactive.js");
   const mediaPath = path.join(rootDir, "routes", "media.js");

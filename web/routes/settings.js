@@ -114,7 +114,7 @@ ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "�
   web.post("/push/test", async (req, res) => {
     const { broker } = req.session;
     const en = broker.preferred_lang === "en";
-    const r = await WebPush.send(broker, { title: en ? "🔔 AqarChat test" : "🔔 تجربة AqarChat", url: "/app/notifications", push: { body: en ? "Notifications work on this device." : "الإشعارات شغالة على الجهاز ده." } }, { pool });
+    const r = await WebPush.send(broker, { title: en ? "🔔 WehdatHub test" : "🔔 تجربة WehdatHub", url: "/app/notifications", push: { body: en ? "Notifications work on this device." : "الإشعارات شغالة على الجهاز ده." } }, { pool });
     return res.redirect(303, `/app/settings?test=${r.ok ? "ok" : "none"}`);
   });
 }

@@ -123,7 +123,7 @@ describe("every outgoing link is built from PUBLIC_BASE_URL", () => {
     for (const f of files) {
       const code = fs.readFileSync(path.join(root, f), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
       if (!allowed.includes(f)) expect([f, /PUBLIC_BASE_URL|publicBaseUrl|publicUrl\(/.test(code)]).toEqual([f, false]);
-      expect([f, /onrender\.com|aqarchat\.com|localhost:\d/.test(code)]).toEqual([f, false]);
+      expect([f, /onrender\.com|aqarchat\.com|wehdathub\.com|localhost:\d/.test(code)]).toEqual([f, false]);
     }
   });
 });

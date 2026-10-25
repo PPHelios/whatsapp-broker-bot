@@ -1,4 +1,4 @@
-/* AqarChat web app — mobile first; logical properties so RTL and LTR share one sheet */
+/* WehdatHub web app — mobile first; logical properties so RTL and LTR share one sheet */
 :root {
   --ink: #0b132b; --muted: #5b6475; --line: #e3e6ec; --bg: #f6f7f9; --card: #fff;
   --brand: #0b132b; --accent: #d4af37; --ok: #137a3b; --warn: #9a5b00; --bad: #b42318;

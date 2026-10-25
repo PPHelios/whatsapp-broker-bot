@@ -200,7 +200,7 @@ const TEST_SCENARIOS = [
 
 async function runSearchTestSuite() {
   console.log("\n========================================================");
-  console.log("AQARCHAT DIRECT DATABASE SEARCH ENGINE TEST RUNNER");
+  console.log("WEHDATHUB DIRECT DATABASE SEARCH ENGINE TEST RUNNER");
   console.log("========================================================\n");
 
   let passed = 0;

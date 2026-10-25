@@ -1,10 +1,10 @@
-# AqarChat clients (CRM) guide for brokers (English)
+# WehdatHub clients (CRM) guide for brokers (English)
 
 Send this after the welcome message (`docs/pilot/broker-howto-en.md`) and the website guide (`docs/pilot/web-howto-en.md`). Arabic version: `docs/pilot/crm-howto-ar.md`.
 
 ---
 
-👤 *Your clients in AqarChat*
+👤 *Your clients in WehdatHub*
 
 *➕ Saving a client*
 • *Forward* the client's WhatsApp message to the bot, or share their *contact card*: tap *➕ Save as client*.
@@ -38,7 +38,7 @@ At the time you set, the bot reminds you (several due at once come in one messag
 *🔔 Notifications*
 • Website → *⚙️ Settings*: for each kind of alert choose *WhatsApp* or *Website*, and set quiet hours (default 22:00–08:00; alerts wait until morning).
 • Turn on website notifications on your phone: *⚙️ Settings* → *🔔 Turn on here* → allow.
-• *iPhone:* open the site in *Safari* → *Share* → *Add to Home Screen*, then open AqarChat from the new icon and turn notifications on there (iOS 16.4 or later).
+• *iPhone:* open the site in *Safari* → *Share* → *Add to Home Screen*, then open WehdatHub from the new icon and turn notifications on there (iOS 16.4 or later).
 • Everything also waits in the website inbox (🔔).
 
 *💬 How WhatsApp credits work*
@@ -75,7 +75,7 @@ Fine on WhatsApp: one quick search, a quick update, one client copy, forwarding 
 Tell your manager. On the client's page they can *📦 Export* the client's data (for a "what do you hold on me" request) or *🗑️ Erase* the client permanently. Clients with no activity for 18 months are erased automatically.
 
 *✅ Do's and ❌ don'ts with client data*
-✅ Save clients in AqarChat, not in screenshots or personal notes.
+✅ Save clients in WehdatHub, not in screenshots or personal notes.
 ✅ Write only what's needed for the deal.
 ❌ Don't forward a client's number or details to people outside the agency.
 ❌ Don't share your sign-in link; each link works once, for you.

@@ -54,7 +54,7 @@ function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, 
 <meta name="theme-color" content="#0B132B">
 <meta name="htmx-config" content="${jsonAttr(HTMX_CONFIG)}">
 ${csrf ? html`<meta name="csrf-token" content="${csrf}">` : ""}
-<title>${title ? `${title} · AqarChat` : "AqarChat"}</title>
+<title>${title ? `${title} · WehdatHub` : "WehdatHub"}</title>
 ${manifest ? html`<link rel="manifest" href="/app/manifest.webmanifest">` : ""}
 <link rel="icon" href="${assets("icons/icon.svg")}" type="image/svg+xml">
 <link rel="apple-touch-icon" href="${assets("icons/icon-192.png")}">
@@ -82,7 +82,7 @@ const NAV = [
 function topBar({ broker, nav, lang, unread = 0 }) {
   const en = lang === "en";
   return html`<header class="top">
-  <a class="brand" href="/app/">AqarChat</a>
+  <a class="brand" href="/app/">WehdatHub</a>
   <a class="lang" data-lang-switch href="?lang=${en ? "ar" : "en"}" hreflang="${en ? "ar" : "en"}" lang="${en ? "ar" : "en"}">${en ? "عربي" : "English"}</a>
   ${broker
     ? html`<nav class="nav">${NAV.map(

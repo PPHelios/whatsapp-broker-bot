@@ -29,7 +29,7 @@ function loginForm({ pre, next, message = null, lang = "ar" }) {
   return html`<div class="card">
   <h1>🔐 ${L(lang, "الدخول", "Sign in")}</h1>
   ${message ? html`<p class="notice card">${message}</p>` : ""}
-  <p>${lang === "en" ? html`Send <strong>"login"</strong> to the AqarChat WhatsApp number and you'll get a sign-in link right away.` : html`ابعت <strong>«دخول»</strong> لرقم AqarChat على واتساب، وهيوصلك رابط الدخول على طول.`}</p>
+  <p>${lang === "en" ? html`Send <strong>"login"</strong> to the WehdatHub WhatsApp number and you'll get a sign-in link right away.` : html`ابعت <strong>«دخول»</strong> لرقم WehdatHub على واتساب، وهيوصلك رابط الدخول على طول.`}</p>
   <p>${L(lang, "أو اكتب رقم الموبايل المسجل وهنبعتلك الرابط على واتساب:", "Or enter your registered mobile number and we'll send the link on WhatsApp:")}</p>
   <form method="post" action="/app/login" class="stack">
     <input type="hidden" name="_csrf" value="${pre}">
@@ -42,7 +42,7 @@ function loginForm({ pre, next, message = null, lang = "ar" }) {
 
 const expiredPage = (lang) => html`<div class="card notice bad">
   <h1>⌛ ${L(lang, "الرابط ده انتهى أو اتستخدم قبل كده", "This link has expired or was already used")}</h1>
-  <p>${lang === "en" ? html`Send <strong>"login"</strong> to the AqarChat WhatsApp number for a new link.` : html`ابعت <strong>«دخول»</strong> لرقم AqarChat على واتساب عشان يوصلك رابط جديد.`}</p>
+  <p>${lang === "en" ? html`Send <strong>"login"</strong> to the WehdatHub WhatsApp number for a new link.` : html`ابعت <strong>«دخول»</strong> لرقم WehdatHub على واتساب عشان يوصلك رابط جديد.`}</p>
   <p><a href="/app/login">${L(lang, "صفحة الدخول", "Sign-in page")}</a></p>
 </div>`;
 
@@ -108,7 +108,7 @@ function register(web, { pool, page }) {
       lang: en ? "en" : "ar",
       body: html`<div class="card">
   <h1>${en ? `👋 Hello ${broker.name}` : `👋 أهلاً ${broker.name}`}</h1>
-  <p>${en ? "Tap to sign in to AqarChat on this device (you stay signed in for 30 days)." : "اضغط للدخول على AqarChat من الجهاز ده (هتفضل مسجل 30 يوم)."}</p>
+  <p>${en ? "Tap to sign in to WehdatHub on this device (you stay signed in for 30 days)." : "اضغط للدخول على WehdatHub من الجهاز ده (هتفضل مسجل 30 يوم)."}</p>
   <form method="post" action="/app/login/confirm">
     <input type="hidden" name="_csrf" value="${pre}">
     <input type="hidden" name="t" value="${req.query.t}">

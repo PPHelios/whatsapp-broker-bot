@@ -1,4 +1,4 @@
-# AqarChat POC: Release 3 (Core CRM) build plan
+# WehdatHub POC: Release 3 (Core CRM) build plan
 
 ## Context
 Release 1 (the WhatsApp-only slice) and Release 2 (the website: `/app/` and the public unit pages) are merged to `main` and running on Render. The pilot is still one design-partner agency with 3–5 brokers.
@@ -196,7 +196,7 @@ The **1,000 free messages are per phone number, not per agency.** A 5-broker age
 **Risk, in order:**
 1. **Margin.** Every reply now costs money. A chatty broker costs more than a quiet one, and the plan's price doesn't scale with use.
 2. **A single number is a single point of failure.** A quality-rating drop or a ban stops every agency at once.
-3. **Meta policy.** Since 15 January 2026 Meta bars general-purpose AI assistants from the Business API. AqarChat is a business tool whose AI is ancillary (listings, search, CRM), which Meta says stays allowed ([TechCrunch](https://techcrunch.com/2025/10/18/whatssapp-changes-its-terms-to-bar-general-purpose-chatbots-from-its-platform), [9to5mac](https://9to5mac.com/2025/10/20/whatsapp-bans-ai-chatbots-from-using-its-business-api/)). The small-talk guard (B2) keeps the bot from acting as a general chatbot, and it must stay.
+3. **Meta policy.** Since 15 January 2026 Meta bars general-purpose AI assistants from the Business API. WehdatHub is a business tool whose AI is ancillary (listings, search, CRM), which Meta says stays allowed ([TechCrunch](https://techcrunch.com/2025/10/18/whatssapp-changes-its-terms-to-bar-general-purpose-chatbots-from-its-platform), [9to5mac](https://9to5mac.com/2025/10/20/whatsapp-bans-ai-chatbots-from-using-its-business-api/)). The small-talk guard (B2) keeps the bot from acting as a general chatbot, and it must stay.
 
 ### Telegram: is moving necessary now?
 **No: not as a replacement, and not for the pilot. But Release 3 makes it cheap to add as a second channel.**
@@ -210,7 +210,7 @@ The **1,000 free messages are per phone number, not per agency.** A 5-broker age
 | **Where Egyptian brokers work** | **everything: clients, groups, forwards** | used by some, rarely for clients |
 | Intake of client chats and group posts | forward inside the same app | must share across apps (copy, or the share sheet) |
 
-The core habit the product is built on is "forward it to the bot". It only works inside WhatsApp. Moving would remove the main reason brokers use AqarChat. The cost is controlled instead with message credits, the website for heavy tasks, and alerts that move to the website when credits run out.
+The core habit the product is built on is "forward it to the bot". It only works inside WhatsApp. Moving would remove the main reason brokers use WehdatHub. The cost is controlled instead with message credits, the website for heavy tasks, and alerts that move to the website when credits run out.
 
 **What Release 3 does instead:**
 1. **The notification centre and message credits** (step 2): alerts go on WhatsApp while the agency has credits, then on the website for free; brokers choose the channel per alert; usage is visible to everyone.
@@ -227,7 +227,7 @@ The core habit the product is built on is "forward it to the bot". It only works
 ### The website as a full backup (owner, round 2)
 If WhatsApp prices spike, WhatsApp could be dropped, so everything a broker does on WhatsApp must also work on the website:
 - Already there: search, add and edit units (with voice), quick updates and bulk edit, client copy and share links, imports and exports, the CRM pages of this release.
-- Added in Release 3: the flyer as a download from the unit page; lead intake by paste; on Android, the installed site appears in WhatsApp's **Share** menu ("Share to AqarChat", the web share target), so forwarding a client message or contact card still works; iPhone users get a paste box (iPhone doesn't allow share targets).
+- Added in Release 3: the flyer as a download from the unit page; lead intake by paste; on Android, the installed site appears in WhatsApp's **Share** menu ("Share to WehdatHub", the web share target), so forwarding a client message or contact card still works; iPhone users get a paste box (iPhone doesn't allow share targets).
 - A parity test lists every WhatsApp command and the website page that does the same.
 - The remaining gap is sign-in, which needs WhatsApp until a passkey (fingerprint or face) sign-in is added (later; about a day of work).
 - **Telegram and a React Native app** stay future options: both would be adapters on the same services and channel layer, with nothing built for them now beyond the Telegram stub.
@@ -279,7 +279,7 @@ Per broker per working day: light ≈ 20 credits (≈ 440 a month), typical ≈ 
 
 ### Wow features for Release 3 (cheap, high impact)
 1. **"🔥 3 clients want this unit".** When a broker saves a unit, the save confirmation they already get says how many open client requests the unit fits: "🔥 3 clients want this unit: 1 yours, 2 with colleagues" with [See my client] [Send to client]. The broker sees details only for their own clients and **no colleague names**. **Managers** get it with names ("VIL-08 fits 3 clients: Sara (1), Omar (2)"), grouped with their other alerts; a manager who saves the unit sees the names in the save reply. Colleagues whose clients match get their normal match alert. No extra message for the saver and no AI call: it uses the same match SQL (step 7).
-2. **Zero results become a request.** "مفيش نتائج" / "No results" gets a button: **"🔔 Save as client request / سجل طلب للعميل"**. The broker types or forwards the client's number; AqarChat shows what it understood and saves only after **[✅ Confirm]** (rule below), then alerts when a matching unit arrives. This turns a dead end into a lead (step 7).
+2. **Zero results become a request.** "مفيش نتائج" / "No results" gets a button: **"🔔 Save as client request / سجل طلب للعميل"**. The broker types or forwards the client's number; WehdatHub shows what it understood and saves only after **[✅ Confirm]** (rule below), then alerts when a matching unit arrives. This turns a dead end into a lead (step 7).
 3. **One voice note updates the CRM.** «كلمت أحمد، عايز يعاين VIL-08 يوم الجمعة الساعة ٥» / "Called Ahmed, he wants to view VIL-08 Friday at 5" becomes:
    - marked contacted
    - stage moved to viewing
@@ -289,7 +289,7 @@ Per broker per working day: light ≈ 20 credits (≈ 440 a month), typical ≈ 
    It costs two AI calls: transcription and one `lead_update` extraction (step 9).
 4. **Who is calling?** Send or forward any phone number, or a contact card that's already a lead, and get the client's card and history at once. Brokers do this while the phone rings. It needs no AI (step 4).
 5. **The hot-client signal.** A client who opens a sent unit link 3 or more times in 48 hours is marked 🔥. The broker gets one alert ("أحمد فتح VIL-08 ٣ مرات") with a follow-up button. It uses the share-link opens that already exist (step 7).
-6. **No lead left without a next step.** After any contact, if the lead has no follow-up, AqarChat suggests one with one tap (default: in 2 days). The lead list's "no next step" filter shows the rest (step 8).
+6. **No lead left without a next step.** After any contact, if the lead has no follow-up, WehdatHub suggests one with one tap (default: in 2 days). The lead list's "no next step" filter shows the rest (step 8).
 
 ## UX review (dead ends, easier choices, data types and quantities)
 

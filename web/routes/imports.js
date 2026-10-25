@@ -156,7 +156,7 @@ function register(web, { pool, page }) {
     sheet.addRow(["HP-101", "Hyde Park", "شقة", "بيع", "8.5 مليون", 150, 3, 2, 4, "تشطيب كامل", "2027 Q3", "3 مليون", "5.5 مليون", 250000, "ربع سنوي", "بحري، ناصية", "التجمع الخامس", "متاحة", "", "", ""]);
     sheet.columns.forEach((c) => (c.width = 18));
     res.type("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.set("Content-Disposition", 'attachment; filename="aqarchat-inventory-template.xlsx"');
+    res.set("Content-Disposition", 'attachment; filename="wehdathub-inventory-template.xlsx"');
     return res.send(Buffer.from(await wb.xlsx.writeBuffer()));
   });
 

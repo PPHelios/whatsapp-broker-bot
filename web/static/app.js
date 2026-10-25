@@ -1,4 +1,4 @@
-// AqarChat web app client: CSRF header for htmx, offline banner, service worker (scope /app/).
+// WehdatHub web app client: CSRF header for htmx, offline banner, service worker (scope /app/).
 (function () {
   "use strict";
   var meta = document.querySelector('meta[name="csrf-token"]');

@@ -7,7 +7,7 @@ const MAX_BASE = 40;
 // First path segments the app owns; an agency can never take them.
 const RESERVED_SLUGS = [
   "app", "api", "auth", "login", "logout", "webhook", "health", "static", "assets", "public",
-  "admin", "s", "u", "www", "aqarchat", "about", "help", "terms", "privacy", "pricing", "blog", "docs",
+  "admin", "s", "u", "www", "aqarchat", "wehdathub", "about", "help", "terms", "privacy", "pricing", "blog", "docs",
   "robots", "favicon", "manifest", "sw", "share", "new"
 ];
 

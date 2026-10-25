@@ -1,7 +1,7 @@
-// AqarChat service worker (scope /app/). The version and asset list are filled in by web/assets.js.
+// WehdatHub service worker (scope /app/). The version and asset list are filled in by web/assets.js.
 "use strict";
 const VERSION = "__VERSION__";
-const CACHE = `aqarchat-${VERSION}`;
+const CACHE = `wehdathub-${VERSION}`;
 const ASSETS = __ASSETS__;
 const OFFLINE = "/app/offline";
 
@@ -13,7 +13,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith("aqarchat-") && k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => (k.startsWith("wehdathub-") || k.startsWith("aqarchat-")) && k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -43,7 +43,7 @@ self.addEventListener("push", (event) => {
   }
   const url = typeof data.url === "string" && data.url.startsWith("/app/") ? data.url : "/app/notifications";
   event.waitUntil(
-    self.registration.showNotification(data.title || "AqarChat", { body: data.body || "", data: { url }, icon: "/app/static/icons/icon-192.png", badge: "/app/static/icons/icon-192.png" })
+    self.registration.showNotification(data.title || "WehdatHub", { body: data.body || "", data: { url }, icon: "/app/static/icons/icon-192.png", badge: "/app/static/icons/icon-192.png" })
   );
 });
 

@@ -1,13 +1,13 @@
-# AqarChat website guide for brokers (short, English)
+# WehdatHub website guide for brokers (short, English)
 
 Send this to English-speaking brokers with the welcome message (`docs/pilot/broker-howto-en.md`). Arabic version: `docs/pilot/web-howto-ar.md`.
 
 ---
 
-🌐 *AqarChat website*: the same inventory as on WhatsApp, on a bigger screen.
+🌐 *WehdatHub website*: the same inventory as on WhatsApp, on a bigger screen.
 
 *🔐 Signing in*
-Send *login* to the AqarChat number on WhatsApp and you get a link. Open it and tap *Sign in*. You stay signed in for 30 days on that device.
+Send *login* to the WehdatHub number on WhatsApp and you get a link. Open it and tap *Sign in*. You stay signed in for 30 days on that device.
 • The link works once and for 15 minutes. Don't forward it.
 • On your phone: in the browser menu choose *Add to Home screen* so it works like an app.
 • *English / عربي* at the top switches the language of every page.

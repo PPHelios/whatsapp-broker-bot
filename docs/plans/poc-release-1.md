@@ -1,7 +1,7 @@
-# AqarChat POC: pre-build review and build plan
+# WehdatHub POC: pre-build review and build plan
 
 ## Context
-The business analysis (Claude Doc "AqarChat — Business Analysis", tabs v2–v7) settled the product. It is a WhatsApp front door, with a website (PWA) as the engine room, sold to agencies at 1,500–2,000 EGP a month. The pilot is one design-partner agency with 3–5 brokers.
+The business analysis (Claude Doc "WehdatHub — Business Analysis", tabs v2–v7) settled the product. It is a WhatsApp front door, with a website (PWA) as the engine room, sold to agencies at 1,500–2,000 EGP a month. The pilot is one design-partner agency with 3–5 brokers.
 
 Remediation Batches 1, 2a and 2b are done:
 - the PGlite harness and CI
@@ -30,7 +30,7 @@ The POC is delivered as **four releases**. **Release 1, the WhatsApp-only slice,
   - One service for WhatsApp and the web, text and voice. The same input gives the same results in the same order.
   - Arabic, English or mixed input maps to the same language-neutral filters.
 - **Web stack (Release 2):** Express + htmx + PWA, in the same app. Next.js comes later, for SEO sites only.
-- **URLs:** every link is built from `PUBLIC_BASE_URL`. Use `https://<service>.onrender.com` until the domain exists, then `www.aqarchat.com`. Public pages are `/<agency-slug>/<unit-code>?s=<share-token>`.
+- **URLs:** every link is built from `PUBLIC_BASE_URL`. Use `https://<service>.onrender.com` until the domain exists, then the real domain. Public pages are `/<agency-slug>/<unit-code>?s=<share-token>`.
 - **Hosting:** Render. Start on Starter ($7). Move to Standard ($25) if measured peak memory stays above about 400 MB.
 - **Gemini:** enable billing now, with a budget alert, for the eval runs. Billing is mandatory before the pilot.
 

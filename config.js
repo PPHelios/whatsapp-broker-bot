@@ -122,7 +122,7 @@ function loadConfig(env = process.env) {
     webPush: {
       publicKey: env.WEB_PUSH_PUBLIC_KEY || "",
       privateKey: env.WEB_PUSH_PRIVATE_KEY || "",
-      subject: env.WEB_PUSH_SUBJECT || "mailto:support@aqarchat.com"
+      subject: env.WEB_PUSH_SUBJECT || "mailto:support@wehdathub.com"
     },
     scheduler: {
       // On by default outside tests; tests call tick({ now }) with a fixed clock instead.

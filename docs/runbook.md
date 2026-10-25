@@ -1,4 +1,4 @@
-# AqarChat runbook (admin and deploy)
+# WehdatHub runbook (admin and deploy)
 
 One Node service on Render runs everything: the WhatsApp webhook, the broker web app (`/app/`) and the public unit pages (`/<agency-slug>/<unit-code>?s=<token>`). It talks to Postgres and Storage on Supabase, the WhatsApp Cloud API (Meta) and Gemini. Architecture details: `ARCHITECTURE_MANIFEST.md`; features: `FEATURE_REGISTRY.md`.
 
@@ -35,7 +35,7 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `WEBHOOK_ALLOW_UNSIGNED` | no | — | Local development only; ignored in production. |
 | `WEB_PUSH_PUBLIC_KEY` / `WEB_PUSH_PRIVATE_KEY` | yes | — | VAPID keys for website notifications (web push). Generate once: `node -e "console.log(require('web-push').generateVAPIDKeys())"`. Rotating them turns push off for every broker until they turn it on again in ⚙️ Settings. |
 | `LEAD_HASH_KEY` | yes | dev key outside production | Secret for the keyed hash (HMAC-SHA256) of an erased client's phone in `lead_erasures`, so a re-capture can say "this client asked to be deleted" without keeping the number. Generate once: `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`. Never rotate it casually: earlier erasures stop matching. |
-| `WEB_PUSH_SUBJECT` | no | `mailto:support@aqarchat.com` | Contact the push services see (a `mailto:` or `https:` URL). |
+| `WEB_PUSH_SUBJECT` | no | `mailto:support@wehdathub.com` | Contact the push services see (a `mailto:` or `https:` URL). |
 | `WA_CREDITS_MONTHLY` | no | `4000` | Message credits per agency per month (1 credit = 1 WhatsApp message the bot sends). An agency's own value in `agencies.wa_credits_monthly` wins. |
 | `WA_CREDITS_CEILING_PCT` | no | `110` | Hard ceiling as a % of the credits: past it a broker gets one notice a day, then read ticks only. |
 | `WA_GLOBAL_MONTHLY_CEILING` | no | `8000` | All agencies on our one number together, per month: reaching it is the ceiling for everyone. |
@@ -204,7 +204,7 @@ ORDER BY projected_pct DESC;
 * **Follow-up reminders:** the `follow_up_reminders` job (every minute) reminds brokers of due follow-ups and viewings and nudges once about new leads nobody contacted in 24 hours. Its last run: `SELECT last_started_at, last_status FROM crm_jobs WHERE name = 'follow_up_reminders';` A reminder that didn't come: `SELECT next_follow_up_at, follow_up_status, follow_up_reminded_at, assigned_broker_id FROM leads WHERE ref = <n> AND agency_id = '<id>';` (no assignee means no reminder; a stamped `follow_up_reminded_at` means it went to the inbox, held until quiet hours end if needed). To remind again, set the follow-up again.
 * **Client privacy (PDPL):** a client asks for their data: a manager opens the client on the website and taps 📦 Export (a zip; 10 an hour). A client asks to be deleted: a manager types the last 4 digits of the client's number under 🗑️ Erase; this cannot be undone, and deals keep only the unit and the money. The `privacy` job erases clients with no activity for 18 months (managers get a warning 30 days before) and clears stored WhatsApp payloads after 7 days. Its last run: `SELECT last_started_at, last_status FROM crm_jobs WHERE name = 'privacy';` Never clear `operation_logs`; it holds no client names or numbers.
 * **Importing a client list:** `/app/leads/import` (CSV or Excel, up to 2,000 rows; template at `/app/leads/import/template.xlsx`). The preview writes nothing; Import runs in the background, so the broker can leave the page. A stuck import: `SELECT id, status, result FROM web_imports WHERE kind = 'leads' ORDER BY created_at DESC LIMIT 5;` — a restart mid-way leaves it `processing` with `result.done` rows saved (each row is its own transaction, so nothing is half-written); the rest is re-imported by uploading the same file again (already-saved rows show as merges).
-* **Share target:** on Android, once the site is installed, WhatsApp's Share menu offers AqarChat; the shared text opens `/app/share` → the add-lead form (nothing is saved until the broker taps Save). The text travels in the URL (GET), so it can appear in the browser history of that phone.
+* **Share target:** on Android, once the site is installed, WhatsApp's Share menu offers WehdatHub; the shared text opens `/app/share` → the add-lead form (nothing is saved until the broker taps Save). The text travels in the URL (GET), so it can appear in the browser history of that phone.
 
 ## 7d. Switching to the backup number
 

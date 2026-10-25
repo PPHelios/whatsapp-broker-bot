@@ -148,7 +148,7 @@ function register(web, { pool, page }) {
     sheet.getColumn(3).numFmt = "@";
     sheet.columns.forEach((c) => (c.width = 20));
     res.type("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.set("Content-Disposition", 'attachment; filename="aqarchat-leads-template.xlsx"');
+    res.set("Content-Disposition", 'attachment; filename="wehdathub-leads-template.xlsx"');
     return res.send(Buffer.from(await wb.xlsx.writeBuffer()));
   });
 

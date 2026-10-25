@@ -176,7 +176,7 @@ ${rows.length
     return formPage(req, res, { values: req.query.text ? prefill(String(req.query.text).slice(0, 4000)) : {} });
   });
 
-  // Web share target (Android: "Share to AqarChat"): the shared text opens the add form, nothing is saved yet.
+  // Web share target (Android: "Share to WehdatHub"): the shared text opens the add form, nothing is saved yet.
   web.get("/share", (req, res) => {
     const text = [req.query.title, req.query.text, req.query.url].filter(Boolean).join("\n").slice(0, 4000);
     return formPage(req, res, { values: prefill(text), notice: L(langOf(req), "📥 الرسالة اللي شاركتها. راجع البيانات واحفظ.", "📥 The message you shared. Check the details and save.") });

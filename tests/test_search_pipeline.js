@@ -227,7 +227,7 @@ const TEST_SCENARIOS = [
 
 async function runPipelineTestSuite() {
   console.log("\n========================================================");
-  console.log("AQARCHAT AUTOMATED PIPELINE & BILINGUAL SEARCH TEST SUITE");
+  console.log("WEHDATHUB AUTOMATED PIPELINE & BILINGUAL SEARCH TEST SUITE");
   console.log("========================================================\n");
 
   let passed = 0;
