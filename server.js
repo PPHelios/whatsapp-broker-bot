@@ -12,6 +12,7 @@ const WA = require("./lib/whatsapp");
 const TG = require("./lib/telegram");
 const TgLink = require("./lib/tgLink");
 const TgIngress = require("./lib/tgIngress");
+const TapGuard = require("./lib/tapGuard");
 const U = require("./lib/util");
 const S = require("./lib/search");
 const AI = require("./lib/ai");
@@ -44,12 +45,13 @@ const { buildJobs } = require("./lib/jobs");
  * Builds the Express app and message pipeline around an injected pg-compatible pool.
  * Tests pass an in-process Postgres; production passes the lib/db.js pool (see bootstrap below).
  */
-function createApp({ pool, config = getConfig(), jobs }) {
+function createApp({ pool, config = getConfig(), jobs, tapGuard = TapGuard.createTapGuard() }) {
   const APP_SECRET = config.whatsapp.appSecret;
   const VERIFY_TOKEN = config.whatsapp.verifyToken;
 
   // Drain Protocol State (Distributed Multi-Pod Invariant)
   const state = { inFlight: 0, isDraining: false };
+  // tapGuard drops repeated button taps (double taps, re-taps while a slow review runs): lib/tapGuard.js.
 
   const app = express();
 
@@ -436,8 +438,23 @@ function createApp({ pool, config = getConfig(), jobs }) {
   async function handleTelegramUpdate(update) {
     const norm = TgIngress.normalize(update);
     if (!norm) return;
-    if (norm.callbackId) TG.answerCallback(norm.callbackId).catch(() => {});
+    // A tap's spinner is stopped once we know whether the tap runs (a dropped tap gets a short toast instead).
+    let answered = !norm.callbackId;
+    const answer = (text = "") => {
+      if (answered) return;
+      answered = true;
+      TG.answerCallback(norm.callbackId, text).catch(() => {});
+    };
+    let tap = null;
+    try {
+      await telegramTurn(norm, answer, (t) => (tap = t));
+    } finally {
+      answer();
+      tap?.release();
+    }
+  }
 
+  async function telegramTurn(norm, answer, holdTap) {
     let broker = await TgLink.findBroker(pool, norm.ids.userId);
     let message = norm.message || null;
     if (!broker) {
@@ -450,6 +467,9 @@ function createApp({ pool, config = getConfig(), jobs }) {
     } else if (norm.callbackId) {
       const id = await TgLink.decodeCallback(pool, norm.data);
       if (!id) return;
+      const tap = tapGuard.claim(broker.id, id);
+      if (!tap.ok) return answer(TapGuard.toast(tap.reason, broker.preferred_lang));
+      holdTap(tap);
       message = TgIngress.buttonMessage(norm, id);
       // "More" is used once: its button leaves the earlier results (the next page comes as a new message).
       if (norm.messageId && (id === "MORE_SEARCH" || id.startsWith("search_more:"))) {
@@ -461,6 +481,7 @@ function createApp({ pool, config = getConfig(), jobs }) {
       await pool.query("UPDATE brokers SET telegram_chat_id = $2 WHERE id = $1", [broker.id, norm.ids.chatId]);
     }
     broker = { ...broker, channel: "telegram", telegram_chat_id: norm.ids.chatId };
+    answer();
     TG.sendTyping(norm.ids.chatId).catch(() => {});
     await runTurn(broker, message, `tg:${norm.ids.userId}`);
   }
@@ -544,6 +565,7 @@ function createApp({ pool, config = getConfig(), jobs }) {
     WA.markAsRead(message.id, { typing: true }).catch(() => {});
 
     state.inFlight++;
+    let tap = null;
     try {
       // 2. Webhook Deduplication via inbound_messages (SEC-03)
       if (message.id) {
@@ -582,6 +604,16 @@ function createApp({ pool, config = getConfig(), jobs }) {
       }
 
       const broker = brokers[0];
+      // A repeated button tap is recorded and dropped (WhatsApp has no toast to show).
+      const tapId = TapGuard.tapId(message);
+      if (tapId) {
+        tap = tapGuard.claim(broker.id, tapId);
+        if (!tap.ok) {
+          tap = null;
+          if (message.id) await pool.query("UPDATE inbound_messages SET status = 'ignored', updated_at = NOW() WHERE msg_id = $1", [message.id]).catch(() => {});
+          return;
+        }
+      }
       const ctx = await buildTurnContext(broker);
 
       // 5. Execute turn inside the Symmetrical Zero-Silent-Drop boundary
@@ -611,6 +643,7 @@ function createApp({ pool, config = getConfig(), jobs }) {
           .catch(() => {});
       }
     } finally {
+      tap?.release();
       state.inFlight--;
     }
   }

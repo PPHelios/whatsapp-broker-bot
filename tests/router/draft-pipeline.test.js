@@ -5,7 +5,7 @@ jest.mock("../../lib/whatsapp", () => require("../harness/fake-whatsapp"));
 jest.mock("../../lib/ai", () => require("../harness/fake-ai"));
 jest.mock("../../lib/supabase", () => require("../harness/fake-supabase"));
 
-const { createHarness, closeHarness, textOf, FALLBACK_AR } = require("../harness/app");
+const { createHarness, closeHarness, textOf, FALLBACK_AR, settle } = require("../harness/app");
 
 jest.setTimeout(30000);
 
@@ -51,7 +51,8 @@ describe("P13: the review card flags a unit already listed", () => {
     await h.text("broker", "اضافة");
     await h.text("broker", "شقة في ميفيدا 200 متر 3 غرف 10 مليون");
     answerExtraction(extraction());
-    const review = await h.text("broker", "تم");
+    const [working, ...review] = await h.text("broker", "تم");
+    expect(working.text).toMatch(/بنراجع بيانات الوحدة/); // the working-on-it line, then the one card
     expect(review).toHaveLength(1);
     expect(textOf(review)).toMatch(/شكلها نفس الوحدة MV-OLD[\s\S]*\/app\/units\/MV-OLD/);
     expect(review[0].buttons.find((b) => b.id === "draft_confirm").title).toBe("احفظ برضه ✅");
@@ -219,6 +220,35 @@ describe("Only the staged review is committed (A2)", () => {
     });
     expect(await listings()).toHaveLength(1);
     expect(textOf(second)).toMatch(/انتهت صلاحية|مسبقاً/);
+  });
+
+  test("taps in quick succession: the repeat is dropped silently and recorded as ignored", async () => {
+    await h.text("broker", "اضافة");
+    await h.text("broker", "شقة");
+    answerExtraction(extraction({ resale: {} }));
+    await h.text("broker", "تم");
+    await h.tap("broker", "draft_confirm", "تأكيد");
+    h.sameMoment();
+    const second = await h.tap("broker", "draft_confirm", "تأكيد");
+    expect(second).toEqual([]);
+    expect(await listings()).toHaveLength(1);
+    const statuses = (await h.query("SELECT status FROM inbound_messages ORDER BY received_at")).map((r) => r.status);
+    expect(statuses.filter((x) => x === "ignored")).toHaveLength(1);
+  });
+
+  test("two taps at once (the second arrives while the first runs): only the first runs", async () => {
+    await h.text("broker", "اضافة");
+    await h.text("broker", "شقة");
+    answerExtraction(extraction({ resale: {} }));
+    await h.text("broker", "تم");
+    const tap = () =>
+      h.app.handleWebhookBody({
+        entry: [{ changes: [{ value: { messages: [{ from: h.BROKERS.broker.phone, id: `wamid.dbl.${Math.random()}`, timestamp: "1", type: "interactive", interactive: { type: "button_reply", button_reply: { id: "draft_confirm", title: "x" } } }] } }] }]
+      });
+    await Promise.all([tap(), tap()]);
+    await settle();
+    expect(await listings()).toHaveLength(1);
+    expect((await h.query("SELECT count(*)::int AS n FROM inbound_messages WHERE status = 'ignored'"))[0].n).toBe(1);
   });
 });
 

@@ -376,6 +376,63 @@ describe("free messages (step 5)", () => {
   });
 });
 
+describe("repeated taps and slow steps", () => {
+  const fields = {
+    code: null, listing_type: "sale", market: "resale", property_type: "apartment", compound: "ميفيدا", compound_en: "Mivida",
+    area_value: 200, bedrooms: 3, bathrooms: null, price_value: 10000000,
+    delivery: { ready: null, year: null, quarter: null, month: null, raw: null }, features: [], features_other: [],
+    resale: { cash_paid: 10000000 }, primary: {}
+  };
+  const startDraft = async () => {
+    await h.tgLink("broker");
+    h.AI.respond((call) => (call.operation === "listing_extraction" ? fields : { intent: "search", filters: {}, locations: [], location_terms: [] }));
+    await h.tgText("broker", "اضافة");
+    await h.tgText("broker", "شقة في ميفيدا");
+  };
+
+  test("Review sends a working-on-it line first, then the review card, then deletes the line", async () => {
+    await startDraft();
+    const start = h.TG.outbox.length;
+    await h.tgText("broker", "تم");
+    const calls = h.TG.outbox.slice(start).filter((e) => e.method !== "sendChatAction");
+    const working = calls.findIndex((e) => e.method === "sendMessage" && /بنراجع بيانات الوحدة/.test(e.text || ""));
+    const card = calls.findIndex((e) => e.method === "sendMessage" && e.keyboard && /ميفيدا|Mivida/.test(e.text || ""));
+    const del = calls.findIndex((e) => e.method === "deleteMessage");
+    expect(working).toBeGreaterThanOrEqual(0);
+    expect(card).toBeGreaterThan(working);
+    expect(del).toBeGreaterThan(card);
+    expect(calls[del].params.message_id).toBeDefined();
+  });
+
+  test("the same button tapped again right away gets a toast and runs once", async () => {
+    await startDraft();
+    await h.tgText("broker", "تم");
+    const start = h.TG.outbox.length;
+    await h.tgTap("broker", "draft_confirm");
+    h.sameMoment();
+    const again = await h.tgTap("broker", "draft_confirm");
+    expect(again).toEqual([]);
+    const toasts = h.TG.outbox.slice(start).filter((e) => e.method === "answerCallbackQuery");
+    expect(toasts.map((e) => e.text)).toEqual(["", "✅ وصلت، مش محتاج تضغط تاني"]);
+    expect(await h.query("SELECT id FROM listings")).toHaveLength(1);
+  });
+
+  test("WhatsApp brokers get the working-on-it line before the card too, without using message credits", async () => {
+    h.AI.respond((call) => (call.operation === "listing_extraction" ? fields : { intent: "search", filters: {}, locations: [], location_terms: [] }));
+    await h.text("broker", "اضافة");
+    await h.text("broker", "شقة في ميفيدا");
+    const out = await h.text("broker", "تم");
+    const working = out.findIndex((r) => /بنراجع بيانات الوحدة/.test(r.text || ""));
+    const card = out.findIndex((r) => /ميفيدا|Mivida/.test(r.text || "") && (r.buttons || []).length);
+    expect(working).toBeGreaterThanOrEqual(0);
+    expect(card).toBeGreaterThan(working);
+    expect(h.TG.outbox).toEqual([]);
+    const logs = await h.query("SELECT operation_type, metadata FROM operation_logs WHERE operation_type = 'wa_progress'");
+    expect(logs).toHaveLength(1);
+    expect(logs[0].metadata.egp).toBeUndefined();
+  });
+});
+
 describe("onboarding and cleanup (step 6)", () => {
   test("start links for every active broker of the agency, each usable once", async () => {
     expect(await TgLink.startLinksForAgency(h.pool, h.AGENCY_A, "")).toEqual([]);
