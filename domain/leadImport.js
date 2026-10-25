@@ -17,7 +17,8 @@ const COLUMNS = [
   ["property_type", /^(property type|unit type|property|نوع العقار|نوع الوحده|العقار)$/],
   ["kind", /^(type|lead type|client type|kind|type of lead|category|النوع|نوع|نوع العميل|تصنيف العميل)$/],
   ["listing_type", /^(sale or rent|sale rent|purpose|for|buy or rent|بيع او ايجار|بيع ايجار|شراء او ايجار|الغرض)$/],
-  ["source", /^(source|lead source|channel|المصدر|مصدر|مصدر العميل|جه منين)$/],
+  // A Meta Leads Center export names the campaign ("campaign_name"); it is the closest thing to a source there.
+  ["source", /^(source|lead source|channel|campaign|campaign name|المصدر|مصدر|مصدر العميل|جه منين|الحمله)$/],
   ["budget", /^(budget|price|max price|budget egp|الميزانيه|ميزانيه|السعر|الميزانيه بالجنيه)$/],
   ["location", /^(area|location|compound|project|area or compound|district|city|المنطقه|منطقه|المكان|الكمبوند|كمبوند|المشروع|المنطقه او الكمبوند)$/],
   ["bedrooms", /^(bedrooms|beds|rooms|غرف|الغرف|عدد الغرف|اوض|عدد الاوض)$/],
@@ -109,7 +110,8 @@ function phonesIn(v) {
   const phones = [];
   const bad = [];
   for (const p of parts) {
-    const e164 = Phone.toE164(p);
+    // Meta's Leads Center export writes numbers as "p:+2010…".
+    const e164 = Phone.toE164(String(p).replace(/^\s*p:/i, ""));
     if (e164) {
       if (!phones.includes(e164)) phones.push(e164);
     } else bad.push(String(p).trim().slice(0, 30));

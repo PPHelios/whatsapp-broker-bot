@@ -9,7 +9,7 @@ Send this after the welcome message (`docs/pilot/broker-howto-en.md`) and the we
 *➕ Saving a client*
 • *Forward* the client's WhatsApp message to the bot, or share their *contact card*: tap *➕ Save as client*.
 • Type *lead Sara 0101 234 5678 wants a 3-bed in New Cairo*, or say it in a voice note.
-• Many clients at once: website → *Clients* → *Import* (CSV or Excel, template on the page).
+• Many clients at once: website → *Clients* → *Import* (CSV or Excel, template on the page). A Facebook/Instagram Leads Center download loads as it is.
 • A number that is already saved opens the existing client instead of a copy. A colleague's client: you are told and your manager is informed.
 
 *📞 Who is calling?*
