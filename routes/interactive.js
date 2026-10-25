@@ -21,6 +21,7 @@ const { quickSections } = require("../lib/buttons");
 const { t } = require("../lib/copy");
 const LeadIntake = require("../lib/leadIntake");
 const DealsWA = require("../lib/deals");
+const Describe = require("../domain/describe");
 
 /**
  * Non-blocking operational telemetry logging helper.
@@ -541,6 +542,21 @@ async function handleInteractive(broker, message, ctx) {
   if (replyId.startsWith("qu_menu:")) {
     const code = T.extractCleanCode(replyId.split(":")[1]);
     await replyList(broker, t("quick_menu", lang, { code }), lang === "en" ? "Choose" : "اختار", quickSections(code, lang));
+    return "done";
+  }
+  // "Still available?" (services/unitChecks.js): the broker's units waiting for an answer, each opening the quick menu.
+  if (replyId === "uc:review") {
+    const units = await require("../services/unitChecks").pendingFor(pool, broker);
+    if (!units.length) {
+      await reply(broker, lang === "en" ? "✅ Nothing left to confirm." : "✅ مفيش وحدات محتاجة تأكيد.");
+      return "done";
+    }
+    await replyList(broker, lang === "en" ? "🤔 Pick a unit to confirm, sell or archive:" : "🤔 اختار وحدة تأكدها أو تعلّمها اتباعت أو تأرشفها:", lang === "en" ? "Units" : "الوحدات", [
+      {
+        title: lang === "en" ? "Units" : "الوحدات",
+        rows: units.map((u) => ({ id: `qu_menu:${u.code}`, title: String(u.code).slice(0, 24), description: Describe.compactLine(u, lang).slice(0, 72) }))
+      }
+    ]);
     return "done";
   }
   if (replyId.startsWith("qu:")) {

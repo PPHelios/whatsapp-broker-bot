@@ -187,10 +187,10 @@ test("the 24-hour nudge: once, only for new leads nobody contacted, never for ol
   expect(n).toEqual({ title: "⏰ Quiet (L-0001) لسه محدش كلمه من 24 ساعة", lead_id: untouched.id });
 });
 
-test("the reminder job runs both, and the 'no next step' filter lists leads without an open follow-up", async () => {
+test("the reminder job runs all three, and the 'no next step' filter lists leads without an open follow-up", async () => {
   const job = Reminders.reminderJob();
   expect(job).toMatchObject({ name: "follow_up_reminders", everyMs: 60000 });
-  expect((await job.run({ pool: h.pool, now: new Date() })).counts).toEqual({ reminded: 0, nudged: 0, brokers: 0 });
+  expect((await job.run({ pool: h.pool, now: new Date() })).counts).toEqual({ reminded: 0, nudged: 0, interest: 0, brokers: 0 });
   expect(require("../../lib/jobs").buildJobs().map((j) => j.name)).toContain("follow_up_reminders");
 
   const planned = await lead("broker", "01012345678", "Planned");
