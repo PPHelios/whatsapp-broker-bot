@@ -174,7 +174,8 @@ CREATE TABLE IF NOT EXISTS public.agencies (
   flyer_theme text DEFAULT 'dark'::text NOT NULL,
   phone text,
   updated_at timestamp with time zone DEFAULT now(),
-  slug text NOT NULL
+  slug text NOT NULL,
+  crm_settings jsonb DEFAULT '{}'::jsonb NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.brokers (
@@ -472,12 +473,23 @@ CREATE TABLE IF NOT EXISTS public.share_links (
   last_alert_at timestamp with time zone
 );
 
+CREATE TABLE IF NOT EXISTS public.crm_jobs (
+  name text NOT NULL,
+  last_started_at timestamp with time zone,
+  last_finished_at timestamp with time zone,
+  last_status text,
+  last_error text,
+  watermark jsonb DEFAULT '{}'::jsonb NOT NULL,
+  run_count integer DEFAULT 0 NOT NULL
+);
+
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (id);
 ALTER TABLE broker_search_state ADD CONSTRAINT broker_search_state_pkey PRIMARY KEY (phone_key);
 ALTER TABLE broker_sessions ADD CONSTRAINT broker_sessions_pkey PRIMARY KEY (broker_id, session_type);
 ALTER TABLE brokers ADD CONSTRAINT brokers_pkey PRIMARY KEY (id);
 ALTER TABLE compound_synonyms ADD CONSTRAINT compound_synonyms_pkey PRIMARY KEY (kind, key, synonym);
+ALTER TABLE crm_jobs ADD CONSTRAINT crm_jobs_pkey PRIMARY KEY (name);
 ALTER TABLE inbound_messages ADD CONSTRAINT inbound_messages_pkey PRIMARY KEY (msg_id);
 ALTER TABLE listing_drafts ADD CONSTRAINT listing_drafts_pkey PRIMARY KEY (broker_id);
 ALTER TABLE listing_images ADD CONSTRAINT listing_images_pkey PRIMARY KEY (id);
@@ -502,6 +514,7 @@ ALTER TABLE projects ADD CONSTRAINT uq_agency_project_name UNIQUE (agency_id, na
 ALTER TABLE agencies ADD CONSTRAINT agencies_slug_format CHECK (((slug ~ '^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$'::text) AND (NOT (slug = ANY (ARRAY['app'::text, 'api'::text, 'auth'::text, 'login'::text, 'logout'::text, 'webhook'::text, 'health'::text, 'static'::text, 'assets'::text, 'public'::text, 'admin'::text, 's'::text, 'u'::text, 'www'::text, 'aqarchat'::text, 'about'::text, 'help'::text, 'terms'::text, 'privacy'::text, 'pricing'::text, 'blog'::text, 'docs'::text, 'robots'::text, 'favicon'::text, 'manifest'::text, 'sw'::text, 'share'::text, 'new'::text])))));
 ALTER TABLE brokers ADD CONSTRAINT brokers_role_check CHECK ((role = ANY (ARRAY['broker'::text, 'agent'::text, 'admin'::text, 'owner'::text, 'manager'::text])));
 ALTER TABLE compound_synonyms ADD CONSTRAINT compound_synonyms_kind_check CHECK ((kind = ANY (ARRAY['compound'::text, 'developer'::text, 'area'::text])));
+ALTER TABLE crm_jobs ADD CONSTRAINT crm_jobs_last_status_check CHECK ((last_status = ANY (ARRAY['running'::text, 'success'::text, 'failed'::text])));
 ALTER TABLE listings ADD CONSTRAINT listings_delivery_month_check CHECK (((delivery_month >= 1) AND (delivery_month <= 12)));
 ALTER TABLE listings ADD CONSTRAINT listings_delivery_quarter_check CHECK (((delivery_quarter >= 1) AND (delivery_quarter <= 4)));
 ALTER TABLE listings ADD CONSTRAINT listings_furnishing_check CHECK ((furnishing = ANY (ARRAY['furnished'::text, 'semi_furnished'::text, 'unfurnished'::text])));

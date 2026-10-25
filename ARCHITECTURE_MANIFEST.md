@@ -28,6 +28,7 @@
   | `008_web_imports.sql` | `web_imports`: Excel and group import plans between preview and apply (1 day) |
   | `009_share_links.sql` | `share_links`: client links to public unit pages (token hash, who shared, opens, last alert) |
   | `010_lock_public_api.sql` | closes Supabase's Data API over `public`: RLS on every table (no policies, deny by default), `anon`/`authenticated` lose all grants now and by default for later tables, `agency_outbound_daily` becomes `security_invoker`. The app is unaffected: it connects as the table owner and uses the service role for Storage |
+  | `011_crm_settings.sql` | `agencies.crm_settings` (per-agency CRM options: privacy note, quiet hours) and `crm_jobs` (one row per scheduler job: last start/finish, status, error, watermark, run count) |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
 * **Graceful Termination & Drain Protocol:** On `SIGTERM` or `SIGINT`, the service enters a draining state:
@@ -211,6 +212,7 @@ Target layering: **`routes` → `lib/registry.js` → `services` (return data) �
 | `searchText.js` | **The one normalizer** `normalizeSearch` and its SQL twin `NORMALIZE_SEARCH_SQL` (`public.normalize_search`), which must agree byte for byte (D2). |
 | `searchQuery.js` | Request → **language-neutral filters**: `emptyFilters`, `normalizeAiSearch` (AI JSON, current and earlier shapes), `fallbackParse` (local regex parser), `canonical` (sorted, de-duplicated), `classifyIntent` (B2: only a request with a filter is a search), `hasAnyFilter`, `normalizeCode` (same folding as `code_norm`). |
 | `vocabulary.js` | Property-type words (`TYPE_TERMS`) and `seedVocabulary(client)`, which writes `search_vocabulary` and `compound_synonyms` from the dictionaries. |
+| `phone.js` | **The one phone rule** (P1): `normalizePhone` (Arabic/Persian digits, spaces, dashes, `+`, `00`, WhatsApp ids, Egyptian national forms, a mobile without its 0 → international digits `2010xxxxxxxx`, or null), `isEgyptMobile`, `isLandline`, `isForeign`, `toE164`, `displayPhone` (Latin digits), `waMeUrl` (null for landlines), `telUrl`, `last4`. `lib/util.js` `normalizePhone` and `lib/onboarding.js` `normalizeEgyptMobile` delegate to it. |
 
 #### B. `services/search.js` (the one search service; returns data)
 * `search({ pool, AI, agencyId, text, ctx })`: `parseRequest` (AI route `search_parse`, local parser on any failure) → intent guard → `runSearch`. Returns `{ status: results|none|small_talk|listing, parsed, source, rows, ids, total, relaxed, timings }`.
@@ -234,6 +236,12 @@ Target layering: **`routes` → `lib/registry.js` → `services` (return data) �
 #### E. Onboarding & hosting
 * **`lib/onboarding.js` + `scripts/onboard.js`** (`npm run onboard -- <agency.json> [--dry-run]`): validates the file (agency name, optional `slug`, `#RRGGBB` colours, `dark|light` theme, https logo; Egyptian mobiles; roles broker/agent/admin/owner/manager; at least one manager role), then in one transaction creates or updates the agency (matched by name) and its brokers (matched by phone). A phone registered with another agency (or a slug used by another agency, `SLUG_TAKEN`) is an error, never a silent move. It prints the agency slug and the web app address. Example: `docs/pilot/agency.example.json`; broker how-to: `docs/pilot/broker-howto-ar.md`.
 * **`render.yaml`:** one Render web service (Starter, Frankfurt), `npm ci --omit=dev`, `npm start`, health check `/health`, `NODE_ENV=production`, Node 22, `MALLOC_ARENA_MAX=2`. Secrets (`PUBLIC_BASE_URL`, `DATABASE_URL`, WhatsApp, Gemini, Supabase) are set in the dashboard (`sync: false`). Move to Standard if measured peak memory stays above about 400 MB.
+
+#### E2. Scheduler (`lib/scheduler.js`, Release 3)
+* `createApp` builds `scheduler = createScheduler({ pool, jobs: buildJobs(...) })` (`lib/jobs.js` holds the job list) and returns it. `start()` begins ticking after the port binds; drain calls `scheduler.stop()` first. Config: `SCHEDULER_ENABLED` (on outside tests), `SCHEDULER_TICK_MS` (60 s, at least 5 s).
+* A job is `{ name, everyMs, run({ pool, now, watermark, log }) → { counts, watermark } }`. Every instance ticks; a job runs on one: the claim is a short transaction with `pg_try_advisory_xact_lock(<job key>)` that checks the `crm_jobs` row (due after `everyMs`, not already `running`) and stamps `last_started_at` before the job starts. A `running` row older than 10 minutes (crashed instance) can be claimed again.
+* Outcome, error text and the new watermark go to `crm_jobs`; one `crm_job_<name>` `operation_logs` row per run carries counts only (never personal data, P3). A failing job doesn't stop the others.
+* Jobs work from their watermark, so an instance that slept (Render Free) catches up once on waking: late, never twice, never skipped. Tests call `tick({ now })` with a fixed clock.
 
 #### F. Web app (`web/`, Release 2)
 * **Same app, same pool:** `server.js` calls `mountWeb(app, { pool, config })` after `/webhook` and `/health`. The broker web app lives under **`/app/`**; the root holds only `robots.txt` (`Disallow: /app/`) and, from step 7, the public unit pages. Next.js is reserved for future SEO sites.

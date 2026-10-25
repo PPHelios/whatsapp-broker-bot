@@ -572,6 +572,26 @@
     },
     "web/routes/publicUnit.js": {
       "mountPublic": ["app", "params"]
+    },
+    "lib/jobs.js": {
+      "buildJobs": ["_deps"]
+    },
+    "lib/scheduler.js": {
+      "createScheduler": ["params"],
+      "lockKey": ["name"],
+      "STALE_RUNNING_MS": "Number"
+    },
+    "domain/phone.js": {
+      "toAsciiDigits": ["s"],
+      "normalizePhone": ["raw"],
+      "isEgyptMobile": ["d"],
+      "isLandline": ["d"],
+      "isForeign": ["d"],
+      "toE164": ["raw"],
+      "displayPhone": ["raw"],
+      "waMeUrl": ["raw", "text"],
+      "telUrl": ["raw"],
+      "last4": ["raw"]
     }
   },
   "invariant_variable_names": {

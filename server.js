@@ -23,12 +23,14 @@ const { handleImage, handleAudio } = require("./routes/media");
 const { handleDocument } = require("./routes/documents");
 const { handleInteractive } = require("./routes/interactive");
 const { mountWeb } = require("./web");
+const { createScheduler } = require("./lib/scheduler");
+const { buildJobs } = require("./lib/jobs");
 
 /**
  * Builds the Express app and message pipeline around an injected pg-compatible pool.
  * Tests pass an in-process Postgres; production passes the lib/db.js pool (see bootstrap below).
  */
-function createApp({ pool, config = getConfig() }) {
+function createApp({ pool, config = getConfig(), jobs }) {
   const APP_SECRET = config.whatsapp.appSecret;
   const VERIFY_TOKEN = config.whatsapp.verifyToken;
 
@@ -536,9 +538,18 @@ function createApp({ pool, config = getConfig() }) {
     }
   }
 
+  // Background jobs (follow-ups, match sweeps, retention…): one tick a minute, each job on one instance.
+  const scheduler = createScheduler({
+    pool,
+    jobs: jobs || buildJobs({ pool, config }),
+    tickMs: config.scheduler.tickMs,
+    enabled: config.scheduler.enabled
+  });
+
   return {
     app,
     state,
+    scheduler,
     handleWebhookBody,
     handleInboundMessage,
     dispatchMessage,
@@ -560,7 +571,7 @@ async function start() {
     if (applied.length) console.log(`[MIGRATE] ${applied.length} migration(s) applied`);
   }
 
-  const { app, state, bootRecovery, preWarmAssets } = createApp({ pool, config });
+  const { app, state, scheduler, bootRecovery, preWarmAssets } = createApp({ pool, config });
 
   // Start Server & Bind Port Immediately for Render Health Probes
   const server = app.listen(config.port, () => {
@@ -569,6 +580,8 @@ async function start() {
     );
     preWarmAssets();
     bootRecovery();
+    // After the port binds, so health probes never wait on it.
+    if (scheduler.start()) console.log(`⏱️ Scheduler on (${scheduler.jobs.length} jobs)`);
   });
 
   /**
@@ -577,6 +590,8 @@ async function start() {
   async function gracefulShutdown(signal) {
     console.log(`Received ${signal}. Initiating Render drain protocol...`);
     state.isDraining = true;
+    // The scheduler stops first: no new job starts while the instance drains.
+    scheduler.stop().catch(() => {});
 
     server.close(() => {
       console.log("HTTP server closed to new connections.");

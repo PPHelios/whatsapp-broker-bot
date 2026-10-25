@@ -85,6 +85,11 @@ function loadConfig(env = process.env) {
       maxQueue: int(env.FLYER_MAX_QUEUE, 6),
       timeoutMs: int(env.FLYER_TIMEOUT_MS, 45000)
     },
+    scheduler: {
+      // On by default outside tests; tests call tick({ now }) with a fixed clock instead.
+      enabled: env.SCHEDULER_ENABLED ? env.SCHEDULER_ENABLED !== "false" : env.NODE_ENV !== "test",
+      tickMs: Math.max(5000, int(env.SCHEDULER_TICK_MS, 60000))
+    },
     ai: {
       prices: parsePrices(env.AI_PRICES_JSON),
       quotas: {

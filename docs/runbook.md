@@ -29,6 +29,8 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `FLYER_WORKER` / `FLYER_MAX_QUEUE` / `FLYER_TIMEOUT_MS` | no | on / `6` / `45000` | Flyer rendering worker thread. |
 | `SLOW_QUERY_MS` | no | `1000` | Slow-query log threshold. |
 | `WEBHOOK_ALLOW_UNSIGNED` | no | — | Local development only; ignored in production. |
+| `SCHEDULER_ENABLED` | no | `true` (off under tests) | Background jobs (follow-ups, match alerts, retention). `false` stops them on this instance. |
+| `SCHEDULER_TICK_MS` | no | `60000` | How often each instance looks for due jobs (at least 5000). Each job still runs on one instance at a time. |
 
 ## 2. Render
 
@@ -45,6 +47,14 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 * A failed migration stops the start (`Migration 00X_… failed: …`) and rolls back that file only; fix it, deploy again.
 * Adding one: new file with the next number, never edit an applied one, keep it idempotent where SQL allows (`IF NOT EXISTS`), run `npm run schema:reference` and commit `SCHEMA_REFERENCE.sql` (a test fails otherwise). There is no automatic down-migration: undo with a new forward migration.
 * Release 2 added `005_agency_slug` … `009_share_links` (slugs, web sign-in and sessions, rate limits, saved searches, imports, share links).
+* Release 3 starts with `010_lock_public_api` (Supabase's Data API locked out: RLS on every table, no grants for `anon`/`authenticated`; **every new table must `ENABLE ROW LEVEL SECURITY`**, a test fails otherwise) and `011_crm_settings` (`agencies.crm_settings`, `crm_jobs`).
+
+## 3b. Scheduler
+
+* Every instance ticks once a minute; each job runs on one instance (advisory lock + the `crm_jobs` row). On Render Free the service sleeps when idle: jobs catch up once when it wakes.
+* State: `SELECT name, last_started_at, last_finished_at, last_status, last_error, run_count FROM crm_jobs ORDER BY name;`
+* History: `SELECT operation_type, status, metadata, created_at FROM operation_logs WHERE operation_type LIKE 'crm_job_%' ORDER BY created_at DESC LIMIT 50;`
+* Run a job again now: `UPDATE crm_jobs SET last_started_at = NULL, last_status = NULL WHERE name = '<job>';` (it runs on the next tick).
 
 ## 4. Onboarding an agency
 
