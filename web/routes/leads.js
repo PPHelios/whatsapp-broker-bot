@@ -290,7 +290,8 @@ ${V.leadHeader(lead, lang)}
     <label>${L(lang, "ملاحظة", "Note")}<input name="note" maxlength="300" value="${lead.follow_up_status === "open" ? lead.follow_up_note || "" : ""}"></label>
     <button type="submit">${L(lang, "حفظ المتابعة", "Save follow-up")}</button>
   </form>
-  ${lead.follow_up_status === "open" ? html`<form method="post" action="${path}/follow-up/done">${hidden}<button type="submit" class="secondary">✔️ ${L(lang, "المتابعة خلصت", "Follow-up done")}</button></form>` : ""}
+  ${lead.follow_up_status === "open" ? html`<form method="post" action="${path}/follow-up/done">${hidden}<button type="submit" class="secondary">✔️ ${L(lang, "المتابعة خلصت", "Follow-up done")}</button></form>
+  <form method="post" action="${path}/follow-up/postpone">${hidden}<button type="submit" class="secondary">📅 ${L(lang, "أجّل يوم", "Postpone a day")}</button></form>` : ""}
 </section>
 <section class="card" id="note"><h2>📝 ${L(lang, "ملاحظة", "Note")}</h2>
   <form method="post" action="${path}/note" class="stack">${hidden}<textarea name="text" rows="2" maxlength="1000" required></textarea><button type="submit" class="secondary">${L(lang, "إضافة", "Add")}</button></form>
@@ -407,6 +408,7 @@ ${V.bottomBar(lead, lang, broker.name)}`
     "follow_up"
   );
   write("follow-up/done", (req, lead, version) => Leads.completeFollowUp(pool, actor(req), lead.id, { version }), "follow_up_done");
+  write("follow-up/postpone", (req, lead, version) => Leads.postponeFollowUp(pool, actor(req), lead.id, { days: 1, version }), "follow_up");
   write("note", (req, lead, version) => Leads.addNote(pool, actor(req), lead.id, req.body.text, { version }), "note");
   write("contacted", (req, lead, version) => Leads.markContacted(pool, actor(req), lead.id, { version }), "contacted");
   write("assign", (req, lead, version) => Leads.assignLead(pool, actor(req), lead.id, req.body.broker || null, { version }), "assigned");

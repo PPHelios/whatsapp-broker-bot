@@ -575,7 +575,9 @@ CREATE TABLE IF NOT EXISTS public.leads (
   last_activity_at timestamp with time zone DEFAULT now() NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
-  version integer DEFAULT 1 NOT NULL
+  version integer DEFAULT 1 NOT NULL,
+  follow_up_reminded_at timestamp with time zone,
+  nudged_at timestamp with time zone
 );
 
 CREATE TABLE IF NOT EXISTS public.lead_events (
@@ -743,6 +745,7 @@ CREATE INDEX idx_lead_matches_listing ON public.lead_matches USING btree (agency
 CREATE INDEX idx_leads_assigned ON public.leads USING btree (agency_id, assigned_broker_id, last_activity_at DESC);
 CREATE INDEX idx_leads_follow_up ON public.leads USING btree (next_follow_up_at) WHERE (follow_up_status = 'open'::text);
 CREATE INDEX idx_leads_phones ON public.leads USING gin (phones);
+CREATE INDEX idx_leads_untouched ON public.leads USING btree (created_at) WHERE ((stage = 'new'::text) AND (last_contact_at IS NULL) AND (nudged_at IS NULL));
 CREATE INDEX idx_listing_drafts_updated ON public.listing_drafts USING btree (updated_at);
 CREATE INDEX listing_images_agency_idx ON public.listing_images USING btree (agency_id);
 CREATE INDEX listing_images_listing_idx ON public.listing_images USING btree (listing_id, "position");

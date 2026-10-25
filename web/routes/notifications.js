@@ -4,6 +4,7 @@
 const Notifications = require("../../lib/notifications");
 const { MANAGER_ROLES } = require("../../lib/authz");
 const { html } = require("../html");
+const { refLabel } = require("../../domain/leadCard");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
@@ -47,6 +48,12 @@ ${rows.length
       (r) => html`<li class="card${r.read_at ? "" : " unread"}" data-notification="${r.id}">
   <strong>${r.title}</strong>${r.body ? html`<div class="pre">${r.body}</div>` : ""}
   <div class="muted">${when(r.created_at)} · ${pick(CHANNEL, r.channel || "inbox", lang)}</div>
+  ${r.follow_up_ref
+    ? html`<div class="row">
+    <form method="post" action="/app/leads/${refLabel(r.follow_up_ref)}/follow-up/done"><button type="submit">${L(lang, "✅ خلصت", "✅ Done")}</button></form>
+    <form method="post" action="/app/leads/${refLabel(r.follow_up_ref)}/follow-up/postpone"><button type="submit" class="secondary">${L(lang, "📅 أجّل يوم", "📅 Postpone a day")}</button></form>
+  </div>`
+    : ""}
   ${r.url
     ? html`<form method="post" action="/app/notifications/${r.id}/open"><button type="submit" class="link">${L(lang, "افتح", "Open")}</button></form>`
     : !r.read_at

@@ -713,6 +713,7 @@
       "markContacted": ["pool", "actor", "key", "params"],
       "setFollowUp": ["pool", "actor", "key", "params"],
       "completeFollowUp": ["pool", "actor", "key", "params"],
+      "postponeFollowUp": ["pool", "actor", "key", "params"],
       "undo": ["pool", "actor", "eventId", "params"],
       "noteRequest": ["pool", "actor", "key", "filters", "params"],
       "logMatchSent": ["pool", "actor", "key", "listing", "params"],
@@ -817,6 +818,13 @@
       "DAILY_CAP": "Number",
       "sweep": ["pool", "params"],
       "sweepJob": []
+    },
+    "services/followUpReminders.js": {
+      "remindDue": ["pool", "params"],
+      "nudgeUntouched": ["pool", "params"],
+      "reminderMessage": ["broker", "leads"],
+      "nudgeMessage": ["broker", "leads"],
+      "reminderJob": []
     }
   },
   "invariant_variable_names": {

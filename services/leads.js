@@ -17,13 +17,14 @@ const MAX_PHONES = 3;
 const UNDO_MS = 10 * 60 * 1000;
 const NOTE_MAX = 1000;
 const PAGE = 20;
+const DAY_MS = 24 * 3600 * 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BROKER_COLS = "id, agency_id, name, role, is_active, preferred_lang, phone_number, phone_normalized, notify_prefs";
 const LEAD_COLS = "l.*, a.name AS assignee_name";
 const FROM_LEADS = "FROM leads l LEFT JOIN brokers a ON a.id = l.assigned_broker_id AND a.agency_id = l.agency_id";
 
 // The fields each reversible event changes; undo puts them back.
-const FOLLOW_UP_FIELDS = ["next_follow_up_at", "follow_up_kind", "follow_up_listing_id", "follow_up_note", "follow_up_status"];
+const FOLLOW_UP_FIELDS = ["next_follow_up_at", "follow_up_kind", "follow_up_listing_id", "follow_up_note", "follow_up_status", "follow_up_reminded_at"];
 const REVERSIBLE = {
   stage: ["stage", "lost_reason"],
   contacted: ["stage", "last_contact_at"],
@@ -303,7 +304,7 @@ async function assignLead(pool, actor, key, toBrokerId, { version = null, now = 
   const r = await mutate(pool, actor, key, { kind: "assigned", version, manage: true, now }, (lead) =>
     lead.assigned_broker_id === (target?.id || null)
       ? { unchanged: true }
-      : { fields: { assigned_broker_id: target?.id || null }, data: { from: lead.assigned_broker_id, to: target?.id || null, to_name: target?.name || null } }
+      : { fields: { assigned_broker_id: target?.id || null, follow_up_reminded_at: null }, data: { from: lead.assigned_broker_id, to: target?.id || null, to_name: target?.name || null } }
   );
   if (r.ok) r.notified = await sendCard(pool, actor, r.lead, target?.id, now);
   return r;
@@ -346,7 +347,7 @@ async function setFollowUp(pool, actor, key, { at, kind = "call", listingId = nu
     if (!u.rows.length) return { error: "unit_not_found" };
   }
   return mutate(pool, actor, key, { kind: "follow_up_set", version, now }, () => ({
-    fields: { next_follow_up_at: when.toISOString(), follow_up_kind: kind, follow_up_listing_id: listingId, follow_up_note: cleanText(note, 300), follow_up_status: "open" },
+    fields: { next_follow_up_at: when.toISOString(), follow_up_kind: kind, follow_up_listing_id: listingId, follow_up_note: cleanText(note, 300), follow_up_status: "open", follow_up_reminded_at: null },
     data: { at: when.toISOString(), kind, listing_id: listingId }
   }));
 }
@@ -355,6 +356,19 @@ async function completeFollowUp(pool, actor, key, { version = null, now = new Da
   return mutate(pool, actor, key, { kind: "follow_up_done", version, now }, (lead) =>
     lead.follow_up_status === "open" ? { fields: { follow_up_status: "done" }, data: { at: lead.next_follow_up_at } } : { error: "no_open_follow_up" }
   );
+}
+
+/** "📅 Postpone": the open follow-up moves `days` Cairo days on at the same time of day (past now), kind and unit kept. */
+async function postponeFollowUp(pool, actor, key, { days = 1, version = null, now = new Date() } = {}) {
+  return mutate(pool, actor, key, { kind: "follow_up_set", version, now }, (lead) => {
+    if (lead.follow_up_status !== "open" || !lead.next_follow_up_at) return { error: "no_open_follow_up" };
+    let at = new Date(new Date(lead.next_follow_up_at).getTime() + days * DAY_MS);
+    while (at <= now) at = new Date(at.getTime() + DAY_MS);
+    return {
+      fields: { next_follow_up_at: at.toISOString(), follow_up_reminded_at: null },
+      data: { at: at.toISOString(), kind: lead.follow_up_kind, listing_id: lead.follow_up_listing_id, postponed: true }
+    };
+  });
 }
 
 /**
@@ -564,6 +578,7 @@ module.exports = {
   markContacted,
   setFollowUp,
   completeFollowUp,
+  postponeFollowUp,
   undo,
   noteRequest,
   logMatchSent,
