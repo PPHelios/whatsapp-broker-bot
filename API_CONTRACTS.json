@@ -293,6 +293,7 @@
     },
     "services/search.js": {
       "PAGE_SIZE": "Number",
+      "TG_PAGE_SIZE": "Number",
       "SNAPSHOT_MAX": "Number",
       "SEARCH_PROMPT": ["featureList"],
       "parseRequest": ["AI", "params"],

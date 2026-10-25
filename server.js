@@ -446,6 +446,10 @@ function createApp({ pool, config = getConfig(), jobs }) {
       const id = await TgLink.decodeCallback(pool, norm.data);
       if (!id) return;
       message = TgIngress.buttonMessage(norm, id);
+      // "More" is used once: its button leaves the earlier results (the next page comes as a new message).
+      if (norm.messageId && (id === "MORE_SEARCH" || id.startsWith("search_more:"))) {
+        TG.call("editMessageReplyMarkup", { chat_id: norm.ids.chatId, message_id: norm.messageId, reply_markup: { inline_keyboard: [] } }).catch(() => {});
+      }
     }
     if (!message) return;
     if (String(broker.telegram_chat_id) !== String(norm.ids.chatId)) {

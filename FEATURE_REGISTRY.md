@@ -295,6 +295,7 @@ Router tests send real webhook payloads through the production pipeline (`tests/
 | TG-CLIENT-02 Photo share page `/app/units/<code>/share-media` (navigator.share with files); photos served same-origin from our bucket only, agency-scoped | ✅ | `tests/router/telegram.test.js` |
 | TG-MINIAPP-01 Website inside Telegram: initData HMAC + 1-hour auth_date + one use; only linked brokers; same-origin only; SameSite=None in the iframe; framing only by web.telegram.org | ✅ | `tests/router/telegram.test.js`, `tests/web/shell.test.js` |
 | TG-SETUP-01 Boot registers webhook, menu button and commands only when token + secret + https are set | ✅ | `tests/router/telegram.test.js` |
+| TG-FREE-01 Telegram searches show 10 a message (WhatsApp 5); More is one-shot (button removed from the earlier page) | ✅ | `tests/router/telegram.test.js` |
 | NTF-04/05 inbox, 🔔 count, open → read + redirect, isolation between brokers, CSRF; log managers-only and agency-scoped; settings round trip | ✅ | `tests/web/notifications.test.js` |
 | NTF-06/07 credit levels, hints once per level, manager alert at 80%, ceiling notice once then read ticks only, global ceiling, broker cap, sign-in ceiling, usage page = operation_logs, caps form managers-only | ✅ | `tests/web/notifications.test.js` |
 | CRM-01/02 dedupe across 4 spellings and second numbers, numbers added up to 3, Q2 (managers alerted, assignee card, owner of a duplicate not messaged, no other broker), claim of an unassigned lead, erased numbers, no PII in operation_logs | ✅ | `tests/crm/leads.test.js` |

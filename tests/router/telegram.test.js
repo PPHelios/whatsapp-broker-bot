@@ -353,6 +353,29 @@ describe("boot setup", () => {
   });
 });
 
+describe("free messages (step 5)", () => {
+  test("a Telegram search shows 10 units a message; More is used once and leaves the earlier message", async () => {
+    for (let i = 1; i <= 12; i++) await h.insertListing({ code: `TS-${i}`, price_value: 5000000 + i * 1000 });
+    await h.tgLink("broker");
+    const first = await h.tgText("broker", "شقة");
+    const page1 = first.find((e) => e.method === "sendMessage" && /وحدة مطابقة|matching/.test(e.text || ""));
+    expect(page1).toBeDefined();
+    expect((page1.text.match(/^\d+\. /gm) || []).length).toBe(10);
+    const more = page1.keyboard.flat().find((b) => /MORE|search_more/.test(b.callback_data));
+    const next = await h.tgTap("broker", more.callback_data);
+    expect(h.TG.outbox.some((e) => e.method === "editMessageReplyMarkup")).toBe(true);
+    const page2 = next.find((e) => e.method === "sendMessage" && /^11\. /m.test(e.text || ""));
+    expect((page2.text.match(/^\d+\. /gm) || []).length).toBe(2);
+  });
+
+  test("WhatsApp searches keep 5 a message", async () => {
+    for (let i = 1; i <= 7; i++) await h.insertListing({ code: `WS-${i}` });
+    const out = await h.text("broker", "شقة");
+    const body = out.map((r) => r.text || "").join("\n");
+    expect((body.match(/^\d+\. /gm) || []).length).toBe(5);
+  });
+});
+
 describe("pieces", () => {
   test("button ids over 64 bytes get a short stored token that decodes back", async () => {
     const long = `ld:undoset:${"1234567890-".repeat(8)}`;

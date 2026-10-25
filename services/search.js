@@ -5,6 +5,8 @@
 const Q = require("../domain/searchQuery");
 
 const PAGE_SIZE = 5;
+// Telegram messages are free, so a Telegram search shows twice as many units per message.
+const TG_PAGE_SIZE = 10;
 const SNAPSHOT_MAX = 100; // ids remembered for "more" (B1)
 const STEP_MONTHS_SQL = `CASE p->>'frequency' WHEN 'monthly' THEN 1 WHEN 'semi_annual' THEN 6 WHEN 'annual' THEN 12 ELSE 3 END`;
 
@@ -225,17 +227,18 @@ async function pageByIds(pool, agencyId, ids, offset, pageSize = PAGE_SIZE) {
  * The whole search for one request: parse → intent guard → run.
  * @returns {Promise<{ status: "results"|"none"|"small_talk"|"listing", parsed, source, rows, ids, total, relaxed, timings }>}
  */
-async function search({ pool, AI, agencyId, text, ctx = {} }) {
+async function search({ pool, AI, agencyId, text, ctx = {}, pageSize = PAGE_SIZE }) {
   const parse = await parseRequest(AI, { text, ctx });
   const intent = Q.classifyIntent(parse.parsed);
   const base = { parsed: parse.parsed, source: parse.source, modelUsed: parse.modelUsed, usage: parse.usage };
   if (intent !== "search") return { ...base, status: intent, rows: [], ids: [], total: 0, relaxed: false, timings: { parseMs: parse.ms, dbMs: 0 } };
-  const res = await runSearch(pool, agencyId, parse.parsed);
+  const res = await runSearch(pool, agencyId, parse.parsed, { pageSize });
   return { ...base, ...res, status: res.rows.length ? "results" : "none", timings: { parseMs: parse.ms, dbMs: res.dbMs } };
 }
 
 module.exports = {
   PAGE_SIZE,
+  TG_PAGE_SIZE,
   SNAPSHOT_MAX,
   SEARCH_PROMPT,
   parseRequest,
