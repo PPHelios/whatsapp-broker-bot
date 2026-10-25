@@ -708,6 +708,7 @@
       "MAX_PHONES": "Number",
       "UNDO_MS": "Number",
       "phoneHash": ["e164"],
+      "wasErased": ["pool", "actor", "e164"],
       "normalizePhones": ["raw"],
       "captureLead": ["pool", "actor", "input", "params"],
       "assignLead": ["pool", "actor", "key", "toBrokerId", "params"],

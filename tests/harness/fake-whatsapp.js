@@ -39,7 +39,7 @@ module.exports = {
   sendWhatsAppReaction: async (to, messageId, emoji) =>
     record("reaction", to, { messageId, emoji }),
   sendWhatsAppDocument: async (to, buffer, filename, caption = "") =>
-    record("document", to, { filename, caption, size: buffer ? buffer.length : 0 }),
+    record("document", to, { filename, caption, size: buffer ? buffer.length : 0, buffer }),
   uploadWhatsAppMedia: async () => `media.up.${++uploadSeq}`,
   markAsRead: async (msgId, opts = {}) => {
     receipts.push({ msgId, typing: Boolean(opts.typing) });

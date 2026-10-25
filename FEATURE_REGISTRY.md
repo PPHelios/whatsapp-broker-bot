@@ -25,7 +25,7 @@ This registry documents every user-facing capability, command, interactive callb
 | **XLS-01** | Excel Document Ingress | - File extension must be `.xlsx`.<br>- File size $\le 5\text{MB}$.<br>- Valid magic bytes (`PK\x03\x04`). | - Downloads file buffer into memory (no `/tmp` disk writes).<br>- Sanitizes dangerous formula execution characters (`=`, `+`, `-`, `@`, `\t`, `\r`) via `Excel.sanitizeCellValue`.<br>- Dynamic multi-column header mapping.<br>- Runs pre-flight dry-run validation in memory. | **Immediate Acknowledgment:** "📥 تم استلام ملف المخزون... الوقت المتوقع: 10 إلى 15 ثانية." |
 | **XLS-02** | Atomic Batch Commit & Developer Protection | - Minimum 1 valid row.<br>- Scoped to `agency_id`. | - Wraps valid rows in single database transaction under 64-bit advisory lock `pg_advisory_xact_lock(hashtext($1), hashtext('bulk_import'))`.<br>- Automatically flags developer project sheets as `inventory_type = 'developer_model'` and `is_primary_developer = true`.<br>- Harmonizes typologies (studios 0 beds, villas BUA/land area).<br>- Updates GIN trigrams and wipes `flyer_cache`. | Written directly to `listings` table. |
 | **XLS-03** | Status & Rejection Reporting | - Bulk import completed. | - Checks `rejectedRows.length`.<br>- If $>0$, compiles in-memory `مرفوضات_<filename>.xlsx` via `Excel.buildRejectionWorkbook` with highlighted row diagnostics.<br>- Distributed 45s cooldown recorded in `broker_sessions`. | **Zero Rejections:** "✅ تم استيراد المخزون بنجاح: تم حفظ وتحديث X وحدة."<br>**With Rejections:** Dispatches text summary breakdown followed by the `.xlsx` rejection document. Cooldown released immediately on crash. |
-| **XLS-04** | Layout & RTL Reading Order | - Generated export / rejection workbooks. | - Overall sheet layout locked to English LTR.<br>- Columns for Arabic description and summary explicitly set to RTL reading order (`alignment: { readingOrder: 'rtl' }`). | Professional dual-language workbook delivery. |
+| **XLS-04** | Layout & RTL Reading Order | - Generated export / rejection workbooks. | - Overall sheet layout locked to English LTR.<br>- The Arabic description (export) and the rejection reasons are set to RTL reading order (`alignment: { readingOrder: 'rtl' }`). | Professional dual-language workbook delivery. |
 
 ---
 
@@ -307,7 +307,9 @@ Router tests send real webhook payloads through the production pipeline (`tests/
 | CRM-25 every `/app/` page in English has no Arabic text and in Arabic is RTL; `?lang` signed in updates `preferred_lang`, signed out sets the cookie the sign-in page follows; offline page carries both | ✅ | `tests/web/i18n.test.js` |
 | CRM-26 start link per language and bot number form, none without a number, invalid `bot_phone` refused, the script prints them on dry run; English guides exist and are linked from the runbook | ✅ | `tests/unit/onboarding.test.js`, `tests/unit/docs.test.js` |
 | Runbook lists every env var; manifest names every migration; broker guides present | ✅ | `tests/unit/docs.test.js` |
-| XLS-01…04 (WhatsApp Excel upload), DEL-03…06/08, STATS-01 | ⬜ | — (the web Excel import WEB-14 is covered) |
+| XLS-01…04 WhatsApp Excel upload: acknowledgment, atomic commit, formula cells neutralised, developer sheets, rejections workbook (Arabic reasons RTL in an LTR sheet), duplicate file, cooldown, bad files; export keeps the Arabic description RTL; STATS-01 counts per agency in both languages; bootRecovery replays only fresh `new` rows, once, in order | ✅ | `tests/router/coverage-gaps.test.js` |
+| DEL-03…06/08 | ⬜ | — |
+| Routes never query CRM tables directly (grep guard over `routes/`, `web/routes/`, `web/views/`) | ✅ | `tests/unit/authz-registry.test.js` |
 
 ## 13. Defect IDs
 Remediation-plan IDs used in test names. Each one was a `test.failing` (or a new test written with the fix) and is now a passing test.

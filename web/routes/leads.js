@@ -63,8 +63,7 @@ async function duplicateNotice(pool, broker, body, lang) {
       return html`<p class="notice">📇 ${L(lang, "الرقم ده متسجل بالفعل:", "This number is already saved:")} <a href="${V.leadPath(found.lead)}">${Card.refLabel(found.lead.ref)} · ${Card.displayName(found.lead, lang)}</a>. ${L(lang, "الحفظ هيضيف للعميل ده.", "Saving adds to that lead.")}</p>`;
     }
     if (found.elsewhere) return html`<p class="notice bad">👥 ${L(lang, "الرقم ده عميل مع زميل. لو حفظت، مديرك هيتبلّغ.", "This number is a colleague's client. If you save, your manager is told.")}</p>`;
-    const erased = await pool.query("SELECT 1 FROM lead_erasures WHERE agency_id = $1 AND phone_hash = $2", [broker.agency_id, Leads.phoneHash(e164)]);
-    if (erased.rows.length) return html`<p class="notice bad">🔒 ${L(lang, "العميل ده طلب قبل كده إن بياناته تتمسح.", "This client asked earlier for their data to be deleted.")}</p>`;
+    if (await Leads.wasErased(pool, broker, e164)) return html`<p class="notice bad">🔒 ${L(lang, "العميل ده طلب قبل كده إن بياناته تتمسح.", "This client asked earlier for their data to be deleted.")}</p>`;
   }
   return "";
 }

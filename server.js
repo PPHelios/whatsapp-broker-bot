@@ -493,11 +493,15 @@ function createApp({ pool, config = getConfig(), jobs }) {
    */
   async function bootRecovery() {
     try {
+      // Claimed in one statement (new → batched), so two instances booting together never replay the same row.
+      // Only `new` rows of the last 15 minutes: `batched` ones belong to a live turn, older ones are stale.
       const { rows: pending } = await pool.query(
-        `SELECT msg_id, phone_key, payload
-       FROM inbound_messages
-       WHERE status = 'new' AND received_at >= NOW() - INTERVAL '15 minutes'
-       FOR UPDATE SKIP LOCKED`
+        `WITH claimed AS (
+           UPDATE inbound_messages SET status = 'batched', attempts = attempts + 1, updated_at = NOW()
+           WHERE status = 'new' AND received_at >= NOW() - INTERVAL '15 minutes'
+           RETURNING msg_id, phone_key, payload, received_at
+         )
+         SELECT msg_id, phone_key, payload FROM claimed ORDER BY received_at`
       );
 
       if (pending.length > 0) {
@@ -506,11 +510,6 @@ function createApp({ pool, config = getConfig(), jobs }) {
         );
 
         for (const item of pending) {
-          await pool.query(
-            "UPDATE inbound_messages SET status = 'batched', attempts = attempts + 1, updated_at = NOW() WHERE msg_id = $1",
-            [item.msg_id]
-          );
-
           const messagePayload = item.payload;
           if (messagePayload && messagePayload.from) {
             const normPhone = U.normalizePhone(messagePayload.from);

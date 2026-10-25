@@ -45,6 +45,12 @@ function phoneHash(e164) {
   return crypto.createHmac("sha256", key).update(String(e164)).digest("hex");
 }
 
+/** True when a client with this number asked to be erased from the actor's agency (the save form warns). */
+async function wasErased(pool, actor, e164) {
+  const { rows } = await pool.query("SELECT 1 FROM lead_erasures WHERE agency_id = $1 AND phone_hash = $2", [actor.agency_id, phoneHash(e164)]);
+  return rows.length > 0;
+}
+
 /** Raw numbers (any spelling) → distinct E.164 numbers, or an error code. */
 function normalizePhones(raw) {
   const list = (Array.isArray(raw) ? raw : [raw]).map((p) => String(p ?? "").trim()).filter(Boolean);
@@ -639,6 +645,7 @@ module.exports = {
   MAX_PHONES,
   UNDO_MS,
   phoneHash,
+  wasErased,
   normalizePhones,
   captureLead,
   assignLead,
