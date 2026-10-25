@@ -9,6 +9,7 @@ const Session = require("./session");
 const { html, layout, withCsrf } = require("./html");
 const Notifications = require("../lib/notifications");
 const ErrorReports = require("../lib/errorReports");
+const { BRAND } = require("../domain/brand");
 
 const MANIFEST = {
   name: "WehdatHub",
@@ -18,8 +19,8 @@ const MANIFEST = {
   start_url: "/app/",
   scope: "/app/",
   display: "standalone",
-  background_color: "#f6f7f9",
-  theme_color: "#0B132B",
+  background_color: BRAND.colors.bg,
+  theme_color: BRAND.colors.brand,
   // Android: "Share to WehdatHub" from WhatsApp opens the add-lead form with the shared text (nothing saved yet).
   share_target: { action: "/app/share", method: "GET", params: { title: "title", text: "text", url: "url" } }
 };
@@ -141,6 +142,8 @@ function mountWeb(app, { pool, config }) {
   // "/app" without the slash is outside the service worker scope; routing is not strict, so check the raw URL.
   app.get("/app", (req, res, next) => (/^\/app(\?|$)/.test(req.originalUrl) ? res.redirect(301, "/app/") : next()));
   app.use("/app", web);
+  // The landing page at / and its "try it" form (phase 2 step 3).
+  require("./routes/landing").mountLanding(app, { pool, assets });
   // Public unit pages last: /<agency-slug>/<unit-code>?s=<token> (reserved slugs never reach them).
   require("./routes/publicUnit").mountPublic(app, { pool, assets });
   return { assets };

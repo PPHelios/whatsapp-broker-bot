@@ -28,7 +28,7 @@ afterAll(closeHarness);
 
 const PAGES = ["/app/", "/app/units", "/app/units/VIL-08", "/app/units/new", "/app/units/VIL-08/edit", "/app/leads", "/app/leads/new",
   "/app/leads/L-0001", "/app/leads/import", "/app/import", "/app/deals", "/app/deals/new", "/app/deals/D-0001", "/app/search",
-  "/app/searches", "/app/notifications", "/app/notifications/log", "/app/settings", "/app/usage", "/app/share", "/app/dashboard", "/app/team"];
+  "/app/searches", "/app/notifications", "/app/notifications/log", "/app/settings", "/app/usage", "/app/share", "/app/dashboard", "/app/team", "/app/guide"];
 
 const ARABIC = /[؀-ۿ]/;
 /** Visible text and attribute values, without the language switch link (it names the other language on purpose). */

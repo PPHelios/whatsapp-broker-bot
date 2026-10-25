@@ -210,7 +210,8 @@ async function ownerDashboard(pool, broker, { weeks = 8, now = new Date(), confi
     [new Date(now.getTime() - 7 * DAY).toISOString()]
   );
   const { rows: jobs } = await pool.query("SELECT name, last_status, last_finished_at, last_error FROM crm_jobs ORDER BY name");
-  return { weeks: rows, agencies, topErrors, jobs, totalUsd: agencies.reduce((s, a) => s + a.usd, 0) };
+  const { rows: trials } = await pool.query("SELECT id, name, agency_name, phone_e164, team_size, created_at FROM demo_requests ORDER BY created_at DESC LIMIT 20");
+  return { weeks: rows, agencies, topErrors, jobs, trials, totalUsd: agencies.reduce((s, a) => s + a.usd, 0) };
 }
 
 module.exports = { PERIODS, isOwner, isManager, brokerActivity, agencyDashboard, ownerDashboard, weekStart };

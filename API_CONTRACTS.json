@@ -406,6 +406,7 @@
     },
     "lib/links.js": {
       "waRedirectUrl": ["token"],
+      "guideUrl": ["lang"],
       "healthUrl": [],
       "telegramWebhookUrl": [],
       "withQuery": ["path", "query"],
@@ -1057,6 +1058,27 @@
       "toast": ["reason", "lang"],
       "REPEAT_WINDOW_MS": "Number",
       "STALE_MS": "Number"
+    },
+    "domain/brand.js": {
+      "BRAND": "Object",
+      "cssTokens": ["brand"]
+    },
+    "domain/plans.js": {
+      "PLANS": "Array",
+      "FREE": "Object",
+      "VOICE_PACK": "Object",
+      "TRIAL": "Object",
+      "planById": ["id"],
+      "planName": ["plan", "lang"]
+    },
+    "web/routes/guide.js": {
+      "register": ["web", "params"],
+      "SECTIONS": "Array",
+      "FAQ": "Array"
+    },
+    "web/routes/landing.js": {
+      "mountLanding": ["app", "params"],
+      "FEATURES": "Array"
     }
   },
   "invariant_variable_names": {

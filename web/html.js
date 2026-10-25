@@ -1,6 +1,8 @@
 // web/html.js — Server-side HTML: an escaping tagged template and the page layout (RTL by default)
 "use strict";
 
+const { BRAND } = require("../domain/brand");
+
 class SafeHtml {
   constructor(text) {
     this.text = text;
@@ -51,13 +53,14 @@ function layout({ title, lang = "ar", body, assets, csrf = null, broker = null, 
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="${robots}">
-<meta name="theme-color" content="#0B132B">
+<meta name="theme-color" content="${BRAND.colors.brand}">
 <meta name="htmx-config" content="${jsonAttr(HTMX_CONFIG)}">
 ${csrf ? html`<meta name="csrf-token" content="${csrf}">` : ""}
 <title>${title ? `${title} · WehdatHub` : "WehdatHub"}</title>
 ${manifest ? html`<link rel="manifest" href="/app/manifest.webmanifest">` : ""}
-<link rel="icon" href="${assets("icons/icon.svg")}" type="image/svg+xml">
+<link rel="icon" href="${assets(BRAND.logo)}" type="image/svg+xml">
 <link rel="apple-touch-icon" href="${assets("icons/icon-192.png")}">
+<link rel="stylesheet" href="${assets("brand.css")}">
 <link rel="stylesheet" href="${assets("app.css")}">
 ${head || ""}
 ${scripts ? html`<script src="${assets("htmx.min.js")}" defer></script>

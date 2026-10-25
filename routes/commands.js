@@ -7,6 +7,7 @@ const Flyer = require("../lib/flyer");
 const Drafts = require("../lib/drafts");
 const Registry = require("../lib/registry");
 const ShareLinks = require("../lib/shareLinks");
+const Links = require("../lib/links");
 const { cardButtons } = require("../lib/buttons");
 const {
   reply,
@@ -380,7 +381,8 @@ async function handleCommand(broker, text, ctx) {
 
   // 1. HELP / MENU (SYS-01)
   if (/^(مساعدة|help|اوامر|الأوامر|menu|قائمة)$/i.test(lower)) {
-    const helpMsg = T.getHelpMessage(lang);
+    const guide = lang === "en" ? `📘 Quick guide and FAQ: ${Links.guideUrl(lang)}` : `📘 الدليل السريع والأسئلة الشائعة: ${Links.guideUrl(lang)}`;
+    const helpMsg = `${T.getHelpMessage(lang)}\n\n${guide}`;
     await reply(broker, helpMsg);
     logCommandOp(pool, {
       agency_id: broker.agency_id,
