@@ -88,3 +88,29 @@ test("new link for an unlinked broker; deactivate (not self) returns their leads
   expect(back.status).toBe(200);
   expect((await h.query("SELECT is_active FROM brokers WHERE id = $1", [h.BROKERS.broker.id]))[0].is_active).toBe(true);
 });
+
+test("4.7: a manager can't deactivate, re-invite or take a link for an admin; no link for someone already on Telegram; links are rate-limited", async () => {
+  await h.query("UPDATE brokers SET role = 'manager' WHERE id = $1", [h.BROKERS.colleague.id]);
+  const m = await signIn(h, "colleague");
+  const send = (path, body = {}) => m.agent.post(path).type("form").send({ _csrf: m.csrf, ...body });
+  const off = await send(`/app/team/${h.BROKERS.admin.id}/deactivate`);
+  expect(off.status).toBe(403);
+  expect((await h.query("SELECT is_active FROM brokers WHERE id = $1", [h.BROKERS.admin.id]))[0].is_active).toBe(true);
+  expect((await send(`/app/team/${h.BROKERS.admin.id}/link`)).status).toBe(403);
+  const again = await send("/app/team/invite", { name: "Hijack", phone: `0${h.BROKERS.admin.phone.slice(2)}`, role: "broker" });
+  expect(again.status).toBe(403);
+  expect(startToken(again.text)).toBeUndefined();
+  expect((await h.query("SELECT name, role FROM brokers WHERE id = $1", [h.BROKERS.admin.id]))[0]).toEqual({ name: "Agency Admin", role: "admin" });
+  expect(await h.query("SELECT 1 FROM telegram_link_tokens WHERE broker_id = $1", [h.BROKERS.admin.id])).toEqual([]);
+
+  // Already on Telegram: a new link would move the account to whoever taps it.
+  await h.query("UPDATE brokers SET telegram_user_id = 5, telegram_chat_id = 5 WHERE id = $1", [h.BROKERS.broker.id]);
+  const linked = await send(`/app/team/${h.BROKERS.broker.id}/link`);
+  expect(linked.status).toBe(400);
+  expect(startToken(linked.text)).toBeUndefined();
+
+  // A manager still manages a broker; the link button is capped at 30 a day per agency (two used above).
+  await h.query("UPDATE brokers SET telegram_user_id = NULL, telegram_chat_id = NULL WHERE id = $1", [h.BROKERS.broker.id]);
+  for (let i = 0; i < 28; i++) expect((await send(`/app/team/${h.BROKERS.broker.id}/link`)).status).toBe(200);
+  expect((await send(`/app/team/${h.BROKERS.broker.id}/link`)).status).toBe(429);
+});
