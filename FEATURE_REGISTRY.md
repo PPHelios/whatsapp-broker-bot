@@ -233,7 +233,7 @@ Router tests send real webhook payloads through the production pipeline (`tests/
 | SEC-01 fail-closed secret, unsigned dev opt-in, body limit 413, verify token required | ✅ | `tests/router/foundation.test.js` |
 | SEC-02 / TC-SEC-02 tenant isolation (lookup, search, edits) | ✅ | `core-flows`, `search`, `edits` |
 | SEC-03 webhook dedup + completed status | ✅ | `core-flows` |
-| SEC-03 crash recovery (`bootRecovery`) | ⬜ | — |
+| SEC-03 crash recovery (`bootRecovery`): fresh `new` rows replayed once, in order; batched, handled and stale rows left alone; second boot replays nothing | ✅ | `tests/router/coverage-gaps.test.js` |
 | TC-SEC-03 drain returns 503 | ✅ | `webhook-security` |
 | SYS-01 help / SYS-02 language toggle | ✅ | `core-flows` |
 | SYS-01 help lists only working commands [U1] | ✅ | `core-flows` |
@@ -318,7 +318,8 @@ Router tests send real webhook payloads through the production pipeline (`tests/
 | UNIT-CODE-01 initials (English, Arabic, one word, filler), format, prefix validation, per-agency running number across types, hand-typed code skipped, manager prefix used and checked, agencies separate; first WhatsApp draft gets AL-A1; managers only on My usage | ✅ | `tests/unit/unit-code.test.js`, `tests/router/draft-pipeline.test.js`, `tests/web/units.test.js` |
 | Runbook lists every env var; manifest names every migration; broker guides present | ✅ | `tests/unit/docs.test.js` |
 | XLS-01…04 WhatsApp Excel upload: acknowledgment, atomic commit, formula cells neutralised, developer sheets, rejections workbook (Arabic reasons RTL in an LTR sheet), duplicate file, cooldown, bad files; export keeps the Arabic description RTL; STATS-01 counts per agency in both languages; bootRecovery replays only fresh `new` rows, once, in order | ✅ | `tests/router/coverage-gaps.test.js` |
-| DEL-03…06/08 | ⬜ | — |
+| DEL-03…06/08 plans list (ids, no plans, unknown, other agency), single-plan copy, multi-plan workbook (sheet per plan, same-term plans get distinct sheets), collateral links, forwarded card → plans / collateral / client copy / unit card, other agency's code not opened | ✅ | `tests/router/deliverables.test.js` |
+| P4.4 keep-awake self-ping: off unless `KEEP_AWAKE=true`, Cairo window wraps midnight, failures swallowed | ✅ | `tests/unit/keep-awake.test.js` |
 | Routes never query CRM tables directly (grep guard over `routes/`, `web/routes/`, `web/views/`) | ✅ | `tests/unit/authz-registry.test.js` |
 
 ## 13. Defect IDs

@@ -17,6 +17,10 @@
     },
     "lib/ai.js": {
       "TIERS": "Array",
+      "TEXT_TIERS": "Array",
+      "MEDIA_TIERS": "Array",
+      "hasMedia": ["contents"],
+      "tiersFor": ["route", "contents"],
       "ROUTES": "Object",
       "FAST_THINKING": "Object",
       "TRANSCRIPTION_PROMPT": "String",
@@ -399,6 +403,7 @@
     },
     "lib/links.js": {
       "waRedirectUrl": ["token"],
+      "healthUrl": [],
       "telegramWebhookUrl": [],
       "withQuery": ["path", "query"],
       "siteOrigin": [],
@@ -985,6 +990,13 @@
       "MAX_AGE_SEC": "Number",
       "verify": ["initData", "botToken", "params"],
       "sign": ["fields", "botToken"]
+    },
+    "lib/keepAwake.js": {
+      "EVERY_MS": "Number",
+      "parseHours": ["spec"],
+      "cairoHour": ["now"],
+      "inWindow": ["hour", "params"],
+      "createKeepAwake": ["params"]
     },
     "lib/tapGuard.js": {
       "createTapGuard": ["params"],
