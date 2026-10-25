@@ -394,10 +394,10 @@ async function undo(pool, actor, eventId, { now = new Date() } = {}) {
   });
 }
 
-/** A buyer's or tenant's request as understood at intake (canonical search filters); step 7 turns it into a saved request. */
-async function noteRequest(pool, actor, key, filters, { now = new Date() } = {}) {
+/** The timeline entry of a saved request (services/leadRequests.js holds the request itself). */
+async function noteRequest(pool, actor, key, filters, { now = new Date(), requestId = null } = {}) {
   if (!filters || typeof filters !== "object") return { error: "request_empty" };
-  return mutate(pool, actor, key, { kind: "request_set", now }, () => ({ fields: {}, data: { filters } }));
+  return mutate(pool, actor, key, { kind: "request_set", now }, () => ({ fields: {}, data: { filters, ...(requestId ? { request_id: requestId } : {}) } }));
 }
 
 /* ---------------------------------------------------------------------- */
@@ -496,15 +496,6 @@ async function pipeline(pool, actor, { now = new Date() } = {}) {
   return { stages: byStage, overdue: overdue.rows };
 }
 
-/** The requests noted for a lead (request_set events, newest first). */
-async function requestsOf(pool, actor, lead) {
-  const { rows } = await pool.query(
-    "SELECT id, data, created_at FROM lead_events WHERE agency_id = $1 AND lead_id = $2 AND kind = 'request_set' AND undone_at IS NULL ORDER BY id DESC LIMIT 5",
-    [actor.agency_id, lead.id]
-  );
-  return rows;
-}
-
 /** The last 20 events (then "older" with beforeId), with the acting broker's name. Null if the lead isn't visible. */
 async function timeline(pool, actor, key, { limit = PAGE, beforeId = null } = {}) {
   const lead = await getLead(pool, actor, key);
@@ -574,7 +565,6 @@ module.exports = {
   refExists,
   dueFollowUps,
   pipeline,
-  requestsOf,
   findByPhone,
   listLeads,
   timeline,

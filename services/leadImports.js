@@ -7,6 +7,7 @@
 
 const Leads = require("./leads");
 const Imports = require("./imports");
+const LeadRequests = require("./leadRequests");
 const Notifications = require("../lib/notifications");
 const Authz = require("../lib/authz");
 const LeadImport = require("../domain/leadImport");
@@ -180,7 +181,7 @@ async function runApply(pool, broker, imp, { now = () => new Date() } = {}) {
         result[res.outcome === "created" ? "created" : "merged"]++;
         if (result.refs.length < 500) result.refs.push(res.lead.ref);
         if (res.outcome === "created" && res.lead.assigned_broker_id) assigned.set(res.lead.assigned_broker_id, (assigned.get(res.lead.assigned_broker_id) || 0) + 1);
-        if (f.request) await Leads.noteRequest(pool, broker, res.lead.id, f.request, { now: now() });
+        if (f.request) await LeadRequests.saveRequest(pool, broker, res.lead.id, f.request, { now: now() });
       } else if (res.outcome === "colleague") result.colleague++;
       else if (res.outcome === "erased_before") result.erased_before++;
       else result.failed++;

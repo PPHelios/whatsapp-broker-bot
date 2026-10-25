@@ -81,7 +81,7 @@ async function parseRequest(AI, { text = "", ctx = {} } = {}) {
  * Builds the search SQL. Every condition is agency-scoped and active-only.
  * relaxed widens price/area ±15%, bedrooms ±1 and drops finishing/furnishing/floor/bathrooms.
  */
-function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, offset = 0, relaxed = false } = {}) {
+function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, offset = 0, relaxed = false, onlyIds = null } = {}) {
   const f = Q.ensureFilters(parsedOrFilters?.filters ? parsedOrFilters : { filters: parsedOrFilters || {} });
   const where = ["l.agency_id = $1", "l.status = 'active'"];
   const params = [agencyId];
@@ -89,6 +89,8 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
     params.push(v);
     return `$${params.length}`;
   };
+  // The match sweep: the same filters, restricted to the units that changed (step 7).
+  if (onlyIds) where.push(`l.id = ANY(${add(onlyIds)}::uuid[])`);
   let rank = "";
 
   if (f.code) {

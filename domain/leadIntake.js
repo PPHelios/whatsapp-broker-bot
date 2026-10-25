@@ -113,6 +113,20 @@ function matchAssign(text) {
   return ref ? { ref, name: m[2].trim() } : null;
 }
 
+/**
+ * «طلب …» / "request …" (on the open lead), or «طلب L-0042 …» → { ref (or null), rest }.
+ * «مطلوب» is a search, not this.
+ */
+function matchRequestCommand(text) {
+  const m = clean(text).match(/^(?:طلب|طلبه|طلب العميل|request|client request|wants)(?=\s|:|$)\s*[:\-–]?\s*([\s\S]*)$/i);
+  if (!m) return null;
+  let rest = m[1].trim();
+  const first = rest.split(/[\s:]+/)[0] || "";
+  const ref = Card.parseRef(first);
+  if (ref) rest = rest.slice(first.length).replace(/^\s*[:\-–]?\s*/, "").trim();
+  return { ref: ref || null, rest };
+}
+
 /** "L-0042" alone → 42 */
 const matchRef = (text) => Card.parseRef(clean(text));
 
@@ -189,6 +203,7 @@ module.exports = {
   matchMyLeads,
   matchFollowUps,
   matchAssign,
+  matchRequestCommand,
   matchRef,
   buildLeadPrompt,
   normalizeLeadExtraction

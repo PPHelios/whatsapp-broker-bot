@@ -717,7 +717,6 @@
       "refExists": ["pool", "actor", "ref"],
       "dueFollowUps": ["pool", "actor", "params"],
       "pipeline": ["pool", "actor", "params"],
-      "requestsOf": ["pool", "actor", "lead"],
       "findByPhone": ["pool", "actor", "raw"],
       "listLeads": ["pool", "actor", "f", "params"],
       "timeline": ["pool", "actor", "key", "params"],
@@ -736,6 +735,7 @@
       "matchMyLeads": ["text"],
       "matchFollowUps": ["text"],
       "matchAssign": ["text"],
+      "matchRequestCommand": ["text"],
       "matchRef": ["text"],
       "buildLeadPrompt": ["lang", "fence"],
       "normalizeLeadExtraction": ["raw"]
@@ -753,6 +753,7 @@
       "myLeads": ["broker", "ctx"],
       "followUps": ["broker", "ctx"],
       "openRef": ["broker", "ref", "ctx"],
+      "requestCommand": ["broker", "params", "ctx"],
       "assignCommand": ["broker", "params", "ctx"],
       "handleButton": ["broker", "id", "ctx"]
     },
@@ -798,6 +799,13 @@
       "placeKey": ["l"],
       "comparable": ["l"],
       "sameUnit": ["a", "b"]
+    },
+    "services/leadRequests.js": {
+      "MAX_REQUESTS": "Number",
+      "listRequests": ["pool", "actor", "lead"],
+      "currentMatches": ["pool", "agencyId", "filters", "params"],
+      "saveRequest": ["pool", "actor", "leadKey", "rawFilters", "params"],
+      "removeRequest": ["pool", "actor", "leadKey", "requestId"]
     }
   },
   "invariant_variable_names": {

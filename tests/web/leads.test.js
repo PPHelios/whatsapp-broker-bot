@@ -218,3 +218,33 @@ describe("the lead page", () => {
     expect(home.text).toContain('href="/app/leads"');
   });
 });
+
+describe("requests on the lead page (step 7)", () => {
+  test("add a request with several places, see what fits, remove it; at most 3", async () => {
+    await h.insertListing({ code: "HP-1", compound: "Hyde Park", price_value: 8.5e6 });
+    await capture("broker", { name: "Sara" });
+    const { agent, csrf } = await signIn(h, "broker");
+    const page = await agent.get("/app/leads/L-0001");
+    expect(page.text).toMatch(/id="requests"[\s\S]*action="\/app\/leads\/L-0001\/requests"/);
+    const r = await agent.post("/app/leads/L-0001/requests").type("form").send({ _csrf: csrf, type: "apartment", place: "Hyde Park، الشيخ زايد", price_max: "9000000" });
+    expect(r.status).toBe(303);
+    const after = await agent.get(r.headers.location);
+    expect(after.text).toMatch(/data-request="[0-9a-f-]{36}"[\s\S]*🏠 1 /);
+    const [req] = await h.query("SELECT id, filters FROM saved_searches WHERE lead_id IS NOT NULL");
+    expect(req.filters.places).toHaveLength(2);
+    const empty = await agent.post("/app/leads/L-0001/requests").type("form").send({ _csrf: csrf });
+    expect(empty.status).toBe(422);
+    const del = await agent.post("/app/leads/L-0001/requests/delete").type("form").send({ _csrf: csrf, request: req.id });
+    expect(del.status).toBe(303);
+    expect(await h.query("SELECT 1 FROM saved_searches")).toHaveLength(0);
+    for (let i = 1; i <= 3; i++) await agent.post("/app/leads/L-0001/requests").type("form").send({ _csrf: csrf, bedrooms_min: String(i) });
+    expect((await agent.post("/app/leads/L-0001/requests").type("form").send({ _csrf: csrf, bedrooms_min: "4" })).status).toBe(422);
+    expect((await agent.get("/app/leads/L-0001")).text).not.toMatch(/action="\/app\/leads\/L-0001\/requests"/);
+  });
+
+  test("a colleague can't add a request to my lead", async () => {
+    await capture("broker", { name: "Sara" });
+    const { agent, csrf } = await signIn(h, "colleague");
+    expect((await agent.post("/app/leads/L-0001/requests").type("form").send({ _csrf: csrf, type: "villa" })).status).toBe(404);
+  });
+});

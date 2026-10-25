@@ -6,6 +6,7 @@
 "use strict";
 
 const Leads = require("../../services/leads");
+const LeadRequests = require("../../services/leadRequests");
 const AI = require("../../lib/ai");
 const RateLimit = require("../../lib/rateLimit");
 const Store = require("../../lib/listingStore");
@@ -13,12 +14,14 @@ const Card = require("../../domain/leadCard");
 const Stages = require("../../domain/leadStages");
 const Intake = require("../../domain/leadIntake");
 const Phone = require("../../domain/phone");
+const SearchLink = require("../../domain/searchLink");
 const { isManager } = require("../../lib/authz");
 const { logOperation } = require("../../lib/db");
 const Session = require("../session");
 const { uploads, VOICE } = require("../uploads");
 const { html } = require("../html");
 const V = require("../views/leads");
+const { refineForm } = require("../views/searchForm");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
@@ -239,7 +242,8 @@ ${rows.length
     const manager = isManager(broker);
     const beforeId = /^\d+$/.test(String(req.query.before || "")) ? req.query.before : null;
     const tl = await Leads.timeline(pool, broker, lead.id, { beforeId });
-    const requests = await Leads.requestsOf(pool, broker, lead);
+    const requests = await LeadRequests.listRequests(pool, broker, lead);
+    for (const r of requests) r.matches = await LeadRequests.currentMatches(pool, broker.agency_id, r.filters, { limit: 1 });
     const brokers = manager ? await activeBrokers(pool, broker.agency_id) : [];
     const unit = lead.follow_up_listing_id ? (await pool.query("SELECT code FROM listings WHERE id = $1 AND agency_id = $2", [lead.follow_up_listing_id, broker.agency_id])).rows[0] : null;
     const path = V.leadPath(lead);
@@ -283,8 +287,18 @@ ${manager
   </form>
 </section>`
   : ""}
-${requests.length
-  ? html`<section class="card" id="requests"><h2>🔎 ${L(lang, "طلبات العميل", "Requests")}</h2><ul>${requests.map((r) => html`<li>${Card.requestSummary(r.data.filters, lang)}</li>`)}</ul></section>`
+${Stages.WANTS_UNIT.includes(lead.kind) || requests.length
+  ? html`<section class="card" id="requests"><h2>🔎 ${L(lang, "طلبات العميل", "Requests")} (${requests.length}/${LeadRequests.MAX_REQUESTS})</h2>
+  ${requests.length
+    ? html`<ul>${requests.map(
+        (r) => html`<li data-request="${r.id}">${Card.requestSummary(r.filters, lang)} · <a href="/app/search?f=${SearchLink.encodeFilters(r.filters)}">🏠 ${r.matches.total} ${L(lang, "وحدة مناسبة", "fit now")}</a>${r.alerts_enabled ? ` · 🔔` : ""}
+  <form method="post" action="${path}/requests/delete" class="inline">${hidden}<input type="hidden" name="request" value="${r.id}"><button type="submit" class="link">🗑️ ${L(lang, "امسح", "Remove")}</button></form></li>`
+      )}</ul>`
+    : html`<p class="muted">${L(lang, "مفيش طلب لسه. ضيف طلب وهبلغك أول ما تنزل وحدة تناسبه.", "No request yet. Add one and you'll hear when a unit that fits comes in.")}</p>`}
+  ${requests.length < LeadRequests.MAX_REQUESTS
+    ? refineForm(null, lang, { action: `${path}/requests`, method: "post", hidden, summary: `➕ ${L(lang, "طلب جديد", "Add a request")}`, submit: L(lang, "حفظ الطلب", "Save the request"), clear: null })
+    : ""}
+</section>`
   : ""}
 ${tl ? V.timelineList(tl.rows, lang, { more: tl.more, lead }) : ""}
 ${V.bottomBar(lead, lang, broker.name)}`
@@ -312,7 +326,9 @@ ${V.bottomBar(lead, lang, broker.name)}`
       note: L(lang, "✅ الملاحظة اتضافت.", "✅ Note added."),
       contacted: L(lang, "📞 اتسجل إنك كلمته.", "📞 Marked as contacted."),
       assigned: L(lang, "✅ اتسلم.", "✅ Assigned."),
-      undone: L(lang, "↩️ اتلغى.", "↩️ Undone.")
+      undone: L(lang, "↩️ اتلغى.", "↩️ Undone."),
+      request: L(lang, "🔎 الطلب اتحفظ؛ هتتبلغ بالوحدات الجديدة اللي تناسبه.", "🔎 Request saved; you'll hear about new units that fit."),
+      request_removed: L(lang, "🗑️ الطلب اتمسح.", "🗑️ Request removed.")
     };
     const key = req.query.saved ? "saved" : req.query.known ? "known" : req.query.done;
     return leadPage(req, res, lead, { notice: done[key] || null, undoEvent: /^\d+$/.test(String(req.query.undo || "")) ? req.query.undo : null });
@@ -344,7 +360,9 @@ ${V.bottomBar(lead, lang, broker.name)}`
         undo_blocked: L(lang, "مش ممكن التراجع: العميل اتعدل بعدها.", "Can't undo: the lead changed since."),
         already_undone: L(lang, "اتلغى قبل كده.", "Already undone."),
         not_undoable: L(lang, "ده مينفعش يتلغي.", "This can't be undone."),
-        not_found: L(lang, "مش موجود.", "Not found.")
+        not_found: L(lang, "مش موجود.", "Not found."),
+        request_empty: L(lang, "اختار فلتر واحد على الأقل (النوع، المكان أو السعر).", "Choose at least one filter (type, place or price)."),
+        too_many_requests: L(lang, `الحد الأقصى ${LeadRequests.MAX_REQUESTS} طلبات للعميل؛ امسح واحد الأول.`, `At most ${LeadRequests.MAX_REQUESTS} requests per client; remove one first.`)
       }[r.error] || r.error;
       return leadPage(req, res, fresh, { status: 422, notice: `⚠️ ${why}` });
     });
@@ -371,6 +389,8 @@ ${V.bottomBar(lead, lang, broker.name)}`
   write("note", (req, lead, version) => Leads.addNote(pool, actor(req), lead.id, req.body.text, { version }), "note");
   write("contacted", (req, lead, version) => Leads.markContacted(pool, actor(req), lead.id, { version }), "contacted");
   write("assign", (req, lead, version) => Leads.assignLead(pool, actor(req), lead.id, req.body.broker || null, { version }), "assigned");
+  write("requests", (req, lead) => LeadRequests.saveRequest(pool, actor(req), lead.id, SearchLink.filtersFromForm(req.body)), "request");
+  write("requests/delete", (req, lead) => LeadRequests.removeRequest(pool, actor(req), lead.id, req.body.request), "request_removed");
   write(
     "undo",
     async (req) => {
