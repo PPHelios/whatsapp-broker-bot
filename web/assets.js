@@ -4,6 +4,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { cssTokens } = require("../domain/brand");
 
 const STATIC_DIR = path.join(__dirname, "static");
 const TYPES = {
@@ -36,6 +37,9 @@ function loadAssets() {
     const body = fs.readFileSync(file);
     files[name] = { body, type: TYPES[path.extname(name)] || "application/octet-stream", hash: hash(body) };
   }
+  // The brand's colour tokens, generated (domain/brand.js), loaded before app.css.
+  const brand = Buffer.from(cssTokens());
+  files["brand.css"] = { body: brand, type: TYPES[".css"], hash: hash(brand) };
   const version = hash(Buffer.from(Object.values(files).map((f) => f.hash).join(".")));
   const url = (name) => {
     const f = files[name];

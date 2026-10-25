@@ -82,6 +82,14 @@ function ownerPage(d, lang) {
   <tbody>${d.topErrors.map((e) => html`<tr><td dir="ltr">${e.kind === "report" ? "#R" : "#E"}${e.last_id}</td><td>${e.kind}</td><td>${e.source}</td><td dir="ltr">${String(e.message || "").slice(0, 140)}</td><td>${e.n}</td></tr>`)}</tbody></table>`
     : html`<p class="muted">✅ ${L(lang, "مفيش.", "None.")}</p>`}
 </section>
+<section class="card" id="trials">
+  <h2>🤝 ${L(lang, "طلبات التجربة", "Trial requests")}</h2>
+  ${d.trials.length
+    ? html`<div class="scroll"><table><tbody>${d.trials.map(
+        (t) => html`<tr data-trial="${t.id}"><td dir="ltr">#T${t.id}</td><td>${t.name}</td><td>${t.agency_name || "—"}</td><td dir="ltr"><a href="tel:${t.phone_e164}">${t.phone_e164}</a></td><td>${t.team_size ?? "—"}</td><td dir="ltr">${new Date(t.created_at).toISOString().slice(0, 10)}</td></tr>`
+      )}</tbody></table></div>`
+    : html`<p class="muted">${L(lang, "مفيش لسه.", "None yet.")}</p>`}
+</section>
 <section class="card">
   <h2>${L(lang, "المهام الخلفية", "Background jobs")}</h2>
   <table><tbody>${d.jobs.map(

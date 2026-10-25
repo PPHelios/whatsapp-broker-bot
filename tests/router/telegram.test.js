@@ -165,7 +165,8 @@ describe("notifications on Telegram (step 2)", () => {
 
   test("Telegram chosen but not linked: no Telegram, no WhatsApp; the website inbox keeps it", async () => {
     await N.savePrefs(h.pool, h.BROKERS.broker, { channels: { match: "telegram" } });
-    const r = await N.notifyBroker(h.pool, await row("broker"), event());
+    // Noon in Cairo: outside the default quiet hours, whatever time the suite runs.
+    const r = await N.notifyBroker(h.pool, await row("broker"), event({ now: new Date("2026-10-25T10:00:00Z") }));
     expect(r.channel).not.toBe("telegram");
     expect(h.TG.outbox).toEqual([]);
     expect(h.WA.outbox).toEqual([]);

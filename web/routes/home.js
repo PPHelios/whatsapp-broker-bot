@@ -19,6 +19,7 @@ function register(web, { page }) {
     <a class="btn secondary" href="/app/units/new">${en ? "➕ Add a unit" : "➕ إضافة وحدة"}</a>
     <a class="btn secondary" href="/app/import">${en ? "📥 Import" : "📥 استيراد"}</a>
     ${Dash.isManager(broker) ? html`<a class="btn secondary" href="/app/dashboard">${en ? "📈 Dashboard" : "📈 لوحة الوكالة"}</a>` : ""}
+    <a class="btn secondary" href="/app/guide">${en ? "📘 Guide" : "📘 الدليل"}</a>
     ${Dash.isOwner(broker) ? html`<a class="btn secondary" href="/app/owner">${en ? "🛠️ App tracking" : "🛠️ متابعة التطبيق"}</a>` : ""}
   </div>
 </div>`

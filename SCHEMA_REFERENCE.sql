@@ -6,6 +6,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
+CREATE SEQUENCE IF NOT EXISTS public.demo_requests_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.error_events_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.lead_events_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.lead_matches_id_seq;
@@ -754,6 +755,16 @@ CREATE TABLE IF NOT EXISTS public.error_events (
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.demo_requests (
+  id bigint DEFAULT nextval('demo_requests_id_seq'::regclass) NOT NULL,
+  name text NOT NULL,
+  agency_name text,
+  phone_e164 text NOT NULL,
+  team_size integer,
+  lang text,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (id);
 ALTER TABLE broker_search_state ADD CONSTRAINT broker_search_state_pkey PRIMARY KEY (phone_key);
@@ -763,6 +774,7 @@ ALTER TABLE compound_synonyms ADD CONSTRAINT compound_synonyms_pkey PRIMARY KEY 
 ALTER TABLE crm_jobs ADD CONSTRAINT crm_jobs_pkey PRIMARY KEY (name);
 ALTER TABLE deal_splits ADD CONSTRAINT deal_splits_pkey PRIMARY KEY (deal_id, broker_id);
 ALTER TABLE deals ADD CONSTRAINT deals_pkey PRIMARY KEY (id);
+ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_pkey PRIMARY KEY (id);
 ALTER TABLE error_events ADD CONSTRAINT error_events_pkey PRIMARY KEY (id);
 ALTER TABLE inbound_messages ADD CONSTRAINT inbound_messages_pkey PRIMARY KEY (msg_id);
 ALTER TABLE lead_erasures ADD CONSTRAINT lead_erasures_pkey PRIMARY KEY (agency_id, phone_hash);
@@ -821,6 +833,11 @@ ALTER TABLE deals ADD CONSTRAINT deals_notes_check CHECK (((notes IS NULL) OR (l
 ALTER TABLE deals ADD CONSTRAINT deals_price_check CHECK ((price > (0)::numeric));
 ALTER TABLE deals ADD CONSTRAINT deals_ref_check CHECK ((ref > 0));
 ALTER TABLE deals ADD CONSTRAINT deals_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'signed'::text, 'paid'::text, 'cancelled'::text])));
+ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_agency_name_check CHECK (((agency_name IS NULL) OR (length(agency_name) <= 120)));
+ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_lang_check CHECK (((lang IS NULL) OR (lang = ANY (ARRAY['ar'::text, 'en'::text]))));
+ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_name_check CHECK (((length(name) >= 1) AND (length(name) <= 80)));
+ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_phone_e164_check CHECK ((length(phone_e164) <= 20));
+ALTER TABLE demo_requests ADD CONSTRAINT demo_requests_team_size_check CHECK (((team_size IS NULL) OR ((team_size >= 1) AND (team_size <= 1000))));
 ALTER TABLE error_events ADD CONSTRAINT error_events_kind_check CHECK ((kind = ANY (ARRAY['error'::text, 'report'::text])));
 ALTER TABLE lead_events ADD CONSTRAINT lead_events_kind_check CHECK ((kind = ANY (ARRAY['created'::text, 'inquiry'::text, 'assigned'::text, 'stage'::text, 'note'::text, 'contacted'::text, 'follow_up_set'::text, 'follow_up_done'::text, 'request_set'::text, 'match_sent'::text, 'share_opened'::text, 'deal'::text, 'exported'::text, 'merged'::text, 'undo'::text])));
 ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_status_check CHECK ((status = ANY (ARRAY['new'::text, 'alerted'::text, 'sent_to_client'::text, 'dismissed'::text])));
@@ -920,6 +937,7 @@ CREATE INDEX idx_compound_synonyms_norm ON public.compound_synonyms USING btree 
 CREATE INDEX idx_deal_splits_broker ON public.deal_splits USING btree (agency_id, broker_id);
 CREATE INDEX idx_deals_agency_closed ON public.deals USING btree (agency_id, closed_at DESC);
 CREATE INDEX idx_deals_lead ON public.deals USING btree (lead_id) WHERE (lead_id IS NOT NULL);
+CREATE INDEX demo_requests_created_idx ON public.demo_requests USING btree (created_at DESC);
 CREATE INDEX error_events_fingerprint ON public.error_events USING btree (fingerprint, created_at DESC);
 CREATE INDEX error_events_recent ON public.error_events USING btree (created_at DESC);
 CREATE INDEX inbound_messages_phone_idx ON public.inbound_messages USING btree (phone_key, received_at DESC);

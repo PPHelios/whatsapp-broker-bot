@@ -1,7 +1,8 @@
 /* WehdatHub web app — mobile first; logical properties so RTL and LTR share one sheet */
 :root {
-  --ink: #0b132b; --muted: #5b6475; --line: #e3e6ec; --bg: #f6f7f9; --card: #fff;
-  --brand: #0b132b; --accent: #d4af37; --ok: #137a3b; --warn: #9a5b00; --bad: #b42318;
+  /* --brand, --accent, --ink and --bg come from brand.css (domain/brand.js). */
+  --muted: #5b6475; --line: #e3e6ec; --card: #fff;
+  --ok: #137a3b; --warn: #9a5b00; --bad: #b42318;
   --radius: 12px; --gap: 12px;
   font-family: "Cairo", "Segoe UI", Tahoma, system-ui, sans-serif;
 }
@@ -74,3 +75,15 @@ progress { width: 100%; height: 14px; accent-color: var(--brand); }
 .tile strong { display: block; font-size: 1.4rem; margin-top: 4px; }
 .scroll { overflow-x: auto; }
 .scroll table { min-width: 640px; }
+
+/* Honeypot field on public forms: off screen for people, still filled by naive bots. */
+.hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+
+/* Landing page (/) */
+.hero { text-align: center; padding: 24px 0 8px; }
+.hero h1 { font-size: 2rem; margin: 8px 0; color: var(--brand); }
+.hero .lead { font-size: 1.1rem; max-width: 640px; margin: 0 auto 16px; }
+.hero .row { justify-content: center; }
+.hero-logo { border-radius: 16px; }
+.features .card h2 { margin-top: 0; }
+.price { font-size: 1.4rem; font-weight: 700; color: var(--brand); }
