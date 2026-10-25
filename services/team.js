@@ -7,6 +7,7 @@
 const Phone = require("../domain/phone");
 const TgLink = require("../lib/tgLink");
 const Brokers = require("./brokers");
+const Billing = require("./billing");
 const { MANAGER_ROLES } = require("../lib/authz");
 const { getConfig } = require("../config");
 
@@ -60,11 +61,13 @@ async function invite(pool, manager, input = {}, opts = {}) {
   if (!digits || !Phone.isEgyptMobile(digits)) return { error: "phone" };
   if (!role) return { error: "role" };
   const lang = input.lang === "en" ? "en" : "ar";
-  const { rows: found } = await pool.query("SELECT id, agency_id, role FROM brokers WHERE phone_normalized = $1", [digits]);
+  const { rows: found } = await pool.query("SELECT id, agency_id, role, is_active FROM brokers WHERE phone_normalized = $1", [digits]);
   let brokerId;
   let created = false;
   if (found[0] && found[0].agency_id !== manager.agency_id) return { error: "phone_taken" };
   if (found[0] && !mayActOn(manager, found[0].role)) return { error: "rank" };
+  // A new or returning broker takes a seat; the plan's seats are the ceiling (existing ones are never removed).
+  if (!found[0]?.is_active && !(await Billing.seatAvailable(pool, manager.agency_id))) return { error: "seats" };
   if (found[0]) {
     // One of ours: bring them back; an admin or owner keeps their role.
     const keep = !INVITE_ROLES.includes(String(found[0].role || "").toLowerCase());

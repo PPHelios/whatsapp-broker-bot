@@ -238,7 +238,7 @@ describe("group import (forwarded posts and chat exports)", () => {
     const r = await agent.post("/app/import/group").field("_csrf", csrf).field("text", "شقة للبيع في ميفيدا 200 متر 3 غرف السعر 12 مليون");
     const id = importId(r);
     await Imports.waitForGroupImport(id);
-    expect((await agent.get(`/app/import/${id}`)).text).toMatch(/data-state="error"[\s\S]*حد الذكاء الاصطناعي اليومي خلص/);
+    expect((await agent.get(`/app/import/${id}`)).text).toMatch(/data-state="error"[\s\S]*حد الذكاء الاصطناعي خلص/);
     await h.query("UPDATE web_imports SET status = 'processing' WHERE id = $1", [id]);
     expect((await agent.get(`/app/import/${id}`)).text).toMatch(/hx-trigger="every 2s"/);
   });

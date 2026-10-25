@@ -25,6 +25,7 @@ const ERRORS = {
   self: ["مينفعش توقف نفسك.", "You can't deactivate yourself."],
   no_bot: ["بوت تيليجرام مش متظبط (TELEGRAM_BOT_USERNAME).", "The Telegram bot isn't set up (TELEGRAM_BOT_USERNAME)."],
   rate: ["دعوات كتير النهارده؛ جرب بكرة.", "Too many invites today; try tomorrow."],
+  seats: ["مقاعد الباقة كلها مستخدمة؛ رقّي الباقة من صفحة الباقة.", "Every seat on your plan is taken; upgrade from the Plan page."],
   linked: ["الوسيط مربوط بتيليجرام بالفعل.", "This broker is already on Telegram."],
   rank: ["الأدمن والمالك يتداروا من الأدمن أو المالك بس.", "Only an admin or owner can manage an admin or owner."],
   forbidden: ["للمديرين بس.", "Managers only."]

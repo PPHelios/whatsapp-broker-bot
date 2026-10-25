@@ -20,6 +20,7 @@
       "TEXT_TIERS": "Array",
       "MEDIA_TIERS": "Array",
       "hasMedia": ["contents"],
+      "hasAudio": ["contents"],
       "tiersFor": ["route", "contents"],
       "ROUTES": "Object",
       "FAST_THINKING": "Object",
@@ -1079,6 +1080,46 @@
     "web/routes/landing.js": {
       "mountLanding": ["app", "params"],
       "FEATURES": "Array"
+    },
+    "services/billing.js": {
+      "MONTHS": "Array",
+      "MAX_PENDING": "Number",
+      "effectivePlan": ["agency", "now"],
+      "allowance": ["db", "agencyId", "params"],
+      "checkAllowance": ["db", "agencyId", "params"],
+      "seatAvailable": ["db", "agencyId", "params"],
+      "getSetting": ["db", "key", "fallback"],
+      "setSetting": ["db", "key", "value"],
+      "payTo": ["db"],
+      "savePayTo": ["db", "params"],
+      "priceOf": ["params"],
+      "requestPayment": ["db", "manager", "input"],
+      "paymentsOf": ["db", "agencyId", "params"],
+      "pendingPayments": ["db"],
+      "confirmPayment": ["pool", "id", "params"],
+      "cancelPayment": ["db", "id"],
+      "endingSoon": ["db", "params"]
+    },
+    "services/billingNotices.js": {
+      "paymentRequested": ["payment", "agency", "manager"],
+      "signupRequested": ["agency", "broker"],
+      "paymentConfirmed": ["pool", "params", "params"],
+      "remindEnding": ["pool", "params"],
+      "reminderJob": []
+    },
+    "services/signup.js": {
+      "isOpen": ["db"],
+      "setOpen": ["db", "enabled"],
+      "submit": ["pool", "input", "params"],
+      "pending": ["db"],
+      "approve": ["pool", "agencyId", "params"],
+      "reject": ["db", "agencyId"]
+    },
+    "web/routes/plan.js": {
+      "register": ["web", "params"]
+    },
+    "web/routes/signup.js": {
+      "register": ["web", "params"]
     }
   },
   "invariant_variable_names": {

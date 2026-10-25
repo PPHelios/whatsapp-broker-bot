@@ -34,7 +34,7 @@ function register(web, { pool, page }) {
       body: html`<h1>⚙️ ${L(lang, "الإعدادات", "Settings")}</h1>
 ${saved ? html`<p class="card notice ok" role="status">✅ ${L(lang, "اتحفظت.", "Saved.")}</p>` : ""}
 ${MANAGER_ROLES.includes(String(broker.role || "").toLowerCase())
-  ? html`<nav class="card row" aria-label="${L(lang, "للمديرين", "For managers")}"><a class="btn secondary" href="/app/team">👥 ${L(lang, "فريقي", "My team")}</a><a class="btn secondary" href="/app/dashboard">📈 ${L(lang, "لوحة الوكالة", "Agency dashboard")}</a><a class="btn secondary" href="/app/usage">📊 ${L(lang, "الاستهلاك", "Usage")}</a></nav>`
+  ? html`<nav class="card row" aria-label="${L(lang, "للمديرين", "For managers")}"><a class="btn secondary" href="/app/team">👥 ${L(lang, "فريقي", "My team")}</a><a class="btn secondary" href="/app/dashboard">📈 ${L(lang, "لوحة الوكالة", "Agency dashboard")}</a><a class="btn secondary" href="/app/usage">📊 ${L(lang, "الاستهلاك", "Usage")}</a><a class="btn secondary" href="/app/plan">💳 ${L(lang, "الباقة", "Plan")}</a></nav>`
   : ""}
 ${pushed === "ok" ? html`<p class="card notice ok" role="status">🔔 ${L(lang, "اتبعت إشعار تجربة.", "Test notification sent.")}</p>` : ""}
 ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "الإشعارات مش مفعلة على أي جهاز لسه.", "Notifications aren't on in any browser yet.")}</p>` : ""}

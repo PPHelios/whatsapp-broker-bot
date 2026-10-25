@@ -42,6 +42,7 @@
   | `022_more_alerts.sql` | `lead_matches.alerted_price` (the unit's price when its broker last heard; a later drop of 2%+ alerts once more, backfilled from the current price) and `leads.interest_nudged_at` (the one "interested but no follow-up" nudge per quiet spell) |
   | `023_function_search_path.sql` | pins `search_path = public, pg_temp` on the 13 own functions the Supabase security advisor flagged (4.7 audit); no data change |
   | `024_demo_requests.sql` | `demo_requests`: "Try it with your agency" requests from the landing page (name, agency, phone, team size); listed on /app/owner, the owner alerted on Telegram |
+  | `025_plans_billing.sql` | plans and billing: `agencies.plan`, `paid_until`, `trial_ends_at`, `pilot` (every existing agency), `approval` (self sign-ups wait for the owner), `signed_up_at`; `app_settings` (sign-up switch, where to pay); `payments` (manual InstaPay/bank payments with a reference, confirmed by the owner) |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
 * **Graceful Termination & Drain Protocol:** On `SIGTERM` or `SIGINT`, the service enters a draining state:

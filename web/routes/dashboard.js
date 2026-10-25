@@ -6,6 +6,11 @@
 const Dash = require("../../services/dashboards");
 const Stages = require("../../domain/leadStages");
 const Commission = require("../../domain/commission");
+const Billing = require("../../services/billing");
+const BillingNotices = require("../../services/billingNotices");
+const Signup = require("../../services/signup");
+const Plans = require("../../domain/plans");
+const Phone = require("../../domain/phone");
 const { html } = require("../html");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
@@ -54,9 +59,47 @@ function agencyPage(d, lang) {
 </section>`;
 }
 
-function ownerPage(d, lang) {
+/** Owner controls (phase 2 step 4): the sign-up switch and waiting sign-ups, where agencies pay, payments to confirm. */
+function billingSections(b, lang) {
+  const day = (x) => new Date(x).toISOString().slice(0, 10);
+  return html`<section class="card" id="signups">
+  <h2>🏢 ${L(lang, "التسجيل", "Sign-up")}</h2>
+  <form method="post" action="/app/owner/signup" class="row">
+    <span>${b.open ? L(lang, "التسجيل مفتوح؛ كل طلب مستني موافقتك.", "Sign-up is open; every request waits for your approval.") : L(lang, "التسجيل مقفول.", "Sign-up is closed.")}</span>
+    <input type="hidden" name="open" value="${b.open ? "0" : "1"}">
+    <button type="submit" class="${b.open ? "secondary" : ""}" data-signup-toggle="${b.open ? "close" : "open"}">${b.open ? L(lang, "اقفل التسجيل", "Close sign-up") : L(lang, "افتح التسجيل", "Open sign-up")}</button>
+  </form>
+  ${b.signups.length
+    ? html`<table><tbody>${b.signups.map(
+        (s) => html`<tr data-signup="${s.id}"><td>${s.name}</td><td>${s.broker_name || "—"}</td><td dir="ltr">${s.phone_number ? `+${s.phone_number}` : "—"}</td><td dir="ltr">${day(s.signed_up_at)}</td>
+  <td class="row"><form method="post" action="/app/owner/signups/${s.id}/approve"><button type="submit">✅ ${L(lang, "وافق", "Approve")}</button></form>
+  <form method="post" action="/app/owner/signups/${s.id}/reject" data-confirm="${L(lang, "ترفض الطلب ده؟", "Reject this request?")}"><button type="submit" class="secondary">✖ ${L(lang, "ارفض", "Reject")}</button></form></td></tr>`
+      )}</tbody></table>`
+    : html`<p class="muted">${L(lang, "مفيش طلبات مستنية.", "No requests waiting.")}</p>`}
+</section>
+<section class="card" id="payments">
+  <h2>💳 ${L(lang, "مدفوعات مستنية التأكيد", "Payments to confirm")}</h2>
+  ${b.payments.length
+    ? html`<div class="scroll"><table><tbody>${b.payments.map(
+        (p) => html`<tr data-payment="${p.reference}"><td dir="ltr">${p.reference}</td><td>${p.agency_name}</td><td>${p.kind === "voice_pack" ? L(lang, "باقة فويس", "Voice pack") : `${Plans.planName(Plans.planById(p.plan), lang)} × ${p.months}`}</td><td>${p.amount_egp} ${L(lang, "ج.م", "EGP")}</td><td dir="ltr">${day(p.created_at)}</td>
+  <td class="row"><form method="post" action="/app/owner/payments/${p.id}/confirm" data-confirm="${L(lang, `وصلك ${p.amount_egp} ج.م بالمرجع ${p.reference}؟`, `Did ${p.amount_egp} EGP with reference ${p.reference} arrive?`)}"><button type="submit">✅ ${L(lang, "وصل", "Received")}</button></form>
+  <form method="post" action="/app/owner/payments/${p.id}/cancel"><button type="submit" class="secondary">✖ ${L(lang, "الغِ", "Cancel")}</button></form></td></tr>`
+      )}</tbody></table></div>`
+    : html`<p class="muted">${L(lang, "مفيش.", "None.")}</p>`}
+  <form method="post" action="/app/owner/pay-to" class="stack">
+    <h3>${L(lang, "الوكالات تدفع فين", "Where agencies pay")}</h3>
+    <label>InstaPay <input name="instapay" maxlength="120" dir="ltr" placeholder="name@instapay" value="${b.payTo.instapay}"></label>
+    <label>${L(lang, "تحويل بنكي (اختياري)", "Bank transfer (optional)")} <textarea name="bank" maxlength="300" rows="2">${b.payTo.bank}</textarea></label>
+    <button type="submit" class="secondary">${L(lang, "احفظ", "Save")}</button>
+  </form>
+</section>`;
+}
+
+function ownerPage(d, lang, { billing = null, notice = null } = {}) {
   const usd = (n) => `$${Number(n).toFixed(n < 1 ? 4 : 2)}`;
   return html`<h1>🛠️ ${L(lang, "متابعة التطبيق", "App tracking")}</h1>
+${notice || ""}
+${billing ? billingSections(billing, lang) : ""}
 <section class="card">
   <h2>${L(lang, "كل أسبوع", "Weekly")}</h2>
   <div class="scroll"><table>
@@ -106,11 +149,66 @@ function register(web, { pool, page }) {
     return page(req, res, { title: L(lang, "لوحة الوكالة", "Agency dashboard"), body: agencyPage(d, lang) });
   });
 
-  web.get("/owner", async (req, res) => {
+  const ownerView = async (req, res, notice = null, status = 200) => {
     const d = await Dash.ownerDashboard(pool, req.session.broker);
     if (!d) return notFound(req, res, page);
-    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), body: ownerPage(d, langOf(req)) });
-  });
+    const [open, signups, payments, payTo] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool)]);
+    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo }, notice }) }, status);
+  };
+  const ok = (text) => html`<p class="card notice ok" role="status">✅ ${text}</p>`;
+  const bad = (text) => html`<p class="card notice bad" role="alert">❌ ${text}</p>`;
+  const ownerOnly = (handler) => async (req, res) => {
+    if (!Dash.isOwner(req.session.broker)) return notFound(req, res, page);
+    return handler(req, res, langOf(req));
+  };
+  const idParam = (req) => (/^\d{1,12}$/.test(req.params.id) ? Number(req.params.id) : null);
+  const uuidParam = (req) => (/^[0-9a-f-]{36}$/i.test(req.params.id) ? req.params.id : null);
+
+  web.get("/owner", (req, res) => ownerView(req, res));
+
+  web.post("/owner/signup", ownerOnly(async (req, res, lang) => {
+    await Signup.setOpen(pool, req.body.open === "1");
+    return ownerView(req, res, ok(req.body.open === "1" ? L(lang, "التسجيل اتفتح.", "Sign-up is open.") : L(lang, "التسجيل اتقفل.", "Sign-up is closed.")));
+  }));
+
+  web.post("/owner/signups/:id/approve", ownerOnly(async (req, res, lang) => {
+    const id = uuidParam(req);
+    const r = id ? await Signup.approve(pool, id) : { error: "not_pending" };
+    if (r.error) return ownerView(req, res, bad(L(lang, "الطلب مش مستني.", "That request isn't waiting.")), 400);
+    const b = r.broker;
+    const text = b.preferred_lang === "en"
+      ? `Hi ${b.name}! ${r.agency.name} is on WehdatHub: a ${Plans.TRIAL.days}-day free trial on the Office plan. Tap this link to start on Telegram (works once, for 7 days): ${r.url || ""}`
+      : `أهلاً ${b.name}! ${r.agency.name} اتفعّلت على WehdatHub: ${Plans.TRIAL.days} يوم تجربة مجانية على باقة المكتب. دوس على اللينك ده عشان تبدأ على تيليجرام (يشتغل مرة واحدة، لمدة ٧ أيام): ${r.url || ""}`;
+    const wa = r.url ? Phone.waMeUrl(b.phone_number, text) : null;
+    return ownerView(req, res, html`<section class="card notice ok" role="status" data-approved="${r.agency.id}"><h2>✅ ${L(lang, `${r.agency.name} اتوافق عليها؛ التجربة شغالة.`, `${r.agency.name} approved; the trial has started.`)}</h2>
+${r.url ? html`<p dir="ltr"><input readonly value="${r.url}" aria-label="${L(lang, "لينك البداية", "Start link")}"></p>` : html`<p class="muted">${L(lang, "بوت تيليجرام مش متظبط (TELEGRAM_BOT_USERNAME).", "The Telegram bot isn't set up (TELEGRAM_BOT_USERNAME).")}</p>`}
+${wa ? html`<p><a class="btn" href="${wa}" target="_blank" rel="noopener noreferrer">📤 ${L(lang, "ابعته على واتساب", "Send on WhatsApp")}</a></p>` : ""}</section>`);
+  }));
+
+  web.post("/owner/signups/:id/reject", ownerOnly(async (req, res, lang) => {
+    const id = uuidParam(req);
+    const r = id ? await Signup.reject(pool, id) : { error: "not_pending" };
+    return r.error ? ownerView(req, res, bad(L(lang, "الطلب مش مستني.", "That request isn't waiting.")), 400) : ownerView(req, res, ok(L(lang, `${r.agency.name} اترفضت.`, `${r.agency.name} rejected.`)));
+  }));
+
+  web.post("/owner/payments/:id/confirm", ownerOnly(async (req, res, lang) => {
+    const id = idParam(req);
+    const r = id ? await Billing.confirmPayment(pool, id) : { error: "not_found" };
+    if (r.error) return ownerView(req, res, bad(L(lang, "الدفع ده مش مستني.", "That payment isn't waiting.")), 400);
+    await BillingNotices.paymentConfirmed(pool, r).catch((e) => console.warn("Payment notice failed:", e.message));
+    return ownerView(req, res, ok(L(lang, `${r.payment.reference} اتأكد.`, `${r.payment.reference} confirmed.`)));
+  }));
+
+  web.post("/owner/payments/:id/cancel", ownerOnly(async (req, res, lang) => {
+    const id = idParam(req);
+    const r = id ? await Billing.cancelPayment(pool, id) : { error: "not_pending" };
+    return r.error ? ownerView(req, res, bad(L(lang, "الدفع ده مش مستني.", "That payment isn't waiting.")), 400) : ownerView(req, res, ok(L(lang, `${r.payment.reference} اتلغى.`, `${r.payment.reference} cancelled.`)));
+  }));
+
+  web.post("/owner/pay-to", ownerOnly(async (req, res, lang) => {
+    await Billing.savePayTo(pool, { instapay: req.body.instapay, bank: req.body.bank });
+    return ownerView(req, res, ok(L(lang, "اتحفظ.", "Saved.")));
+  }));
 }
 
 module.exports = { register };
