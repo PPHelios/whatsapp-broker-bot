@@ -78,6 +78,15 @@ function billingSections(b, lang) {
       )}</tbody></table>`
     : html`<p class="muted">${L(lang, "مفيش طلبات مستنية.", "No requests waiting.")}</p>`}
 </section>
+<section class="card" id="trial-agencies">
+  <h2>⏳ ${L(lang, "وكالات في التجربة", "Agencies on a trial")}</h2>
+  ${b.trials.length
+    ? html`<div class="scroll"><table><tbody>${b.trials.map(
+        (t) => html`<tr data-trial-agency="${t.id}"><td>${t.name}</td><td>${new Date(t.trial_ends_at) > new Date() ? L(lang, "تنتهي", "Ends") : L(lang, "انتهت", "Ended")} <span dir="ltr">${day(t.trial_ends_at)}</span></td>
+  <td class="row">${Billing.EXTEND_DAYS.map((n) => html`<form method="post" action="/app/owner/trials/${t.id}/extend"><input type="hidden" name="days" value="${n}"><button type="submit" class="secondary">+${n} ${L(lang, "يوم", "days")}</button></form>`)}</td></tr>`
+      )}</tbody></table></div>`
+    : html`<p class="muted">${L(lang, "مفيش.", "None.")}</p>`}
+</section>
 <section class="card" id="payments">
   <h2>💳 ${L(lang, "مدفوعات مستنية التأكيد", "Payments to confirm")}</h2>
   ${b.payments.length
@@ -153,8 +162,8 @@ function register(web, { pool, page }) {
   const ownerView = async (req, res, notice = null, status = 200) => {
     const d = await Dash.ownerDashboard(pool, req.session.broker);
     if (!d) return notFound(req, res, page);
-    const [open, signups, payments, payTo] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool)]);
-    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo }, notice }) }, status);
+    const [open, signups, payments, payTo, trials] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool)]);
+    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials }, notice }) }, status);
   };
   const ok = (text) => html`<p class="card notice ok" role="status">✅ ${text}</p>`;
   const bad = (text) => html`<p class="card notice bad" role="alert">❌ ${text}</p>`;
@@ -204,6 +213,14 @@ ${wa ? html`<p><a class="btn" href="${wa}" target="_blank" rel="noopener norefer
     const id = idParam(req);
     const r = id ? await Billing.cancelPayment(pool, id) : { error: "not_pending" };
     return r.error ? ownerView(req, res, bad(L(lang, "الدفع ده مش مستني.", "That payment isn't waiting.")), 400) : ownerView(req, res, ok(L(lang, `${r.payment.reference} اتلغى.`, `${r.payment.reference} cancelled.`)));
+  }));
+
+  web.post("/owner/trials/:id/extend", ownerOnly(async (req, res, lang) => {
+    const id = uuidParam(req);
+    const r = id ? await Billing.extendTrial(pool, id, req.body.days) : { error: "not_found" };
+    if (r.error) return ownerView(req, res, bad(L(lang, "مينفعش تمدّد دي.", "That trial can't be extended.")), 400);
+    const until = new Date(r.agency.trial_ends_at).toISOString().slice(0, 10);
+    return ownerView(req, res, ok(L(lang, `تجربة ${r.agency.name} اتمدّت لحد ${until}.`, `${r.agency.name}'s trial now ends ${until}.`)));
   }));
 
   web.post("/owner/pay-to", ownerOnly(async (req, res, lang) => {

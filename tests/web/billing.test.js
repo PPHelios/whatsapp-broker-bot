@@ -181,3 +181,22 @@ test("managers hear once, 3 days before the trial ends", async () => {
   const rows = await h.query("SELECT broker_id FROM notifications WHERE dedupe_key LIKE 'plan_end:%'");
   expect(new Set(rows.map((r) => r.broker_id)).size).toBe(rows.length);
 });
+
+test("the owner extends a trial by 7 or 14 days, also after it ended; pilots and other amounts are refused", async () => {
+  const ended = new Date(Date.now() - 2 * DAY);
+  await h.query("UPDATE agencies SET pilot = false, trial_ends_at = $2 WHERE id = $1", [h.AGENCY_B, ended.toISOString()]);
+  const a = await signIn(h, "admin");
+  const page = await a.agent.get("/app/owner");
+  expect(page.text).toMatch(new RegExp(`data-trial-agency="${h.AGENCY_B}"`));
+  expect(page.text).not.toMatch(new RegExp(`data-trial-agency="${h.AGENCY_A}"`));
+  const r = await a.agent.post(`/app/owner/trials/${h.AGENCY_B}/extend`).type("form").send({ _csrf: a.csrf, days: "7" });
+  expect(r.status).toBe(200);
+  const [b] = await h.query("SELECT trial_ends_at FROM agencies WHERE id = $1", [h.AGENCY_B]);
+  // From now (the trial had ended), not from the old end.
+  expect(Math.round((new Date(b.trial_ends_at) - Date.now()) / DAY)).toBe(7);
+  expect((await Billing.allowance(h.pool, h.AGENCY_B)).source).toBe("trial");
+  expect((await a.agent.post(`/app/owner/trials/${h.AGENCY_B}/extend`).type("form").send({ _csrf: a.csrf, days: "30" })).status).toBe(400);
+  expect((await a.agent.post(`/app/owner/trials/${h.AGENCY_A}/extend`).type("form").send({ _csrf: a.csrf, days: "7" })).status).toBe(400);
+  const broker = await signIn(h, "broker");
+  expect((await broker.agent.post(`/app/owner/trials/${h.AGENCY_B}/extend`).type("form").send({ _csrf: broker.csrf, days: "7" })).status).toBe(404);
+});

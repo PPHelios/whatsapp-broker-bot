@@ -1092,6 +1092,9 @@
       "FEATURES": "Array"
     },
     "services/billing.js": {
+      "EXTEND_DAYS": "Array",
+      "trialAgencies": ["db", "params"],
+      "extendTrial": ["db", "agencyId", "days", "params"],
       "MONTHS": "Array",
       "MAX_PENDING": "Number",
       "effectivePlan": ["agency", "now"],
