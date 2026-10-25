@@ -30,6 +30,7 @@ const { handleImage, handleAudio } = require("./routes/media");
 const { handleDocument } = require("./routes/documents");
 const { handleInteractive } = require("./routes/interactive");
 const LeadIntake = require("./lib/leadIntake");
+const DealsWA = require("./lib/deals");
 const { mountWeb } = require("./web");
 const { createScheduler } = require("./lib/scheduler");
 const { buildJobs } = require("./lib/jobs");
@@ -185,6 +186,9 @@ function createApp({ pool, config = getConfig(), jobs }) {
 
         // 0. An open lead draft takes the next message (the client's text, number or a correction).
         if (await LeadIntake.collect(broker, text, ctx)) return "done";
+
+        // 0a. A deal waiting for its commission takes the next message.
+        if (await DealsWA.collect(broker, text, ctx)) return "done";
 
         // 0b. Wow 3: "كلمت أحمد، عايز يعاين VIL-08 الجمعة الساعة ٥" about one of the broker's clients → Confirm.
         if (await LeadIntake.offerUpdate(broker, text, ctx)) return "done";

@@ -54,6 +54,60 @@ CREATE OR REPLACE FUNCTION public.clean_arabic_text(input_text text)
  IMMUTABLE PARALLEL SAFE
 AS $function$ SELECT public.normalize_search(input_text) $function$;
 
+CREATE OR REPLACE FUNCTION public.deal_shares_balance()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  d uuid;
+  want bigint;
+  got bigint;
+BEGIN
+  IF TG_TABLE_NAME = 'deals' THEN
+    d := NEW.id;
+  ELSIF TG_OP = 'DELETE' THEN
+    d := OLD.deal_id;
+  ELSE
+    d := NEW.deal_id;
+  END IF;
+  SELECT commission_total - external_share INTO want FROM deals WHERE id = d;
+  IF want IS NULL THEN RETURN NULL; END IF;
+  SELECT COALESCE(sum(amount), 0) INTO got FROM deal_splits WHERE deal_id = d;
+  IF got <> want THEN
+    RAISE EXCEPTION 'deal % shares add up to %, not %', d, got, want USING ERRCODE = '23514';
+  END IF;
+  RETURN NULL;
+END $function$;
+
+CREATE OR REPLACE FUNCTION public.deal_splits_same_agency()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM deals WHERE id = NEW.deal_id AND agency_id = NEW.agency_id)
+     OR NOT EXISTS (SELECT 1 FROM brokers WHERE id = NEW.broker_id AND agency_id = NEW.agency_id) THEN
+    RAISE EXCEPTION 'deal share outside the deal''s agency' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $function$;
+
+CREATE OR REPLACE FUNCTION public.deals_same_agency()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF NEW.lead_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM leads WHERE id = NEW.lead_id AND agency_id = NEW.agency_id) THEN
+    RAISE EXCEPTION 'deal % on a lead of another agency', NEW.id USING ERRCODE = '23514';
+  END IF;
+  IF NEW.listing_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM listings WHERE id = NEW.listing_id AND agency_id = NEW.agency_id) THEN
+    RAISE EXCEPTION 'deal % on a unit of another agency', NEW.id USING ERRCODE = '23514';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM brokers WHERE id = NEW.closing_broker_id AND agency_id = NEW.agency_id) THEN
+    RAISE EXCEPTION 'deal % closed by a broker of another agency', NEW.id USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $function$;
+
 CREATE OR REPLACE FUNCTION public.leads_same_agency()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -200,7 +254,8 @@ CREATE TABLE IF NOT EXISTS public.agencies (
   wa_credits_monthly integer,
   wa_broker_daily_cap integer,
   wa_broker_weekly_cap integer,
-  lead_ref_seq integer DEFAULT 0 NOT NULL
+  lead_ref_seq integer DEFAULT 0 NOT NULL,
+  deal_ref_seq integer DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.brokers (
@@ -609,6 +664,41 @@ CREATE TABLE IF NOT EXISTS public.lead_matches (
   alerted_at timestamp with time zone
 );
 
+CREATE TABLE IF NOT EXISTS public.deals (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid NOT NULL,
+  ref integer NOT NULL,
+  lead_id uuid,
+  listing_id uuid,
+  unit_code text,
+  closing_broker_id uuid NOT NULL,
+  created_by_broker_id uuid,
+  deal_type text NOT NULL,
+  price numeric(14,0) NOT NULL,
+  commission_mode text NOT NULL,
+  commission_pct numeric(6,3),
+  commission_total bigint NOT NULL,
+  external_share bigint DEFAULT 0 NOT NULL,
+  external_name text,
+  status text DEFAULT 'pending'::text NOT NULL,
+  client_name text,
+  client_phone text,
+  notes text,
+  idem_key text,
+  version integer DEFAULT 1 NOT NULL,
+  closed_at timestamp with time zone DEFAULT now() NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.deal_splits (
+  deal_id uuid NOT NULL,
+  agency_id uuid NOT NULL,
+  broker_id uuid NOT NULL,
+  pct numeric(6,3) NOT NULL,
+  amount bigint NOT NULL
+);
+
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (id);
 ALTER TABLE broker_search_state ADD CONSTRAINT broker_search_state_pkey PRIMARY KEY (phone_key);
@@ -616,6 +706,8 @@ ALTER TABLE broker_sessions ADD CONSTRAINT broker_sessions_pkey PRIMARY KEY (bro
 ALTER TABLE brokers ADD CONSTRAINT brokers_pkey PRIMARY KEY (id);
 ALTER TABLE compound_synonyms ADD CONSTRAINT compound_synonyms_pkey PRIMARY KEY (kind, key, synonym);
 ALTER TABLE crm_jobs ADD CONSTRAINT crm_jobs_pkey PRIMARY KEY (name);
+ALTER TABLE deal_splits ADD CONSTRAINT deal_splits_pkey PRIMARY KEY (deal_id, broker_id);
+ALTER TABLE deals ADD CONSTRAINT deals_pkey PRIMARY KEY (id);
 ALTER TABLE inbound_messages ADD CONSTRAINT inbound_messages_pkey PRIMARY KEY (msg_id);
 ALTER TABLE lead_erasures ADD CONSTRAINT lead_erasures_pkey PRIMARY KEY (agency_id, phone_hash);
 ALTER TABLE lead_events ADD CONSTRAINT lead_events_pkey PRIMARY KEY (id);
@@ -641,6 +733,8 @@ ALTER TABLE web_rate_limits ADD CONSTRAINT web_rate_limits_pkey PRIMARY KEY (buc
 ALTER TABLE web_sessions ADD CONSTRAINT web_sessions_pkey PRIMARY KEY (id_hash);
 ALTER TABLE brokers ADD CONSTRAINT brokers_phone_key UNIQUE (phone_number);
 ALTER TABLE brokers ADD CONSTRAINT uq_broker_phone UNIQUE (agency_id, phone_number);
+ALTER TABLE deals ADD CONSTRAINT deals_agency_id_idem_key_key UNIQUE (agency_id, idem_key);
+ALTER TABLE deals ADD CONSTRAINT deals_agency_id_ref_key UNIQUE (agency_id, ref);
 ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_search_id_listing_id_key UNIQUE (search_id, listing_id);
 ALTER TABLE leads ADD CONSTRAINT leads_agency_id_phone_e164_key UNIQUE (agency_id, phone_e164);
 ALTER TABLE leads ADD CONSTRAINT leads_agency_id_ref_key UNIQUE (agency_id, ref);
@@ -655,6 +749,19 @@ ALTER TABLE agencies ADD CONSTRAINT agencies_wa_credits_monthly_check CHECK (((w
 ALTER TABLE brokers ADD CONSTRAINT brokers_role_check CHECK ((role = ANY (ARRAY['broker'::text, 'agent'::text, 'admin'::text, 'owner'::text, 'manager'::text])));
 ALTER TABLE compound_synonyms ADD CONSTRAINT compound_synonyms_kind_check CHECK ((kind = ANY (ARRAY['compound'::text, 'developer'::text, 'area'::text])));
 ALTER TABLE crm_jobs ADD CONSTRAINT crm_jobs_last_status_check CHECK ((last_status = ANY (ARRAY['running'::text, 'success'::text, 'failed'::text])));
+ALTER TABLE deal_splits ADD CONSTRAINT deal_splits_amount_check CHECK ((amount >= 0));
+ALTER TABLE deal_splits ADD CONSTRAINT deal_splits_pct_check CHECK (((pct >= (0)::numeric) AND (pct <= (100)::numeric)));
+ALTER TABLE deals ADD CONSTRAINT deals_check CHECK (((external_share >= 0) AND (external_share <= commission_total)));
+ALTER TABLE deals ADD CONSTRAINT deals_client_name_check CHECK (((client_name IS NULL) OR (length(client_name) <= 120)));
+ALTER TABLE deals ADD CONSTRAINT deals_commission_mode_check CHECK ((commission_mode = ANY (ARRAY['amount'::text, 'pct'::text])));
+ALTER TABLE deals ADD CONSTRAINT deals_commission_pct_check CHECK (((commission_pct IS NULL) OR ((commission_pct > (0)::numeric) AND (commission_pct <= (100)::numeric))));
+ALTER TABLE deals ADD CONSTRAINT deals_commission_total_check CHECK ((commission_total >= 0));
+ALTER TABLE deals ADD CONSTRAINT deals_deal_type_check CHECK ((deal_type = ANY (ARRAY['sale'::text, 'rent'::text])));
+ALTER TABLE deals ADD CONSTRAINT deals_external_name_check CHECK (((external_name IS NULL) OR (length(external_name) <= 120)));
+ALTER TABLE deals ADD CONSTRAINT deals_notes_check CHECK (((notes IS NULL) OR (length(notes) <= 1000)));
+ALTER TABLE deals ADD CONSTRAINT deals_price_check CHECK ((price > (0)::numeric));
+ALTER TABLE deals ADD CONSTRAINT deals_ref_check CHECK ((ref > 0));
+ALTER TABLE deals ADD CONSTRAINT deals_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'signed'::text, 'paid'::text, 'cancelled'::text])));
 ALTER TABLE lead_events ADD CONSTRAINT lead_events_kind_check CHECK ((kind = ANY (ARRAY['created'::text, 'inquiry'::text, 'assigned'::text, 'stage'::text, 'note'::text, 'contacted'::text, 'follow_up_set'::text, 'follow_up_done'::text, 'request_set'::text, 'match_sent'::text, 'share_opened'::text, 'deal'::text, 'exported'::text, 'merged'::text, 'undo'::text])));
 ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_status_check CHECK ((status = ANY (ARRAY['new'::text, 'alerted'::text, 'sent_to_client'::text, 'dismissed'::text])));
 ALTER TABLE leads ADD CONSTRAINT leads_check CHECK (((stage <> 'lost'::text) OR (lost_reason IS NOT NULL)));
@@ -692,6 +799,14 @@ ALTER TABLE web_login_tokens ADD CONSTRAINT web_login_tokens_channel_check CHECK
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE brokers ADD CONSTRAINT brokers_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE deal_splits ADD CONSTRAINT deal_splits_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE deal_splits ADD CONSTRAINT deal_splits_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id);
+ALTER TABLE deal_splits ADD CONSTRAINT deal_splits_deal_id_fkey FOREIGN KEY (deal_id) REFERENCES deals(id) ON DELETE CASCADE;
+ALTER TABLE deals ADD CONSTRAINT deals_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE deals ADD CONSTRAINT deals_closing_broker_id_fkey FOREIGN KEY (closing_broker_id) REFERENCES brokers(id);
+ALTER TABLE deals ADD CONSTRAINT deals_created_by_broker_id_fkey FOREIGN KEY (created_by_broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE deals ADD CONSTRAINT deals_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL;
+ALTER TABLE deals ADD CONSTRAINT deals_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE SET NULL;
 ALTER TABLE lead_erasures ADD CONSTRAINT lead_erasures_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE lead_erasures ADD CONSTRAINT lead_erasures_erased_by_broker_id_fkey FOREIGN KEY (erased_by_broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE lead_events ADD CONSTRAINT lead_events_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
@@ -737,6 +852,9 @@ CREATE INDEX idx_broker_sessions_expires ON public.broker_sessions USING btree (
 CREATE INDEX brokers_agency_idx ON public.brokers USING btree (agency_id);
 CREATE UNIQUE INDEX brokers_phone_normalized_uidx ON public.brokers USING btree (phone_normalized);
 CREATE INDEX idx_compound_synonyms_norm ON public.compound_synonyms USING btree (synonym_norm);
+CREATE INDEX idx_deal_splits_broker ON public.deal_splits USING btree (agency_id, broker_id);
+CREATE INDEX idx_deals_agency_closed ON public.deals USING btree (agency_id, closed_at DESC);
+CREATE INDEX idx_deals_lead ON public.deals USING btree (lead_id) WHERE (lead_id IS NOT NULL);
 CREATE INDEX inbound_messages_phone_idx ON public.inbound_messages USING btree (phone_key, received_at DESC);
 CREATE INDEX inbound_messages_status_idx ON public.inbound_messages USING btree (status, received_at);
 CREATE INDEX idx_lead_events_lead ON public.lead_events USING btree (lead_id, created_at DESC, id DESC);
@@ -792,6 +910,10 @@ CREATE INDEX idx_web_login_tokens_broker ON public.web_login_tokens USING btree 
 CREATE INDEX idx_web_sessions_broker ON public.web_sessions USING btree (broker_id);
 
 CREATE TRIGGER trg_agencies_slug BEFORE INSERT OR UPDATE OF slug, name ON public.agencies FOR EACH ROW WHEN (((new.slug IS NULL) OR (btrim(new.slug) = ''::text) OR (new.slug <> lower(btrim(new.slug))))) EXECUTE FUNCTION agencies_set_slug();
+CREATE CONSTRAINT TRIGGER trg_deal_shares_balance AFTER INSERT OR DELETE OR UPDATE ON public.deal_splits DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION deal_shares_balance();
+CREATE TRIGGER trg_deal_splits_same_agency BEFORE INSERT OR UPDATE ON public.deal_splits FOR EACH ROW EXECUTE FUNCTION deal_splits_same_agency();
+CREATE CONSTRAINT TRIGGER trg_deal_total_balance AFTER INSERT OR UPDATE OF commission_total, external_share ON public.deals DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION deal_shares_balance();
+CREATE TRIGGER trg_deals_same_agency BEFORE INSERT OR UPDATE OF agency_id, lead_id, listing_id, closing_broker_id ON public.deals FOR EACH ROW EXECUTE FUNCTION deals_same_agency();
 CREATE TRIGGER trg_leads_same_agency BEFORE INSERT OR UPDATE OF agency_id, assigned_broker_id, created_by_broker_id, follow_up_listing_id ON public.leads FOR EACH ROW EXECUTE FUNCTION leads_same_agency();
 CREATE TRIGGER trg_set_listing_image_agency_id BEFORE INSERT ON public.listing_images FOR EACH ROW EXECUTE FUNCTION set_listing_image_agency_id();
 CREATE TRIGGER trg_listings_search_document BEFORE INSERT OR UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_search_document();

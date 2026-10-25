@@ -716,6 +716,7 @@
       "postponeFollowUp": ["pool", "actor", "key", "params"],
       "applyUpdate": ["pool", "actor", "key", "u", "params"],
       "undoMany": ["pool", "actor", "eventIds", "params"],
+      "recordDeal": ["client", "actor", "leadId", "params", "now"],
       "undo": ["pool", "actor", "eventId", "params"],
       "noteRequest": ["pool", "actor", "key", "filters", "params"],
       "logMatchSent": ["pool", "actor", "key", "listing", "params"],
@@ -842,6 +843,36 @@
       "hasChange": ["u"],
       "checkUpdate": ["u", "params"],
       "summaryLines": ["u", "lead", "lang", "params"]
+    },
+    "domain/commission.js": {
+      "compute": ["params"],
+      "parsePct": ["text"],
+      "parseSplit": ["text"],
+      "money": ["n", "lang"]
+    },
+    "services/deals.js": {
+      "STATUSES": "Array",
+      "refLabel": ["ref"],
+      "parseRef": ["text"],
+      "statusLabel": ["s", "lang"],
+      "prepare": ["pool", "actor", "input"],
+      "createDeal": ["pool", "actor", "input", "params"],
+      "getDeal": ["pool", "actor", "key"],
+      "listDeals": ["pool", "actor", "params"],
+      "monthlyTotals": ["pool", "actor", "params"],
+      "updateDeal": ["pool", "actor", "key", "change", "params"]
+    },
+    "lib/deals.js": {
+      "parseDealCommand": ["text"],
+      "parseCommission": ["text"],
+      "reviewLines": ["d", "lang"],
+      "dealCommand": ["broker", "params", "ctx"],
+      "collect": ["broker", "text", "ctx"],
+      "handleButton": ["broker", "id", "ctx"],
+      "DEAL": "Object"
+    },
+    "web/routes/deals.js": {
+      "register": ["web", "params"]
     }
   },
   "invariant_variable_names": {

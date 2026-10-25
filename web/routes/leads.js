@@ -274,7 +274,8 @@ ${rows.length
           ? html` <form method="post" action="${path}/undo" class="inline"><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="event" value="${undoEvent}"><button type="submit" class="link">↩️ ${L(lang, "تراجع", "Undo")}</button></form>`
           : ""}</div>` : ""}
 ${V.leadHeader(lead, lang)}
-<form method="post" action="${path}/contacted" class="card row">${hidden}<button type="submit">📞 ${L(lang, "كلمته", "I called")}</button></form>
+<div class="card row"><form method="post" action="${path}/contacted" class="inline">${hidden}<button type="submit">📞 ${L(lang, "كلمته", "I called")}</button></form>
+  <a class="btn secondary" href="/app/deals/new?lead=${Card.refLabel(lead.ref)}">🤝 ${L(lang, "سجل صفقة", "Record deal")}</a></div>
 <section class="card" id="stage"><h2>🔄 ${L(lang, "المرحلة", "Stage")}</h2>
   <form method="post" action="${path}/stage" class="row">${hidden}
     <select name="stage">${Stages.STAGES.map((s) => html`<option value="${s}"${s === lead.stage ? html` selected` : ""}>${Stages.stageLabel(s, lang)}</option>`)}</select>

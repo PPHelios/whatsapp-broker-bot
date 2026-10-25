@@ -346,6 +346,13 @@ async function applyUpdate(pool, actor, key, u, { now = new Date() } = {}) {
   });
 }
 
+/** Inside the deal's transaction (services/deals.js): the lead is won, with a "deal" event (not undoable). */
+async function recordDeal(client, actor, leadId, { dealId, ref, price, unitCode }, now = new Date()) {
+  const lead = await loadLead(client, actor.agency_id, leadId, { forUpdate: true });
+  if (!lead) return null;
+  return applyChange(client, actor, lead, "deal", { fields: { stage: "won", lost_reason: null }, data: { deal_id: dealId, ref, price, unit_code: unitCode, from: lead.stage } }, now);
+}
+
 /** Undoes a set of events (newest first); stops at the first that can't be undone. */
 async function undoMany(pool, actor, eventIds, { now = new Date() } = {}) {
   let last = null;
@@ -643,6 +650,7 @@ module.exports = {
   postponeFollowUp,
   applyUpdate,
   undoMany,
+  recordDeal,
   undo,
   noteRequest,
   logMatchSent,

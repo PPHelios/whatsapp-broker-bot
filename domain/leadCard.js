@@ -112,7 +112,7 @@ function timelineLine(ev, lang) {
       case "share_opened":
         return L(lang, `👀 فتح ${d.code || "الرابط"}`, `👀 Opened ${d.code || "the link"}`);
       case "deal":
-        return L(lang, "💰 صفقة", "💰 Deal");
+        return d.ref ? L(lang, `🤝 صفقة D-${String(d.ref).padStart(4, "0")}${d.unit_code ? ` · ${d.unit_code}` : ""}`, `🤝 Deal D-${String(d.ref).padStart(4, "0")}${d.unit_code ? ` · ${d.unit_code}` : ""}`) : L(lang, "💰 صفقة", "💰 Deal");
       case "exported":
         return L(lang, "📦 اتصدّرت بياناته", "📦 Data exported");
       case "merged":

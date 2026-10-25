@@ -11,6 +11,7 @@ const PRIVATE = [
   require("./units"),
   require("./leadImports"),
   require("./leads"),
+  require("./deals"),
   require("./notifications"),
   require("./settings"),
   require("./usage")
