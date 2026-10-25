@@ -116,7 +116,7 @@ function register(web, { pool, page }) {
           ...view,
           values: Form.formFromUnit({ ...base, code: form.code }),
           error: quota
-            ? L10n(lang, "⛔ تم استهلاك حد الذكاء الاصطناعي اليومي. املأ البيانات يدوياً.", "⛔ The daily AI limit was reached. Fill the fields by hand.")
+            ? L10n(lang, "⛔ حد الذكاء الاصطناعي خلص (حد اليوم أو رصيد الباقة). املأ البيانات يدوياً.", "⛔ The AI limit was reached (today's limit or your plan's allowance). Fill the fields by hand.")
             : L10n(lang, "❌ تعذر قراءة الوصف حالياً. املأ البيانات يدوياً أو حاول تاني.", "❌ Could not read the description right now. Fill the fields by hand or try again.")
         }))
       );

@@ -8,6 +8,7 @@ const RateLimit = require("../../lib/rateLimit");
 const ErrorReports = require("../../lib/errorReports");
 const Phone = require("../../domain/phone");
 const Plans = require("../../domain/plans");
+const Signup = require("../../services/signup");
 const { BRAND } = require("../../domain/brand");
 const { getConfig } = require("../../config");
 const { securityHeaders, sameOrigin } = require("../security");
@@ -49,13 +50,14 @@ function tryForm(lang, { error, values = {}, sent }) {
 </form>`;
 }
 
-function landingBody(lang, { telegramUrl, form, logo }) {
+function landingBody(lang, { telegramUrl, form, logo, signupOpen }) {
   return html`<section class="hero">
   <img class="hero-logo" src="${logo}" alt="" width="72" height="72">
   <h1>${BRAND.name}</h1>
   <p class="lead">${T(lang, "وحداتك وعملاءك في مكان واحد، على تيليجرام والموقع. معمول للبروكرز والوكالات العقارية في مصر.", "Your units and clients in one place, on Telegram and the web. Built for real estate brokers and agencies in Egypt.")}</p>
   <div class="row">
     ${telegramUrl ? html`<a class="btn" href="${telegramUrl}" rel="noopener">✈️ ${T(lang, "افتح في تيليجرام", "Open in Telegram")}</a>` : ""}
+    ${signupOpen ? html`<a class="btn" href="/app/signup?lang=${lang}">🏢 ${T(lang, "سجّل وكالتك", "Sign up your agency")}</a>` : ""}
     <a class="btn secondary" href="#try">🤝 ${T(lang, "جرّبه مع وكالتك", "Try it with your agency")}</a>
     <a class="btn secondary" href="/app/guide?lang=${lang}">📘 ${T(lang, "الدليل", "Guide")}</a>
   </div>
@@ -82,7 +84,8 @@ ${form}`;
 }
 
 function mountLanding(app, { pool, assets }) {
-  const render = (req, res, lang, form = {}, status = 200) => {
+  const render = async (req, res, lang, form = {}, status = 200) => {
+    const signupOpen = await Signup.isOpen(pool);
     const username = getConfig().telegram.botUsername;
     const telegramUrl = /^[A-Za-z0-9_]{5,32}$/.test(username || "") ? `https://t.me/${username}` : null;
     const other = lang === "en" ? "ar" : "en";
@@ -102,14 +105,14 @@ function mountLanding(app, { pool, assets }) {
 <meta property="og:title" content="${BRAND.name}">
 <link rel="alternate" hreflang="${other}" href="/?lang=${other}">`,
             body: html`<nav class="top"><span class="brand">${BRAND.name}</span><a class="logout" href="/?lang=${other}" data-lang-switch hreflang="${other}">${other === "en" ? "English" : "العربية"}</a><a href="/app/">${T(lang, "دخول", "Sign in")}</a></nav>
-${landingBody(lang, { telegramUrl, form: tryForm(lang, form), logo: assets.url(BRAND.logo) })}`
+${landingBody(lang, { telegramUrl, form: tryForm(lang, form), logo: assets.url(BRAND.logo), signupOpen })}`
           })
         )
       );
   };
   const langOf = (req) => (req.query.lang === "en" ? "en" : "ar");
 
-  app.get("/", securityHeaders, (req, res) => {
+  app.get("/", securityHeaders, async (req, res) => {
     res.set("Cache-Control", "no-cache");
     return render(req, res, langOf(req), { sent: req.query.sent === "1" });
   });

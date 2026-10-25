@@ -115,7 +115,7 @@ ${imp.result ? resultCard(imp.result, lang) : ""}
   ${r?.duplicate ? html`<p class="warn">⚠️ ${L(lang, "شكلها نفس الوحدة", "Looks like the same unit as")} <a href="/app/units/${encodeURIComponent(r.duplicate)}">${r.duplicate}</a></p>` : ""}
   ${twin ? html`<p class="warn">⚠️ ${L(lang, `شكلها نفس الوحدة في بوست ${r.same_as + 1}`, `Looks like the same unit as post ${r.same_as + 1}`)}</p>` : ""}
   ${r && !r.ok && !r.error ? html`<p class="bad">⛔ ${r.blockers.join("، ")}</p>` : ""}
-  ${r?.error ? html`<p class="bad">❌ ${r.error === "quota" ? L(lang, "حد الذكاء الاصطناعي اليومي خلص", "Daily AI limit reached") : L(lang, "تعذرت قراءته", "Could not be read")}</p>` : ""}
+  ${r?.error ? html`<p class="bad">❌ ${r.error === "quota" ? L(lang, "حد الذكاء الاصطناعي خلص (حد اليوم أو رصيد الباقة)", "AI limit reached (today's limit or the plan's allowance)") : L(lang, "تعذرت قراءته", "Could not be read")}</p>` : ""}
 </li>`;
   })}</ol>
 ${applied ? "" : html`<button type="submit">✅ ${L(lang, "ضيف المختار", "Add the selected units")}</button>`}

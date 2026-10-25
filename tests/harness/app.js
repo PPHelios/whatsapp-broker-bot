@@ -31,7 +31,8 @@ const BROKERS = {
 
 async function seed(pool) {
   await pool.query(
-    `INSERT INTO agencies (id, name, phone) VALUES ($1, 'Agency Alpha', '0221111111'), ($2, 'Agency Beta', '0222222222')`,
+    // Pilot agencies, like every agency onboarded by hand (Office plan, free during the POC).
+    `INSERT INTO agencies (id, name, phone, pilot) VALUES ($1, 'Agency Alpha', '0221111111', true), ($2, 'Agency Beta', '0222222222', true)`,
     [AGENCY_A, AGENCY_B]
   );
   for (const b of Object.values(BROKERS)) {

@@ -2,7 +2,7 @@
 // PUBLIC pages are open (sign-in); PRIVATE pages need a signed-in broker and CSRF tokens on writes.
 "use strict";
 
-const PUBLIC = [require("./auth"), require("./guide")];
+const PUBLIC = [require("./auth"), require("./guide"), require("./signup")];
 const PRIVATE = [
   require("./home"),
   require("./search"),
@@ -17,6 +17,7 @@ const PRIVATE = [
   require("./usage"),
   require("./dashboard"),
   require("./team"),
+  require("./plan"),
   require("./report")
 ];
 

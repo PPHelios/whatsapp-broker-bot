@@ -13,6 +13,7 @@ CREATE SEQUENCE IF NOT EXISTS public.lead_matches_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.listing_code_seq;
 CREATE SEQUENCE IF NOT EXISTS public.notifications_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.operation_logs_id_seq;
+CREATE SEQUENCE IF NOT EXISTS public.payments_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.push_subscriptions_id_seq;
 
 CREATE OR REPLACE FUNCTION public.agencies_set_slug()
@@ -272,7 +273,13 @@ CREATE TABLE IF NOT EXISTS public.agencies (
   lead_ref_seq integer DEFAULT 0 NOT NULL,
   deal_ref_seq integer DEFAULT 0 NOT NULL,
   code_prefix text,
-  unit_code_seq integer DEFAULT 0 NOT NULL
+  unit_code_seq integer DEFAULT 0 NOT NULL,
+  plan text DEFAULT 'office'::text NOT NULL,
+  paid_until timestamp with time zone,
+  trial_ends_at timestamp with time zone,
+  pilot boolean DEFAULT false NOT NULL,
+  approval text DEFAULT 'approved'::text NOT NULL,
+  signed_up_at timestamp with time zone
 );
 
 CREATE TABLE IF NOT EXISTS public.brokers (
@@ -765,7 +772,28 @@ CREATE TABLE IF NOT EXISTS public.demo_requests (
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.app_settings (
+  key text NOT NULL,
+  value jsonb NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.payments (
+  id bigint DEFAULT nextval('payments_id_seq'::regclass) NOT NULL,
+  agency_id uuid NOT NULL,
+  kind text NOT NULL,
+  plan text,
+  months integer DEFAULT 1 NOT NULL,
+  amount_egp integer NOT NULL,
+  reference text NOT NULL,
+  status text DEFAULT 'pending'::text NOT NULL,
+  requested_by uuid,
+  confirmed_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
+ALTER TABLE app_settings ADD CONSTRAINT app_settings_pkey PRIMARY KEY (key);
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (id);
 ALTER TABLE broker_search_state ADD CONSTRAINT broker_search_state_pkey PRIMARY KEY (phone_key);
 ALTER TABLE broker_sessions ADD CONSTRAINT broker_sessions_pkey PRIMARY KEY (broker_id, session_type);
@@ -787,6 +815,7 @@ ALTER TABLE listings ADD CONSTRAINT listings_pkey PRIMARY KEY (id);
 ALTER TABLE notifications ADD CONSTRAINT notifications_pkey PRIMARY KEY (id);
 ALTER TABLE operation_logs ADD CONSTRAINT operation_logs_pkey PRIMARY KEY (id);
 ALTER TABLE payment_plans ADD CONSTRAINT payment_plans_pkey PRIMARY KEY (id);
+ALTER TABLE payments ADD CONSTRAINT payments_pkey PRIMARY KEY (id);
 ALTER TABLE processed_batches ADD CONSTRAINT processed_batches_pkey PRIMARY KEY (batch_key);
 ALTER TABLE processed_messages ADD CONSTRAINT processed_messages_pkey PRIMARY KEY (message_id);
 ALTER TABLE projects ADD CONSTRAINT projects_pkey PRIMARY KEY (id);
@@ -810,9 +839,12 @@ ALTER TABLE leads ADD CONSTRAINT leads_agency_id_phone_e164_key UNIQUE (agency_i
 ALTER TABLE leads ADD CONSTRAINT leads_agency_id_ref_key UNIQUE (agency_id, ref);
 ALTER TABLE listings ADD CONSTRAINT uq_listings_agency_code UNIQUE (agency_id, code);
 ALTER TABLE notifications ADD CONSTRAINT notifications_broker_id_dedupe_key_key UNIQUE (broker_id, dedupe_key);
+ALTER TABLE payments ADD CONSTRAINT payments_reference_key UNIQUE (reference);
 ALTER TABLE projects ADD CONSTRAINT uq_agency_project_name UNIQUE (agency_id, name);
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_endpoint_key UNIQUE (endpoint);
+ALTER TABLE agencies ADD CONSTRAINT agencies_approval_check CHECK ((approval = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])));
 ALTER TABLE agencies ADD CONSTRAINT agencies_code_prefix_check CHECK (((code_prefix IS NULL) OR (code_prefix ~ '^[A-Z]{1,4}$'::text)));
+ALTER TABLE agencies ADD CONSTRAINT agencies_plan_check CHECK ((plan = ANY (ARRAY['solo'::text, 'office'::text, 'agency'::text, 'free'::text])));
 ALTER TABLE agencies ADD CONSTRAINT agencies_slug_format CHECK (((slug ~ '^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$'::text) AND (NOT (slug = ANY (ARRAY['app'::text, 'api'::text, 'auth'::text, 'login'::text, 'logout'::text, 'webhook'::text, 'health'::text, 'static'::text, 'assets'::text, 'public'::text, 'admin'::text, 's'::text, 'u'::text, 'www'::text, 'aqarchat'::text, 'about'::text, 'help'::text, 'terms'::text, 'privacy'::text, 'pricing'::text, 'blog'::text, 'docs'::text, 'robots'::text, 'favicon'::text, 'manifest'::text, 'sw'::text, 'share'::text, 'new'::text])))));
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_broker_daily_cap_check CHECK (((wa_broker_daily_cap IS NULL) OR (wa_broker_daily_cap > 0)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_broker_weekly_cap_check CHECK (((wa_broker_weekly_cap IS NULL) OR (wa_broker_weekly_cap > 0)));
@@ -865,6 +897,12 @@ ALTER TABLE notifications ADD CONSTRAINT notifications_channel_check CHECK ((cha
 ALTER TABLE notifications ADD CONSTRAINT notifications_reason_check CHECK ((reason = ANY (ARRAY['chosen'::text, 'fallback'::text, 'no_credits'::text, 'window_closed'::text, 'quiet_hours'::text, 'merged'::text, 'no_push'::text, 'not_linked'::text])));
 ALTER TABLE notifications ADD CONSTRAINT notifications_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'held'::text, 'queued'::text, 'sent'::text, 'failed'::text, 'skipped'::text])));
 ALTER TABLE notifications ADD CONSTRAINT notifications_url_check CHECK (((url IS NULL) OR (url ~~ '/app/%'::text)));
+ALTER TABLE payments ADD CONSTRAINT payments_amount_egp_check CHECK ((amount_egp > 0));
+ALTER TABLE payments ADD CONSTRAINT payments_check CHECK (((kind = 'plan'::text) = (plan IS NOT NULL)));
+ALTER TABLE payments ADD CONSTRAINT payments_kind_check CHECK ((kind = ANY (ARRAY['plan'::text, 'voice_pack'::text])));
+ALTER TABLE payments ADD CONSTRAINT payments_months_check CHECK (((months >= 1) AND (months <= 12)));
+ALTER TABLE payments ADD CONSTRAINT payments_plan_check CHECK (((plan IS NULL) OR (plan = ANY (ARRAY['solo'::text, 'office'::text, 'agency'::text]))));
+ALTER TABLE payments ADD CONSTRAINT payments_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'cancelled'::text])));
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_endpoint_check CHECK ((endpoint ~~ 'https://%'::text));
 ALTER TABLE saved_searches ADD CONSTRAINT saved_searches_name_check CHECK (((length(btrim(name)) >= 1) AND (length(btrim(name)) <= 80)));
 ALTER TABLE search_vocabulary ADD CONSTRAINT search_vocabulary_kind_check CHECK ((kind = ANY (ARRAY['type'::text, 'feature'::text])));
@@ -910,6 +948,8 @@ ALTER TABLE notifications ADD CONSTRAINT notifications_agency_id_fkey FOREIGN KE
 ALTER TABLE notifications ADD CONSTRAINT notifications_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE notifications ADD CONSTRAINT notifications_merged_into_fkey FOREIGN KEY (merged_into) REFERENCES notifications(id) ON DELETE SET NULL;
 ALTER TABLE payment_plans ADD CONSTRAINT payment_plans_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
+ALTER TABLE payments ADD CONSTRAINT payments_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE payments ADD CONSTRAINT payments_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE projects ADD CONSTRAINT projects_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
@@ -984,6 +1024,8 @@ CREATE INDEX idx_operation_logs_broker_created ON public.operation_logs USING bt
 CREATE INDEX idx_operation_logs_wa_outbound ON public.operation_logs USING btree (created_at, agency_id, broker_id) WHERE (operation_type = 'wa_outbound'::text);
 CREATE INDEX op_logs_agency_day ON public.operation_logs USING btree (agency_id, created_at DESC);
 CREATE INDEX idx_payment_plans_listing ON public.payment_plans USING btree (listing_id);
+CREATE INDEX payments_agency_idx ON public.payments USING btree (agency_id, created_at DESC);
+CREATE INDEX payments_pending_idx ON public.payments USING btree (created_at) WHERE (status = 'pending'::text);
 CREATE INDEX idx_processed_messages_created ON public.processed_messages USING btree (created_at);
 CREATE INDEX idx_push_subscriptions_broker ON public.push_subscriptions USING btree (broker_id);
 CREATE INDEX idx_saved_searches_alerts ON public.saved_searches USING btree (agency_id) WHERE alerts_enabled;
