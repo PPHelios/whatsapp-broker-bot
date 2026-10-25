@@ -6,11 +6,13 @@
  * Verify against the Gemini pricing page before the pilot; override with AI_PRICES_JSON,
  * e.g. {"gemini-3.8-flash":{"inPerM":0.3,"outPerM":2.5}}.
  */
+// USD per million tokens (Google's paid tier, checked 2026-10-25). `next` is an announced price change.
+const FLASH_2027 = { from: "2027-01-01T00:00:00Z", inPerM: 1.5, outPerM: 7.5 };
 const DEFAULT_AI_PRICES = {
-  "gemini-3.8-flash": { inPerM: 0.3, outPerM: 2.5 },
-  "gemini-3.6-flash": { inPerM: 0.3, outPerM: 2.5 },
-  "gemini-3.5-flash-lite": { inPerM: 0.1, outPerM: 0.4 },
-  default: { inPerM: 0.3, outPerM: 2.5 }
+  "gemini-3.8-flash": { inPerM: 0.75, outPerM: 3.75, next: FLASH_2027 },
+  "gemini-3.6-flash": { inPerM: 0.75, outPerM: 3.75, next: FLASH_2027 },
+  "gemini-3.5-flash-lite": { inPerM: 0.3, outPerM: 2.5 },
+  default: { inPerM: 0.75, outPerM: 3.75, next: FLASH_2027 }
 };
 
 // Required in production; the process refuses to start without them.
@@ -139,8 +141,9 @@ function resetConfig() {
 }
 
 /** Estimated USD cost of one AI call from configured per-model prices. */
-function estimateCostUsd(model, tokensIn = 0, tokensOut = 0, prices = getConfig().ai.prices) {
-  const p = prices[model] || prices.default;
+function estimateCostUsd(model, tokensIn = 0, tokensOut = 0, prices = getConfig().ai.prices, now = new Date()) {
+  const base = prices[model] || prices.default;
+  const p = base.next && now >= new Date(base.next.from) ? base.next : base;
   return Number((((tokensIn || 0) * p.inPerM + (tokensOut || 0) * p.outPerM) / 1e6).toFixed(6));
 }
 

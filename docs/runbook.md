@@ -25,7 +25,7 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `DB_POOL_MAX` / `DB_STATEMENT_TIMEOUT_MS` / `DATABASE_SSL` | no | `10` / `10000` / on in production | Pool size, statement timeout, SSL. |
 | `BODY_LIMIT` | no | `512kb` | JSON and form bodies (uploads have their own limits: 10 MB a photo, 5 MB an Excel file). |
 | `AI_QUOTA_AGENCY_DAILY` / `AI_QUOTA_BROKER_DAILY` | no | `300` / `400` | Daily AI calls; over the limit the broker is told and nothing is lost. |
-| `AI_PRICES_JSON` | no | built-in | Model prices for the cost column, e.g. `{"gemini-3.8-flash":{"inPerM":0.3,"outPerM":2.5}}`. |
+| `AI_PRICES_JSON` | no | built-in | Model prices for the cost column, e.g. `{"gemini-3.8-flash":{"inPerM":0.75,"outPerM":3.75}}`. Built in (checked 2026-10-25): 3.8/3.6 Flash $0.75 in / $3.75 out per million tokens, rising to $1.50 / $7.50 on 1 January 2027 (applied automatically by date); 3.5 Flash-Lite $0.30 / $2.50. Rows logged before 2026-10-25 used older prices and under-count cost about 10×. |
 | `FLYER_WORKER` / `FLYER_MAX_QUEUE` / `FLYER_TIMEOUT_MS` | no | on / `6` / `45000` | Flyer rendering worker thread. |
 | `SLOW_QUERY_MS` | no | `1000` | Slow-query log threshold. |
 | `WEBHOOK_ALLOW_UNSIGNED` | no | — | Local development only; ignored in production. |
