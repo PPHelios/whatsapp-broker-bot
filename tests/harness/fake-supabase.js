@@ -1,7 +1,10 @@
 // tests/harness/fake-supabase.js — In-memory stand-in for lib/supabase.js (same exports)
 "use strict";
 
+const fs = require("fs");
+
 const objects = new Map(); // storage path -> Buffer
+const chats = new Map(); // chat-imports path -> Buffer (tests put the zip here, as the browser would)
 const BASE = "https://storage.test/listing-images/";
 
 const pathOf = (urlOrPath) => String(urlOrPath || "").replace(BASE, "").replace(/^\/+/, "");
@@ -28,10 +31,24 @@ module.exports = {
     return true;
   },
 
+  CHAT_ZIP_MAX_BYTES: 200 * 1024 * 1024,
+  createChatUploadUrl: async (storagePath) => ({ url: `https://storage.test/upload/chat-imports/${storagePath}?token=t`, path: storagePath }),
+  downloadChatExportToFile: async (storagePath, file) => {
+    const buffer = chats.get(storagePath);
+    if (!buffer) throw Object.assign(new Error("Chat export not found"), { code: "NOT_FOUND" });
+    fs.writeFileSync(file, buffer);
+    return { bytes: buffer.length };
+  },
+  deleteChatExport: async (storagePath) => {
+    chats.delete(storagePath);
+  },
+
   // --- test controls ---
+  chats,
   objects,
   BASE,
   reset() {
     objects.clear();
+    chats.clear();
   }
 };

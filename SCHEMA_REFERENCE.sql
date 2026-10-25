@@ -991,6 +991,7 @@ CREATE INDEX idx_leads_phones ON public.leads USING gin (phones);
 CREATE INDEX idx_leads_untouched ON public.leads USING btree (created_at) WHERE ((stage = 'new'::text) AND (last_contact_at IS NULL) AND (nudged_at IS NULL));
 CREATE INDEX idx_listing_drafts_updated ON public.listing_drafts USING btree (updated_at);
 CREATE INDEX listing_images_agency_idx ON public.listing_images USING btree (agency_id);
+CREATE INDEX listing_images_agency_phash_idx ON public.listing_images USING btree (agency_id) WHERE (phash IS NOT NULL);
 CREATE INDEX listing_images_listing_idx ON public.listing_images USING btree (listing_id, "position");
 CREATE UNIQUE INDEX listing_images_listing_pos_uniq ON public.listing_images USING btree (listing_id, "position");
 CREATE INDEX idx_listings_area_key ON public.listings USING btree (agency_id, area_key) WHERE (area_key IS NOT NULL);

@@ -87,3 +87,4 @@ progress { width: 100%; height: 14px; accent-color: var(--brand); }
 .hero-logo { border-radius: 16px; }
 .features .card h2 { margin-top: 0; }
 .price { font-size: 1.4rem; font-weight: 700; color: var(--brand); }
+.thumbs { flex-wrap: wrap; gap: 4px; } .thumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; }

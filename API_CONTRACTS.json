@@ -161,7 +161,11 @@
       "downloadListingImage": ["url"],
       "uploadListingImage": ["agencyId", "storagePath", "buffer"],
       "uploadFlyerImage": ["agencyId", "storagePath", "buffer"],
-      "deleteStorageFiles": ["paths"]
+      "deleteStorageFiles": ["paths"],
+      "CHAT_ZIP_MAX_BYTES": "Number",
+      "createChatUploadUrl": ["storagePath"],
+      "downloadChatExportToFile": ["storagePath", "file"],
+      "deleteChatExport": ["storagePath"]
     },
     "lib/dispatcher.js": {
       "countOutbound": ["broker", "kind", "status", "operationType"],
@@ -560,11 +564,16 @@
     },
     "domain/chatExport.js": {
       "MAX_POSTS": "Number",
+      "MAX_PHOTOS": "Number",
       "isChatExport": ["text"],
       "parseChatExport": ["text"],
       "splitPasted": ["text"],
       "looksLikeListing": ["text"],
-      "candidatePosts": ["text"]
+      "candidatePosts": ["text"],
+      "atMs": ["at"],
+      "parseWithAttachments": ["text"],
+      "assignPhotos": ["messages", "posts"],
+      "candidatePostsWithPhotos": ["text"]
     },
     "lib/sheets.js": {
       "MAX_BYTES": "Number",
@@ -1120,6 +1129,22 @@
     },
     "web/routes/signup.js": {
       "register": ["web", "params"]
+    },
+    "services/photoHash.js": {
+      "MAX_DISTANCE": "Number",
+      "hashImage": ["buffer"],
+      "distance": ["a", "b"],
+      "sameAs": ["db", "agencyId", "hashes", "params"],
+      "saveHashes": ["db", "agencyId", "byUrl"],
+      "backfill": ["pool", "params"],
+      "backfillJob": []
+    },
+    "services/chatPhotos.js": {
+      "MAX_PHOTO_BYTES": "Number",
+      "isZip": ["b"],
+      "openExport": ["params"],
+      "storePhotos": ["pool", "broker", "importId", "posts", "entries"],
+      "postsFromExport": ["pool", "broker", "importId", "source", "params"]
     }
   },
   "invariant_variable_names": {
