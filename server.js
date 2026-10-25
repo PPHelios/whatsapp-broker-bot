@@ -186,6 +186,9 @@ function createApp({ pool, config = getConfig(), jobs }) {
         // 0. An open lead draft takes the next message (the client's text, number or a correction).
         if (await LeadIntake.collect(broker, text, ctx)) return "done";
 
+        // 0b. Wow 3: "كلمت أحمد، عايز يعاين VIL-08 الجمعة الساعة ٥" about one of the broker's clients → Confirm.
+        if (await LeadIntake.offerUpdate(broker, text, ctx)) return "done";
+
         // 1. Try structured text commands (help, stats, export, sold, delete, price, flyer, plans)
         const handledCommand = await handleCommand(broker, text, ctx);
         if (handledCommand) return "done";

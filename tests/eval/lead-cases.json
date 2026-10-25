@@ -1,0 +1,24 @@
+{
+  "now": "2026-10-25T08:00:00Z",
+  "note": "Sunday 25 October 2026, 11:00 Cairo. Update cases resolve relative days from this moment.",
+  "extraction": [
+    { "id": "L01-basic", "text": "ليد أحمد سمير 01012345678 عايز شقة في التجمع 3 غرف لحد 9 مليون", "expected": { "name": "أحمد سمير", "phones": ["01012345678"], "kind": "buyer", "request.listing_type": "sale", "request.price_max": 9000000, "request.bedrooms_min": 3 } },
+    { "id": "L02-spoken-digits", "text": "عميلة اسمها منى رقمها صفر واحد واحد خمسة اتنين تلاتة أربعة خمسة ستة سبعة تمانية عايزة تأجر في زايد", "expected": { "name": "منى", "phones": ["01152345678"], "kind": "tenant", "request.listing_type": "rent" } },
+    { "id": "L03-seller", "text": "Karim 01223344556 wants to sell his villa in Mivida, came from Facebook", "expected": { "name": "Karim", "phones": ["01223344556"], "kind": "seller", "source": "Facebook" } },
+    { "id": "L04-forward", "text": "ده عميل: السلام عليكم انا محمد عايز شاليه في الساحل كاش 5 مليون رقمي 01098765432", "expected": { "name": "محمد", "phones": ["01098765432"], "kind": "buyer", "request.price_max": 5000000 } },
+    { "id": "L05-range", "text": "ليد سارة 01011112222 من 7 لـ 9 مليون في مدينتي أو الرحاب", "expected": { "name": "سارة", "phones": ["01011112222"], "request.price_min": 7000000, "request.price_max": 9000000 } },
+    { "id": "L06-landlord", "text": "عم حسن 01033334444 عايز يأجر شقته في المعادي إيجار 25 ألف", "expected": { "name": "حسن", "phones": ["01033334444"], "kind": "landlord" } },
+    { "id": "L07-two-phones", "text": "Lead: Omar 01055556666 / 01277778888 looking for a 2-bedroom apartment in Sheikh Zayed, installment up to 50k", "expected": { "name": "Omar", "phones": ["01055556666", "01277778888"], "kind": "buyer", "request.bedrooms_min": 2, "request.max_installment": 50000 } },
+    { "id": "L08-no-name", "text": "01099990000 عايز فيلا في زايد استلام فوري", "expected": { "name": null, "phones": ["01099990000"], "kind": "buyer", "request.delivery_ready": true } }
+  ],
+  "update": [
+    { "id": "U01-viewing", "text": "كلمت أحمد، عايز يعاين VIL-08 يوم الجمعة الساعة ٥", "expected": { "leadName": "أحمد", "contacted": true, "stage": "viewing", "followUp.date": "2026-10-30", "followUp.time": "17:00", "followUp.kind": "viewing", "followUp.unitCode": "VIL-08" } },
+    { "id": "U02-no-answer", "text": "سارة مردتش، هكلمها بكرة الصبح", "expected": { "leadName": "سارة", "contacted": false, "followUp.date": "2026-10-26", "followUp.kind": "call" } },
+    { "id": "U03-lost", "text": "اتكلمت مع منى ومش مهتمة، اشترت من مكان تاني", "expected": { "leadName": "منى", "contacted": true, "stage": "lost" } },
+    { "id": "U04-mixed", "text": "Called Karim, he's interested, follow up next Sunday", "expected": { "leadName": "Karim", "contacted": true, "stage": "interested", "followUp.date": "2026-11-01", "followUp.kind": "call" } },
+    { "id": "U05-next-friday", "text": "محمد هيعاين الشاليه CH-12 الجمعة الجاية الساعة خمسة ونص", "expected": { "leadName": "محمد", "stage": "viewing", "followUp.date": "2026-10-30", "followUp.time": "17:30", "followUp.unitCode": "CH-12" } },
+    { "id": "U06-won", "text": "عمر اشترى مننا الشقة واتقفلت الحمد لله", "expected": { "leadName": "عمر", "stage": "won" } },
+    { "id": "U07-after-tomorrow", "text": "Spoke to Omar, negotiating on price, call him the day after tomorrow at 7pm", "expected": { "leadName": "Omar", "contacted": true, "stage": "negotiation", "followUp.date": "2026-10-27", "followUp.time": "19:00" } },
+    { "id": "U08-note-only", "text": "حسن قالي إنه عايز دور أرضي بجنينة بس", "expected": { "leadName": "حسن", "note": "*" } }
+  ]
+}

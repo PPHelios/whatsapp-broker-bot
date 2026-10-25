@@ -714,6 +714,8 @@
       "setFollowUp": ["pool", "actor", "key", "params"],
       "completeFollowUp": ["pool", "actor", "key", "params"],
       "postponeFollowUp": ["pool", "actor", "key", "params"],
+      "applyUpdate": ["pool", "actor", "key", "u", "params"],
+      "undoMany": ["pool", "actor", "eventIds", "params"],
       "undo": ["pool", "actor", "eventId", "params"],
       "noteRequest": ["pool", "actor", "key", "filters", "params"],
       "logMatchSent": ["pool", "actor", "key", "listing", "params"],
@@ -757,6 +759,7 @@
       "myLeads": ["broker", "ctx"],
       "followUps": ["broker", "ctx"],
       "openRef": ["broker", "ref", "ctx"],
+      "offerUpdate": ["broker", "text", "ctx"],
       "requestCommand": ["broker", "params", "ctx"],
       "requestButton": ["pool", "broker", "filters", "lang"],
       "assignCommand": ["broker", "params", "ctx"],
@@ -825,6 +828,20 @@
       "reminderMessage": ["broker", "leads"],
       "nudgeMessage": ["broker", "leads"],
       "reminderJob": []
+    },
+    "domain/leadUpdate.js": {
+      "looksLikeUpdate": ["text"],
+      "refIn": ["text"],
+      "fold": ["s"],
+      "namesIn": ["text", "leads"],
+      "matchName": ["name", "leads"],
+      "cairoToday": ["now"],
+      "buildUpdatePrompt": ["lang", "fence", "params"],
+      "normalizeUpdate": ["raw"],
+      "followUpAt": ["fu"],
+      "hasChange": ["u"],
+      "checkUpdate": ["u", "params"],
+      "summaryLines": ["u", "lead", "lang", "params"]
     }
   },
   "invariant_variable_names": {

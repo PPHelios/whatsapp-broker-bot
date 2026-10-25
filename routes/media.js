@@ -281,6 +281,8 @@ async function handleAudio(broker, message, ctx) {
 
   // «ليد …» spoken, or a lead draft waiting for the client: the same intake as text (lib/leadIntake.js).
   if (await LeadIntake.collectVoice(broker, transcribedText.trim(), ctx)) return "done";
+  // Wow 3: a spoken outcome with one of the broker's clients updates the CRM after Confirm.
+  if (await LeadIntake.offerUpdate(broker, transcribedText.trim(), ctx)) return "done";
 
   // Spoken quick updates ("اتباعت VIL-08", "سعر VIL-08 9 مليون") run as commands; the rest is a search.
   if (await Registry.dispatch(broker, transcribedText.trim(), ctx, { voice: true })) return "done";

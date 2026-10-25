@@ -281,17 +281,79 @@ async function mutate(pool, actor, key, { kind, version = null, manage = false, 
     if (version !== null && version !== undefined && Number(version) !== lead.version) return { conflict: true, lead };
     const c = change(lead);
     if (c.error || c.unchanged) return { ...c, lead };
-    const fields = c.fields || {};
-    const cols = Object.keys(fields);
-    const { rows } = await client.query(
-      `UPDATE leads SET ${cols.map((col, i) => `${col} = $${i + 3}, `).join("")}last_activity_at = $${cols.length + 3}, updated_at = $${cols.length + 3}, version = version + 1
-        WHERE id = $1 AND agency_id = $2 RETURNING *`,
-      [lead.id, actor.agency_id, ...cols.map((col) => fields[col]), now.toISOString()]
-    );
-    const prev = Object.fromEntries((REVERSIBLE[kind] || cols).map((col) => [col, lead[col] instanceof Date ? lead[col].toISOString() : (lead[col] ?? null)]));
-    const eventId = await addEvent(client, lead, actor.id, kind, { ...c.data, prev, version: rows[0].version }, now);
-    return { ok: true, lead: rows[0], eventId };
+    return { ok: true, ...(await applyChange(client, actor, lead, kind, c, now)) };
   });
+}
+
+/** Inside a transaction, on a locked lead: applies the fields and logs one event with what undo restores. */
+async function applyChange(client, actor, lead, kind, c, now) {
+  const fields = c.fields || {};
+  const cols = Object.keys(fields);
+  const { rows } = await client.query(
+    `UPDATE leads SET ${cols.map((col, i) => `${col} = $${i + 3}, `).join("")}last_activity_at = $${cols.length + 3}, updated_at = $${cols.length + 3}, version = version + 1
+      WHERE id = $1 AND agency_id = $2 RETURNING *`,
+    [lead.id, actor.agency_id, ...cols.map((col) => fields[col]), now.toISOString()]
+  );
+  const prev = Object.fromEntries((REVERSIBLE[kind] || cols).map((col) => [col, lead[col] instanceof Date ? lead[col].toISOString() : (lead[col] ?? null)]));
+  const eventId = await addEvent(client, lead, actor.id, kind, { ...c.data, prev, version: rows[0].version }, now);
+  return { lead: rows[0], eventId };
+}
+
+/**
+ * The voice CRM update (step 9), on Confirm: contacted, stage, follow-up and note as one transaction, one event each
+ * (so each shows on the timeline and the set undoes together with undoMany).
+ * @param {Object} u - { contacted, stage, lostReason, followUp: { at, kind, listingId } | null, note, via }
+ * @returns {Promise<{ ok, lead, eventIds } | { unchanged, lead } | { error }>}
+ */
+async function applyUpdate(pool, actor, key, u, { now = new Date() } = {}) {
+  if (u.stage) {
+    const err = Stages.stageError(u.stage, u.stage === "lost" ? u.lostReason || "—" : null);
+    if (err) return { error: err };
+  }
+  if (u.followUp) {
+    if (!(u.followUp.at instanceof Date) || Number.isNaN(u.followUp.at.getTime())) return { error: "follow_up_time" };
+    if (u.followUp.listingId) {
+      const x = await pool.query("SELECT 1 FROM listings WHERE id = $1 AND agency_id = $2", [u.followUp.listingId, actor.agency_id]);
+      if (!x.rows.length) return { error: "unit_not_found" };
+    }
+  }
+  return withTransaction(pool, async (client) => {
+    let lead = await loadLead(client, actor.agency_id, key, { forUpdate: true });
+    if (!lead) return { error: "not_found" };
+    if (!Authz.canEditLead(actor, lead)) return { error: "forbidden" };
+    const eventIds = [];
+    const step = async (kind, c) => {
+      const r = await applyChange(client, actor, lead, kind, c, now);
+      lead = r.lead;
+      eventIds.push(r.eventId);
+    };
+    const via = u.via || null;
+    if (u.contacted) await step("contacted", { fields: { last_contact_at: now.toISOString(), stage: Stages.stageAfterContact(lead.stage) }, data: { from: lead.stage, via } });
+    if (u.stage) {
+      const reason = u.stage === "lost" ? cleanText(u.lostReason || "—", 200) : null;
+      if (lead.stage !== u.stage || (lead.lost_reason || null) !== reason) await step("stage", { fields: { stage: u.stage, lost_reason: reason }, data: { from: lead.stage, to: u.stage, lost_reason: reason, via } });
+    }
+    if (u.followUp) {
+      const f = u.followUp;
+      await step("follow_up_set", {
+        fields: { next_follow_up_at: f.at.toISOString(), follow_up_kind: f.kind, follow_up_listing_id: f.listingId || null, follow_up_note: null, follow_up_status: "open", follow_up_reminded_at: null },
+        data: { at: f.at.toISOString(), kind: f.kind, listing_id: f.listingId || null, via }
+      });
+    }
+    if (u.note) await step("note", { fields: {}, data: { text: cleanText(u.note, NOTE_MAX), via } });
+    if (!eventIds.length) return { unchanged: true, lead };
+    return { ok: true, lead, eventIds };
+  });
+}
+
+/** Undoes a set of events (newest first); stops at the first that can't be undone. */
+async function undoMany(pool, actor, eventIds, { now = new Date() } = {}) {
+  let last = null;
+  for (const id of [...eventIds].sort((a, b) => Number(b) - Number(a))) {
+    last = await undo(pool, actor, id, { now });
+    if (!last.ok) return last;
+  }
+  return last || { error: "not_found" };
 }
 
 /** Managers only: assign to a broker of the agency, or back to the unassigned pool (null). */
@@ -579,6 +641,8 @@ module.exports = {
   setFollowUp,
   completeFollowUp,
   postponeFollowUp,
+  applyUpdate,
+  undoMany,
   undo,
   noteRequest,
   logMatchSent,
