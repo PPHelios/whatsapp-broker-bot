@@ -21,7 +21,7 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `WHATSAPP_PHONE_NUMBER_ID` | yes | — | The bot number's id. |
 | `WHATSAPP_API_VERSION` | no | `v25.0` | Graph API version (v25.0 released February 2026; Meta supports a version for about two years, so bump it yearly and check the WhatsApp changelog first). |
 | `GEMINI_API_KEY` | yes | — | Production Gemini key (billing on, budget alert set). The eval never uses it. |
-| `SUPABASE_URL` | yes for photos | — | Storage project URL (bucket `listing-images`). Without it storage runs in a mock mode: photos are not kept. |
+| `SUPABASE_URL` | yes for photos | — | Storage project URL (public bucket `listing-images`; private bucket `chat-imports` for chat-export zips, created by migration 026, 200 MB per file; the Supabase plan's own upload limit also applies: 50 MB on Free). Without it storage runs in a mock mode: photos are not kept. |
 | `SUPABASE_SERVICE_ROLE_KEY` | yes for photos | — | Storage key (server only; never in the browser). `SUPABASE_ANON_KEY` is a fallback. |
 | `MALLOC_ARENA_MAX` | no | `2` (blueprint) | Keeps flyer rendering around 250 MB peak RSS. |
 | `PORT` | no | `3000` | Render sets it. |
@@ -47,6 +47,7 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `ALERT_TELEGRAM_CHAT_ID` | no | — | The owner's Telegram chat id: where error alerts and bug reports go. Unset = no alerts (errors are still stored in `error_events`). See §6b for how to find it. |
 | `ALERT_EVERY_MIN` | no | `30` | At most one alert per distinct error (fingerprint) in this many minutes. Bug reports always alert. |
 | `SCHEDULER_TICK_MS` | no | `60000` | How often each instance looks for due jobs (at least 5000). Each job still runs on one instance at a time. |
+| `CHAT_ZIP_MAX_MB` | no | `50` | Largest WhatsApp chat-export zip (with photos) the import page takes, in MB (at most 200). Supabase Free refuses uploads over 50 MB, so raise it only on a paid Supabase plan. |
 | `KEEP_AWAKE` | no | off | `true` makes the instance ping its own `/health` every 10 minutes so Render Free doesn't spin it down. Off when unset, because Render Free's monthly instance hours are capped (the workspace has a second free service). Turn on for the POC. |
 | `KEEP_AWAKE_HOURS` | no | `6-1` | Cairo hours when the keep-awake ping runs (`from-to`, may wrap past midnight; `0-0` = all day). 06:00–01:00 is about 590 hours a month. |
 | `OWNER_BROKER_IDS` | no | empty | Broker ids (comma-separated UUIDs) of the product owner. Only they see the app tracking dashboard at `/app/owner` (weekly active agencies and brokers, units/leads/deals, AI cost per agency, errors). Everyone else gets a 404 there. |

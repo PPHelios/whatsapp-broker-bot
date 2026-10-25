@@ -1,13 +1,18 @@
 // web/routes/imports.js — Excel diff import, group import (forwarded posts / chat export) and bulk edit
 "use strict";
 
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+const crypto = require("crypto");
 const ExcelJS = require("exceljs");
-const JSZip = require("jszip");
+const Supabase = require("../../lib/supabase");
 const AI = require("../../lib/ai");
 const RateLimit = require("../../lib/rateLimit");
 const Sheets = require("../../lib/sheets");
 const { logOperation } = require("../../lib/db");
 const Imports = require("../../services/imports");
+const ChatPhotos = require("../../services/chatPhotos");
 const Bulk = require("../../services/bulk");
 const Chat = require("../../domain/chatExport");
 const Describe = require("../../domain/describe");
@@ -26,18 +31,16 @@ for (const re of [/^\/import\/excel$/, /^\/import\/group$/]) Session.allowMultip
 
 const TEMPLATE_HEADERS = ["Code / الكود", "Compound / الكمبوند", "Property Type / النوع", "Purpose / بيع او ايجار", "Price / السعر", "Area (sqm) / المساحة", "Bedrooms / الغرف", "Bathrooms / الحمامات", "Floor / الدور", "Finishing / التشطيب", "Delivery / التسليم", "Paid / المدفوع", "Remaining / المتبقي", "Installment / القسط", "Frequency / دورية القسط", "Features / المميزات", "District / المنطقة", "Status / الحالة", "Owner / المالك", "Owner phone / تليفون المالك", "Notes / ملاحظات"];
 
-/** A chat export upload (.txt, or the .zip WhatsApp makes) → its text. */
+/** A chat export uploaded as .txt → its text (a .zip goes through services/chatPhotos.js, photos included). */
 async function chatText(file) {
-  if (!file) return "";
-  const b = file.buffer;
-  if (b.length >= 4 && b[0] === 0x50 && b[1] === 0x4b) {
-    const zip = await JSZip.loadAsync(b);
-    const entry = Object.values(zip.files).find((f) => !f.dir && /\.txt$/i.test(f.name));
-    if (!entry) return "";
-    return (await entry.async("string")).slice(0, 5_000_000);
-  }
-  return b.toString("utf8").slice(0, 5_000_000);
+  if (!file || ChatPhotos.isZip(file.buffer)) return "";
+  return file.buffer.toString("utf8").slice(0, 5_000_000);
 }
+
+// Where a broker's chat export zip lands in the private chat-imports bucket: their agency and id first, so a path
+// sent back with the form can only be one of their own uploads.
+const zipPrefix = (broker) => `${broker.agency_id}/${broker.id}/`;
+const ZIP_PATH = /^[0-9a-f-]{36}\/[0-9a-f-]{36}\/\d{13}-[0-9a-f]{12}\.zip$/;
 
 const KIND_LABEL = {
   new: ["🆕 جديدة", "🆕 New"],
@@ -92,13 +95,38 @@ function resultCard(r, lang) {
 </div>`;
 }
 
+/** A post's photos from a chat export zip: thumbnails, and a warning when a photo is already on a unit. */
+function photosLine(post, lang) {
+  const photos = post.photos || [];
+  if (!photos.length && !post.missing) return "";
+  const same = [...new Set(photos.map((x) => x.same_as).filter(Boolean))];
+  const twins = [...new Set(photos.map((x) => x.twin).filter((x) => x !== undefined && x !== null))];
+  return html`<div class="stack" data-photos="${photos.length}">
+  <p>📷 ${L(lang, `${photos.length} صورة`, `${photos.length} photos`)}${post.missing ? html` <span class="muted">· ${L(lang, `${post.missing} مش موجودة في الملف`, `${post.missing} not in the file`)}</span>` : ""}</p>
+  ${photos.length ? html`<div class="row thumbs">${photos.slice(0, 6).map((x) => html`<img src="${x.url}" alt="" width="64" height="64" loading="lazy">`)}</div>` : ""}
+  ${same.map((code) => html`<p class="warn" data-same-photo="${code}">⚠️ ${L(lang, "نفس صورة الوحدة", "Same photo as unit")} <a href="/app/units/${encodeURIComponent(code)}">${code}</a></p>`)}
+  ${twins.map((n) => html`<p class="warn">⚠️ ${L(lang, `نفس صورة في بوست ${n + 1}`, `Same photo as in post ${n + 1}`)}</p>`)}
+</div>`;
+}
+
 function groupPage(imp, lang) {
   const posts = imp.payload.posts || [];
   const results = imp.payload.results || [];
   const done = results.filter(Boolean).length;
   if (imp.status === "processing") {
     return html`<div id="group-status" hx-get="/app/import/${imp.id}" hx-trigger="every 2s" hx-select="#group-status" hx-swap="outerHTML" class="card">
-  <h1>⏳ ${L(lang, "جاري قراءة البوستات", "Reading the posts")}</h1><p>${done} / ${posts.length}</p></div>`;
+  ${imp.payload.stage === "photos"
+    ? html`<h1>⏳ ${L(lang, "جاري فك الشات والصور", "Unpacking the chat and photos")}</h1><p class="muted">${L(lang, "ممكن ياخد دقيقة أو اتنين للشات الكبير.", "A big chat can take a minute or two.")}</p>`
+    : html`<h1>⏳ ${L(lang, "جاري قراءة البوستات", "Reading the posts")}</h1><p>${done} / ${posts.length}</p>`}</div>`;
+  }
+  if (imp.status === "failed") {
+    const why = {
+      no_chat: L(lang, "الملف مش تصدير شات واتساب (مفيش ملف الشات .txt جوه الـ zip).", "The file isn't a WhatsApp chat export (no chat .txt inside the zip)."),
+      no_posts: L(lang, "ملقيناش بوستات فيها وحدات (سعر ومساحة أو غرف).", "No posts describing a unit (price and area or rooms) were found."),
+      not_found: L(lang, "الملف موصلش كامل. ارفعه تاني.", "The file didn't arrive in full. Upload it again."),
+      too_large: L(lang, "الملف أكبر من المسموح.", "The file is larger than allowed.")
+    }[imp.payload.error] || L(lang, "حصلت مشكلة في قراءة الملف.", "Something went wrong reading the file.");
+    return html`<div id="group-status" class="card notice bad" data-import-error="${imp.payload.error || "failed"}"><h1>⚠️ ${why}</h1><a href="/app/import">${L(lang, "رجوع", "Back")}</a></div>`;
   }
   const applied = imp.status !== "ready";
   return html`<div id="group-status"><h1>📥 ${L(lang, "استيراد من الجروب", "Group import")}</h1>
@@ -111,6 +139,7 @@ ${imp.result ? resultCard(imp.result, lang) : ""}
     return html`<li class="card" data-post="${i}" data-state="${state}">
   <div class="row">${!applied && r?.ok ? html`<input type="checkbox" name="rows" value="${i}"${r.duplicate || twin ? "" : raw(" checked")}>` : ""}<strong>${p.sender || L(lang, "بوست", "Post")}</strong> <span class="muted">${p.at || ""}</span></div>
   <p class="muted">${p.text.slice(0, 280)}</p>
+  ${photosLine(p, lang)}
   ${r?.ok ? html`<p>${stripMarkdown(Describe.compactLine({ ...r.fields, code: "" }, lang).replace(/^``\s*·\s*/, ""))}</p>` : ""}
   ${r?.duplicate ? html`<p class="warn">⚠️ ${L(lang, "شكلها نفس الوحدة", "Looks like the same unit as")} <a href="/app/units/${encodeURIComponent(r.duplicate)}">${r.duplicate}</a></p>` : ""}
   ${twin ? html`<p class="warn">⚠️ ${L(lang, `شكلها نفس الوحدة في بوست ${r.same_as + 1}`, `Looks like the same unit as post ${r.same_as + 1}`)}</p>` : ""}
@@ -145,6 +174,17 @@ function register(web, { pool, page }) {
   <label>${L(lang, "أو ارفع تصدير الشات من واتساب (.txt أو .zip)", "Or upload a WhatsApp chat export (.txt or .zip)")}<input type="file" name="chat" accept=".txt,.zip,text/plain,application/zip"></label>
   <p class="muted">${L(lang, `بنقرا لحد ${Chat.MAX_POSTS} بوست في المرة، وبنعلّم المكرر.`, `Up to ${Chat.MAX_POSTS} posts at a time; duplicates are flagged.`)}</p>
   <button type="submit">${L(lang, "اقرأ البوستات", "Read the posts")}</button>
+</form>
+<form method="post" action="/app/import/zip" class="card stack" data-zip-upload data-max="${Supabase.CHAT_ZIP_MAX_BYTES}">
+  <input type="hidden" name="_csrf" value="${req.session.csrf}">
+  <input type="hidden" name="path" value="">
+  <input type="hidden" name="filename" value="">
+  <h2>📷 ${L(lang, "تصدير شات بالصور", "Chat export with photos")}</h2>
+  <p class="muted">${L(lang, `من واتساب: الجروب ← المزيد ← تصدير الشات ← «إرفاق الوسائط». ارفع الـ zip هنا (لحد ${Math.round(Supabase.CHAT_ZIP_MAX_BYTES / 1048576)} ميجا): كل صورة بتروح للبوست بتاعها (نفس الراسل وفي خلال دقايق)، لحد ${Chat.MAX_PHOTOS} صورة للوحدة، وبنعلّم الصور اللي موجودة على وحدة عندك.`, `In WhatsApp: the group → More → Export chat → "Attach media". Upload the zip here (up to ${Math.round(Supabase.CHAT_ZIP_MAX_BYTES / 1048576)} MB): each photo goes to its post (same sender, within minutes), up to ${Chat.MAX_PHOTOS} a unit, and photos already on one of your units are flagged.`)}</p>
+  <input type="file" accept=".zip,application/zip" data-zip-file required>
+  <progress max="100" value="0" hidden data-zip-progress></progress>
+  <p class="muted" hidden data-zip-status data-msg-big="${L(lang, "الملف أكبر من المسموح.", "The file is larger than allowed.")}" data-msg-fail="${L(lang, "الرفع فشل. جرب تاني.", "The upload failed. Try again.")}" data-msg-wait="${L(lang, "جاري الرفع…", "Uploading…")}"></p>
+  <button type="submit">${L(lang, "ارفع واقرأ", "Upload and read")}</button>
 </form>`
     );
   });
@@ -193,6 +233,18 @@ function register(web, { pool, page }) {
     const file = (req.files?.chat || [])[0];
     const text = [String(req.body.text || ""), await chatText(file)].filter((t) => t.trim()).join("\n\n\n");
     const found = Chat.candidatePosts(text);
+    if (file && ChatPhotos.isZip(file.buffer)) {
+      // A small zip sent with the form: read with its photos in the background, pasted posts first.
+      const id = await Imports.startGroupImport(pool, broker, [], {
+        AI,
+        ctx: { pool, broker, agency: req.session.agency, lang },
+        lang,
+        filename: String(file.originalname || "").slice(0, 120),
+        prepare: (importId) => ChatPhotos.postsFromExport(pool, broker, importId, { buffer: file.buffer }, { extraPosts: found.posts })
+      });
+      logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", metadata: { kind: "group_zip", bytes: file.buffer.length } });
+      return res.redirect(303, `/app/import/${id}`);
+    }
     if (!found.posts.length) {
       return importPage(req, res, html`<p class="card notice">🔍 ${L(lang, "ملقيناش بوستات فيها وحدات (سعر ومساحة أو غرف).", "No posts describing a unit (price and area or rooms) were found.")} <a href="/app/import">${L(lang, "رجوع", "Back")}</a></p>`, 422);
     }
@@ -203,6 +255,50 @@ function register(web, { pool, page }) {
       filename: file ? String(file.originalname || "").slice(0, 120) : null
     });
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", metadata: { kind: "group", posts: found.posts.length, skipped: found.skipped, duplicates: found.duplicates } });
+    return res.redirect(303, `/app/import/${id}`);
+  });
+
+  // A chat export zip with photos goes from the browser straight to Storage (a signed upload URL), so a 100 MB file
+  // never passes through this server's memory; the server then streams it to a temp file and reads it from there.
+  web.post("/import/zip/start", async (req, res) => {
+    const { broker } = req.session;
+    const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
+    if (!gate.allowed) return res.status(429).json({ error: "rate" });
+    const target = `${zipPrefix(broker)}${Date.now()}-${crypto.randomBytes(6).toString("hex")}.zip`;
+    const signed = await Supabase.createChatUploadUrl(target);
+    if (!signed) return res.status(503).json({ error: "storage" });
+    return res.json({ url: signed.url, path: target });
+  });
+
+  web.post("/import/zip", async (req, res) => {
+    const lang = langOf(req);
+    const { broker } = req.session;
+    const target = String(req.body.path || "");
+    if (!ZIP_PATH.test(target) || !target.startsWith(zipPrefix(broker))) {
+      return importPage(req, res, html`<p class="card notice bad">⚠️ ${L(lang, "اختار ملف الـ zip الأول.", "Choose the zip file first.")} <a href="/app/import">${L(lang, "رجوع", "Back")}</a></p>`, 400);
+    }
+    const tmp = path.join(os.tmpdir(), `chat-${crypto.randomBytes(8).toString("hex")}.zip`);
+    const id = await Imports.startGroupImport(pool, broker, [], {
+      AI,
+      ctx: { pool, broker, agency: req.session.agency, lang },
+      lang,
+      filename: String(req.body.filename || "").slice(0, 120) || null,
+      prepare: async (importId) => {
+        try {
+          await Supabase.downloadChatExportToFile(target, tmp);
+        } catch (err) {
+          if (err.code === "NOT_FOUND") return { error: "not_found" };
+          if (err.code === "TOO_LARGE") return { error: "too_large" };
+          throw err;
+        }
+        return ChatPhotos.postsFromExport(pool, broker, importId, { file: tmp });
+      },
+      cleanup: async () => {
+        await fs.promises.unlink(tmp).catch(() => {});
+        await Supabase.deleteChatExport(target);
+      }
+    });
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", metadata: { kind: "group_zip_upload" } });
     return res.redirect(303, `/app/import/${id}`);
   });
 

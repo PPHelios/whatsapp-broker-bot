@@ -16,6 +16,8 @@ const SheetImport = require("../domain/sheetImport");
 const Dup = require("../domain/unitDuplicate");
 const { normalizeCode } = require("../domain/searchQuery");
 const { normalizeSearch } = require("../domain/searchText");
+const Supabase = require("../lib/supabase");
+const PhotoHash = require("./photoHash");
 
 const MONEY = ["price_value", "down_payment_value", "remaining_amount", "installment_value"];
 const DETAIL_LABELS = { owner_name: ["المالك", "Owner"], owner_phone: ["تليفون المالك", "Owner phone"], notes: ["ملاحظات", "Notes"], clean_summary: ["الوصف", "Description"], summary_en: ["الوصف بالإنجليزي", "English summary"], floor: ["الدور", "Floor"] };
@@ -312,16 +314,33 @@ async function processGroup(pool, broker, id, { AI, ctx, lang = "ar" }) {
   await save("ready");
 }
 
-/** Saves the posts and starts extracting them in the background. Returns the import id. */
-async function startGroupImport(pool, broker, posts, { AI, ctx, lang = "ar", filename = null }) {
-  const id = await savePlan(pool, broker, "group", { posts, results: [] }, { filename, status: "processing" });
+/**
+ * Saves the posts and starts extracting them in the background. Returns the import id.
+ * With prepare (a chat export zip), the posts come from it first: prepare(id) → { posts } or { error }, stored on the
+ * import as failed so the page can say why.
+ */
+async function startGroupImport(pool, broker, posts, { AI, ctx, lang = "ar", filename = null, prepare = null, cleanup = null }) {
+  const id = await savePlan(pool, broker, "group", { posts, results: [], ...(prepare ? { stage: "photos" } : {}) }, { filename, status: "processing" });
   const job = new Promise((resolve) => setImmediate(resolve))
-    .then(() => processGroup(pool, broker, id, { AI, ctx, lang }))
+    .then(async () => {
+      if (prepare) {
+        const ready = await prepare(id);
+        if (ready.error) {
+          await pool.query("UPDATE web_imports SET status = 'failed', payload = payload || $2::jsonb WHERE id = $1", [id, JSON.stringify({ error: ready.error, stage: null })]);
+          return;
+        }
+        await pool.query("UPDATE web_imports SET payload = payload || $2::jsonb WHERE id = $1", [id, JSON.stringify({ posts: ready.posts, stage: null })]);
+      }
+      await processGroup(pool, broker, id, { AI, ctx, lang });
+    })
     .catch(async (err) => {
       console.error("Group import failed:", err.message);
       await pool.query("UPDATE web_imports SET status = 'failed' WHERE id = $1", [id]).catch(() => {});
     })
-    .finally(() => jobs.delete(id));
+    .finally(async () => {
+      if (cleanup) await Promise.resolve(cleanup()).catch(() => {});
+      jobs.delete(id);
+    });
   jobs.set(id, job);
   return id;
 }
@@ -337,12 +356,26 @@ async function applyGroup(pool, broker, id, { rows = [], lang = "ar" } = {}) {
   if (!imp) return null;
   const wanted = new Set(rows.map(Number));
   const result = { created: [], failed: [] };
+  const posts = imp.payload.posts || [];
+  const used = new Set();
   for (const r of imp.payload.results || []) {
     if (!r || !wanted.has(r.i) || !r.ok) continue;
     const res = await insertOne(pool, broker, r.fields, null, lang);
-    if (res.listing) result.created.push(res.listing.code);
-    else result.failed.push(r.i);
+    if (!res.listing) {
+      result.failed.push(r.i);
+      continue;
+    }
+    result.created.push(res.listing.code);
+    // Photos from a chat export zip go on the new unit, with their hashes for the duplicate-photo flag.
+    const photos = (posts[r.i]?.photos || []).filter((p) => p.url);
+    if (photos.length) {
+      await Store.addPhotos(pool, res.listing, photos.map((p) => p.url));
+      await PhotoHash.saveHashes(pool, broker.agency_id, new Map(photos.map((p) => [p.url, p.hash])));
+      photos.forEach((p) => used.add(p.url));
+    }
   }
+  const unused = posts.flatMap((p) => (p.photos || []).map((x) => x.url)).filter((u) => u && !used.has(u));
+  if (unused.length) await Supabase.deleteStorageFiles(unused);
   await pool.query("UPDATE web_imports SET result = $2::jsonb WHERE id = $1", [id, JSON.stringify(result)]);
   return result;
 }
