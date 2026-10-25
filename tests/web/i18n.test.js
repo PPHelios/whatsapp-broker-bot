@@ -64,6 +64,25 @@ test("every page renders in English without Arabic and in Arabic right to left",
   await a.agent.get("/app/?lang=en");
 });
 
+test("every POST form on every page carries exactly one CSRF field, so plain form submits pass", async () => {
+  const a = await signIn(h, "admin");
+  const missing = [];
+  for (const p of PAGES) {
+    const res = await a.agent.get(p);
+    for (const form of res.text.match(/<form\b[^>]*method="post"[\s\S]*?<\/form>/gi) || []) {
+      const n = (form.match(/name="_csrf"/g) || []).length;
+      if (n !== 1) missing.push(`${p}: ${form.slice(0, 80)} (${n})`);
+    }
+  }
+  expect(missing).toEqual([]);
+  // A form posted exactly as the browser would (its own fields only) is accepted.
+  const inbox = await a.agent.get("/app/notifications");
+  const form = inbox.text.match(/<form method="post" action="\/app\/notifications\/read-all">[\s\S]*?<\/form>/)[0];
+  const token = form.match(/name="_csrf" value="([^"]+)"/)[1];
+  expect((await a.agent.post("/app/notifications/read-all").type("form").send({ _csrf: token })).status).toBe(303);
+  expect((await a.agent.post("/app/logout").type("form").send({ _csrf: token })).status).toBe(303);
+});
+
 test("?lang= signed in updates preferred_lang; signed out it sets a cookie for the sign-in page", async () => {
   const b = await signIn(h, "colleague");
   await b.agent.get("/app/?lang=en");

@@ -6,7 +6,7 @@ const express = require("express");
 const { loadAssets } = require("./assets");
 const { securityHeaders, sameOrigin } = require("./security");
 const Session = require("./session");
-const { html, layout } = require("./html");
+const { html, layout, withCsrf } = require("./html");
 const Notifications = require("../lib/notifications");
 
 const MANIFEST = {
@@ -38,7 +38,7 @@ function mountWeb(app, { pool, config }) {
     return res
       .status(status)
       .type("html")
-      .send(String(layout({ assets: assets.url, broker: s?.broker || null, csrf: s?.csrf || null, unread: s?.unread || 0, ...opts, lang })));
+      .send(withCsrf(layout({ assets: assets.url, broker: s?.broker || null, csrf: s?.csrf || null, unread: s?.unread || 0, ...opts, lang }), s?.csrf));
   };
   // Behind Render's proxy, req.ip is the client from X-Forwarded-For (rate limits).
   if (config.isProd) app.set("trust proxy", 1);

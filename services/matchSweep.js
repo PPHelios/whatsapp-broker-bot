@@ -101,7 +101,10 @@ async function sweep(pool, { now = new Date(), watermark = {}, dailyCap = DAILY_
       if (!fresh.length) continue;
       counts.matches += fresh.length;
       const freshIds = new Set(fresh.map((f) => f.listing_id));
-      const to = r.assigned_broker_id || r.broker_id;
+      // Only the lead's current broker: an unassigned lead is the managers' (they see its matches on the lead page),
+      // never the broker who saved the request before it was taken away.
+      const to = r.assigned_broker_id;
+      if (!to) continue;
       if (!perBroker.has(to)) perBroker.set(to, { agencyId, hits: [] });
       const lead = { id: r.lead_id, ref: r.ref, name: r.name, phone_e164: r.phone_e164 };
       for (const f of fits) if (freshIds.has(f.id)) perBroker.get(to).hits.push({ lead, listing: f });

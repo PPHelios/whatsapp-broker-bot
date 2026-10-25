@@ -95,4 +95,16 @@ function topBar({ broker, nav, lang, unread = 0 }) {
 </header>`;
 }
 
-module.exports = { SafeHtml, html, raw, escapeHtml, jsonAttr, layout, NAV, HTMX_CONFIG };
+/**
+ * Gives every POST form of a signed-in page the session's CSRF field (unless it already has one), so a plain
+ * form submit passes verifyCsrf like htmx requests do. One field per form: a second would make `_csrf` an array.
+ */
+function withCsrf(pageHtml, csrf) {
+  if (!csrf) return String(pageHtml);
+  const field = `<input type="hidden" name="_csrf" value="${escapeHtml(csrf)}">`;
+  return String(pageHtml).replace(/<form\b[^>]*\bmethod="post"[^>]*>[\s\S]*?<\/form>/gi, (form) =>
+    form.includes('name="_csrf"') ? form : form.replace(">", `>${field}`)
+  );
+}
+
+module.exports = { SafeHtml, html, raw, escapeHtml, jsonAttr, layout, withCsrf, NAV, HTMX_CONFIG };

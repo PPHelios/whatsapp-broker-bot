@@ -132,6 +132,15 @@ test("the alert goes to the lead's current broker after a reassignment", async (
   expect(await alerts("colleague")).toHaveLength(1);
 });
 
+test("a lead moved back to the unassigned pool alerts nobody (not the broker who saved the request)", async () => {
+  const l = await lead();
+  await Leads.assignLead(h.pool, await row("admin"), l.id, null);
+  await h.insertListing({ code: "HP-1", compound: "Hyde Park" });
+  await run();
+  expect(await alerts("broker")).toHaveLength(0);
+  expect((await h.query("SELECT count(*)::int AS n FROM lead_matches"))[0].n).toBe(1);
+});
+
 test("the job is registered", () => {
   expect(require("../../lib/jobs").buildJobs().map((j) => j.name)).toContain("match_sweep");
   expect(Store.findDuplicate).toBeInstanceOf(Function);

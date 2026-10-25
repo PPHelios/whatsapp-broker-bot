@@ -415,6 +415,7 @@
       "escapeHtml": ["value"],
       "jsonAttr": ["obj"],
       "layout": ["params"],
+      "withCsrf": ["pageHtml", "csrf"],
       "NAV": "Array",
       "HTMX_CONFIG": "Object"
     },
