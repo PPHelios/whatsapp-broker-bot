@@ -146,3 +146,33 @@ test("every model has a fast-thinking setting it accepts (MINIMAL is not valid o
   for (const m of AI.TIERS) expect(AI.FAST_THINKING[m]).toBeDefined();
   expect(AI.FAST_THINKING["gemini-3.8-flash"].thinkingLevel).not.toBe("MINIMAL");
 });
+
+test("routing: text-only calls start on Flash-Lite, audio and images on 3.6 Flash", async () => {
+  expect(AI.TEXT_TIERS[0]).toBe("gemini-3.5-flash-lite");
+  expect(AI.MEDIA_TIERS[0]).toBe("gemini-3.6-flash");
+  const audio = [{ role: "user", parts: [{ text: "p" }, { inlineData: { mimeType: "audio/ogg", data: "x" } }] }];
+  const image = [{ role: "user", parts: [{ inlineData: { mimeType: "image/jpeg", data: "x" } }] }];
+  const text = [{ role: "user", parts: [{ text: "p" }] }];
+  expect(AI.hasMedia(audio)).toBe(true);
+  expect(AI.hasMedia(image)).toBe(true);
+  expect(AI.hasMedia(text)).toBe(false);
+  expect(AI.hasMedia("plain prompt")).toBe(false);
+
+  const client = fakeClient({});
+  AI._setClientForTests(client);
+  await AI.generateWithCascade({ contents: audio, operationType: "listing_extraction", ctx });
+  await AI.generateWithCascade({ contents: text, operationType: "listing_extraction", ctx });
+  await AI.generateWithCascade({ contents: text, operationType: "search_parse", ctx });
+  expect(client.calls.map((c) => c.model)).toEqual([
+    "gemini-3.6-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.5-flash-lite"
+  ]);
+  // Draft extraction now uses the per-model fast thinking the eval measured.
+  expect(client.calls[0].config.thinkingConfig).toEqual({ thinkingLevel: "MINIMAL" });
+});
+
+test("routing: a route can pin its own chain", () => {
+  const route = { tiers: ["gemini-3.8-flash"] };
+  expect(AI.tiersFor(route, "q")).toEqual(["gemini-3.8-flash"]);
+});

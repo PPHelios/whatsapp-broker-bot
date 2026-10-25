@@ -121,7 +121,7 @@ The database runs on PostgreSQL (Supabase) with the `pg_trgm`, `pgcrypto` and `u
 
 ### 3. AI Gateway & Resilience Architecture
 * **Single gateway:** every Gemini call goes through `lib/ai.js` `generateWithCascade({ contents, config, operationType, ctx })`. That covers search parsing, transcription, vision curation and draft extraction, which makes it the only place that controls AI latency, cost and telemetry. All calls pass through the in-process `rateGate` (60 RPM per process).
-* **Model tiers (`TIERS`, in order):** `gemini-3.8-flash` → `gemini-3.6-flash` → `gemini-3.5-flash-lite`.
+* **Model chains (`tiersFor`):** text-only requests use `TEXT_TIERS` `gemini-3.5-flash-lite` → `gemini-3.6-flash` → `gemini-3.8-flash`; requests carrying audio, image or video parts (`hasMedia`) use `MEDIA_TIERS` `gemini-3.6-flash` → `gemini-3.8-flash` → `gemini-3.5-flash-lite`. A route may pin its own chain with `tiers`. Chosen by the 2026-10-25 model eval: Flash-Lite scored the same as Flash on text listings at ~45% less (72% less from 1 January 2027), but missed fields in 8 of 13 voice notes; 3.6 Flash matched 3.8 Flash on voice and was faster. `TIERS` is `TEXT_TIERS` (the eval script's default model).
 * **Per-task routes (`ROUTES`):** each `operationType` has a total `deadlineMs`, a `hedgeAfterMs`, and a thinking class. Unknown types use `default`.
 
   | Route | Deadline | Hedge after | Thinking |
@@ -135,7 +135,7 @@ The database runs on PostgreSQL (Supabase) with the `pg_trgm`, `pgcrypto` and `u
   - If the current tier hasn't answered within `hedgeAfterMs`, the next tier starts **in parallel**. The first successful answer wins, and the other attempts are cancelled through `abortSignal`.
   - A hard error (overloaded, quota, invalid) moves to the next tier immediately, with no fixed sleeps.
   - The call fails with `code: "AI_DEADLINE"` when the route deadline passes.
-* **Thinking per model (`FAST_THINKING`):** thinking settings aren't portable across models. `gemini-3.8-flash` rejects `MINIMAL`, and flash-lite rejects `thinkingBudget: 0` (probed 2026-10-24). So the "fast" class maps each model to its own lowest accepted level: 3.8 → `LOW`, 3.6 and lite → `MINIMAL`. Draft extraction keeps the model default until the AI quality eval (`npm run eval:ai`) shows a lower level keeps accuracy.
+* **Thinking per model (`FAST_THINKING`):** thinking settings aren't portable across models. `gemini-3.8-flash` rejects `MINIMAL`, and flash-lite rejects `thinkingBudget: 0` (probed 2026-10-24). So the "fast" class maps each model to its own lowest accepted level: 3.8 → `LOW`, 3.6 and lite → `MINIMAL`. Draft extraction (`listing_extraction`) uses the fast class too: the 2026-10-25 eval showed MINIMAL (LOW on 3.8) keeps accuracy on text and voice.
 * **Telemetry:**
   - Each call writes one `operation_logs` row, on success **and** on failure. It records `operation_type = <route>`, the winning `model_used`, `gemini_ms` (the winner's latency), `total_duration_ms` and `tokens_input`.
   - `tokens_output` includes thinking tokens, because they're billed as output.
