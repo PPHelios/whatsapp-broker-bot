@@ -5,6 +5,8 @@
 // Managers hear once per import, and each assignee once, never once per row. Names and phones stay out of logs.
 "use strict";
 
+const Rules = require("../domain/leadRules");
+
 const Leads = require("./leads");
 const Imports = require("./imports");
 const LeadRequests = require("./leadRequests");
@@ -22,7 +24,7 @@ const L = (b, ar, eng) => (en(b) ? eng : ar);
 
 async function activeBrokers(pool, agencyId) {
   const { rows } = await pool.query(
-    "SELECT id, name, role, phone_number, phone_normalized FROM brokers WHERE agency_id = $1 AND is_active ORDER BY name, id",
+    "SELECT id, name, role, phone_number, phone_normalized, away_until FROM brokers WHERE agency_id = $1 AND is_active ORDER BY name, id",
     [agencyId]
   );
   return rows;
@@ -54,8 +56,10 @@ async function planLeads(pool, broker, table, { basis = "client_request", roundR
 
   const brokers = manager ? await activeBrokers(pool, broker.agency_id) : [];
   // Round-robin goes to the brokers (role broker); an agency of managers only shares among them.
-  const pool_ = brokers.filter((b) => b.role === "broker");
-  const rotation = pool_.length ? pool_ : brokers;
+  // Brokers away (R3) take no new leads and are skipped.
+  const available = brokers.filter((b) => !Rules.awayNow(b));
+  const pool_ = available.filter((b) => b.role === "broker");
+  const rotation = pool_.length ? pool_ : available;
   let turn = 0;
 
   const seen = new Map(); // phone → first row
@@ -106,6 +110,10 @@ async function planLeads(pool, broker, table, { basis = "client_request", roundR
       if (p.assigned) {
         assignee = LeadImport.matchBroker(p.assigned, brokers);
         if (!assignee) warnings.push("assigned");
+        else if (Rules.awayNow(assignee)) {
+          warnings.push("assigned_away");
+          assignee = null;
+        }
       }
       if (!assignee && roundRobin && rotation.length) assignee = rotation[turn++ % rotation.length];
     }

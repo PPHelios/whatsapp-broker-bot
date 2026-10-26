@@ -280,7 +280,8 @@ CREATE TABLE IF NOT EXISTS public.agencies (
   trial_ends_at timestamp with time zone,
   pilot boolean DEFAULT false NOT NULL,
   approval text DEFAULT 'approved'::text NOT NULL,
-  signed_up_at timestamp with time zone
+  signed_up_at timestamp with time zone,
+  lead_rules jsonb DEFAULT '{}'::jsonb NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.brokers (
@@ -298,7 +299,10 @@ CREATE TABLE IF NOT EXISTS public.brokers (
   notify_prefs jsonb DEFAULT '{}'::jsonb NOT NULL,
   telegram_user_id bigint,
   telegram_chat_id bigint,
-  telegram_linked_at timestamp with time zone
+  telegram_linked_at timestamp with time zone,
+  away_until timestamp with time zone,
+  deactivated_at timestamp with time zone,
+  last_lead_at timestamp with time zone
 );
 
 CREATE TABLE IF NOT EXISTS public.listings (
@@ -673,7 +677,10 @@ CREATE TABLE IF NOT EXISTS public.leads (
   version integer DEFAULT 1 NOT NULL,
   follow_up_reminded_at timestamp with time zone,
   nudged_at timestamp with time zone,
-  interest_nudged_at timestamp with time zone
+  interest_nudged_at timestamp with time zone,
+  assigned_at timestamp with time zone,
+  response_due_at timestamp with time zone,
+  response_jumps integer DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.lead_events (
@@ -1145,7 +1152,7 @@ ALTER TABLE listings ADD CONSTRAINT listings_market_check CHECK ((market = ANY (
 ALTER TABLE listings ADD CONSTRAINT listings_payment_frequency_check CHECK ((payment_frequency = ANY (ARRAY['monthly'::text, 'quarterly'::text, 'semi_annual'::text, 'annual'::text])));
 ALTER TABLE listings ADD CONSTRAINT listings_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'sold'::text, 'archived'::text])));
 ALTER TABLE notifications ADD CONSTRAINT notifications_channel_check CHECK ((channel = ANY (ARRAY['whatsapp'::text, 'webpush'::text, 'inbox'::text, 'telegram'::text])));
-ALTER TABLE notifications ADD CONSTRAINT notifications_reason_check CHECK ((reason = ANY (ARRAY['chosen'::text, 'fallback'::text, 'no_credits'::text, 'window_closed'::text, 'quiet_hours'::text, 'merged'::text, 'no_push'::text, 'not_linked'::text])));
+ALTER TABLE notifications ADD CONSTRAINT notifications_reason_check CHECK ((reason = ANY (ARRAY['chosen'::text, 'fallback'::text, 'no_credits'::text, 'window_closed'::text, 'quiet_hours'::text, 'merged'::text, 'no_push'::text, 'not_linked'::text, 'switched_off'::text])));
 ALTER TABLE notifications ADD CONSTRAINT notifications_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'held'::text, 'queued'::text, 'sent'::text, 'failed'::text, 'skipped'::text])));
 ALTER TABLE notifications ADD CONSTRAINT notifications_url_check CHECK (((url IS NULL) OR (url ~~ '/app/%'::text)));
 ALTER TABLE payments ADD CONSTRAINT payments_amount_egp_check CHECK ((amount_egp > 0));
@@ -1309,6 +1316,7 @@ CREATE INDEX idx_lead_matches_listing ON public.lead_matches USING btree (agency
 CREATE INDEX idx_leads_assigned ON public.leads USING btree (agency_id, assigned_broker_id, last_activity_at DESC);
 CREATE INDEX idx_leads_follow_up ON public.leads USING btree (next_follow_up_at) WHERE (follow_up_status = 'open'::text);
 CREATE INDEX idx_leads_phones ON public.leads USING gin (phones);
+CREATE INDEX idx_leads_response_due ON public.leads USING btree (response_due_at) WHERE (response_due_at IS NOT NULL);
 CREATE INDEX idx_leads_untouched ON public.leads USING btree (created_at) WHERE ((stage = 'new'::text) AND (last_contact_at IS NULL) AND (nudged_at IS NULL));
 CREATE INDEX idx_listing_drafts_updated ON public.listing_drafts USING btree (updated_at);
 CREATE INDEX listing_images_agency_idx ON public.listing_images USING btree (agency_id);

@@ -18,14 +18,15 @@ const TOP_ROLES = ["admin", "owner"];
 const mayActOn = (actor, targetRole) =>
   !TOP_ROLES.includes(String(targetRole || "").toLowerCase()) || TOP_ROLES.includes(String(actor?.role || "").toLowerCase());
 
-/** The agency's brokers with what the team page shows (no client data). */
+/** The agency's brokers with what the team page shows (no client data): active by name, then former brokers, longest gone last. Never deleted. */
 async function listTeam(pool, manager) {
   if (!isManager(manager)) return null;
   const { rows } = await pool.query(
     `SELECT b.id, b.name, b.role, b.is_active, b.phone_number, b.preferred_lang, b.last_active_at, b.telegram_linked_at,
-            (b.telegram_chat_id IS NOT NULL) AS telegram,
+            b.away_until, b.deactivated_at, b.notify_prefs, (b.telegram_chat_id IS NOT NULL) AS telegram,
             (SELECT max(t.expires_at) FROM telegram_link_tokens t WHERE t.broker_id = b.id AND t.used_at IS NULL AND t.expires_at > NOW()) AS link_until
-       FROM brokers b WHERE b.agency_id = $1 ORDER BY b.is_active DESC, b.name`,
+       FROM brokers b WHERE b.agency_id = $1
+      ORDER BY b.is_active DESC, CASE WHEN b.is_active THEN b.name END, b.deactivated_at DESC NULLS LAST, b.name`,
     [manager.agency_id]
   );
   return rows;
@@ -71,7 +72,7 @@ async function invite(pool, manager, input = {}, opts = {}) {
   if (found[0]) {
     // One of ours: bring them back; an admin or owner keeps their role.
     const keep = !INVITE_ROLES.includes(String(found[0].role || "").toLowerCase());
-    await pool.query("UPDATE brokers SET name = $2, role = CASE WHEN $4 THEN role ELSE $3 END, is_active = true WHERE id = $1", [found[0].id, name, role, keep]);
+    await pool.query("UPDATE brokers SET name = $2, role = CASE WHEN $4 THEN role ELSE $3 END, is_active = true, deactivated_at = NULL WHERE id = $1", [found[0].id, name, role, keep]);
     brokerId = found[0].id;
   } else {
     const { rows } = await pool.query(

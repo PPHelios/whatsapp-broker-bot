@@ -206,7 +206,8 @@ const WARNING_LABELS = {
   lawful_basis: ["الأساس القانوني مش مفهوم (اتاخد اللي اخترته)", "Unknown lawful basis (the one you picked is used)"],
   property_type: ["نوع العقار مش مفهوم", "Unknown property type"],
   budget: ["الميزانية مش مفهومة", "Budget not understood"],
-  assigned: ["الوسيط مش معروف", "Unknown broker"]
+  assigned: ["الوسيط مش معروف", "Unknown broker"],
+  assigned_away: ["الوسيط في إجازة؛ مش هيتسلمله", "The broker is away; not given to them"]
 };
 const ERROR_LABELS = {
   phone_required: ["مفيش رقم", "No phone number"],

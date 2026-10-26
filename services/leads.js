@@ -10,6 +10,8 @@ const Stages = require("../domain/leadStages");
 const Card = require("../domain/leadCard");
 const Authz = require("../lib/authz");
 const Notifications = require("../lib/notifications");
+const LeadRules = require("./leadRules");
+const Rules = require("../domain/leadRules");
 const { withTransaction, logOperation } = require("../lib/db");
 const { getConfig } = require("../config");
 
@@ -19,7 +21,7 @@ const NOTE_MAX = 1000;
 const PAGE = 20;
 const DAY_MS = 24 * 3600 * 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const BROKER_COLS = "id, agency_id, name, role, is_active, preferred_lang, phone_number, phone_normalized, notify_prefs";
+const BROKER_COLS = "id, agency_id, name, role, is_active, preferred_lang, phone_number, phone_normalized, notify_prefs, away_until";
 const LEAD_COLS = "l.*, a.name AS assignee_name";
 const FROM_LEADS = "FROM leads l LEFT JOIN brokers a ON a.id = l.assigned_broker_id AND a.agency_id = l.agency_id";
 
@@ -27,11 +29,11 @@ const FROM_LEADS = "FROM leads l LEFT JOIN brokers a ON a.id = l.assigned_broker
 const FOLLOW_UP_FIELDS = ["next_follow_up_at", "follow_up_kind", "follow_up_listing_id", "follow_up_note", "follow_up_status", "follow_up_reminded_at"];
 const REVERSIBLE = {
   stage: ["stage", "lost_reason"],
-  contacted: ["stage", "last_contact_at"],
+  contacted: ["stage", "last_contact_at", "response_due_at"],
   follow_up_set: FOLLOW_UP_FIELDS,
   follow_up_done: FOLLOW_UP_FIELDS,
   note: [],
-  assigned: ["assigned_broker_id"]
+  assigned: ["assigned_broker_id", "assigned_at", "response_due_at", "response_jumps"]
 };
 
 const en = (b) => b?.preferred_lang === "en";
@@ -160,7 +162,10 @@ async function captureLead(pool, actor, input = {}, { now = new Date(), quiet = 
   if (assignee && assignee !== actor.id) {
     const b = await brokerById(pool, actor.agency_id, assignee);
     if (!b || !b.is_active) return { outcome: "invalid", error: "assignee", notified: [] };
+    if (Rules.awayNow(b, now)) return { outcome: "invalid", error: "assignee_away", notified: [] };
   }
+  // R3: a lead someone else gives a broker must be contacted in time (when the agency's rule is on).
+  const due = assignee && assignee !== actor.id && stage === "new" ? await LeadRules.deadlineFor(pool, actor.agency_id, now) : null;
 
   const hashes = parsed.phones.map(phoneHash);
   if (!input.allowErased) {
@@ -193,9 +198,10 @@ async function captureLead(pool, actor, input = {}, { now = new Date(), quiet = 
       const { rows } = await client.query(
         `UPDATE leads SET phones = phones || $3::text[], name = COALESCE(name, $4), assigned_broker_id = $5,
                 source = COALESCE(source, $7), notes = COALESCE(notes, $8),
+                assigned_at = CASE WHEN $9 THEN $6 ELSE assigned_at END,
                 last_activity_at = $6, updated_at = $6, version = version + 1
           WHERE id = $1 AND agency_id = $2 RETURNING *`,
-        [existing.id, actor.agency_id, added, cleanText(input.name, 120), claim ? actor.id : existing.assigned_broker_id, now.toISOString(), cleanText(input.source, 60), cleanText(input.notes, 4000)]
+        [existing.id, actor.agency_id, added, cleanText(input.name, 120), claim ? actor.id : existing.assigned_broker_id, now.toISOString(), cleanText(input.source, 60), cleanText(input.notes, 4000), claim]
       );
       await addEvent(client, existing, actor.id, "inquiry", { source: cleanText(input.source, 60) }, now);
       if (added.length) await addEvent(client, existing, actor.id, "merged", { added: added.length }, now);
@@ -206,8 +212,9 @@ async function captureLead(pool, actor, input = {}, { now = new Date(), quiet = 
     const seq = await client.query("UPDATE agencies SET lead_ref_seq = lead_ref_seq + 1 WHERE id = $1 RETURNING lead_ref_seq", [actor.agency_id]);
     const { rows } = await client.query(
       `INSERT INTO leads (agency_id, ref, kind, assigned_broker_id, created_by_broker_id, name, phone_e164, phones, lang, source,
-                          lawful_basis, consent_at, consent_note, notes, stage, lost_reason, last_activity_at, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $16, $17, $15, $15, $15) RETURNING *`,
+                          lawful_basis, consent_at, consent_note, notes, stage, lost_reason, last_activity_at, created_at, updated_at,
+                          assigned_at, response_due_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $16, $17, $15, $15, $15, $18, $19) RETURNING *`,
       [
         actor.agency_id,
         seq.rows[0].lead_ref_seq,
@@ -225,9 +232,12 @@ async function captureLead(pool, actor, input = {}, { now = new Date(), quiet = 
         cleanText(input.notes, 4000),
         now.toISOString(),
         stage,
-        lostReason
+        lostReason,
+        assignee ? now.toISOString() : null,
+        due ? due.toISOString() : null
       ]
     );
+    if (assignee && assignee !== actor.id) await client.query("UPDATE brokers SET last_lead_at = $2 WHERE id = $1", [assignee, now.toISOString()]);
     await addEvent(client, rows[0], actor.id, "created", { source: cleanText(input.source, 60), assigned_to: assignee }, now);
     return { outcome: "created", lead: rows[0] };
   });
@@ -334,7 +344,10 @@ async function applyUpdate(pool, actor, key, u, { now = new Date() } = {}) {
       eventIds.push(r.eventId);
     };
     const via = u.via || null;
-    if (u.contacted) await step("contacted", { fields: { last_contact_at: now.toISOString(), stage: Stages.stageAfterContact(lead.stage) }, data: { from: lead.stage, via } });
+    if (u.contacted) {
+      const c = contactChange(lead, actor, now);
+      await step("contacted", { fields: c.fields, data: { ...c.data, via } });
+    }
     if (u.stage) {
       const reason = u.stage === "lost" ? cleanText(u.lostReason || "—", 200) : null;
       if (lead.stage !== u.stage || (lead.lost_reason || null) !== reason) await step("stage", { fields: { stage: u.stage, lost_reason: reason }, data: { from: lead.stage, to: u.stage, lost_reason: reason, via } });
@@ -375,12 +388,24 @@ async function assignLead(pool, actor, key, toBrokerId, { version = null, now = 
   if (toBrokerId) {
     target = await brokerById(pool, actor.agency_id, toBrokerId);
     if (!target || !target.is_active) return { error: "assignee" };
+    if (Rules.awayNow(target, now)) return { error: "assignee_away" };
   }
+  const deadline = target && target.id !== actor.id ? await LeadRules.deadlineFor(pool, actor.agency_id, now) : null;
   const r = await mutate(pool, actor, key, { kind: "assigned", version, manage: true, now }, (lead) =>
     lead.assigned_broker_id === (target?.id || null)
       ? { unchanged: true }
-      : { fields: { assigned_broker_id: target?.id || null, follow_up_reminded_at: null }, data: { from: lead.assigned_broker_id, to: target?.id || null, to_name: target?.name || null } }
+      : {
+          fields: {
+            assigned_broker_id: target?.id || null,
+            follow_up_reminded_at: null,
+            assigned_at: target ? now.toISOString() : null,
+            response_due_at: deadline && lead.stage === "new" && !lead.last_contact_at ? deadline.toISOString() : null,
+            response_jumps: 0
+          },
+          data: { from: lead.assigned_broker_id, to: target?.id || null, to_name: target?.name || null }
+        }
   );
+  if (r.ok && target && target.id !== actor.id) await pool.query("UPDATE brokers SET last_lead_at = $2 WHERE id = $1", [target.id, now.toISOString()]);
   if (r.ok) r.notified = await sendCard(pool, actor, r.lead, target?.id, now);
   return r;
 }
@@ -404,12 +429,21 @@ async function addNote(pool, actor, key, text, { version = null, now = new Date(
   return mutate(pool, actor, key, { kind: "note", version, now }, () => ({ fields: {}, data: { text: note } }));
 }
 
+/**
+ * The broker talked to the client: a new lead moves to contacted and its response deadline ends. The first contact by
+ * the broker someone gave the lead to records how many minutes it took (speed-to-lead, R3).
+ */
+function contactChange(lead, actor, now) {
+  const data = { from: lead.stage };
+  if (!lead.last_contact_at && lead.assigned_at && lead.assigned_broker_id === actor.id && lead.created_by_broker_id !== actor.id) {
+    data.response_min = Rules.minutesBetween(lead.assigned_at, now);
+  }
+  return { fields: { last_contact_at: now.toISOString(), stage: Stages.stageAfterContact(lead.stage), response_due_at: null }, data };
+}
+
 /** The broker talked to the client: a new lead moves to contacted. */
 async function markContacted(pool, actor, key, { version = null, now = new Date() } = {}) {
-  return mutate(pool, actor, key, { kind: "contacted", version, now }, (lead) => ({
-    fields: { last_contact_at: now.toISOString(), stage: Stages.stageAfterContact(lead.stage) },
-    data: { from: lead.stage }
-  }));
+  return mutate(pool, actor, key, { kind: "contacted", version, now }, (lead) => contactChange(lead, actor, now));
 }
 
 /** Q5: one open follow-up per lead (a new one replaces it). A viewing may carry a unit of the agency. */
@@ -612,7 +646,7 @@ async function timeline(pool, actor, key, { limit = PAGE, beforeId = null } = {}
 async function releaseBrokerLeads(pool, agencyId, brokerId, { actorId = null, now = new Date() } = {}) {
   const released = await withTransaction(pool, async (client) => {
     const { rows } = await client.query(
-      `UPDATE leads SET assigned_broker_id = NULL, updated_at = $3, version = version + 1
+      `UPDATE leads SET assigned_broker_id = NULL, assigned_at = NULL, response_due_at = NULL, updated_at = $3, version = version + 1
         WHERE agency_id = $1 AND assigned_broker_id = $2 RETURNING id`,
       [agencyId, brokerId, now.toISOString()]
     );

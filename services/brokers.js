@@ -12,10 +12,10 @@ const Phone = require("../domain/phone");
 async function deactivateBroker(pool, { agencyId, brokerId = null, phone = null, actorId = null, now = new Date() }) {
   const digits = phone ? Phone.normalizePhone(phone) : null;
   const { rows } = await pool.query(
-    `UPDATE brokers SET is_active = false
+    `UPDATE brokers SET is_active = false, away_until = NULL, deactivated_at = CASE WHEN is_active THEN $4::timestamptz ELSE deactivated_at END
       WHERE agency_id = $1 AND (id = $2 OR ($2::uuid IS NULL AND phone_normalized = $3))
       RETURNING id, agency_id, name, role, is_active`,
-    [agencyId, brokerId, digits]
+    [agencyId, brokerId, digits, now.toISOString()]
   );
   const broker = rows[0];
   if (!broker) return { error: "not_found" };

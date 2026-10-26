@@ -12,13 +12,14 @@ const Notifications = require("../lib/notifications");
 const Card = require("../domain/leadCard");
 const Phone = require("../domain/phone");
 const Describe = require("../domain/describe");
+const Rules = require("../domain/leadRules");
 const { withTransaction } = require("../lib/db");
 
 const BATCH = 200;
 const LINES = 5;
 const NUDGE_AFTER_MS = 24 * 3600 * 1000;
 const NUDGE_WINDOW_MS = 72 * 3600 * 1000; // older untouched leads (first deploy, old imports) are never nudged
-const BROKER_COLS = "id, agency_id, name, role, is_active, preferred_lang, phone_number, phone_normalized, notify_prefs";
+const BROKER_COLS = "id, agency_id, name, role, is_active, preferred_lang, phone_number, phone_normalized, notify_prefs, away_until";
 
 const en = (b) => b?.preferred_lang === "en";
 const L = (b, ar, eng) => (en(b) ? eng : ar);
@@ -80,13 +81,26 @@ function reminderMessage(broker, leads) {
   };
 }
 
-/** Sends one grouped notification per broker. → number of brokers told */
+/**
+ * Sends one grouped notification per broker. A broker away (R3) is not disturbed: the managers get it instead, titled
+ * with whose leads they are. → number of brokers told
+ */
 async function tellBrokers(pool, byBroker, build, prefix, field, now) {
   let told = 0;
   for (const [brokerId, { agencyId, leads }] of byBroker) {
     const { rows } = await pool.query(`SELECT ${BROKER_COLS} FROM brokers WHERE id = $1 AND agency_id = $2`, [brokerId, agencyId]);
     const broker = rows[0];
     if (!broker || !broker.is_active) continue;
+    if (Rules.awayNow(broker, now)) {
+      for (const m of await Notifications.managersOf(pool, agencyId)) {
+        if (m.id === broker.id) continue;
+        const msg = build(m, leads);
+        const title = `${msg.title} · ${L(m, `بدل ${broker.name} (إجازة)`, `for ${broker.name} (away)`)}`;
+        await Notifications.notifyBroker(pool, m, { kind: "follow_up", dedupeKey: `${dedupe(prefix, leads, field)}:${broker.id}`, ...msg, title, buttons: null, now });
+      }
+      told++;
+      continue;
+    }
     const m = build(broker, leads);
     await Notifications.notifyBroker(pool, broker, { kind: "follow_up", dedupeKey: dedupe(prefix, leads, field), ...m, now });
     told++;
