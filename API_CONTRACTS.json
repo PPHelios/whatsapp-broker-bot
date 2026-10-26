@@ -1598,6 +1598,24 @@
     "services/followUpDrafts.js": {
       "draft": ["pool", "broker", "leadKey", "params"],
       "saveStyle": ["pool", "broker", "text"]
+    },
+    "domain/leases.js": {
+      "END_DAYS": "Array",
+      "INCREASE_DAYS": "Number",
+      "ymd": ["d"],
+      "addMonths": ["start", "months"],
+      "endDate": ["lease"],
+      "increaseDates": ["lease"],
+      "dueReminders": ["lease", "today"],
+      "fromForm": ["f"]
+    },
+    "services/leases.js": {
+      "forListing": ["db", "listing"],
+      "save": ["db", "actor", "listing", "form"],
+      "remove": ["db", "actor", "listing"],
+      "upcoming": ["db", "manager", "params"],
+      "remindDue": ["db", "params"],
+      "reminderJob": []
     }
   },
   "invariant_variable_names": {

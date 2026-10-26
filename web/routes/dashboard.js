@@ -6,6 +6,7 @@
 
 const PriceReading = require("../../services/priceReading");
 const Assistant = require("../../services/assistant");
+const Leases = require("../../services/leases");
 const Reading = require("../../domain/priceReading");
 const Dash = require("../../services/dashboards");
 const Stages = require("../../domain/leadStages");
@@ -29,6 +30,17 @@ const minutes = (m, lang) => {
 const medal = (i) => ["🥇", "🥈", "🥉"][i] || `${i + 1}`;
 const notFound = (req, res, page) =>
   page(req, res, { title: L(langOf(req), "غير موجود", "Not found"), body: html`<div class="card"><h1>🔍 ${L(langOf(req), "الصفحة غير موجودة", "Page not found")}</h1><p><a href="/app/">${L(langOf(req), "الرئيسية", "Home")}</a></p></div>` }, 404);
+
+/** N4: rented units whose lease ends in the next 90 days. */
+function leaseEnds(rows, lang) {
+  return html`<section class="card" id="lease-ends">
+  <h2>🔑 ${L(lang, "عقود إيجار بتخلص خلال 90 يوم", "Leases ending in the next 90 days")}</h2>
+  ${rows.length
+    ? html`<div class="scroll"><table><thead><tr><th>${L(lang, "الوحدة", "Unit")}</th><th>${L(lang, "بتخلص", "Ends")}</th><th>${L(lang, "المستأجر", "Tenant")}</th><th>${L(lang, "البروكر", "Broker")}</th><th>${L(lang, "الإيجار", "Rent")}</th></tr></thead>
+  <tbody>${rows.map((r) => html`<tr data-lease-end="${r.code}"><td><a href="/app/units/${encodeURIComponent(r.code)}#lease">${r.code}</a></td><td dir="ltr">${r.end.toISOString().slice(0, 10)}</td><td>${r.tenant_name || "—"}</td><td>${r.broker_name || "—"}${r.remind ? " 🔔" : ""}</td><td>${r.rent ? money(r.rent, lang) : "—"}</td></tr>`)}</tbody></table></div>`
+    : html`<p class="muted">${L(lang, "مفيش. سجّل عقد الإيجار من صفحة الوحدة المؤجرة.", "None. Enter a lease on the rented unit's page.")}</p>`}
+</section>`;
+}
 
 function agencyPage(d, lang) {
   const tile = (label, value, attr) => html`<div class="card tile" data-kpi="${attr}"><div class="muted">${label}</div><strong>${value}</strong></div>`;
@@ -198,7 +210,8 @@ function register(web, { pool, page }) {
     const lang = langOf(req);
     const d = await Dash.agencyDashboard(pool, req.session.broker, { days: req.query.days });
     if (!d) return res.status(403).type("text/plain").send(L(lang, "للمديرين بس", "Managers only"));
-    return page(req, res, { title: L(lang, "لوحة الوكالة", "Agency dashboard"), body: agencyPage(d, lang) });
+    const leases = await Leases.upcoming(pool, req.session.broker);
+    return page(req, res, { title: L(lang, "لوحة الوكالة", "Agency dashboard"), body: html`${agencyPage(d, lang)}${leaseEnds(leases || [], lang)}` });
   });
 
   const ownerView = async (req, res, notice = null, status = 200) => {
