@@ -21,6 +21,7 @@ const PRIVATE = [
   require("./report"),
   require("./sources"),
   require("./insights"),
+  require("./catalogueUpdates"),
   require("./catalogue"),
   require("./priceSheets")
 ];
