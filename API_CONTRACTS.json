@@ -1122,7 +1122,7 @@
     },
     "services/billingNotices.js": {
       "paymentRequested": ["payment", "agency", "manager"],
-      "signupRequested": ["agency", "broker"],
+      "signupRequested": ["agency", "broker", "referrer"],
       "paymentConfirmed": ["pool", "params", "params"],
       "remindEnding": ["pool", "params"],
       "reminderJob": []
@@ -1642,6 +1642,18 @@
       "MAX_PHONES": "Number",
       "mergedFields": ["keep", "drop"],
       "merge": ["pool", "manager", "keepKey", "dropKey", "params"]
+    },
+    "services/referrals.js": {
+      "BONUS_MONTHS": "Number",
+      "normalize": ["code"],
+      "newCode": [],
+      "linkOf": ["code"],
+      "codeOf": ["db", "agencyId"],
+      "agencyByCode": ["db", "code"],
+      "link": ["db", "agencyId", "code"],
+      "onPlanPayment": ["client", "agencyId", "params"],
+      "summary": ["db", "agencyId"],
+      "overview": ["db"]
     }
   },
   "invariant_variable_names": {

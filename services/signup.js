@@ -8,6 +8,7 @@ const Phone = require("../domain/phone");
 const Plans = require("../domain/plans");
 const TgLink = require("../lib/tgLink");
 const Billing = require("./billing");
+const Referrals = require("./referrals");
 const { withTransaction } = require("../lib/db");
 const { getConfig } = require("../config");
 
@@ -22,8 +23,9 @@ async function setOpen(db, enabled) {
 }
 
 /**
- * A sign-up request: { ok, agency, broker } or { error: closed|agency|name|phone|phone_taken }.
- * @param {Object} input - { agency, name, phone, lang }
+ * A sign-up request: { ok, agency, broker, referrer } or { error: closed|agency|name|phone|referral|phone_taken }.
+ * A referral code (optional) records the agency that invited this one (services/referrals.js).
+ * @param {Object} input - { agency, name, phone, lang, referral }
  */
 async function submit(pool, input = {}, { now = new Date() } = {}) {
   if (!(await isOpen(pool))) return { error: "closed" };
@@ -34,19 +36,21 @@ async function submit(pool, input = {}, { now = new Date() } = {}) {
   if (!agencyName) return { error: "agency" };
   if (!name) return { error: "name" };
   if (!digits || !Phone.isEgyptMobile(digits)) return { error: "phone" };
+  const referrer = input.referral ? await Referrals.agencyByCode(pool, input.referral) : null;
+  if (input.referral && !referrer) return { error: "referral" };
   return withTransaction(pool, async (client) => {
     const { rows: taken } = await client.query("SELECT 1 FROM brokers WHERE phone_normalized = $1", [digits]);
     if (taken.length) return { error: "phone_taken" };
     const { rows: a } = await client.query(
-      `INSERT INTO agencies (name, plan, pilot, approval, signed_up_at) VALUES ($1, $2, false, 'pending', $3) RETURNING id, name, slug`,
-      [agencyName, Plans.TRIAL.plan, now.toISOString()]
+      `INSERT INTO agencies (name, plan, pilot, approval, signed_up_at, referred_by) VALUES ($1, $2, false, 'pending', $3, $4) RETURNING id, name, slug`,
+      [agencyName, Plans.TRIAL.plan, now.toISOString(), referrer ? referrer.id : null]
     );
     const { rows: b } = await client.query(
       `INSERT INTO brokers (agency_id, phone_number, name, role, preferred_lang, is_active) VALUES ($1, $2, $3, 'admin', $4, false)
        RETURNING id, agency_id, name, phone_number, preferred_lang`,
       [a[0].id, digits, name, lang]
     );
-    return { ok: true, agency: a[0], broker: b[0] };
+    return { ok: true, agency: a[0], broker: b[0], referrer };
   });
 }
 

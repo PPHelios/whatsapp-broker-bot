@@ -287,7 +287,11 @@ CREATE TABLE IF NOT EXISTS public.agencies (
   signed_up_at timestamp with time zone,
   lead_rules jsonb DEFAULT '{}'::jsonb NOT NULL,
   price_reading jsonb DEFAULT '{}'::jsonb NOT NULL,
-  assistant jsonb DEFAULT '{}'::jsonb NOT NULL
+  assistant jsonb DEFAULT '{}'::jsonb NOT NULL,
+  referral_code text,
+  referred_by uuid,
+  referral_rewarded_at timestamp with time zone,
+  referral_credit_months smallint DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.brokers (
@@ -1175,6 +1179,7 @@ ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_source_check CHECK (((length(source
 ALTER TABLE agencies ADD CONSTRAINT agencies_approval_check CHECK ((approval = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])));
 ALTER TABLE agencies ADD CONSTRAINT agencies_code_prefix_check CHECK (((code_prefix IS NULL) OR (code_prefix ~ '^[A-Z]{1,4}$'::text)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_plan_check CHECK ((plan = ANY (ARRAY['solo'::text, 'office'::text, 'agency'::text, 'free'::text])));
+ALTER TABLE agencies ADD CONSTRAINT agencies_referral_credit_months_check CHECK ((referral_credit_months >= 0));
 ALTER TABLE agencies ADD CONSTRAINT agencies_slug_format CHECK (((slug ~ '^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$'::text) AND (NOT (slug = ANY (ARRAY['app'::text, 'api'::text, 'auth'::text, 'login'::text, 'logout'::text, 'webhook'::text, 'health'::text, 'static'::text, 'assets'::text, 'public'::text, 'admin'::text, 's'::text, 'u'::text, 'www'::text, 'aqarchat'::text, 'about'::text, 'help'::text, 'terms'::text, 'privacy'::text, 'pricing'::text, 'blog'::text, 'docs'::text, 'robots'::text, 'favicon'::text, 'manifest'::text, 'sw'::text, 'share'::text, 'new'::text])))));
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_broker_daily_cap_check CHECK (((wa_broker_daily_cap IS NULL) OR (wa_broker_daily_cap > 0)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_broker_weekly_cap_check CHECK (((wa_broker_weekly_cap IS NULL) OR (wa_broker_weekly_cap > 0)));
@@ -1312,6 +1317,7 @@ ALTER TABLE web_imports ADD CONSTRAINT web_imports_status_check CHECK ((status =
 ALTER TABLE web_login_tokens ADD CONSTRAINT web_login_tokens_channel_check CHECK ((channel = ANY (ARRAY['whatsapp'::text, 'web'::text])));
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE agencies ADD CONSTRAINT agencies_referred_by_fkey FOREIGN KEY (referred_by) REFERENCES agencies(id) ON DELETE SET NULL;
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
@@ -1417,6 +1423,8 @@ ALTER TABLE web_imports ADD CONSTRAINT web_imports_broker_id_fkey FOREIGN KEY (b
 ALTER TABLE web_login_tokens ADD CONSTRAINT web_login_tokens_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE web_sessions ADD CONSTRAINT web_sessions_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 
+CREATE UNIQUE INDEX agencies_referral_code_idx ON public.agencies USING btree (referral_code) WHERE (referral_code IS NOT NULL);
+CREATE INDEX agencies_referred_by_idx ON public.agencies USING btree (referred_by) WHERE (referred_by IS NOT NULL);
 CREATE UNIQUE INDEX uq_agencies_slug ON public.agencies USING btree (slug);
 CREATE INDEX idx_assistant_questions_agency ON public.assistant_questions USING btree (agency_id, created_at DESC);
 CREATE INDEX idx_audit_logs_agency ON public.audit_logs USING btree (agency_id, created_at DESC);

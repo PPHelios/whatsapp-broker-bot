@@ -15,6 +15,7 @@ const Commission = require("../../domain/commission");
 const Billing = require("../../services/billing");
 const BillingNotices = require("../../services/billingNotices");
 const Signup = require("../../services/signup");
+const Referrals = require("../../services/referrals");
 const Plans = require("../../domain/plans");
 const Phone = require("../../domain/phone");
 const { html } = require("../html");
@@ -170,11 +171,33 @@ function assistantSection(rows, lang) {
 </section>`;
 }
 
-function ownerPage(d, lang, { billing = null, notice = null, reading = [], assistant = [] } = {}) {
+/** Owner: agency referrals (Release B N9) — who invited whom and whether the free months were given; link an agency. */
+function referralsSection(r, lang) {
+  const day = (x) => new Date(x).toISOString().slice(0, 10);
+  return html`<section class="card" id="referrals">
+  <h2>🎁 ${L(lang, "الدعوات بين الوكالات", "Agency referrals")}</h2>
+  ${r.referrals.length
+    ? html`<div class="scroll"><table><tbody>${r.referrals.map(
+        (x) => html`<tr data-referral-row="${x.id}"><td>${x.name}</td><td>← ${x.referrer_name}</td><td>${x.referral_rewarded_at ? html`🎁 ${L(lang, "الشهرين اتحسبوا", "Both months given")} <span dir="ltr">${day(x.referral_rewarded_at)}</span>` : L(lang, "مستنية أول دفعة", "Waiting for its first payment")}</td></tr>`
+      )}</tbody></table></div>`
+    : html`<p class="muted">${L(lang, "مفيش دعوات لسه.", "No referrals yet.")}</p>`}
+  ${r.linkable.length
+    ? html`<form method="post" action="/app/owner/referrals" class="row">
+    <label>${L(lang, "الوكالة", "Agency")} <select name="agency">${r.linkable.map((a) => html`<option value="${a.id}">${a.name}</option>`)}</select></label>
+    <label>${L(lang, "كود الوكالة اللي دعتها", "Inviting agency's code")} <input name="code" required maxlength="12" dir="ltr"></label>
+    <button type="submit" class="secondary">${L(lang, "اربط", "Link")}</button>
+  </form>`
+    : ""}
+  <p class="muted">${L(lang, "الوكالة اللي اتدعت وتدفع أول باقة تاخد شهر زيادة، واللي دعتها تاخد شهر (على باقتها لو بتدفع، أو رصيد لأول دفعة جاية).", "An invited agency gets an extra month on its first plan payment, and its inviter gets one (on its paid plan, or as a credit for its next payment).")}</p>
+</section>`;
+}
+
+function ownerPage(d, lang, { billing = null, notice = null, reading = [], assistant = [], referrals = null } = {}) {
   const usd = (n) => `$${Number(n).toFixed(n < 1 ? 4 : 2)}`;
   return html`<h1>🛠️ ${L(lang, "متابعة التطبيق", "App tracking")}</h1>
 ${notice || ""}
 ${billing ? billingSections(billing, lang) : ""}
+${referrals ? referralsSection(referrals, lang) : ""}
 ${readingSection(reading, lang)}
 ${assistantSection(assistant, lang)}
 <section class="card">
@@ -230,8 +253,8 @@ function register(web, { pool, page }) {
   const ownerView = async (req, res, notice = null, status = 200) => {
     const d = await Dash.ownerDashboard(pool, req.session.broker);
     if (!d) return notFound(req, res, page);
-    const [open, signups, payments, payTo, trials, reading, assistant] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Assistant.overview(pool)]);
-    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials }, notice, reading, assistant }) }, status);
+    const [open, signups, payments, payTo, trials, reading, assistant, referrals] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Assistant.overview(pool), Referrals.overview(pool)]);
+    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials }, notice, reading, assistant, referrals }) }, status);
   };
   const ok = (text) => html`<p class="card notice ok" role="status">✅ ${text}</p>`;
   const bad = (text) => html`<p class="card notice bad" role="alert">❌ ${text}</p>`;
@@ -289,6 +312,19 @@ ${wa ? html`<p><a class="btn" href="${wa}" target="_blank" rel="noopener norefer
     if (r.error) return ownerView(req, res, bad(L(lang, "مينفعش تمدّد دي.", "That trial can't be extended.")), 400);
     const until = new Date(r.agency.trial_ends_at).toISOString().slice(0, 10);
     return ownerView(req, res, ok(L(lang, `تجربة ${r.agency.name} اتمدّت لحد ${until}.`, `${r.agency.name}'s trial now ends ${until}.`)));
+  }));
+
+  web.post("/owner/referrals", ownerOnly(async (req, res, lang) => {
+    const id = /^[0-9a-f-]{36}$/i.test(String(req.body.agency || "")) ? req.body.agency : null;
+    const r = id ? await Referrals.link(pool, id, req.body.code) : { error: "referral" };
+    const why = {
+      referral: L(lang, "الكود ده مش موجود.", "That code doesn't exist."),
+      self: L(lang, "الوكالة مينفعش تدعي نفسها.", "An agency can't invite itself."),
+      paid: L(lang, "الوكالة دي دفعت قبل كده.", "That agency has already paid."),
+      already: L(lang, "الوكالة دي مربوطة بدعوة بالفعل.", "That agency is already linked to an invite.")
+    };
+    if (r.error) return ownerView(req, res, bad(why[r.error]), 400);
+    return ownerView(req, res, ok(L(lang, `اتربطت بدعوة ${r.referrer.name}.`, `Linked to ${r.referrer.name}'s invite.`)));
   }));
 
   web.post("/owner/price-reading/:id", ownerOnly(async (req, res, lang) => {
