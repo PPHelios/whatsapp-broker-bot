@@ -11,6 +11,7 @@ const { logOperation } = require("../../lib/db");
 const { t } = require("../../lib/copy");
 const TgInit = require("../../domain/tgInitData");
 const TgLink = require("../../lib/tgLink");
+const Passkeys = require("../../services/passkeys");
 const S = require("../session");
 const { html } = require("../html");
 
@@ -39,6 +40,11 @@ function loginForm({ pre, next, message = null, lang = "ar" }) {
     <label>${L(lang, "رقم الموبايل", "Mobile number")} <input name="phone" type="tel" inputmode="tel" autocomplete="tel" required placeholder="01012345678" dir="ltr"></label>
     <button type="submit">${L(lang, "ابعتلي رابط الدخول", "Send me a sign-in link")}</button>
   </form>
+  <div id="passkey-login" class="stack" data-csrf="${pre}" data-next="${next}" hidden>
+    <p>${L(lang, "أو لو فعّلت الدخول بالبصمة/الوش من الإعدادات:", "Or, if you turned on passkeys in Settings:")}</p>
+    <button type="button" class="secondary" data-passkey-login>🔑 ${L(lang, "ادخل بالبصمة أو الوش (Passkey)", "Sign in with a passkey")}</button>
+    <p class="muted" data-passkey-status></p>
+  </div>
 </div>`;
 }
 
@@ -129,6 +135,29 @@ function register(web, { pool, page }) {
     S.setSessionCookie(res, sid, { crossSite: req.body.framed === "1" });
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_login_telegram" });
     return res.json({ next: S.safeNext(req.body.next) });
+  });
+
+  // R6: passkey sign-in (services/passkeys.js). Same double-submit token as the sign-in form, rate-limited by IP.
+  web.post("/passkey/login/options", S.noStore, async (req, res) => {
+    if (!S.verifyPreToken(req)) return res.status(403).json({ error: "csrf" });
+    const gate = await RateLimit.hit(pool, `login_confirm:ip:${req.ip}`, RateLimit.LIMITS.loginConfirmIp);
+    if (!gate.allowed) return res.status(429).json({ error: "too_many" });
+    return res.json(await Passkeys.loginOptions(pool));
+  });
+
+  web.post("/passkey/login", S.noStore, async (req, res) => {
+    if (!S.verifyPreToken(req)) return res.status(403).json({ error: "csrf" });
+    const b = req.body || {};
+    const out = await Passkeys.login(pool, { credentialId: b.credentialId, clientDataJSON: b.clientDataJSON, authenticatorData: b.authenticatorData, signature: b.signature, userHandle: b.userHandle || null });
+    if (out.error) {
+      logOperation(pool, { operation_type: "web_login_passkey", status: "failed", error_code: out.error });
+      return res.status(403).json({ error: out.error });
+    }
+    if (req.sid) await WebAuth.revokeSession(pool, req.sid);
+    const { sid } = await WebAuth.createSession(pool, out.broker, { userAgent: req.get("user-agent") });
+    S.setSessionCookie(res, sid);
+    logOperation(pool, { agency_id: out.broker.agency_id, broker_id: out.broker.id, operation_type: "web_login_passkey" });
+    return res.json({ next: S.safeNext(b.next) });
   });
 
   web.get("/login/confirm", S.noStore, async (req, res) => {

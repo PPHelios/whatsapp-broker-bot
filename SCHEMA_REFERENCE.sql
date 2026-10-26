@@ -7,6 +7,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
 CREATE SEQUENCE IF NOT EXISTS public.assistant_questions_id_seq;
+CREATE SEQUENCE IF NOT EXISTS public.broker_passkeys_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.demo_requests_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.error_events_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.lead_events_id_seq;
@@ -306,7 +307,8 @@ CREATE TABLE IF NOT EXISTS public.brokers (
   telegram_linked_at timestamp with time zone,
   away_until timestamp with time zone,
   deactivated_at timestamp with time zone,
-  last_lead_at timestamp with time zone
+  last_lead_at timestamp with time zone,
+  passkey_enabled boolean DEFAULT false NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.listings (
@@ -1052,11 +1054,32 @@ CREATE TABLE IF NOT EXISTS public.assistant_questions (
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.broker_passkeys (
+  id bigint DEFAULT nextval('broker_passkeys_id_seq'::regclass) NOT NULL,
+  broker_id uuid NOT NULL,
+  agency_id uuid NOT NULL,
+  credential_id text NOT NULL,
+  public_key text NOT NULL,
+  alg integer NOT NULL,
+  sign_count bigint DEFAULT 0 NOT NULL,
+  label text,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  last_used_at timestamp with time zone
+);
+
+CREATE TABLE IF NOT EXISTS public.passkey_challenges (
+  challenge text NOT NULL,
+  kind text NOT NULL,
+  broker_id uuid,
+  expires_at timestamp with time zone NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE app_settings ADD CONSTRAINT app_settings_pkey PRIMARY KEY (key);
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_pkey PRIMARY KEY (id);
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (id);
+ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_pkey PRIMARY KEY (id);
 ALTER TABLE broker_search_state ADD CONSTRAINT broker_search_state_pkey PRIMARY KEY (phone_key);
 ALTER TABLE broker_sessions ADD CONSTRAINT broker_sessions_pkey PRIMARY KEY (broker_id, session_type);
 ALTER TABLE brokers ADD CONSTRAINT brokers_pkey PRIMARY KEY (id);
@@ -1082,6 +1105,7 @@ ALTER TABLE listing_prices ADD CONSTRAINT listing_prices_pkey PRIMARY KEY (id);
 ALTER TABLE listings ADD CONSTRAINT listings_pkey PRIMARY KEY (id);
 ALTER TABLE notifications ADD CONSTRAINT notifications_pkey PRIMARY KEY (id);
 ALTER TABLE operation_logs ADD CONSTRAINT operation_logs_pkey PRIMARY KEY (id);
+ALTER TABLE passkey_challenges ADD CONSTRAINT passkey_challenges_pkey PRIMARY KEY (challenge);
 ALTER TABLE payment_plans ADD CONSTRAINT payment_plans_pkey PRIMARY KEY (id);
 ALTER TABLE payments ADD CONSTRAINT payments_pkey PRIMARY KEY (id);
 ALTER TABLE price_increases ADD CONSTRAINT price_increases_pkey PRIMARY KEY (id);
@@ -1107,6 +1131,7 @@ ALTER TABLE web_imports ADD CONSTRAINT web_imports_pkey PRIMARY KEY (id);
 ALTER TABLE web_login_tokens ADD CONSTRAINT web_login_tokens_pkey PRIMARY KEY (token_hash);
 ALTER TABLE web_rate_limits ADD CONSTRAINT web_rate_limits_pkey PRIMARY KEY (bucket, window_start);
 ALTER TABLE web_sessions ADD CONSTRAINT web_sessions_pkey PRIMARY KEY (id_hash);
+ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_credential_id_key UNIQUE (credential_id);
 ALTER TABLE brokers ADD CONSTRAINT brokers_phone_key UNIQUE (phone_number);
 ALTER TABLE brokers ADD CONSTRAINT uq_broker_phone UNIQUE (agency_id, phone_number);
 ALTER TABLE commissions ADD CONSTRAINT commissions_deal_id_key UNIQUE (deal_id);
@@ -1133,6 +1158,9 @@ ALTER TABLE agencies ADD CONSTRAINT agencies_wa_broker_weekly_cap_check CHECK ((
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_credits_monthly_check CHECK (((wa_credits_monthly IS NULL) OR (wa_credits_monthly >= 0)));
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_channel_check CHECK ((channel = ANY (ARRAY['web'::text, 'telegram'::text, 'whatsapp'::text])));
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_question_check CHECK ((length(question) <= 600));
+ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_alg_check CHECK ((alg = ANY (ARRAY['-7'::integer, '-257'::integer])));
+ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_credential_id_check CHECK (((length(credential_id) >= 16) AND (length(credential_id) <= 1400)));
+ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_label_check CHECK (((label IS NULL) OR (length(label) <= 120)));
 ALTER TABLE brokers ADD CONSTRAINT brokers_role_check CHECK ((role = ANY (ARRAY['broker'::text, 'agent'::text, 'admin'::text, 'owner'::text, 'manager'::text])));
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_action_check CHECK ((action = ANY (ARRAY['increase'::text, 'status'::text, 'price'::text, 'plan'::text])));
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_channel_check CHECK ((channel = ANY (ARRAY['web'::text, 'bot'::text])));
@@ -1208,6 +1236,7 @@ ALTER TABLE notifications ADD CONSTRAINT notifications_channel_check CHECK ((cha
 ALTER TABLE notifications ADD CONSTRAINT notifications_reason_check CHECK ((reason = ANY (ARRAY['chosen'::text, 'fallback'::text, 'no_credits'::text, 'window_closed'::text, 'quiet_hours'::text, 'merged'::text, 'no_push'::text, 'not_linked'::text, 'switched_off'::text])));
 ALTER TABLE notifications ADD CONSTRAINT notifications_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'held'::text, 'queued'::text, 'sent'::text, 'failed'::text, 'skipped'::text])));
 ALTER TABLE notifications ADD CONSTRAINT notifications_url_check CHECK (((url IS NULL) OR (url ~~ '/app/%'::text)));
+ALTER TABLE passkey_challenges ADD CONSTRAINT passkey_challenges_kind_check CHECK ((kind = ANY (ARRAY['register'::text, 'login'::text])));
 ALTER TABLE payments ADD CONSTRAINT payments_amount_egp_check CHECK ((amount_egp > 0));
 ALTER TABLE payments ADD CONSTRAINT payments_check CHECK (((kind = 'plan'::text) = (plan IS NOT NULL)));
 ALTER TABLE payments ADD CONSTRAINT payments_kind_check CHECK ((kind = ANY (ARRAY['plan'::text, 'voice_pack'::text])));
@@ -1257,6 +1286,8 @@ ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_agency_id_fke
 ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE brokers ADD CONSTRAINT brokers_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_created_by_fkey FOREIGN KEY (created_by) REFERENCES brokers(id) ON DELETE SET NULL;
@@ -1308,6 +1339,7 @@ ALTER TABLE listings ADD CONSTRAINT listings_project_id_fkey FOREIGN KEY (projec
 ALTER TABLE notifications ADD CONSTRAINT notifications_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE notifications ADD CONSTRAINT notifications_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE notifications ADD CONSTRAINT notifications_merged_into_fkey FOREIGN KEY (merged_into) REFERENCES notifications(id) ON DELETE SET NULL;
+ALTER TABLE passkey_challenges ADD CONSTRAINT passkey_challenges_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE payment_plans ADD CONSTRAINT payment_plans_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
 ALTER TABLE payments ADD CONSTRAINT payments_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE payments ADD CONSTRAINT payments_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES brokers(id) ON DELETE SET NULL;
@@ -1355,6 +1387,7 @@ ALTER TABLE web_sessions ADD CONSTRAINT web_sessions_broker_id_fkey FOREIGN KEY 
 CREATE UNIQUE INDEX uq_agencies_slug ON public.agencies USING btree (slug);
 CREATE INDEX idx_assistant_questions_agency ON public.assistant_questions USING btree (agency_id, created_at DESC);
 CREATE INDEX idx_audit_logs_agency ON public.audit_logs USING btree (agency_id, created_at DESC);
+CREATE INDEX idx_broker_passkeys_broker ON public.broker_passkeys USING btree (broker_id);
 CREATE INDEX idx_broker_sessions_expires ON public.broker_sessions USING btree (expires_at);
 CREATE INDEX brokers_agency_idx ON public.brokers USING btree (agency_id);
 CREATE UNIQUE INDEX brokers_phone_normalized_uidx ON public.brokers USING btree (phone_normalized);
@@ -1419,6 +1452,7 @@ CREATE INDEX idx_operation_logs_agency_type_created ON public.operation_logs USI
 CREATE INDEX idx_operation_logs_broker_created ON public.operation_logs USING btree (broker_id, created_at DESC);
 CREATE INDEX idx_operation_logs_wa_outbound ON public.operation_logs USING btree (created_at, agency_id, broker_id) WHERE (operation_type = 'wa_outbound'::text);
 CREATE INDEX op_logs_agency_day ON public.operation_logs USING btree (agency_id, created_at DESC);
+CREATE INDEX idx_passkey_challenges_expiry ON public.passkey_challenges USING btree (expires_at);
 CREATE INDEX idx_payment_plans_listing ON public.payment_plans USING btree (listing_id);
 CREATE INDEX payments_agency_idx ON public.payments USING btree (agency_id, created_at DESC);
 CREATE INDEX payments_pending_idx ON public.payments USING btree (created_at) WHERE (status = 'pending'::text);

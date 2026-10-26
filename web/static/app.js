@@ -89,6 +89,71 @@
       });
     }).catch(function () { say("Could not turn on."); });
   });
+  // Passkeys (R6): add one in Settings (#passkeys), sign in with one on the sign-in page (#passkey-login).
+  // Registration sends getPublicKey() (SPKI) and getAuthenticatorData(), so the server parses no CBOR.
+  var hasPasskeys = !!(window.PublicKeyCredential && navigator.credentials);
+  function pkSay(box, t) { var p = box && box.querySelector("[data-passkey-status]"); if (p) p.textContent = t; }
+  document.addEventListener("DOMContentLoaded", function () {
+    var box = document.getElementById("passkey-login");
+    if (box && hasPasskeys) box.hidden = false;
+  });
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest ? e.target.closest("[data-passkey-register]") : null;
+    if (!btn) return;
+    var box = document.getElementById("passkeys");
+    if (!hasPasskeys) return pkSay(box, "This browser can't use passkeys.");
+    btn.disabled = true;
+    post("/app/passkey/register/options", {})
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("options")); })
+      .then(function (o) {
+        o.challenge = b64ToBytes(o.challenge);
+        o.user.id = b64ToBytes(o.user.id);
+        o.excludeCredentials = (o.excludeCredentials || []).map(function (c) { return { type: c.type, id: b64ToBytes(c.id) }; });
+        return navigator.credentials.create({ publicKey: o });
+      })
+      .then(function (cred) {
+        var res = cred.response;
+        if (!res.getPublicKey || !res.getAuthenticatorData) throw new Error("unsupported");
+        return post("/app/passkey/register", {
+          credentialId: bytesToB64(cred.rawId),
+          clientDataJSON: bytesToB64(res.clientDataJSON),
+          authenticatorData: bytesToB64(res.getAuthenticatorData()),
+          publicKey: bytesToB64(res.getPublicKey()),
+          alg: String(res.getPublicKeyAlgorithm())
+        });
+      })
+      .then(function (r) { if (r.ok) location.reload(); else pkSay(box, "Could not add the passkey."); })
+      .catch(function (err) { pkSay(box, err && err.message === "unsupported" ? "This browser can't add passkeys here; try Chrome or Safari." : "Cancelled or not possible on this device."); })
+      .then(function () { btn.disabled = false; });
+  });
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest ? e.target.closest("[data-passkey-login]") : null;
+    if (!btn) return;
+    var box = document.getElementById("passkey-login");
+    var csrf = box.getAttribute("data-csrf");
+    var send = function (path, fields) {
+      fields._csrf = csrf;
+      return fetch(path, { method: "POST", credentials: "same-origin", body: new URLSearchParams(fields) });
+    };
+    btn.disabled = true;
+    send("/app/passkey/login/options", {})
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("options")); })
+      .then(function (o) { o.challenge = b64ToBytes(o.challenge); return navigator.credentials.get({ publicKey: o }); })
+      .then(function (cred) {
+        var res = cred.response;
+        return send("/app/passkey/login", {
+          credentialId: bytesToB64(cred.rawId),
+          clientDataJSON: bytesToB64(res.clientDataJSON),
+          authenticatorData: bytesToB64(res.authenticatorData),
+          signature: bytesToB64(res.signature),
+          userHandle: res.userHandle ? bytesToB64(res.userHandle) : "",
+          next: box.getAttribute("data-next") || "/app/"
+        });
+      })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("refused")); })
+      .then(function (j) { location.replace(j.next || "/app/"); })
+      .catch(function () { pkSay(box, "Passkey sign-in didn't work. Turn passkeys on in Settings first, or use a bot link."); btn.disabled = false; });
+  });
   // Unit photos to a client (/app/units/<code>/share-media): files through the share sheet, one tap to WhatsApp.
   document.addEventListener("click", function (e) {
     var btn = e.target.closest ? e.target.closest("[data-share-media]") : null;

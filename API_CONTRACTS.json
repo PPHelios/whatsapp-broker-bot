@@ -1558,6 +1558,34 @@
     },
     "web/routes/assistant.js": {
       "register": ["web", "params"]
+    },
+    "domain/passkey.js": {
+      "ALGS": "Object",
+      "b64u": ["buf"],
+      "fromB64u": ["s"],
+      "newChallenge": [],
+      "parseAuthData": ["buf"],
+      "challengeOf": ["clientDataB64"],
+      "verifyRegistration": ["input", "params"],
+      "verifyAssertion": ["input", "stored", "params"]
+    },
+    "services/passkeys.js": {
+      "CHALLENGE_MIN": "Number",
+      "MAX_PER_BROKER": "Number",
+      "rp": [],
+      "isEnabled": ["db", "broker"],
+      "setEnabled": ["db", "broker", "on"],
+      "list": ["db", "broker"],
+      "remove": ["db", "broker", "id"],
+      "registerOptions": ["db", "broker"],
+      "register": ["db", "broker", "input", "params"],
+      "loginOptions": ["db"],
+      "login": ["db", "input"]
+    },
+    "web/routes/passkeys.js": {
+      "register": ["web", "params"],
+      "passkeySection": ["params"],
+      "labelOf": ["ua"]
     }
   },
   "invariant_variable_names": {
