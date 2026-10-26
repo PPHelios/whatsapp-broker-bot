@@ -1315,6 +1315,8 @@
       "preview": ["rows", "existing"]
     },
     "services/priceSheets.js": {
+      "storePreview": ["pool", "actor", "project", "tableRows", "params"],
+      "projectOf": ["db", "actor", "projectId"],
       "STALE_DAYS": "Number",
       "upload": ["pool", "actor", "projectId", "buffer", "params"],
       "getSheet": ["db", "actor", "projectId", "sheetId"],
@@ -1453,6 +1455,32 @@
       "responseJob": [],
       "speedToLead": ["pool", "agencyId", "params"],
       "cairoMidnight": ["day"]
+    },
+    "domain/priceReading.js": {
+      "MAX_PAGES": "Number",
+      "DEFAULT_PAGES_MONTH": "Number",
+      "MAX_PAGES_MONTH": "Number",
+      "PROMPT_VERSION": "String",
+      "FIELDS": "Array",
+      "PROMPT": "String",
+      "parsePages": ["input", "total"],
+      "settingOf": ["raw"],
+      "settingFields": ["input"],
+      "monthKey": ["now"],
+      "monthStart": ["now"],
+      "rowsFromAnswer": ["text"]
+    },
+    "services/priceReading.js": {
+      "settingOf": ["db", "agencyId"],
+      "setForAgency": ["db", "agencyId", "input"],
+      "usage": ["db", "agencyId", "params"],
+      "overview": ["db", "params"],
+      "read": ["pool", "actor", "projectId", "params", "params"]
+    },
+    "lib/pdfPages.js": {
+      "pageCount": ["buffer"],
+      "extract": ["buffer", "pages"],
+      "imageFingerprint": ["buffer"]
     }
   },
   "invariant_variable_names": {

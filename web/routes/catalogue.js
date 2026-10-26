@@ -10,6 +10,7 @@ const PriceSheets = require("../../services/priceSheets");
 const Commissions = require("../../services/commissions");
 const { termsSection } = require("./commissions");
 const { pricesSection, pricesNotice } = require("./priceSheets");
+const PriceReading = require("../../services/priceReading");
 const { html } = require("../html");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
@@ -273,7 +274,8 @@ function register(web, { pool, page }) {
       manager ? PriceSheets.listSheets(pool, actor, data.project.id) : [],
       PriceSheets.listIncreases(pool, actor, data.project.id)
     ]);
-    const prices = pricesSection(lang, manager, { project: data.project, units: data.units, sheets, increases, phases: data.phases });
+    const reading = manager ? await PriceReading.usage(pool, actor.agency_id) : null;
+    const prices = pricesSection(lang, manager, { project: data.project, units: data.units, sheets, increases, phases: data.phases, reading });
     // C8: the developer's commission terms (managers only).
     const commissionTerms = manager ? termsSection(lang, data.project.id, await Commissions.getTerms(pool, actor, data.project.id)) : null;
     return page(req, res, { title: data.project.name, body: projectPage(lang, manager, data, developers, { notice: notice || pricesNotice(req.query, lang) || savedNotice(req), prices, commissionTerms }) }, status);
