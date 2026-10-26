@@ -8,6 +8,7 @@
 
 const Team = require("../../services/team");
 const LeadRules = require("../../services/leadRules");
+const Targets = require("../../services/targets");
 const Rules = require("../../domain/leadRules");
 const Notifications = require("../../lib/notifications");
 const Phone = require("../../domain/phone");
@@ -38,6 +39,8 @@ const ERRORS = {
   hours: ["ساعات الشغل مش مظبوطة.", "The working hours aren't valid."],
   days: ["اختار يوم شغل واحد على الأقل.", "Choose at least one working day."],
   max_jumps: [`عدد مرات التحويل من 1 لـ ${Rules.MAX_JUMPS}.`, `Moves per lead from 1 to ${Rules.MAX_JUMPS}.`],
+  target_deals: ["الصفقات رقم من 1 لـ 1000 (أو فاضي).", "Deals: a number from 1 to 1000 (or empty)."],
+  target_commission: ["العمولة رقم صحيح بالجنيه (أو فاضي).", "Commission: a whole number in EGP (or empty)."],
   away_date: ["اختار تاريخ رجوع جاي (خلال سنة).", "Choose a future return date (within a year)."]
 };
 const errorText = (code, lang) => (ERRORS[code] || ERRORS.forbidden)[lang === "en" ? 1 : 0];
@@ -96,7 +99,12 @@ function memberTools(b, lang, today) {
   const off = Array.isArray(b.notify_prefs?.off) ? b.notify_prefs.off : [];
   const label = (k) => (Notifications.KIND_LABELS[k] || Notifications.DAILY_LABELS?.[k] || [k, k])[lang === "en" ? 1 : 0];
   const awayDay = b.away_until ? cairoDay(b.away_until) : "";
-  return html`<details data-member-tools="${b.id}"><summary>${L(lang, "إجازة وإشعارات", "Away and notifications")}</summary>
+  return html`<details data-member-tools="${b.id}"><summary>${L(lang, "إجازة وإشعارات وهدف", "Away, notifications, target")}</summary>
+  <form method="post" action="/app/team/${b.id}/target" class="row" data-target-form>
+    <label>🎯 ${L(lang, "صفقات في الشهر", "Deals a month")} <input name="deals" type="number" min="1" max="1000" value="${b.target_deals || ""}" size="4"></label>
+    <label>${L(lang, "عمولته في الشهر (جنيه)", "Their commission a month (EGP)")} <input name="commission" inputmode="numeric" value="${b.target_commission ? Number(b.target_commission) : ""}" size="9"></label>
+    <button type="submit" class="secondary">${L(lang, "احفظ الهدف", "Save target")}</button>
+  </form>
   <form method="post" action="/app/team/${b.id}/away" class="row">
     <label>${L(lang, "في إجازة، راجع يوم", "Away, back on")} <input type="date" name="until" value="${awayDay}" min="${today}"></label>
     <button type="submit" class="secondary">${L(lang, "احفظ", "Save")}</button>
@@ -207,6 +215,14 @@ function register(web, { pool, page }) {
       ? L(lang, `✅ ${r.broker.name} في إجازة لحد ${cairoDay(r.broker.away_until)}: مفيش عملاء جداد، وتذكيراته بتروح للمديرين.`, `✅ ${r.broker.name} is away until ${cairoDay(r.broker.away_until)}: no new leads, and their reminders go to the managers.`)
       : L(lang, `✅ ${r.broker.name} رجع.`, `✅ ${r.broker.name} is back.`);
     return render(req, res, { notice: html`<p class="card notice ok" role="status">${msg}</p>` });
+  });
+
+  web.post("/team/:id/target", async (req, res) => {
+    const lang = langOf(req);
+    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return render(req, res, { notice: bad("not_found", lang) }, 404);
+    const r = await Targets.setTarget(pool, req.session.broker, req.params.id, { deals: req.body.deals, commission: req.body.commission });
+    if (r.error) return render(req, res, { notice: bad(r.error, lang) }, r.error === "forbidden" ? 403 : 400);
+    return render(req, res, { notice: html`<p class="card notice ok" role="status">✅ ${L(lang, `هدف ${r.broker.name} اتحفظ.`, `${r.broker.name}'s target saved.`)}</p>` });
   });
 
   web.post("/team/:id/notify", async (req, res) => {

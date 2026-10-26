@@ -6,6 +6,8 @@
 
 const PriceReading = require("../../services/priceReading");
 const Assistant = require("../../services/assistant");
+const Leases = require("../../services/leases");
+const Targets = require("../../services/targets");
 const Reading = require("../../domain/priceReading");
 const Dash = require("../../services/dashboards");
 const Stages = require("../../domain/leadStages");
@@ -29,6 +31,29 @@ const minutes = (m, lang) => {
 const medal = (i) => ["🥇", "🥈", "🥉"][i] || `${i + 1}`;
 const notFound = (req, res, page) =>
   page(req, res, { title: L(langOf(req), "غير موجود", "Not found"), body: html`<div class="card"><h1>🔍 ${L(langOf(req), "الصفحة غير موجودة", "Page not found")}</h1><p><a href="/app/">${L(langOf(req), "الرئيسية", "Home")}</a></p></div>` }, 404);
+
+/** N6: this month's progress against each broker's target. */
+function targetsSection(rows, lang) {
+  const bar = (n, of) => (of ? html`<progress max="100" value="${Math.min(100, Targets.pct(n, of))}"></progress> ${Targets.pct(n, of)}%` : "—");
+  return html`<section class="card" id="targets">
+  <h2>🎯 ${L(lang, "أهداف الشهر", "This month's targets")}</h2>
+  ${rows.length
+    ? html`<div class="scroll"><table><thead><tr><th>${L(lang, "البروكر", "Broker")}</th><th>${L(lang, "صفقات", "Deals")}</th><th></th><th>${L(lang, "العمولة", "Commission")}</th><th></th></tr></thead>
+  <tbody>${rows.map((r) => html`<tr data-target="${r.id}"><td>${r.name}</td><td>${r.deals}${r.target_deals ? ` / ${r.target_deals}` : ""}</td><td>${bar(r.deals, r.target_deals)}</td><td>${money(r.commission, lang)}${r.target_commission ? html` / ${money(r.target_commission, lang)}` : ""}</td><td>${bar(r.commission, r.target_commission)}</td></tr>`)}</tbody></table></div>`
+    : html`<p class="muted">${L(lang, "مفيش أهداف. حط هدف لكل بروكر من صفحة الفريق.", "No targets yet. Set one per broker on the Team page.")} <a href="/app/team">${L(lang, "الفريق", "Team")}</a></p>`}
+</section>`;
+}
+
+/** N4: rented units whose lease ends in the next 90 days. */
+function leaseEnds(rows, lang) {
+  return html`<section class="card" id="lease-ends">
+  <h2>🔑 ${L(lang, "عقود إيجار بتخلص خلال 90 يوم", "Leases ending in the next 90 days")}</h2>
+  ${rows.length
+    ? html`<div class="scroll"><table><thead><tr><th>${L(lang, "الوحدة", "Unit")}</th><th>${L(lang, "بتخلص", "Ends")}</th><th>${L(lang, "المستأجر", "Tenant")}</th><th>${L(lang, "البروكر", "Broker")}</th><th>${L(lang, "الإيجار", "Rent")}</th></tr></thead>
+  <tbody>${rows.map((r) => html`<tr data-lease-end="${r.code}"><td><a href="/app/units/${encodeURIComponent(r.code)}#lease">${r.code}</a></td><td dir="ltr">${r.end.toISOString().slice(0, 10)}</td><td>${r.tenant_name || "—"}</td><td>${r.broker_name || "—"}${r.remind ? " 🔔" : ""}</td><td>${r.rent ? money(r.rent, lang) : "—"}</td></tr>`)}</tbody></table></div>`
+    : html`<p class="muted">${L(lang, "مفيش. سجّل عقد الإيجار من صفحة الوحدة المؤجرة.", "None. Enter a lease on the rented unit's page.")}</p>`}
+</section>`;
+}
 
 function agencyPage(d, lang) {
   const tile = (label, value, attr) => html`<div class="card tile" data-kpi="${attr}"><div class="muted">${label}</div><strong>${value}</strong></div>`;
@@ -198,7 +223,8 @@ function register(web, { pool, page }) {
     const lang = langOf(req);
     const d = await Dash.agencyDashboard(pool, req.session.broker, { days: req.query.days });
     if (!d) return res.status(403).type("text/plain").send(L(lang, "للمديرين بس", "Managers only"));
-    return page(req, res, { title: L(lang, "لوحة الوكالة", "Agency dashboard"), body: agencyPage(d, lang) });
+    const [leases, targets] = await Promise.all([Leases.upcoming(pool, req.session.broker), Targets.progress(pool, req.session.broker.agency_id)]);
+    return page(req, res, { title: L(lang, "لوحة الوكالة", "Agency dashboard"), body: html`${agencyPage(d, lang)}${targetsSection([...targets.values()], lang)}${leaseEnds(leases || [], lang)}` });
   });
 
   const ownerView = async (req, res, notice = null, status = 200) => {

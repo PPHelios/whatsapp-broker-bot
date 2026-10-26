@@ -12,6 +12,7 @@ CREATE SEQUENCE IF NOT EXISTS public.demo_requests_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.error_events_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.lead_events_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.lead_matches_id_seq;
+CREATE SEQUENCE IF NOT EXISTS public.leases_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.listing_code_seq;
 CREATE SEQUENCE IF NOT EXISTS public.listing_prices_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.notifications_id_seq;
@@ -308,7 +309,11 @@ CREATE TABLE IF NOT EXISTS public.brokers (
   away_until timestamp with time zone,
   deactivated_at timestamp with time zone,
   last_lead_at timestamp with time zone,
-  passkey_enabled boolean DEFAULT false NOT NULL
+  passkey_enabled boolean DEFAULT false NOT NULL,
+  draft_style text,
+  quiet_line boolean DEFAULT true NOT NULL,
+  target_deals smallint,
+  target_commission bigint
 );
 
 CREATE TABLE IF NOT EXISTS public.listings (
@@ -1074,6 +1079,22 @@ CREATE TABLE IF NOT EXISTS public.passkey_challenges (
   expires_at timestamp with time zone NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.leases (
+  id bigint DEFAULT nextval('leases_id_seq'::regclass) NOT NULL,
+  agency_id uuid NOT NULL,
+  listing_id uuid NOT NULL,
+  broker_id uuid,
+  tenant_name text,
+  start_date date NOT NULL,
+  months smallint NOT NULL,
+  rent numeric(14,2),
+  increase_pct numeric(5,2),
+  remind boolean DEFAULT false NOT NULL,
+  reminded text[] DEFAULT '{}'::text[] NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE app_settings ADD CONSTRAINT app_settings_pkey PRIMARY KEY (key);
@@ -1099,6 +1120,7 @@ ALTER TABLE lead_erasures ADD CONSTRAINT lead_erasures_pkey PRIMARY KEY (agency_
 ALTER TABLE lead_events ADD CONSTRAINT lead_events_pkey PRIMARY KEY (id);
 ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_pkey PRIMARY KEY (id);
 ALTER TABLE leads ADD CONSTRAINT leads_pkey PRIMARY KEY (id);
+ALTER TABLE leases ADD CONSTRAINT leases_pkey PRIMARY KEY (id);
 ALTER TABLE listing_drafts ADD CONSTRAINT listing_drafts_pkey PRIMARY KEY (broker_id);
 ALTER TABLE listing_images ADD CONSTRAINT listing_images_pkey PRIMARY KEY (id);
 ALTER TABLE listing_prices ADD CONSTRAINT listing_prices_pkey PRIMARY KEY (id);
@@ -1140,6 +1162,7 @@ ALTER TABLE deals ADD CONSTRAINT deals_agency_id_ref_key UNIQUE (agency_id, ref)
 ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_search_id_listing_id_key UNIQUE (search_id, listing_id);
 ALTER TABLE leads ADD CONSTRAINT leads_agency_id_phone_e164_key UNIQUE (agency_id, phone_e164);
 ALTER TABLE leads ADD CONSTRAINT leads_agency_id_ref_key UNIQUE (agency_id, ref);
+ALTER TABLE leases ADD CONSTRAINT leases_listing_id_key UNIQUE (listing_id);
 ALTER TABLE listings ADD CONSTRAINT uq_listings_agency_code UNIQUE (agency_id, code);
 ALTER TABLE notifications ADD CONSTRAINT notifications_broker_id_dedupe_key_key UNIQUE (broker_id, dedupe_key);
 ALTER TABLE payments ADD CONSTRAINT payments_reference_key UNIQUE (reference);
@@ -1161,7 +1184,10 @@ ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_question_chec
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_alg_check CHECK ((alg = ANY (ARRAY['-7'::integer, '-257'::integer])));
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_credential_id_check CHECK (((length(credential_id) >= 16) AND (length(credential_id) <= 1400)));
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_label_check CHECK (((label IS NULL) OR (length(label) <= 120)));
+ALTER TABLE brokers ADD CONSTRAINT brokers_draft_style_check CHECK (((draft_style IS NULL) OR (length(draft_style) <= 600)));
 ALTER TABLE brokers ADD CONSTRAINT brokers_role_check CHECK ((role = ANY (ARRAY['broker'::text, 'agent'::text, 'admin'::text, 'owner'::text, 'manager'::text])));
+ALTER TABLE brokers ADD CONSTRAINT brokers_target_commission_check CHECK (((target_commission IS NULL) OR (target_commission > 0)));
+ALTER TABLE brokers ADD CONSTRAINT brokers_target_deals_check CHECK (((target_deals IS NULL) OR ((target_deals >= 1) AND (target_deals <= 1000))));
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_action_check CHECK ((action = ANY (ARRAY['increase'::text, 'status'::text, 'price'::text, 'plan'::text])));
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_channel_check CHECK ((channel = ANY (ARRAY['web'::text, 'bot'::text])));
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_input_check CHECK ((length(input) <= 1000));
@@ -1224,6 +1250,10 @@ ALTER TABLE leads ADD CONSTRAINT leads_phones_check CHECK (((cardinality(phones)
 ALTER TABLE leads ADD CONSTRAINT leads_ref_check CHECK ((ref > 0));
 ALTER TABLE leads ADD CONSTRAINT leads_source_check CHECK (((source IS NULL) OR (length(source) <= 60)));
 ALTER TABLE leads ADD CONSTRAINT leads_stage_check CHECK ((stage = ANY (ARRAY['new'::text, 'contacted'::text, 'interested'::text, 'viewing'::text, 'negotiation'::text, 'won'::text, 'lost'::text])));
+ALTER TABLE leases ADD CONSTRAINT leases_increase_pct_check CHECK (((increase_pct IS NULL) OR ((increase_pct >= (0)::numeric) AND (increase_pct <= (100)::numeric))));
+ALTER TABLE leases ADD CONSTRAINT leases_months_check CHECK (((months >= 1) AND (months <= 120)));
+ALTER TABLE leases ADD CONSTRAINT leases_rent_check CHECK (((rent IS NULL) OR (rent >= (0)::numeric)));
+ALTER TABLE leases ADD CONSTRAINT leases_tenant_name_check CHECK (((tenant_name IS NULL) OR (length(tenant_name) <= 120)));
 ALTER TABLE listing_prices ADD CONSTRAINT listing_prices_price_check CHECK ((price > (0)::numeric));
 ALTER TABLE listing_prices ADD CONSTRAINT listing_prices_source_check CHECK ((source = ANY (ARRAY['sheet'::text, 'increase'::text, 'edit'::text, 'quick'::text])));
 ALTER TABLE listings ADD CONSTRAINT listings_delivery_month_check CHECK (((delivery_month >= 1) AND (delivery_month <= 12)));
@@ -1324,6 +1354,9 @@ ALTER TABLE leads ADD CONSTRAINT leads_agency_id_fkey FOREIGN KEY (agency_id) RE
 ALTER TABLE leads ADD CONSTRAINT leads_assigned_broker_id_fkey FOREIGN KEY (assigned_broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE leads ADD CONSTRAINT leads_created_by_broker_id_fkey FOREIGN KEY (created_by_broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE leads ADD CONSTRAINT leads_follow_up_listing_id_fkey FOREIGN KEY (follow_up_listing_id) REFERENCES listings(id) ON DELETE SET NULL;
+ALTER TABLE leases ADD CONSTRAINT leases_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE leases ADD CONSTRAINT leases_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE leases ADD CONSTRAINT leases_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
 ALTER TABLE listing_images ADD CONSTRAINT listing_images_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE listing_images ADD CONSTRAINT listing_images_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
 ALTER TABLE listing_prices ADD CONSTRAINT listing_prices_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
@@ -1414,6 +1447,7 @@ CREATE INDEX idx_leads_follow_up ON public.leads USING btree (next_follow_up_at)
 CREATE INDEX idx_leads_phones ON public.leads USING gin (phones);
 CREATE INDEX idx_leads_response_due ON public.leads USING btree (response_due_at) WHERE (response_due_at IS NOT NULL);
 CREATE INDEX idx_leads_untouched ON public.leads USING btree (created_at) WHERE ((stage = 'new'::text) AND (last_contact_at IS NULL) AND (nudged_at IS NULL));
+CREATE INDEX idx_leases_agency ON public.leases USING btree (agency_id);
 CREATE INDEX idx_listing_drafts_updated ON public.listing_drafts USING btree (updated_at);
 CREATE INDEX listing_images_agency_idx ON public.listing_images USING btree (agency_id);
 CREATE INDEX listing_images_agency_phash_idx ON public.listing_images USING btree (agency_id) WHERE (phash IS NOT NULL);

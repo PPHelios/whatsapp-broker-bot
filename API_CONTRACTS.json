@@ -1586,6 +1586,43 @@
       "register": ["web", "params"],
       "passkeySection": ["params"],
       "labelOf": ["ua"]
+    },
+    "domain/followUpDraft.js": {
+      "MAX_TEXT": "Number",
+      "MAX_STYLE": "Number",
+      "firstName": ["name"],
+      "factsOf": ["params"],
+      "prompt": ["facts", "params"],
+      "parse": ["text"]
+    },
+    "services/followUpDrafts.js": {
+      "draft": ["pool", "broker", "leadKey", "params"],
+      "saveStyle": ["pool", "broker", "text"]
+    },
+    "domain/leases.js": {
+      "END_DAYS": "Array",
+      "INCREASE_DAYS": "Number",
+      "ymd": ["d"],
+      "addMonths": ["start", "months"],
+      "endDate": ["lease"],
+      "increaseDates": ["lease"],
+      "dueReminders": ["lease", "today"],
+      "fromForm": ["f"]
+    },
+    "services/leases.js": {
+      "forListing": ["db", "listing"],
+      "save": ["db", "actor", "listing", "form"],
+      "remove": ["db", "actor", "listing"],
+      "upcoming": ["db", "manager", "params"],
+      "remindDue": ["db", "params"],
+      "reminderJob": []
+    },
+    "services/targets.js": {
+      "monthOf": ["now"],
+      "setTarget": ["db", "manager", "brokerId", "params"],
+      "progress": ["db", "agencyId", "params"],
+      "briefLine": ["p", "lang", "money"],
+      "pct": ["n", "of"]
     }
   },
   "invariant_variable_names": {

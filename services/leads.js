@@ -463,7 +463,7 @@ async function setFollowUp(pool, actor, key, { at, kind = "call", listingId = nu
 
 async function completeFollowUp(pool, actor, key, { version = null, now = new Date() } = {}) {
   return mutate(pool, actor, key, { kind: "follow_up_done", version, now }, (lead) =>
-    lead.follow_up_status === "open" ? { fields: { follow_up_status: "done" }, data: { at: lead.next_follow_up_at } } : { error: "no_open_follow_up" }
+    lead.follow_up_status === "open" ? { fields: { follow_up_status: "done" }, data: { at: lead.next_follow_up_at, kind: lead.follow_up_kind || "call", note: lead.follow_up_note || null } } : { error: "no_open_follow_up" }
   );
 }
 

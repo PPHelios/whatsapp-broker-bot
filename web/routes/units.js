@@ -11,6 +11,8 @@ const Storage = require("../../lib/supabase");
 const Insights = require("../../services/priceInsights");
 const Catalogue = require("../../services/catalogue");
 const PriceSheets = require("../../services/priceSheets");
+const Leases = require("../../services/leases");
+const LeaseRules = require("../../domain/leases");
 const Commission = require("../../domain/commission");
 const { html } = require("../html");
 const { resultItem, factList } = require("../views/units");
@@ -74,6 +76,29 @@ function marketLine(m, listing, lang) {
     ? L(lang, "قريب من", "close to")
     : m.diffPct > 0 ? L(lang, `أعلى ${m.diffPct}% من`, `${m.diffPct}% above`) : L(lang, `أقل ${-m.diffPct}% من`, `${-m.diffPct}% below`);
   return html`<p class="muted" data-market="${m.diffPct}">📊 ${n(m.perM2)} ${L(lang, "ج.م للمتر", "EGP per m²")}${listing.listing_type === "rent" ? L(lang, " في الشهر", " a month") : ""} · ${diff} ${L(lang, `وسيط ${m.units} وحدة في ${m.place}`, `the median of ${m.units} units in ${m.place}`)} (${n(m.median)}) · <a href="/app/insights">${L(lang, "أسعار المتر", "Prices per m²")}</a></p>`;
+}
+
+/** N4: the lease card on a rent unit (who may edit it). */
+function leaseSection(listing, lease, lang, csrf, notice) {
+  const end = lease ? LeaseRules.ymd(LeaseRules.endDate(lease)) : null;
+  const notes = { saved: L(lang, "✅ الإيجار اتحفظ.", "✅ Lease saved."), removed: L(lang, "الإيجار اتمسح.", "Lease removed."), bad_start_date: L(lang, "اختار تاريخ بداية.", "Choose a start date."), bad_months: L(lang, "المدة بالشهور من 1 لـ 120.", "Length in months, 1 to 120."), bad_rent: L(lang, "الإيجار مش مفهوم.", "The rent isn't valid."), bad_increase_pct: L(lang, "الزيادة من 0 لـ 100%.", "Increase from 0 to 100%."), bad_not_rent: L(lang, "الوحدة دي مش إيجار.", "This unit isn't for rent.") };
+  return html`<section class="card stack" id="lease" data-lease="${lease ? "yes" : "no"}">
+  <h2>🔑 ${L(lang, "عقد الإيجار والتذكير بالتجديد", "Lease and renewal reminders")}</h2>
+  ${notice && notes[notice] ? html`<p class="notice" data-lease-notice="${notice}">${notes[notice]}</p>` : ""}
+  <p class="muted">${L(lang, "اختياري: لو الوحدة اتأجرت، سجل بداية العقد ومدته. لو علّمت «فكرني»، هتوصلك رسالة قبل نهاية العقد بـ 60 و30 يوم، وقبل كل زيادة سنوية بـ 30 يوم.", "Optional: once the unit is rented, enter the lease start and length. With \"remind me\" ticked you hear 60 and 30 days before it ends, and 30 days before each yearly increase.")}</p>
+  ${lease ? html`<p data-lease-end>${L(lang, `العقد بيخلص ${end}`, `The lease ends ${end}`)}${lease.remind ? " · 🔔" : ""}</p>` : ""}
+  <form method="post" action="/app/units/${encodeURIComponent(listing.code)}/lease" class="grid">
+    <input type="hidden" name="_csrf" value="${csrf}">
+    <label>${L(lang, "اسم المستأجر (اختياري)", "Tenant name (optional)")}<input name="tenant_name" maxlength="120" value="${lease?.tenant_name || ""}"></label>
+    <label>${L(lang, "بداية العقد", "Lease start")}<input type="date" name="start_date" required value="${lease ? LeaseRules.ymd(lease.start_date) : ""}"></label>
+    <label>${L(lang, "المدة (شهور)", "Length (months)")}<input type="number" name="months" min="1" max="120" required value="${lease?.months || 12}"></label>
+    <label>${L(lang, "الإيجار الشهري (اختياري)", "Monthly rent (optional)")}<input name="rent" inputmode="numeric" value="${lease?.rent ? Math.round(Number(lease.rent)) : ""}"></label>
+    <label>${L(lang, "الزيادة السنوية % (اختياري)", "Yearly increase % (optional)")}<input name="increase_pct" inputmode="decimal" value="${lease?.increase_pct ?? ""}"></label>
+    <label class="check"><input type="checkbox" name="remind" value="1"${lease?.remind ? html` checked` : ""}> ${L(lang, "فكرني بالتجديد والزيادة", "Remind me about renewal and increases")}</label>
+    <button type="submit">${L(lang, "حفظ", "Save")}</button>
+  </form>
+  ${lease ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/lease"><input type="hidden" name="_csrf" value="${csrf}"><input type="hidden" name="remove" value="1"><button type="submit" class="secondary">${L(lang, "امسح العقد", "Remove the lease")}</button></form>` : ""}
+</section>`;
 }
 
 function register(web, { pool, page }) {
@@ -201,6 +226,16 @@ ${rows.length
     return res.redirect(303, `/app/units/${encodeURIComponent(listing.code)}?saved=1`);
   });
 
+  // N4: the lease of a rented unit, with opt-in renewal and increase reminders (services/leases.js).
+  web.post("/units/:code/lease", async (req, res, next) => {
+    const { broker } = req.session;
+    const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!listing || !Authz.canView(broker, listing)) return next();
+    const out = req.body.remove === "1" ? await Leases.remove(pool, broker, listing) : await Leases.save(pool, broker, listing, req.body);
+    if (out.error === "forbidden") return res.status(403).send(L(langOf(req), "مش مسموح.", "Not allowed."));
+    return res.redirect(303, `/app/units/${encodeURIComponent(listing.code)}?lease=${out.error ? `bad_${out.error}` : req.body.remove === "1" ? "removed" : "saved"}#lease`);
+  });
+
   web.get("/units/:code", async (req, res, next) => {
     const lang = langOf(req);
     const { broker } = req.session;
@@ -230,6 +265,7 @@ ${rows.length
     ${images.length && listing.status === "active" ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(listing.code)}/share-media">📤 ${L(lang, "ابعت الصور للعميل", "Send photos to a client")}</a>` : ""}
   </div>
 </article>
+${listing.listing_type === "rent" && Authz.canEdit(broker, listing) ? leaseSection(listing, await Leases.forListing(pool, listing), lang, req.session.csrf, req.query.lease) : ""}
 ${listing.status === "active" ? await wantedSection(pool, broker, listing, lang, req.session.csrf) : ""}
 ${await shareSection(broker, listing, lang)}`
     });
