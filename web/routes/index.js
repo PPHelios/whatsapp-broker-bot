@@ -24,6 +24,7 @@ const PRIVATE = [
   require("./plan"),
   require("./report"),
   require("./sources"),
+  require("./winLoss"),
   require("./insights"),
   require("./catalogueUpdates"),
   require("./brochure"),
