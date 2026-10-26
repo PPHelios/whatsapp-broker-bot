@@ -116,7 +116,9 @@ function timelineLine(ev, lang) {
       case "exported":
         return L(lang, "📦 اتصدّرت بياناته", "📦 Data exported");
       case "merged":
-        return L(lang, "🔗 رقم إضافي اتضاف", "🔗 Another number added");
+        return d.from_ref
+          ? L(lang, `🔗 اتدمج معاه ${refLabel(d.from_ref)}${d.from_name ? ` (${d.from_name})` : ""}`, `🔗 Merged with ${refLabel(d.from_ref)}${d.from_name ? ` (${d.from_name})` : ""}`)
+          : L(lang, "🔗 رقم إضافي اتضاف", "🔗 Another number added");
       case "undo":
         return L(lang, "↩️ تراجع", "↩️ Undone");
       default:

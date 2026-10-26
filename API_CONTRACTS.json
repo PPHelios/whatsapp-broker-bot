@@ -1637,6 +1637,11 @@
     },
     "web/routes/winLoss.js": {
       "register": ["web", "params"]
+    },
+    "services/leadMerge.js": {
+      "MAX_PHONES": "Number",
+      "mergedFields": ["keep", "drop"],
+      "merge": ["pool", "manager", "keepKey", "dropKey", "params"]
     }
   },
   "invariant_variable_names": {
