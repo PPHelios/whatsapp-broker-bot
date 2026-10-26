@@ -73,8 +73,11 @@ async function briefData(pool, broker, now) {
   const commissions = MANAGER_ROLES.includes(String(broker.role || "").toLowerCase())
     ? await require("./commissions").briefItems(pool, broker.agency_id, { now }).catch(() => null)
     : null;
+  // N6: the broker's progress against their monthly target.
+  const target = (await require("./targets").progress(pool, broker.agency_id, { now, brokerId: broker.id }).catch(() => new Map())).get(broker.id) || null;
   return {
     commissions,
+    target,
     viewings: today.filter((r) => r.follow_up_kind === "viewing"),
     calls: today.filter((r) => r.follow_up_kind !== "viewing"),
     overdue,
@@ -103,6 +106,8 @@ function briefMessage(broker, data) {
     section(L(broker, `📝 تسجيل عملاء هيخلص`, `📝 Client registrations about to lapse`), data.commissions?.registrations || [], (c) => `• D-${String(c.deal_ref).padStart(4, "0")} ${c.unit_code || ""} · ${c.developer_name || "—"} · ${L(broker, `فاضل ${c.days_left} يوم`, `${c.days_left} days left`)}`)
   ].filter((p) => p.length);
   if (!parts.length) return null;
+  const goal = require("./targets").briefLine(data.target, lg, (n) => money(n, broker));
+  if (goal) parts.push([goal]);
   const first = String(broker.name || "").split(/\s+/)[0];
   const followUps = data.viewings.length + data.calls.length + data.overdue.length;
   const buttons = [];

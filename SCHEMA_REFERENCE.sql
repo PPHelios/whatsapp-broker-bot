@@ -311,7 +311,9 @@ CREATE TABLE IF NOT EXISTS public.brokers (
   last_lead_at timestamp with time zone,
   passkey_enabled boolean DEFAULT false NOT NULL,
   draft_style text,
-  quiet_line boolean DEFAULT true NOT NULL
+  quiet_line boolean DEFAULT true NOT NULL,
+  target_deals smallint,
+  target_commission bigint
 );
 
 CREATE TABLE IF NOT EXISTS public.listings (
@@ -1184,6 +1186,8 @@ ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_credential_id_check C
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_label_check CHECK (((label IS NULL) OR (length(label) <= 120)));
 ALTER TABLE brokers ADD CONSTRAINT brokers_draft_style_check CHECK (((draft_style IS NULL) OR (length(draft_style) <= 600)));
 ALTER TABLE brokers ADD CONSTRAINT brokers_role_check CHECK ((role = ANY (ARRAY['broker'::text, 'agent'::text, 'admin'::text, 'owner'::text, 'manager'::text])));
+ALTER TABLE brokers ADD CONSTRAINT brokers_target_commission_check CHECK (((target_commission IS NULL) OR (target_commission > 0)));
+ALTER TABLE brokers ADD CONSTRAINT brokers_target_deals_check CHECK (((target_deals IS NULL) OR ((target_deals >= 1) AND (target_deals <= 1000))));
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_action_check CHECK ((action = ANY (ARRAY['increase'::text, 'status'::text, 'price'::text, 'plan'::text])));
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_channel_check CHECK ((channel = ANY (ARRAY['web'::text, 'bot'::text])));
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_input_check CHECK ((length(input) <= 1000));

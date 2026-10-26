@@ -23,7 +23,7 @@ async function listTeam(pool, manager) {
   if (!isManager(manager)) return null;
   const { rows } = await pool.query(
     `SELECT b.id, b.name, b.role, b.is_active, b.phone_number, b.preferred_lang, b.last_active_at, b.telegram_linked_at,
-            b.away_until, b.deactivated_at, b.notify_prefs, (b.telegram_chat_id IS NOT NULL) AS telegram,
+            b.away_until, b.deactivated_at, b.notify_prefs, b.target_deals, b.target_commission, (b.telegram_chat_id IS NOT NULL) AS telegram,
             (SELECT max(t.expires_at) FROM telegram_link_tokens t WHERE t.broker_id = b.id AND t.used_at IS NULL AND t.expires_at > NOW()) AS link_until
        FROM brokers b WHERE b.agency_id = $1
       ORDER BY b.is_active DESC, CASE WHEN b.is_active THEN b.name END, b.deactivated_at DESC NULLS LAST, b.name`,

@@ -1616,6 +1616,13 @@
       "upcoming": ["db", "manager", "params"],
       "remindDue": ["db", "params"],
       "reminderJob": []
+    },
+    "services/targets.js": {
+      "monthOf": ["now"],
+      "setTarget": ["db", "manager", "brokerId", "params"],
+      "progress": ["db", "agencyId", "params"],
+      "briefLine": ["p", "lang", "money"],
+      "pct": ["n", "of"]
     }
   },
   "invariant_variable_names": {

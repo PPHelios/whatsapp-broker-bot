@@ -7,6 +7,7 @@
 const PriceReading = require("../../services/priceReading");
 const Assistant = require("../../services/assistant");
 const Leases = require("../../services/leases");
+const Targets = require("../../services/targets");
 const Reading = require("../../domain/priceReading");
 const Dash = require("../../services/dashboards");
 const Stages = require("../../domain/leadStages");
@@ -30,6 +31,18 @@ const minutes = (m, lang) => {
 const medal = (i) => ["🥇", "🥈", "🥉"][i] || `${i + 1}`;
 const notFound = (req, res, page) =>
   page(req, res, { title: L(langOf(req), "غير موجود", "Not found"), body: html`<div class="card"><h1>🔍 ${L(langOf(req), "الصفحة غير موجودة", "Page not found")}</h1><p><a href="/app/">${L(langOf(req), "الرئيسية", "Home")}</a></p></div>` }, 404);
+
+/** N6: this month's progress against each broker's target. */
+function targetsSection(rows, lang) {
+  const bar = (n, of) => (of ? html`<progress max="100" value="${Math.min(100, Targets.pct(n, of))}"></progress> ${Targets.pct(n, of)}%` : "—");
+  return html`<section class="card" id="targets">
+  <h2>🎯 ${L(lang, "أهداف الشهر", "This month's targets")}</h2>
+  ${rows.length
+    ? html`<div class="scroll"><table><thead><tr><th>${L(lang, "البروكر", "Broker")}</th><th>${L(lang, "صفقات", "Deals")}</th><th></th><th>${L(lang, "العمولة", "Commission")}</th><th></th></tr></thead>
+  <tbody>${rows.map((r) => html`<tr data-target="${r.id}"><td>${r.name}</td><td>${r.deals}${r.target_deals ? ` / ${r.target_deals}` : ""}</td><td>${bar(r.deals, r.target_deals)}</td><td>${money(r.commission, lang)}${r.target_commission ? html` / ${money(r.target_commission, lang)}` : ""}</td><td>${bar(r.commission, r.target_commission)}</td></tr>`)}</tbody></table></div>`
+    : html`<p class="muted">${L(lang, "مفيش أهداف. حط هدف لكل بروكر من صفحة الفريق.", "No targets yet. Set one per broker on the Team page.")} <a href="/app/team">${L(lang, "الفريق", "Team")}</a></p>`}
+</section>`;
+}
 
 /** N4: rented units whose lease ends in the next 90 days. */
 function leaseEnds(rows, lang) {
@@ -210,8 +223,8 @@ function register(web, { pool, page }) {
     const lang = langOf(req);
     const d = await Dash.agencyDashboard(pool, req.session.broker, { days: req.query.days });
     if (!d) return res.status(403).type("text/plain").send(L(lang, "للمديرين بس", "Managers only"));
-    const leases = await Leases.upcoming(pool, req.session.broker);
-    return page(req, res, { title: L(lang, "لوحة الوكالة", "Agency dashboard"), body: html`${agencyPage(d, lang)}${leaseEnds(leases || [], lang)}` });
+    const [leases, targets] = await Promise.all([Leases.upcoming(pool, req.session.broker), Targets.progress(pool, req.session.broker.agency_id)]);
+    return page(req, res, { title: L(lang, "لوحة الوكالة", "Agency dashboard"), body: html`${agencyPage(d, lang)}${targetsSection([...targets.values()], lang)}${leaseEnds(leases || [], lang)}` });
   });
 
   const ownerView = async (req, res, notice = null, status = 200) => {
