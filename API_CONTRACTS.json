@@ -667,6 +667,7 @@
       "KINDS": "Array",
       "KIND_LABELS": "Object",
       "DAILY_KINDS": "Array",
+      "DAILY_LABELS": "Object",
       "DEFAULT_QUIET": "Object",
       "MERGE_WINDOW_MS": "Number",
       "prefsOf": ["broker", "params"],
@@ -1426,6 +1427,32 @@
     "web/routes/commissions.js": {
       "register": ["web", "params"],
       "termsSection": ["lang", "projectId", "terms", "notice"]
+    },
+    "domain/leadRules.js": {
+      "DEFAULTS": "Object",
+      "MIN_WAIT": "Number",
+      "MAX_WAIT": "Number",
+      "MAX_JUMPS": "Number",
+      "rulesOf": ["raw"],
+      "rulesFields": ["input"],
+      "inWorkHours": ["rules", "at"],
+      "dueAt": ["rules", "from"],
+      "awayNow": ["broker", "now"],
+      "minutesBetween": ["from", "to"],
+      "cairo": ["at"]
+    },
+    "services/leadRules.js": {
+      "SWITCHABLE": "Array",
+      "getRules": ["db", "agencyId"],
+      "saveRules": ["pool", "manager", "input"],
+      "deadlineFor": ["db", "agencyId", "now"],
+      "setAway": ["pool", "manager", "brokerId", "day", "params"],
+      "setSwitches": ["pool", "manager", "brokerId", "off"],
+      "nextBroker": ["db", "agencyId", "params"],
+      "moveOverdue": ["pool", "params"],
+      "responseJob": [],
+      "speedToLead": ["pool", "agencyId", "params"],
+      "cairoMidnight": ["day"]
     }
   },
   "invariant_variable_names": {

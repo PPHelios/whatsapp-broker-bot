@@ -276,6 +276,7 @@ ${rows.length
       too_many_phones: L(lang, "3 أرقام بالكتير.", "At most 3 numbers."),
       lawful_basis: L(lang, "اختار الأساس القانوني.", "Choose the lawful basis."),
       assignee: L(lang, "الوسيط مش موجود.", "Unknown broker."),
+      assignee_away: L(lang, "الوسيط ده في إجازة ومش بياخد عملاء جداد.", "This broker is away and takes no new leads."),
       kind: L(lang, "النوع مش معروف.", "Unknown type.")
     }[r.error] || r.error;
     return formPage(req, res, { values, error: `⚠️ ${why}` }, 422);
@@ -427,6 +428,8 @@ ${V.bottomBar(lead, lang, broker.name)}`
         note_empty: L(lang, "الملاحظة فاضية.", "The note is empty."),
         no_open_follow_up: L(lang, "مفيش متابعة مفتوحة.", "No open follow-up."),
         assignee: L(lang, "الوسيط مش موجود.", "Unknown broker."),
+      assignee_away: L(lang, "الوسيط ده في إجازة ومش بياخد عملاء جداد.", "This broker is away and takes no new leads."),
+        assignee_away: L(lang, "الوسيط ده في إجازة ومش بياخد عملاء جداد.", "This broker is away and takes no new leads."),
         undo_expired: L(lang, "التراجع متاح 10 دقايق بس.", "Undo is only available for 10 minutes."),
         undo_blocked: L(lang, "مش ممكن التراجع: العميل اتعدل بعدها.", "Can't undo: the lead changed since."),
         already_undone: L(lang, "اتلغى قبل كده.", "Already undone."),

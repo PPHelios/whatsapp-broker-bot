@@ -26,7 +26,8 @@ const REASON = {
   quiet_hours: ["ساعات الهدوء", "quiet hours"],
   merged: ["متجمعة مع غيرها", "merged"],
   no_push: ["الإشعارات مش مفعلة", "push not enabled"],
-  not_linked: ["تليجرام مش متوصل", "Telegram not linked"]
+  not_linked: ["تليجرام مش متوصل", "Telegram not linked"],
+  switched_off: ["مقفولة من المدير", "switched off by a manager"]
 };
 const pick = (map, key, lang) => (map[key] ? map[key][lang === "en" ? 1 : 0] : key || "—");
 

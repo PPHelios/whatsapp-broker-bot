@@ -77,7 +77,7 @@ ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "�
     "Telegram and the website are free; WhatsApp uses your agency's message credits. When the credits run out or the 24-hour window closes, alerts come on the website. Each alert comes on one channel only, and all of them are kept in 🔔."
   )}</p>
   ${Notifications.KINDS.map(
-    (k) => html`<label>${Notifications.KIND_LABELS[k][lang === "en" ? 1 : 0]}
+    (k) => html`<label>${Notifications.KIND_LABELS[k][lang === "en" ? 1 : 0]}${prefs.off.includes(k) ? html` <span class="muted" data-switched-off>(${L(lang, "مقفولة من المدير؛ في 🔔 بس", "switched off by your manager; in 🔔 only")})</span>` : ""}
     <select name="ch_${k}" data-kind="${k}">${tgOn ? opt(k, "telegram", L(lang, "تليجرام (ببلاش)", "Telegram (free)")) : ""}${opt(k, "web", L(lang, "الموقع (ببلاش)", "Website (free)"))}${opt(k, "whatsapp", L(lang, "واتساب (من الرصيد)", "WhatsApp (uses credits)"))}</select>
   </label>`
   )}
