@@ -88,3 +88,8 @@ progress { width: 100%; height: 14px; accent-color: var(--brand); }
 .features .card h2 { margin-top: 0; }
 .price { font-size: 1.4rem; font-weight: 700; color: var(--brand); }
 .thumbs { flex-wrap: wrap; gap: 4px; } .thumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; }
+
+/* C7: client comparison and payment plans */
+table.compare th[scope="col"] { vertical-align: top; min-width: 160px; }
+table.compare img.thumb { width: 160px; max-width: 100%; height: 110px; object-fit: cover; border-radius: 8px; }
+table.compare ul.facts { margin: 0; padding-inline-start: 1em; }
