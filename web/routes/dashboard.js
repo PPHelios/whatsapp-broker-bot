@@ -5,6 +5,7 @@
 "use strict";
 
 const PriceReading = require("../../services/priceReading");
+const Assistant = require("../../services/assistant");
 const Reading = require("../../domain/priceReading");
 const Dash = require("../../services/dashboards");
 const Stages = require("../../domain/leadStages");
@@ -126,12 +127,31 @@ function readingSection(rows, lang) {
 </section>`;
 }
 
-function ownerPage(d, lang, { billing = null, notice = null, reading = [] } = {}) {
+/** C10/N1: the assistant's web answers, off per agency until switched on here, with a monthly count. */
+function assistantSection(rows, lang) {
+  return html`<section class="card" id="assistant-web">
+  <h2>🌐 ${L(lang, "المساعد: البحث على الإنترنت", "Assistant: web answers")}</h2>
+  <p class="muted">${L(lang, "المساعد بيرد من بيانات الوكالة بس. لو مفعّل هنا وملقاش الرد عندنا، بيدور على الإنترنت ويقول إن الرد «من الإنترنت، غير مؤكد» ومعاه المصادر.", "The assistant answers from the agency's data only. When switched on here and our data has no answer, it searches the web and labels the answer \"from the web, unverified\" with its sources.")}</p>
+  <div class="scroll"><table>
+  <thead><tr><th>${L(lang, "الوكالة", "Agency")}</th><th>${L(lang, "أسئلة الشهر", "Questions this month")}</th><th>${L(lang, "ردود الإنترنت", "Web answers")}</th><th></th></tr></thead>
+  <tbody>${rows.map(
+    (a) => html`<tr data-assistant-web="${a.id}"><td>${a.name}</td><td>${a.asked}</td><td>${a.web_used} / ${a.web_month}</td>
+    <td><form method="post" action="/app/owner/assistant/${a.id}" class="row">
+      <label><input type="checkbox" name="enabled" value="on"${a.web ? html` checked` : ""}> ${L(lang, "مفعّل", "On")}</label>
+      <label>${L(lang, "ردود/شهر", "Answers/month")} <input name="web_month" type="number" min="0" max="1000" value="${a.web_month}" size="5"></label>
+      <button type="submit" class="secondary">${L(lang, "احفظ", "Save")}</button>
+    </form></td></tr>`
+  )}</tbody></table></div>
+</section>`;
+}
+
+function ownerPage(d, lang, { billing = null, notice = null, reading = [], assistant = [] } = {}) {
   const usd = (n) => `$${Number(n).toFixed(n < 1 ? 4 : 2)}`;
   return html`<h1>🛠️ ${L(lang, "متابعة التطبيق", "App tracking")}</h1>
 ${notice || ""}
 ${billing ? billingSections(billing, lang) : ""}
 ${readingSection(reading, lang)}
+${assistantSection(assistant, lang)}
 <section class="card">
   <h2>${L(lang, "كل أسبوع", "Weekly")}</h2>
   <div class="scroll"><table>
@@ -184,8 +204,8 @@ function register(web, { pool, page }) {
   const ownerView = async (req, res, notice = null, status = 200) => {
     const d = await Dash.ownerDashboard(pool, req.session.broker);
     if (!d) return notFound(req, res, page);
-    const [open, signups, payments, payTo, trials, reading] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool)]);
-    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials }, notice, reading }) }, status);
+    const [open, signups, payments, payTo, trials, reading, assistant] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Assistant.overview(pool)]);
+    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials }, notice, reading, assistant }) }, status);
   };
   const ok = (text) => html`<p class="card notice ok" role="status">✅ ${text}</p>`;
   const bad = (text) => html`<p class="card notice bad" role="alert">❌ ${text}</p>`;
@@ -250,6 +270,13 @@ ${wa ? html`<p><a class="btn" href="${wa}" target="_blank" rel="noopener norefer
     const r = id ? await PriceReading.setForAgency(pool, id, req.body) : { error: "not_found" };
     if (r.error) return ownerView(req, res, bad(L(lang, `الصفحات رقم من 0 لـ ${Reading.MAX_PAGES_MONTH}.`, `Pages must be 0 to ${Reading.MAX_PAGES_MONTH}.`)), 400);
     return ownerView(req, res, ok(r.setting.enabled ? L(lang, `${r.agency.name}: القراية مفعّلة، ${r.setting.pages_month} صفحة في الشهر.`, `${r.agency.name}: reading on, ${r.setting.pages_month} pages a month.`) : L(lang, `${r.agency.name}: القراية مقفولة.`, `${r.agency.name}: reading off.`)));
+  }));
+
+  web.post("/owner/assistant/:id", ownerOnly(async (req, res, lang) => {
+    const id = uuidParam(req);
+    const r = id ? await Assistant.setWeb(pool, id, { enabled: req.body.enabled === "on", webMonth: req.body.web_month }) : { error: "not_found" };
+    if (r.error) return ownerView(req, res, bad(L(lang, "الردود رقم من 0 لـ 1000.", "Answers must be 0 to 1000.")), 400);
+    return ownerView(req, res, ok(r.web ? L(lang, `${r.agency.name}: البحث على الإنترنت مفعّل، ${r.web_month} رد في الشهر.`, `${r.agency.name}: web answers on, ${r.web_month} a month.`) : L(lang, `${r.agency.name}: البحث على الإنترنت مقفول.`, `${r.agency.name}: web answers off.`)));
   }));
 
   web.post("/owner/pay-to", ownerOnly(async (req, res, lang) => {
