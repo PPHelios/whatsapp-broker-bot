@@ -17,6 +17,7 @@ const PRIVATE = [
   require("./commissions"),
   require("./notifications"),
   require("./settings"),
+  require("./passkeys"),
   require("./usage"),
   require("./dashboard"),
   require("./team"),

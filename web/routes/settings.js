@@ -5,6 +5,8 @@ const Notifications = require("../../lib/notifications");
 const WebPush = require("../../lib/channels/webpush");
 const { getConfig } = require("../../config");
 const { html } = require("../html");
+const Passkeys = require("../../services/passkeys");
+const { passkeySection } = require("./passkeys");
 const { MANAGER_ROLES, isManager } = require("../../lib/authz");
 const Storage = require("../../lib/supabase");
 const Session = require("../session");
@@ -55,6 +57,7 @@ function register(web, { pool, page }) {
     const manager = isManager(broker);
     const agency = manager ? (await pool.query("SELECT logo_url FROM agencies WHERE id = $1", [broker.agency_id])).rows[0] || {} : null;
     const logoNotice = { saved: ["✅ الشعار اتحفظ.", "✅ Logo saved."], bad: ["❌ الصورة مش مفهومة. ارفع PNG أو JPG أو WebP أقل من 2 ميجا.", "❌ Unreadable image. Upload a PNG, JPG or WebP under 2 MB."], removed: ["الشعار اتشال.", "Logo removed."], failed: ["❌ الرفع فشل، جرب تاني.", "❌ The upload failed; try again."] }[req.query.logo];
+    const passkeyNotice = { on: ["✅ اتفتحت. ضيف Passkey على الجهاز ده.", "✅ On. Add a passkey on this device."], off: ["اتقفلت، والـ Passkeys اتمسحت.", "Off; your passkeys were removed."], removed: ["الـ Passkey اتمسحت.", "Passkey removed."] }[req.query.passkey];
     return page(req, res, {
       title: L(lang, "الإعدادات", "Settings"),
       nav: "settings",
@@ -90,6 +93,7 @@ ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "�
   <button type="submit">${L(lang, "حفظ", "Save")}</button>
 </form>
 ${manager ? brandSection(lang, agency, logoNotice ? html`<p class="notice" data-logo-notice="${req.query.logo}">${L(lang, ...logoNotice)}</p>` : "") : ""}
+${passkeySection({ enabled: await Passkeys.isEnabled(pool, broker), keys: await Passkeys.list(pool, broker), lang, notice: passkeyNotice ? L(lang, ...passkeyNotice) : null })}
 <section class="card" id="push" data-vapid="${key}" data-push-count="${pushes}">
   <h2>📲 ${L(lang, "إشعارات الموقع على الجهاز ده", "Website notifications on this device")}</h2>
   <p>${pushes
