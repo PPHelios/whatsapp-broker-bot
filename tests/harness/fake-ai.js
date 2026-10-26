@@ -28,8 +28,21 @@ module.exports = {
   // --- lib/ai.js API ---
   getGenAI: async () => genAI,
   generateWithCascade: async ({ contents, config = {}, operationType = "ai_generation" }) => {
-    const text = answer({ operation: operationType, model: "fake-model", contents, config });
+    const raw = answer({ operation: operationType, model: "fake-model", contents, config });
+    // A responder may return { __text, __grounding } to stand in for a web-grounded answer.
+    let text = raw;
+    let grounding = null;
+    try {
+      const o = JSON.parse(raw);
+      if (o && typeof o === "object" && "__text" in o) {
+        text = typeof o.__text === "string" ? o.__text : JSON.stringify(o.__text);
+        grounding = o.__grounding || null;
+      }
+    } catch {
+      /* plain text */
+    }
     return {
+      grounding,
       text,
       modelUsed: "fake-model",
       usage: { promptTokenCount: 100, candidatesTokenCount: 20 },

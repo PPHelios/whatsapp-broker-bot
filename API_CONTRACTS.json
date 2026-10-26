@@ -1520,6 +1520,44 @@
       "checkDue": ["pool", "params"],
       "syncJob": [],
       "fetchCsv": ["sync", "params"]
+    },
+    "domain/projectContext.js": {
+      "MAX_FACTS": "Number",
+      "sourceKey": ["params"],
+      "priceRanges": ["units"],
+      "build": ["params"]
+    },
+    "services/projectContext.js": {
+      "contextFor": ["db", "agencyId", "projectId", "params"]
+    },
+    "domain/assistant.js": {
+      "MAX_QUESTION": "Number",
+      "NOT_FOUND": "Object",
+      "WEB_LABEL": "Object",
+      "matchAsk": ["text"],
+      "langOf": ["q"],
+      "matchProjects": ["question", "projects"],
+      "matchLeads": ["question", "leads"],
+      "scopesOf": ["question"],
+      "prompt": ["question", "blocks", "params"],
+      "parseAnswer": ["text", "lang"],
+      "webPrompt": ["question", "params"],
+      "webSources": ["grounding"]
+    },
+    "services/assistant.js": {
+      "ask": ["pool", "broker", "question", "params"],
+      "datesLine": ["dates", "lang"],
+      "unanswered": ["pool", "manager", "params"],
+      "webSetting": ["db", "agencyId"],
+      "setWeb": ["db", "agencyId", "params"],
+      "overview": ["db", "params"]
+    },
+    "lib/assistantBot.js": {
+      "command": ["broker", "params", "ctx"],
+      "replyText": ["out"]
+    },
+    "web/routes/assistant.js": {
+      "register": ["web", "params"]
     }
   },
   "invariant_variable_names": {

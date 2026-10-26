@@ -76,6 +76,7 @@ ${broker ? html`<footer class="foot muted"><a href="/app/report">${en ? "🐞 Re
 
 const NAV = [
   { key: "search", href: "/app/search", ar: "🔍 بحث", en: "🔍 Search" },
+  { key: "ask", href: "/app/ask", ar: "💬 اسأل", en: "💬 Ask" },
   { key: "units", href: "/app/units", ar: "🏠 الوحدات", en: "🏠 Units" },
   { key: "leads", href: "/app/leads", ar: "👤 العملاء", en: "👤 Leads" },
   { key: "deals", href: "/app/deals", ar: "🤝 الصفقات", en: "🤝 Deals" },

@@ -6,6 +6,7 @@ const PUBLIC = [require("./auth"), require("./guide"), require("./signup"), requ
 const PRIVATE = [
   require("./home"),
   require("./search"),
+  require("./assistant"),
   require("./imports"),
   require("./unitForm"),
   require("./units"),
