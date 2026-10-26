@@ -12,6 +12,13 @@ const Share = require("../../lib/shareLinks");
 const RateLimit = require("../../lib/rateLimit");
 const Links = require("../../lib/links");
 const PublicUnit = require("../../domain/publicUnit");
+const ClientPlans = require("../../domain/clientPlans");
+const Catalogue = require("../../services/catalogue");
+const Stages = require("../../domain/leadStages");
+const SchedulePdf = require("../../lib/schedulePdf");
+const Compare = require("../../lib/compareLinks");
+const { fetchBuf } = require("../../lib/flyerAssets");
+const sharp = require("sharp");
 const { RESERVED_SLUGS } = require("../../domain/slug");
 const Session = require("../session");
 const { securityHeaders, sameOrigin } = require("../security");
@@ -22,6 +29,9 @@ const CODE = /^[A-Za-z0-9][A-Za-z0-9_\-.]{1,29}$/;
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const INTEREST_IP = { limit: 5, windowSec: 3600 };
 const INTEREST_LINK = { limit: 20, windowSec: 24 * 3600 };
+const PDF_IP = { limit: 20, windowSec: 3600 };
+const num = (n) => Math.round(Number(n) || 0).toLocaleString("en-US");
+const money = (n, lang) => `${num(n)} ${L(lang, "ج.م", "EGP")}`;
 
 const INTEREST_ERRORS = {
   name: ["اكتب اسمك.", "Enter your name."],
@@ -59,7 +69,41 @@ ${u.agency.name ? html`<meta property="og:site_name" content="${u.agency.name}">
 <meta name="twitter:card" content="${u.og.image ? "summary_large_image" : "summary"}">`;
 }
 
-function unitBody(u, { otherLangUrl, interest = null }) {
+/** C7: the plans with their numbers; one plan's dated schedule when chosen (?plan=), and its PDF. */
+function plansSection(u, { base, plan = null, schedule = null }) {
+  const lang = u.lang;
+  if (!u.plans.length) return "";
+  return html`<section class="card" id="plans">
+  <h2>💳 ${L(lang, "خطط الدفع", "Payment plans")}</h2>
+  ${u.plans.map((p) => html`<div class="card${plan === p.index ? " notice" : ""}" data-plan="${p.index}">
+    <h3>${p.name}</h3>
+    <ul>
+      <li>${L(lang, "المقدم", "Down payment")} ${p.down_payment_pct}%: <strong>${money(p.summary.down_payment, lang)}</strong></li>
+      ${p.summary.installments ? html`<li>${p.summary.installments} ${L(lang, "قسط", "installments")} ${p.frequency_label}: <strong>${money(p.summary.installment, lang)}</strong></li>` : ""}
+      ${p.summary.milestones.map((m) => html`<li>${L(lang, "دفعة", "Milestone")} ${m.pct}% ${L(lang, `بعد ${m.months} شهر`, `after ${m.months} months`)}: ${money(m.amount, lang)}</li>`)}
+      ${p.discount_pct ? html`<li>${L(lang, "خصم", "Discount")} ${p.discount_pct}%</li>` : ""}
+      ${p.summary.maintenance ? html`<li>${L(lang, "الصيانة", "Maintenance")} ${p.summary.maintenance_pct}%: ${money(p.summary.maintenance, lang)}</li>` : ""}
+      ${p.fees.map((f) => html`<li>${f.label}: ${money(f.amount, lang)}</li>`)}
+    </ul>
+    <p class="row"><a class="btn secondary" href="${base}&plan=${p.index}#plans">🧮 ${L(lang, "جدول الدفع", "Payment schedule")}</a> <a class="btn secondary" href="${base.replace("?", "/schedule.pdf?")}&plan=${p.index}" data-schedule-pdf="${p.index}">📄 PDF</a></p>
+  </div>`)}
+  ${schedule ? html`<div class="scroll" data-schedule="${plan}"><table><thead><tr><th>#</th><th>${L(lang, "الميعاد", "Due")}</th><th>${L(lang, "البند", "Item")}</th><th>${L(lang, "المبلغ", "Amount")}</th>${schedule.totals.maintenance_scheduled ? html`<th>${L(lang, "الصيانة", "Maintenance")}</th>` : ""}</tr></thead>
+    <tbody>${schedule.rows.map((r) => html`<tr><td>${r.n}</td><td dir="ltr">${r.date}</td><td>${r.label}</td><td>${money(r.amount, lang)}</td>${schedule.totals.maintenance_scheduled ? html`<td>${r.maintenance ? money(r.maintenance, lang) : "—"}</td>` : ""}</tr>`)}</tbody></table></div>
+    <p class="muted">${L(lang, "جدول استرشادي محسوب من النهارده، مش عقد. الأسعار والخطط ممكن تتغير.", "An indicative schedule counted from today, not a contract. Prices and plans may change.")}</p>` : ""}
+</section>`;
+}
+
+function projectSection(u) {
+  const lang = u.lang;
+  const p = u.project;
+  if (!p || (!p.name && !p.links.length)) return "";
+  return html`<section class="card" id="project"><h2>🏗️ ${p.name || ""}</h2>
+  ${p.delivery ? html`<p>🔑 ${L(lang, "التسليم", "Delivery")}: <span dir="ltr">${p.delivery}</span></p>` : ""}
+  ${p.links.length ? html`<ul>${p.links.map((m) => html`<li><a href="${m.url}" target="_blank" rel="noopener noreferrer">${m.label}</a></li>`)}</ul>` : ""}
+</section>`;
+}
+
+function unitBody(u, { otherLangUrl, interest = null, plans = {} }) {
   const lang = u.lang;
   if (u.status !== "active") {
     return html`<article class="card" data-public-unit="${u.code}">
@@ -82,6 +126,8 @@ function unitBody(u, { otherLangUrl, interest = null }) {
   ${u.features.length ? html`<ul class="tags">${u.features.map((f) => html`<li>${f}</li>`)}</ul>` : ""}
   ${u.summary ? html`<p>${u.summary}</p>` : ""}
   <p class="muted">${L(lang, "كود الوحدة", "Unit code")}: <span dir="ltr">${u.code}</span></p>
+  ${projectSection(u)}
+  ${plansSection(u, plans)}
   ${u.contact
     ? html`<section class="card notice"><h2>📞 ${L(lang, "للمعاينة والاستفسار", "For viewings and details")}</h2>
     <p>${u.contact.name || ""}</p>
@@ -92,6 +138,56 @@ function unitBody(u, { otherLangUrl, interest = null }) {
     : ""}
   ${u.contact && interest ? interestForm(u, interest) : ""}
 </article>`;
+}
+
+/** C7: 2 or 3 units side by side, client-safe only (the serializer's fields plus price per m²). */
+function compareBody(units, { agency, contact, lang, otherLangUrl }) {
+  const wa = contact?.phone ? `https://wa.me/${contact.phone.replace(/\D/g, "")}?text=${encodeURIComponent(`${L(lang, "استفسار عن الوحدات", "About units")} ${units.map((u) => u.code).join(", ")}`)}` : null;
+  const row = (label, cell) => html`<tr><th scope="row">${label}</th>${units.map((u) => html`<td>${u.status === "active" ? cell(u) : html`<span class="muted">${L(lang, "مبقتش متاحة", "No longer available")}</span>`}</td>`)}</tr>`;
+  const plan = (u) => u.plans[0];
+  return html`<article class="card" data-compare="${units.map((u) => u.code).join(",")}">
+  <header class="row">
+    ${agency.logo_url ? html`<img class="logo" src="${agency.logo_url}" alt="">` : ""}
+    <strong>${agency.name || ""}</strong>
+    <a class="muted" href="${otherLangUrl}" hreflang="${lang === "en" ? "ar" : "en"}">${lang === "en" ? "عربي" : "English"}</a>
+  </header>
+  <h1>⚖️ ${L(lang, "مقارنة الوحدات", "Unit comparison")}</h1>
+  <div class="scroll"><table class="compare">
+    <thead><tr><th></th>${units.map((u) => html`<th scope="col" data-compare-unit="${u.code}">${u.images[0] ? html`<img src="${u.images[0]}" alt="" loading="lazy" class="thumb"><br>` : ""}${u.headline}<br><span class="muted" dir="ltr">${u.code}</span></th>`)}</tr></thead>
+    <tbody>
+      ${row(L(lang, "السعر", "Price"), (u) => html`<strong>${u.price || "—"}</strong>`)}
+      ${row(L(lang, "سعر المتر", "Per m²"), (u) => (u.per_m2 ? money(u.per_m2, lang) : "—"))}
+      ${row(L(lang, "المواصفات", "Details"), (u) => html`<ul class="facts">${u.facts.map((f) => html`<li>${f}</li>`)}</ul>`)}
+      ${row(L(lang, "المشروع والتسليم", "Project and delivery"), (u) => (u.project ? `${u.project.name || ""}${u.project.delivery ? ` · ${u.project.delivery}` : ""}` : "—"))}
+      ${row(L(lang, "أول خطة دفع", "First payment plan"), (u) => (plan(u) ? html`${plan(u).name}<br>${L(lang, "مقدم", "Down")} ${money(plan(u).summary.down_payment, lang)}${plan(u).summary.installments ? html`<br>${plan(u).summary.installments} × ${money(plan(u).summary.installment, lang)}` : ""}` : "—"))}
+      ${row(L(lang, "مميزات", "Features"), (u) => (u.features.length ? u.features.join("، ") : "—"))}
+    </tbody>
+  </table></div>
+  ${contact
+    ? html`<section class="card notice"><h2>📞 ${L(lang, "للمعاينة والاستفسار", "For viewings and details")}</h2>
+    <p>${contact.name || ""}</p>
+    <div class="row">
+      ${contact.phone ? html`<a class="btn" href="tel:${contact.phone}" dir="ltr">${contact.phone}</a>` : ""}
+      ${wa ? html`<a class="btn secondary" href="${wa}" rel="noopener">WhatsApp</a>` : ""}
+    </div></section>`
+    : ""}
+</article>`;
+}
+
+/** Cairo's today at midnight (UTC date), the first row of a schedule. */
+const cairoToday = () => new Date(`${Stages.toCairoLocal(new Date()).slice(0, 10)}T00:00:00Z`);
+
+/** The agency logo as a small PNG data URI for the PDF (the flyer's safe fetch), or null. */
+async function logoData(url) {
+  if (!url) return null;
+  try {
+    const buf = await fetchBuf(url);
+    if (!buf) return null;
+    const png = await sharp(buf, { failOn: "none" }).resize(240, 240, { fit: "inside" }).png().toBuffer();
+    return `data:image/png;base64,${png.toString("base64")}`;
+  } catch {
+    return null;
+  }
 }
 
 /** Mounts the public pages on the app (after /app, /webhook and /health). */
@@ -125,6 +221,12 @@ function mountPublic(app, { pool, assets }) {
     return { resolved, token, lang };
   }
 
+  /** The unit's catalogue project and its client-visible links (C7). */
+  async function projectOf(listing) {
+    const project = await Catalogue.projectForUnit(pool, listing).catch(() => null);
+    return project ? { project, materials: await Catalogue.clientMaterials(pool, listing) } : { project: null, materials: [] };
+  }
+
   async function render(req, res, { resolved, token, lang }, interest = {}, status = null) {
     const { listing, agency, broker } = resolved;
     const pageUrl = Links.unitPageUrl(agency.slug, listing.code, token);
@@ -133,7 +235,7 @@ function mountPublic(app, { pool, assets }) {
     let unit;
     if (listing.status === "active") {
       const { rows: images } = await pool.query("SELECT url FROM listing_images WHERE listing_id = $1 AND agency_id = $2 ORDER BY position LIMIT 15", [listing.id, listing.agency_id]);
-      unit = PublicUnit.toPublicUnit(listing, { agency, broker: broker?.is_active ? broker : null, images, lang });
+      unit = PublicUnit.toPublicUnit(listing, { agency, broker: broker?.is_active ? broker : null, images, lang, ...(await projectOf(listing)) });
     } else {
       unit = PublicUnit.unavailable(listing, { agency, lang });
     }
@@ -150,13 +252,84 @@ function mountPublic(app, { pool, assets }) {
             scripts: false,
             manifest: false,
             head: unit.status === "active" ? ogTags(unit, pageUrl) : null,
-            body: unitBody(unit, { otherLangUrl, interest: { action: `${base}&lang=${lang}#interest`, ...interest } })
+            body: unitBody(unit, { otherLangUrl, interest: { action: `${base}&lang=${lang}#interest`, ...interest }, plans: plansView(unit, listing, `${base}&lang=${lang}`, req.query.plan, lang) })
           })
         )
       );
   }
 
+  function plansView(unit, listing, base, planParam, lang) {
+    const plan = /^\d$/.test(String(planParam ?? "")) ? Number(planParam) : null;
+    const schedule = plan !== null && unit.plans[plan] ? ClientPlans.schedule(listing, plan, { lang, start: cairoToday() }) : null;
+    return { base, plan: schedule ? plan : null, schedule };
+  }
+
   const skip = (req) => !SLUG.test(req.params.slug) || RESERVED_SLUGS.includes(req.params.slug);
+
+  // C7: a comparison of 2 or 3 units the broker sent.
+  app.get("/:slug/compare/:token", securityHeaders, Session.loadSession(pool), async (req, res, next) => {
+    if (skip(req)) return next();
+    res.set({ "X-Robots-Tag": "noindex, nofollow, noarchive", "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" });
+    const gate = await RateLimit.hit(pool, `public:ip:${req.ip}`, RateLimit.LIMITS.publicPageIp);
+    if (!gate.allowed) return res.status(429).set("Retry-After", String(gate.retryAfterSec)).send("Too many requests");
+    const resolved = await Compare.resolveCompareLink(pool, req.params.slug, String(req.params.token));
+    if (!resolved) return notFound(res);
+    const lang = req.query.lang === "en" || req.query.lang === "ar" ? req.query.lang : resolved.link.lang;
+    await Compare.recordOpen(pool, resolved, { userAgent: req.get("user-agent"), viewerAgencyId: req.session?.agency?.id || null }).catch((e) => console.warn("Compare open record failed:", e.message));
+    const broker = resolved.broker?.is_active ? resolved.broker : null;
+    const units = [];
+    for (const listing of resolved.listings) {
+      if (listing.status !== "active") {
+        units.push({ ...PublicUnit.unavailable(listing, { agency: resolved.agency, lang }), per_m2: null });
+        continue;
+      }
+      const { rows: images } = await pool.query("SELECT url FROM listing_images WHERE listing_id = $1 AND agency_id = $2 ORDER BY position LIMIT 1", [listing.id, listing.agency_id]);
+      const u = PublicUnit.toPublicUnit(listing, { agency: resolved.agency, broker, images, lang, ...(await projectOf(listing)) });
+      const perM2 = listing.listing_type !== "rent" && Number(listing.area_value) > 0 && Number(listing.price_value) > 0 ? Math.round(Number(listing.price_value) / Number(listing.area_value)) : null;
+      units.push({ ...u, per_m2: perM2 });
+    }
+    const contact = PublicUnit.contactOf(broker);
+    const self = `/${resolved.agency.slug}/compare/${encodeURIComponent(req.params.token)}`;
+    return res.type("html").send(
+      String(
+        layout({
+          assets: assets.url,
+          lang,
+          title: L(lang, "مقارنة الوحدات", "Unit comparison"),
+          robots: "noindex, nofollow",
+          scripts: false,
+          manifest: false,
+          body: compareBody(units, { agency: resolved.agency, contact, lang, otherLangUrl: `${self}?lang=${lang === "en" ? "ar" : "en"}` })
+        })
+      )
+    );
+  });
+
+  // C7: one plan's schedule as a PDF (agency name and logo, the broker to call; nothing internal).
+  app.get("/:slug/:code/schedule.pdf", securityHeaders, async (req, res, next) => {
+    if (skip(req)) return next();
+    const ctx = await load(req, res);
+    if (!ctx) return undefined;
+    const { listing, agency, broker } = ctx.resolved;
+    if (listing.status !== "active") return notFound(res);
+    const byIp = await RateLimit.hit(pool, `pdf:ip:${req.ip}`, PDF_IP);
+    if (!byIp.allowed) return res.status(429).set("Retry-After", String(byIp.retryAfterSec)).send("Too many requests");
+    const plan = /^\d$/.test(String(req.query.plan ?? "")) ? Number(req.query.plan) : 0;
+    const schedule = ClientPlans.schedule(listing, plan, { lang: ctx.lang, start: cairoToday() });
+    if (!schedule) return notFound(res);
+    const unit = PublicUnit.toPublicUnit(listing, { agency, broker: broker?.is_active ? broker : null, lang: ctx.lang });
+    const pdf = await SchedulePdf.renderSchedulePdf({
+      lang: ctx.lang,
+      agency: { name: unit.agency.name, logo: await logoData(unit.agency.logo_url) },
+      unit: { code: unit.code, headline: unit.headline },
+      schedule,
+      contact: unit.contact,
+      today: Stages.toCairoLocal(new Date()).slice(0, 10)
+    });
+    return res
+      .set({ "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="${listing.code.replace(/[^A-Za-z0-9_-]/g, "")}-schedule.pdf"` })
+      .send(pdf);
+  });
 
   app.get("/:slug/:code", securityHeaders, Session.loadSession(pool), async (req, res, next) => {
     if (skip(req)) return next();

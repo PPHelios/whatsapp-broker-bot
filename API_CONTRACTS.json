@@ -161,6 +161,7 @@
       "downloadListingImage": ["url"],
       "uploadListingImage": ["agencyId", "storagePath", "buffer"],
       "uploadFlyerImage": ["agencyId", "storagePath", "buffer"],
+      "uploadAgencyLogo": ["agencyId", "storagePath", "buffer"],
       "deleteStorageFiles": ["paths"],
       "CHAT_ZIP_MAX_BYTES": "Number",
       "createChatUploadUrl": ["storagePath"],
@@ -411,6 +412,7 @@
       "seedVocabulary": ["client"]
     },
     "lib/links.js": {
+      "compareUrl": ["agencySlug", "token"],
       "viewingUrl": ["token"],
       "waRedirectUrl": ["token"],
       "guideUrl": ["lang"],
@@ -612,7 +614,8 @@
       "PUBLIC_FIELDS": "Array",
       "MAX_IMAGES": "Number",
       "toPublicUnit": ["listing", "params"],
-      "unavailable": ["listing", "params"]
+      "unavailable": ["listing", "params"],
+      "contactOf": ["broker"]
     },
     "lib/shareLinks.js": {
       "ALERT_EVERY_HOURS": "Number",
@@ -1366,6 +1369,27 @@
     "web/routes/catalogueUpdates.js": {
       "register": ["web", "params"],
       "updateCard": ["u", "lang", "params"]
+    },
+    "domain/clientPlans.js": {
+      "clientPlans": ["listing", "lang"],
+      "schedule": ["listing", "index", "params"],
+      "basePrice": ["listing"]
+    },
+    "lib/schedulePdf.js": {
+      "renderSchedulePdf": ["data"],
+      "imagePdf": ["images"],
+      "pages": ["data"]
+    },
+    "lib/compareLinks.js": {
+      "MAX_UNITS": "Number",
+      "parseCodes": ["input"],
+      "createCompareLink": ["pool", "broker", "input", "params"],
+      "resolveCompareLink": ["pool", "slug", "token"],
+      "recordOpen": ["pool", "resolved", "params"],
+      "linksOf": ["pool", "broker"]
+    },
+    "web/routes/compare.js": {
+      "register": ["web", "params"]
     }
   },
   "invariant_variable_names": {

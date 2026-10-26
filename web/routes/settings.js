@@ -5,7 +5,16 @@ const Notifications = require("../../lib/notifications");
 const WebPush = require("../../lib/channels/webpush");
 const { getConfig } = require("../../config");
 const { html } = require("../html");
-const { MANAGER_ROLES } = require("../../lib/authz");
+const { MANAGER_ROLES, isManager } = require("../../lib/authz");
+const Storage = require("../../lib/supabase");
+const Session = require("../session");
+const { uploads } = require("../uploads");
+const crypto = require("crypto");
+const sharp = require("sharp");
+
+// C7: the agency logo on client pages and PDFs (managers upload it here).
+const uploadLogo = uploads([{ name: "logo", maxCount: 1, accept: /^image\/(png|jpeg|webp)$/ }], { maxMb: 2 });
+Session.allowMultipart(/^\/settings\/logo$/);
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
@@ -15,6 +24,21 @@ const hh = (h) => `${String(h).padStart(2, "0")}:00`;
 async function loadBroker(pool, broker) {
   const { rows } = await pool.query("SELECT notify_prefs, telegram_chat_id FROM brokers WHERE id = $1 AND agency_id = $2", [broker.id, broker.agency_id]);
   return { ...broker, notify_prefs: rows[0]?.notify_prefs || {}, telegram_chat_id: rows[0]?.telegram_chat_id || null };
+}
+
+/** Managers: the agency's logo (shown on client pages and payment-schedule PDFs). */
+function brandSection(lang, agency, notice) {
+  return html`<section class="card stack" id="brand">
+  <h2>🏢 ${L(lang, "شعار الوكالة", "Agency logo")}</h2>
+  ${notice || ""}
+  <p class="muted">${L(lang, "بيظهر للعملاء على صفحات الوحدات وجداول الدفع PDF مع اسم الوكالة ورقم البروكر.", "Clients see it on unit pages and payment-schedule PDFs, with the agency's name and the broker's number.")}</p>
+  ${agency.logo_url ? html`<img class="logo" src="${agency.logo_url}" alt="" data-agency-logo>` : html`<p class="muted" data-agency-logo="none">${L(lang, "لسه مفيش شعار.", "No logo yet.")}</p>`}
+  <form method="post" action="/app/settings/logo" enctype="multipart/form-data" class="row">
+    <input type="file" name="logo" accept="image/png,image/jpeg,image/webp" required>
+    <button type="submit" class="secondary">${L(lang, "رفع الشعار", "Upload logo")}</button>
+  </form>
+  ${agency.logo_url ? html`<form method="post" action="/app/settings/logo/remove"><button type="submit" class="link">${L(lang, "شيل الشعار", "Remove the logo")}</button></form>` : ""}
+</section>`;
 }
 
 function register(web, { pool, page }) {
@@ -28,6 +52,9 @@ function register(web, { pool, page }) {
     const key = getConfig().webPush.publicKey;
     const saved = req.query.saved === "1";
     const pushed = req.query.test;
+    const manager = isManager(broker);
+    const agency = manager ? (await pool.query("SELECT logo_url FROM agencies WHERE id = $1", [broker.agency_id])).rows[0] || {} : null;
+    const logoNotice = { saved: ["✅ الشعار اتحفظ.", "✅ Logo saved."], bad: ["❌ الصورة مش مفهومة. ارفع PNG أو JPG أو WebP أقل من 2 ميجا.", "❌ Unreadable image. Upload a PNG, JPG or WebP under 2 MB."], removed: ["الشعار اتشال.", "Logo removed."], failed: ["❌ الرفع فشل، جرب تاني.", "❌ The upload failed; try again."] }[req.query.logo];
     return page(req, res, {
       title: L(lang, "الإعدادات", "Settings"),
       nav: "settings",
@@ -62,6 +89,7 @@ ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "�
   </div>
   <button type="submit">${L(lang, "حفظ", "Save")}</button>
 </form>
+${manager ? brandSection(lang, agency, logoNotice ? html`<p class="notice" data-logo-notice="${req.query.logo}">${L(lang, ...logoNotice)}</p>` : "") : ""}
 <section class="card" id="push" data-vapid="${key}" data-push-count="${pushes}">
   <h2>📲 ${L(lang, "إشعارات الموقع على الجهاز ده", "Website notifications on this device")}</h2>
   <p>${pushes
@@ -100,6 +128,31 @@ ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "�
   });
 
   // From the browser's PushManager (web/static/app.js): endpoint and keys as form fields.
+  web.post("/settings/logo", uploadLogo, async (req, res) => {
+    const { broker } = req.session;
+    if (!isManager(broker)) return res.status(403).send("Managers only");
+    const file = (req.files?.logo || [])[0];
+    let png = null;
+    try {
+      png = file ? await sharp(file.buffer, { failOn: "error" }).rotate().resize(512, 512, { fit: "inside", withoutEnlargement: true }).png().toBuffer() : null;
+    } catch {
+      png = null;
+    }
+    if (!png) return res.redirect(303, "/app/settings?logo=bad#brand");
+    const hash = crypto.createHash("sha256").update(png).digest("hex").slice(0, 12);
+    const url = await Storage.uploadAgencyLogo(broker.agency_id, `${broker.agency_id}/brand/logo-${hash}.png`, png);
+    if (!url) return res.redirect(303, "/app/settings?logo=failed#brand");
+    await pool.query("UPDATE agencies SET logo_url = $2 WHERE id = $1", [broker.agency_id, url]);
+    return res.redirect(303, "/app/settings?logo=saved#brand");
+  });
+
+  web.post("/settings/logo/remove", async (req, res) => {
+    const { broker } = req.session;
+    if (!isManager(broker)) return res.status(403).send("Managers only");
+    await pool.query("UPDATE agencies SET logo_url = NULL WHERE id = $1", [broker.agency_id]);
+    return res.redirect(303, "/app/settings?logo=removed#brand");
+  });
+
   web.post("/push/subscribe", async (req, res) => {
     const ok = await Notifications.savePushSubscription(
       pool,

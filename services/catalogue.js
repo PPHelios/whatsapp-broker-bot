@@ -583,7 +583,7 @@ async function deleteMaterial(db, actor, projectId, materialId) {
 async function clientMaterials(db, listing) {
   if (!listing?.project_id) return [];
   const { rows } = await db.query(
-    "SELECT kind, label, url, unit_type FROM project_materials WHERE project_id = $1 AND agency_id = $2 AND client_visible AND kind <> 'price_sheet' ORDER BY created_at",
+    "SELECT kind, label, url, unit_type FROM project_materials WHERE project_id = $1 AND agency_id = $2 AND client_visible AND kind <> 'price_sheet' AND check_status IS DISTINCT FROM 'broken' ORDER BY created_at",
     [listing.project_id, listing.agency_id]
   );
   return rows;
