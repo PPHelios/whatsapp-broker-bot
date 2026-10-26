@@ -20,6 +20,7 @@ const Edits = require("../lib/edits");
 const { quickSections } = require("../lib/buttons");
 const { t } = require("../lib/copy");
 const LeadIntake = require("../lib/leadIntake");
+const CatalogueBot = require("../lib/catalogueBot");
 const DealsWA = require("../lib/deals");
 const Describe = require("../domain/describe");
 
@@ -98,6 +99,8 @@ async function handleInteractive(broker, message, ctx) {
   if (await LeadIntake.handleButton(broker, replyId, ctx)) return "done";
   // Deal review buttons (dl:*): the deal waits server-side (lib/deals.js).
   if (await DealsWA.handleButton(broker, replyId, ctx)) return "done";
+  // Catalogue quick-update buttons (cu:*): managers only, each reloads the update (lib/catalogueBot.js).
+  if (await CatalogueBot.handleButton(broker, replyId, ctx)) return "done";
 
   // 2. DISCARD DRAFT (DRAFT_CANCEL / draft_cancel)
   if (replyId === "DRAFT_CANCEL" || replyId === "draft_cancel") {

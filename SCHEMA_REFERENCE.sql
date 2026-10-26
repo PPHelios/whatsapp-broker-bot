@@ -926,6 +926,24 @@ CREATE TABLE IF NOT EXISTS public.price_increases (
   applied_at timestamp with time zone
 );
 
+CREATE TABLE IF NOT EXISTS public.catalogue_updates (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid NOT NULL,
+  created_by uuid,
+  channel text NOT NULL,
+  input text NOT NULL,
+  action text NOT NULL,
+  project_id uuid,
+  payload jsonb DEFAULT '{}'::jsonb NOT NULL,
+  units integer DEFAULT 0 NOT NULL,
+  example jsonb,
+  status text DEFAULT 'preview'::text NOT NULL,
+  undo jsonb,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  applied_at timestamp with time zone,
+  undone_at timestamp with time zone
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE app_settings ADD CONSTRAINT app_settings_pkey PRIMARY KEY (key);
@@ -933,6 +951,7 @@ ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (id);
 ALTER TABLE broker_search_state ADD CONSTRAINT broker_search_state_pkey PRIMARY KEY (phone_key);
 ALTER TABLE broker_sessions ADD CONSTRAINT broker_sessions_pkey PRIMARY KEY (broker_id, session_type);
 ALTER TABLE brokers ADD CONSTRAINT brokers_pkey PRIMARY KEY (id);
+ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_pkey PRIMARY KEY (id);
 ALTER TABLE compound_synonyms ADD CONSTRAINT compound_synonyms_pkey PRIMARY KEY (kind, key, synonym);
 ALTER TABLE crm_jobs ADD CONSTRAINT crm_jobs_pkey PRIMARY KEY (name);
 ALTER TABLE deal_splits ADD CONSTRAINT deal_splits_pkey PRIMARY KEY (deal_id, broker_id);
@@ -997,6 +1016,10 @@ ALTER TABLE agencies ADD CONSTRAINT agencies_wa_broker_daily_cap_check CHECK (((
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_broker_weekly_cap_check CHECK (((wa_broker_weekly_cap IS NULL) OR (wa_broker_weekly_cap > 0)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_credits_monthly_check CHECK (((wa_credits_monthly IS NULL) OR (wa_credits_monthly >= 0)));
 ALTER TABLE brokers ADD CONSTRAINT brokers_role_check CHECK ((role = ANY (ARRAY['broker'::text, 'agent'::text, 'admin'::text, 'owner'::text, 'manager'::text])));
+ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_action_check CHECK ((action = ANY (ARRAY['increase'::text, 'status'::text, 'price'::text, 'plan'::text])));
+ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_channel_check CHECK ((channel = ANY (ARRAY['web'::text, 'bot'::text])));
+ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_input_check CHECK ((length(input) <= 1000));
+ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_status_check CHECK ((status = ANY (ARRAY['preview'::text, 'applied'::text, 'undone'::text, 'discarded'::text])));
 ALTER TABLE compound_synonyms ADD CONSTRAINT compound_synonyms_kind_check CHECK ((kind = ANY (ARRAY['compound'::text, 'developer'::text, 'area'::text])));
 ALTER TABLE crm_jobs ADD CONSTRAINT crm_jobs_last_status_check CHECK ((last_status = ANY (ARRAY['running'::text, 'success'::text, 'failed'::text])));
 ALTER TABLE deal_splits ADD CONSTRAINT deal_splits_amount_check CHECK ((amount >= 0));
@@ -1097,6 +1120,9 @@ ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_updated_by_fkey FOREIGN KEY (update
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE brokers ADD CONSTRAINT brokers_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_created_by_fkey FOREIGN KEY (created_by) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 ALTER TABLE deal_splits ADD CONSTRAINT deal_splits_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE deal_splits ADD CONSTRAINT deal_splits_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id);
 ALTER TABLE deal_splits ADD CONSTRAINT deal_splits_deal_id_fkey FOREIGN KEY (deal_id) REFERENCES deals(id) ON DELETE CASCADE;
@@ -1181,6 +1207,7 @@ CREATE INDEX idx_broker_sessions_expires ON public.broker_sessions USING btree (
 CREATE INDEX brokers_agency_idx ON public.brokers USING btree (agency_id);
 CREATE UNIQUE INDEX brokers_phone_normalized_uidx ON public.brokers USING btree (phone_normalized);
 CREATE UNIQUE INDEX brokers_telegram_user_uidx ON public.brokers USING btree (telegram_user_id) WHERE (telegram_user_id IS NOT NULL);
+CREATE INDEX idx_catalogue_updates_agency ON public.catalogue_updates USING btree (agency_id, created_at DESC);
 CREATE INDEX idx_compound_synonyms_norm ON public.compound_synonyms USING btree (synonym_norm);
 CREATE INDEX idx_deal_splits_broker ON public.deal_splits USING btree (agency_id, broker_id);
 CREATE INDEX idx_deals_agency_closed ON public.deals USING btree (agency_id, closed_at DESC);

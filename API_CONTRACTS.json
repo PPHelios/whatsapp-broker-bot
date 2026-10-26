@@ -1333,6 +1333,39 @@
       "register": ["web", "params"],
       "pricesSection": ["lang", "manager", "params"],
       "pricesNotice": ["query", "lang"]
+    },
+    "services/catalogueUpdates.js": {
+      "UNDO_HOURS": "Number",
+      "interpret": ["pool", "actor", "params"],
+      "apply": ["pool", "actor", "id", "params"],
+      "undo": ["pool", "actor", "id", "params"],
+      "discard": ["pool", "actor", "id"],
+      "getUpdate": ["db", "actor", "id"],
+      "listUpdates": ["db", "actor", "params"],
+      "canUndo": ["u", "now"],
+      "card": ["u", "lang"],
+      "errorText": ["out", "lang"]
+    },
+    "domain/catalogueUpdate.js": {
+      "ACTIONS": "Array",
+      "clean": ["text"],
+      "parseDate": ["text", "today"],
+      "parseRules": ["text", "today"],
+      "codesIn": ["text"],
+      "frequencyIn": ["s"],
+      "planName": ["p"],
+      "findNamed": ["words", "items", "keys"],
+      "buildPrompt": ["lang", "fence", "params"],
+      "normalizeAi": ["out", "today"],
+      "round1000": ["n"]
+    },
+    "lib/catalogueBot.js": {
+      "command": ["broker", "params", "ctx"],
+      "handleButton": ["broker", "id", "ctx"]
+    },
+    "web/routes/catalogueUpdates.js": {
+      "register": ["web", "params"],
+      "updateCard": ["u", "lang", "params"]
     }
   },
   "invariant_variable_names": {
