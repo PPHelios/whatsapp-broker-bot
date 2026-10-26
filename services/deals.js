@@ -162,6 +162,8 @@ async function createDeal(pool, actor, input, { idemKey = null, unitVersion = nu
       for (const s of d.shares) {
         await client.query("INSERT INTO deal_splits (deal_id, agency_id, broker_id, pct, amount) VALUES ($1, $2, $3, $4, $5)", [deal.id, actor.agency_id, s.brokerId, s.pct, s.amount]);
       }
+      // C8: a deal on a catalogue unit gets its developer commission row.
+      await require("./commissions").ensureForDeal(client, deal);
       await Leads.recordDeal(client, actor, d.leadId, { dealId: deal.id, ref: deal.ref, price: d.price, unitCode: d.unitCode }, now);
       if (d.markSold) {
         const listing = await Store.findByCode(client, actor.agency_id, d.unitCode, { forUpdate: true });
@@ -303,6 +305,7 @@ async function updateDeal(pool, actor, key, change = {}, { version = null, now =
         await client.query("INSERT INTO deal_splits (deal_id, agency_id, broker_id, pct, amount) VALUES ($1, $2, $3, $4, $5)", [deal.id, actor.agency_id, s.brokerId, s.pct, s.amount]);
       }
     }
+    if (fields.status !== undefined) await require("./commissions").onDealChanged(client, upd.rows[0]);
     return { ok: true, deal: upd.rows[0] };
   });
 }

@@ -86,6 +86,7 @@ function register(web, { pool, page }) {
       title: L(lang, "الصفقات", "Deals"),
       nav: "deals",
       body: html`<h1>🤝 ${L(lang, "الصفقات", "Deals")}</h1>
+<p><a class="btn secondary" href="/app/commissions" data-commissions-link>💸 ${L(lang, "عمولات المطورين", "Developer commissions")}</a></p>
 <section class="card" id="totals"><h2>📊 ${manager ? L(lang, "إجمالي الشهور", "Monthly totals") : L(lang, "نصيبك كل شهر", "Your share per month")}</h2>
 ${totals.length
   ? html`<table class="table"><thead><tr><th>${L(lang, "الشهر", "Month")}</th><th>${L(lang, "صفقات", "Deals")}</th>${manager

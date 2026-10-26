@@ -1390,6 +1390,42 @@
     },
     "web/routes/compare.js": {
       "register": ["web", "params"]
+    },
+    "domain/commissionTracker.js": {
+      "STATUSES": "Array",
+      "OPEN": "Array",
+      "TRIGGERS": "Array",
+      "REMIND_EVERY_DAYS": "Number",
+      "termsFields": ["input"],
+      "rateFor": ["terms", "unitsThisYear"],
+      "expectedFor": ["terms", "params"],
+      "addDays": ["day", "n"],
+      "daysBetween": ["from", "to"],
+      "isoDay": ["d"],
+      "statusAfterPayment": ["expected", "paid"],
+      "remindOverdue": ["c", "today"],
+      "remindRegistration": ["c", "today"],
+      "overdueDays": ["c", "today"],
+      "num": ["v"]
+    },
+    "services/commissions.js": {
+      "getTerms": ["db", "actor", "projectId"],
+      "saveTerms": ["db", "actor", "projectId", "input"],
+      "ensureForDeal": ["db", "deal"],
+      "onDealChanged": ["db", "deal"],
+      "syncAgency": ["db", "agencyId"],
+      "listCommissions": ["db", "actor", "params"],
+      "getCommission": ["db", "actor", "id"],
+      "totals": ["rows"],
+      "statement": ["db", "actor", "developerId", "params"],
+      "statementWorkbook": ["st", "lang"],
+      "statusWord": ["s", "lang"],
+      "move": ["db", "actor", "id", "action", "input", "params"],
+      "briefItems": ["db", "agencyId", "params"]
+    },
+    "web/routes/commissions.js": {
+      "register": ["web", "params"],
+      "termsSection": ["lang", "projectId", "terms", "notice"]
     }
   },
   "invariant_variable_names": {

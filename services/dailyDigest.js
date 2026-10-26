@@ -69,7 +69,12 @@ async function briefData(pool, broker, now) {
     `SELECT count(*)::int AS n FROM leads WHERE agency_id = $1 AND assigned_broker_id = $2 AND stage = 'new' AND last_contact_at IS NULL`,
     args
   );
+  // C8: managers also hear about overdue developer commissions (every 7 days) and client registrations about to lapse.
+  const commissions = MANAGER_ROLES.includes(String(broker.role || "").toLowerCase())
+    ? await require("./commissions").briefItems(pool, broker.agency_id, { now }).catch(() => null)
+    : null;
   return {
+    commissions,
     viewings: today.filter((r) => r.follow_up_kind === "viewing"),
     calls: today.filter((r) => r.follow_up_kind !== "viewing"),
     overdue,
@@ -93,7 +98,9 @@ function briefMessage(broker, data) {
     section(L(broker, `⚠️ متأخرة (${data.overdue.length})`, `⚠️ Overdue (${data.overdue.length})`), data.overdue, (l) => `• ${who(l)}`),
     section(L(broker, `✨ وحدات جديدة مناسبة لعملائك`, `✨ New matches for your clients`), data.matches, (m) => `• ${who(m)}: ${m.n} ${L(broker, m.n === 1 ? "وحدة" : "وحدات", m.n === 1 ? "unit" : "units")}`),
     section(L(broker, `🔥 عملاء مهتمين جداً`, `🔥 Hot clients`), data.hot, (l) => `• ${who(l)}`),
-    data.uncontacted ? [L(broker, `🆕 ${data.uncontacted} عملاء جداد لسه محدش كلمهم`, `🆕 ${data.uncontacted} new clients not contacted yet`)] : []
+    data.uncontacted ? [L(broker, `🆕 ${data.uncontacted} عملاء جداد لسه محدش كلمهم`, `🆕 ${data.uncontacted} new clients not contacted yet`)] : [],
+    section(L(broker, `💸 عمولات متأخرة عند المطورين`, `💸 Overdue developer commissions`), data.commissions?.overdue || [], (c) => `• D-${String(c.deal_ref).padStart(4, "0")} ${c.unit_code || ""} · ${c.developer_name || "—"} · ${money(c.outstanding, broker)} · ${L(broker, `متأخرة ${c.days} يوم`, `${c.days} days late`)}`),
+    section(L(broker, `📝 تسجيل عملاء هيخلص`, `📝 Client registrations about to lapse`), data.commissions?.registrations || [], (c) => `• D-${String(c.deal_ref).padStart(4, "0")} ${c.unit_code || ""} · ${c.developer_name || "—"} · ${L(broker, `فاضل ${c.days_left} يوم`, `${c.days_left} days left`)}`)
   ].filter((p) => p.length);
   if (!parts.length) return null;
   const first = String(broker.name || "").split(/\s+/)[0];

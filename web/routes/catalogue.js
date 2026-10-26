@@ -7,6 +7,8 @@ const Catalogue = require("../../services/catalogue");
 const Commission = require("../../domain/commission");
 const { isManager } = require("../../lib/authz");
 const PriceSheets = require("../../services/priceSheets");
+const Commissions = require("../../services/commissions");
+const { termsSection } = require("./commissions");
 const { pricesSection, pricesNotice } = require("./priceSheets");
 const { html } = require("../html");
 
@@ -174,7 +176,7 @@ function planForm(lang, projectId, phases, pl = {}) {
 </form>`;
 }
 
-function projectPage(lang, manager, data, developers, { notice = null, prices = null } = {}) {
+function projectPage(lang, manager, data, developers, { notice = null, prices = null, commissionTerms = null } = {}) {
   const { project: p, developer: d, phases, plans, materials, units } = data;
   const base = `/app/catalogue/projects/${p.id}`;
   const phaseName = (id) => phases.find((x) => x.id === id)?.name;
@@ -188,6 +190,7 @@ ${notice || ""}
   ${manager && p.notes ? html`<p class="muted">🔒 ${p.notes}</p>` : ""}
 </section>
 ${prices || ""}
+${commissionTerms || ""}
 ${manager ? html`<details class="card"><summary>✏️ ${L(lang, "تعديل المشروع", "Edit project")}</summary>${projectForm(lang, developers, p, base)}
   <form method="post" action="${base}/archive"><input type="hidden" name="archived" value="${p.archived_at ? "0" : "1"}"><button type="submit" class="secondary">${p.archived_at ? L(lang, "رجّعه من الأرشيف", "Restore") : L(lang, "أرشفة المشروع", "Archive project")}</button></form></details>` : ""}
 
@@ -271,7 +274,9 @@ function register(web, { pool, page }) {
       PriceSheets.listIncreases(pool, actor, data.project.id)
     ]);
     const prices = pricesSection(lang, manager, { project: data.project, units: data.units, sheets, increases, phases: data.phases });
-    return page(req, res, { title: data.project.name, body: projectPage(lang, manager, data, developers, { notice: notice || pricesNotice(req.query, lang) || savedNotice(req), prices }) }, status);
+    // C8: the developer's commission terms (managers only).
+    const commissionTerms = manager ? termsSection(lang, data.project.id, await Commissions.getTerms(pool, actor, data.project.id)) : null;
+    return page(req, res, { title: data.project.name, body: projectPage(lang, manager, data, developers, { notice: notice || pricesNotice(req.query, lang) || savedNotice(req), prices, commissionTerms }) }, status);
   };
 
   /** Runs a service write and answers: 403, 404, the page again with the error (400), or a redirect. */
