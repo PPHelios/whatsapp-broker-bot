@@ -15,6 +15,7 @@ CREATE SEQUENCE IF NOT EXISTS public.listing_prices_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.notifications_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.operation_logs_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.payments_id_seq;
+CREATE SEQUENCE IF NOT EXISTS public.price_read_log_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.push_subscriptions_id_seq;
 
 CREATE OR REPLACE FUNCTION public.agencies_set_slug()
@@ -281,7 +282,8 @@ CREATE TABLE IF NOT EXISTS public.agencies (
   pilot boolean DEFAULT false NOT NULL,
   approval text DEFAULT 'approved'::text NOT NULL,
   signed_up_at timestamp with time zone,
-  lead_rules jsonb DEFAULT '{}'::jsonb NOT NULL
+  lead_rules jsonb DEFAULT '{}'::jsonb NOT NULL,
+  price_reading jsonb DEFAULT '{}'::jsonb NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.brokers (
@@ -905,7 +907,8 @@ CREATE TABLE IF NOT EXISTS public.price_sheets (
   entries jsonb DEFAULT '[]'::jsonb NOT NULL,
   summary jsonb DEFAULT '{}'::jsonb NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  applied_at timestamp with time zone
+  applied_at timestamp with time zone,
+  source text DEFAULT 'file'::text NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.listing_prices (
@@ -1005,6 +1008,23 @@ CREATE TABLE IF NOT EXISTS public.commissions (
   updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.price_page_reads (
+  fingerprint text NOT NULL,
+  rows jsonb DEFAULT '[]'::jsonb NOT NULL,
+  model text,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.price_read_log (
+  id bigint DEFAULT nextval('price_read_log_id_seq'::regclass) NOT NULL,
+  agency_id uuid NOT NULL,
+  project_id uuid,
+  broker_id uuid,
+  fingerprint text NOT NULL,
+  reused boolean DEFAULT false NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE app_settings ADD CONSTRAINT app_settings_pkey PRIMARY KEY (key);
@@ -1037,6 +1057,8 @@ ALTER TABLE operation_logs ADD CONSTRAINT operation_logs_pkey PRIMARY KEY (id);
 ALTER TABLE payment_plans ADD CONSTRAINT payment_plans_pkey PRIMARY KEY (id);
 ALTER TABLE payments ADD CONSTRAINT payments_pkey PRIMARY KEY (id);
 ALTER TABLE price_increases ADD CONSTRAINT price_increases_pkey PRIMARY KEY (id);
+ALTER TABLE price_page_reads ADD CONSTRAINT price_page_reads_pkey PRIMARY KEY (fingerprint);
+ALTER TABLE price_read_log ADD CONSTRAINT price_read_log_pkey PRIMARY KEY (id);
 ALTER TABLE price_sheets ADD CONSTRAINT price_sheets_pkey PRIMARY KEY (id);
 ALTER TABLE processed_batches ADD CONSTRAINT processed_batches_pkey PRIMARY KEY (batch_key);
 ALTER TABLE processed_messages ADD CONSTRAINT processed_messages_pkey PRIMARY KEY (message_id);
@@ -1163,7 +1185,9 @@ ALTER TABLE payments ADD CONSTRAINT payments_plan_check CHECK (((plan IS NULL) O
 ALTER TABLE payments ADD CONSTRAINT payments_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'cancelled'::text])));
 ALTER TABLE price_increases ADD CONSTRAINT price_increases_pct_check CHECK ((((pct >= ('-50'::integer)::numeric) AND (pct <= (100)::numeric)) AND (pct <> (0)::numeric)));
 ALTER TABLE price_increases ADD CONSTRAINT price_increases_status_check CHECK ((status = ANY (ARRAY['scheduled'::text, 'applied'::text, 'cancelled'::text])));
+ALTER TABLE price_page_reads ADD CONSTRAINT price_page_reads_fingerprint_check CHECK ((length(fingerprint) <= 120));
 ALTER TABLE price_sheets ADD CONSTRAINT price_sheets_file_name_check CHECK (((file_name IS NULL) OR (length(file_name) <= 200)));
+ALTER TABLE price_sheets ADD CONSTRAINT price_sheets_source_check CHECK ((source = ANY (ARRAY['file'::text, 'ai'::text])));
 ALTER TABLE price_sheets ADD CONSTRAINT price_sheets_status_check CHECK ((status = ANY (ARRAY['preview'::text, 'applied'::text, 'discarded'::text])));
 ALTER TABLE project_materials ADD CONSTRAINT project_materials_check_status_check CHECK (((check_status IS NULL) OR (check_status = ANY (ARRAY['ok'::text, 'broken'::text]))));
 ALTER TABLE project_materials ADD CONSTRAINT project_materials_kind_check CHECK ((kind = ANY (ARRAY['master_plan'::text, 'brochure'::text, 'layout'::text, 'video'::text, 'location'::text, 'website'::text, 'price_sheet'::text, 'other'::text])));
@@ -1258,6 +1282,9 @@ ALTER TABLE price_increases ADD CONSTRAINT price_increases_agency_id_fkey FOREIG
 ALTER TABLE price_increases ADD CONSTRAINT price_increases_created_by_fkey FOREIGN KEY (created_by) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE price_increases ADD CONSTRAINT price_increases_phase_id_fkey FOREIGN KEY (phase_id) REFERENCES project_phases(id) ON DELETE CASCADE;
 ALTER TABLE price_increases ADD CONSTRAINT price_increases_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
+ALTER TABLE price_read_log ADD CONSTRAINT price_read_log_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE price_read_log ADD CONSTRAINT price_read_log_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE price_read_log ADD CONSTRAINT price_read_log_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL;
 ALTER TABLE price_sheets ADD CONSTRAINT price_sheets_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE price_sheets ADD CONSTRAINT price_sheets_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 ALTER TABLE price_sheets ADD CONSTRAINT price_sheets_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES brokers(id) ON DELETE SET NULL;
@@ -1360,6 +1387,7 @@ CREATE INDEX idx_payment_plans_listing ON public.payment_plans USING btree (list
 CREATE INDEX payments_agency_idx ON public.payments USING btree (agency_id, created_at DESC);
 CREATE INDEX payments_pending_idx ON public.payments USING btree (created_at) WHERE (status = 'pending'::text);
 CREATE INDEX idx_price_increases_due ON public.price_increases USING btree (effective_on) WHERE (status = 'scheduled'::text);
+CREATE INDEX idx_price_read_log_agency ON public.price_read_log USING btree (agency_id, created_at);
 CREATE INDEX idx_price_sheets_project ON public.price_sheets USING btree (project_id, created_at DESC);
 CREATE INDEX idx_processed_messages_created ON public.processed_messages USING btree (created_at);
 CREATE INDEX idx_project_materials_check ON public.project_materials USING btree (checked_at NULLS FIRST);

@@ -1,8 +1,11 @@
 // web/routes/dashboard.js — The agency dashboard and leaderboard (7.2, managers: /app/dashboard) and the owner's tracking
 // dashboard (5.4, OWNER_BROKER_IDS only: /app/owner; everyone else gets the ordinary 404). Numbers only: no client's name
-// or phone appears on either page. Queries live in services/dashboards.js.
+// or phone appears on either page. Queries live in services/dashboards.js. The owner page also switches PDF and photo
+// price-list reading on per agency with its monthly pages (Release B C5).
 "use strict";
 
+const PriceReading = require("../../services/priceReading");
+const Reading = require("../../domain/priceReading");
 const Dash = require("../../services/dashboards");
 const Stages = require("../../domain/leadStages");
 const Commission = require("../../domain/commission");
@@ -105,11 +108,30 @@ function billingSections(b, lang) {
 </section>`;
 }
 
-function ownerPage(d, lang, { billing = null, notice = null } = {}) {
+/** C5: PDF and photo price-list reading, off per agency until switched on here, with its monthly pages. */
+function readingSection(rows, lang) {
+  return html`<section class="card" id="price-reading">
+  <h2>🤖 ${L(lang, "قراية قوايم الأسعار PDF والصور", "Reading PDF and photo price lists")}</h2>
+  <p class="muted">${L(lang, "مقفولة لكل وكالة لحد ما تفتحها هنا. الصفحة اللي اتقرت قبل كده (من أي وكالة) بتتعاد من غير تكلفة ومش بتتحسب.", "Off for every agency until you switch it on here. A page read before (by any agency) is reused at no cost and not counted.")}</p>
+  <div class="scroll"><table>
+  <thead><tr><th>${L(lang, "الوكالة", "Agency")}</th><th>${L(lang, "الشهر ده", "This month")}</th><th></th></tr></thead>
+  <tbody>${rows.map(
+    (a) => html`<tr data-reading="${a.id}"><td>${a.name}</td><td>${a.used} / ${a.pages_month}${a.reused ? html` <span class="muted">(+${a.reused} ${L(lang, "متعادة", "reused")})</span>` : ""}</td>
+    <td><form method="post" action="/app/owner/price-reading/${a.id}" class="row">
+      <label><input type="checkbox" name="enabled" value="on"${a.enabled ? html` checked` : ""}> ${L(lang, "مفعّلة", "On")}</label>
+      <label>${L(lang, "صفحات/شهر", "Pages/month")} <input name="pages_month" type="number" min="0" max="${Reading.MAX_PAGES_MONTH}" value="${a.pages_month}" size="5"></label>
+      <button type="submit" class="secondary">${L(lang, "احفظ", "Save")}</button>
+    </form></td></tr>`
+  )}</tbody></table></div>
+</section>`;
+}
+
+function ownerPage(d, lang, { billing = null, notice = null, reading = [] } = {}) {
   const usd = (n) => `$${Number(n).toFixed(n < 1 ? 4 : 2)}`;
   return html`<h1>🛠️ ${L(lang, "متابعة التطبيق", "App tracking")}</h1>
 ${notice || ""}
 ${billing ? billingSections(billing, lang) : ""}
+${readingSection(reading, lang)}
 <section class="card">
   <h2>${L(lang, "كل أسبوع", "Weekly")}</h2>
   <div class="scroll"><table>
@@ -162,8 +184,8 @@ function register(web, { pool, page }) {
   const ownerView = async (req, res, notice = null, status = 200) => {
     const d = await Dash.ownerDashboard(pool, req.session.broker);
     if (!d) return notFound(req, res, page);
-    const [open, signups, payments, payTo, trials] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool)]);
-    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials }, notice }) }, status);
+    const [open, signups, payments, payTo, trials, reading] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool)]);
+    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials }, notice, reading }) }, status);
   };
   const ok = (text) => html`<p class="card notice ok" role="status">✅ ${text}</p>`;
   const bad = (text) => html`<p class="card notice bad" role="alert">❌ ${text}</p>`;
@@ -221,6 +243,13 @@ ${wa ? html`<p><a class="btn" href="${wa}" target="_blank" rel="noopener norefer
     if (r.error) return ownerView(req, res, bad(L(lang, "مينفعش تمدّد دي.", "That trial can't be extended.")), 400);
     const until = new Date(r.agency.trial_ends_at).toISOString().slice(0, 10);
     return ownerView(req, res, ok(L(lang, `تجربة ${r.agency.name} اتمدّت لحد ${until}.`, `${r.agency.name}'s trial now ends ${until}.`)));
+  }));
+
+  web.post("/owner/price-reading/:id", ownerOnly(async (req, res, lang) => {
+    const id = uuidParam(req);
+    const r = id ? await PriceReading.setForAgency(pool, id, req.body) : { error: "not_found" };
+    if (r.error) return ownerView(req, res, bad(L(lang, `الصفحات رقم من 0 لـ ${Reading.MAX_PAGES_MONTH}.`, `Pages must be 0 to ${Reading.MAX_PAGES_MONTH}.`)), 400);
+    return ownerView(req, res, ok(r.setting.enabled ? L(lang, `${r.agency.name}: القراية مفعّلة، ${r.setting.pages_month} صفحة في الشهر.`, `${r.agency.name}: reading on, ${r.setting.pages_month} pages a month.`) : L(lang, `${r.agency.name}: القراية مقفولة.`, `${r.agency.name}: reading off.`)));
   }));
 
   web.post("/owner/pay-to", ownerOnly(async (req, res, lang) => {

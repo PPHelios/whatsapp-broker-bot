@@ -51,13 +51,20 @@ async function upload(pool, actor, projectId, buffer, { fileName = null } = {}) 
     throw e;
   }
   if (!table.mapped.includes("price") && !table.mapped.includes("price_from")) return { error: "NO_PRICE" };
-  const { entries, summary } = Sheet.preview(table.rows, await projectUnits(pool, project.id));
-  summary.unmapped = table.unmapped.slice(0, 10);
-  // Earlier previews of this project are replaced by the new one.
+  return storePreview(pool, actor, project, table.rows, { fileName, unmapped: table.unmapped });
+}
+
+/**
+ * Previews rows ([{ rowNumber, cells }]) against the project's units and stores the preview, replacing earlier ones.
+ * Shared by the sheet upload and the AI price-list reader (services/priceReading.js, source "ai").
+ */
+async function storePreview(pool, actor, project, tableRows, { fileName = null, unmapped = [], source = "file", extra = {} } = {}) {
+  const { entries, summary } = Sheet.preview(tableRows, await projectUnits(pool, project.id));
+  Object.assign(summary, { unmapped: unmapped.slice(0, 10) }, extra);
   await pool.query("UPDATE price_sheets SET status = 'discarded' WHERE project_id = $1 AND status = 'preview'", [project.id]);
   const { rows } = await pool.query(
-    `INSERT INTO price_sheets (agency_id, project_id, uploaded_by, file_name, entries, summary) VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb) RETURNING *`,
-    [actor.agency_id, project.id, actor.id, fileName ? String(fileName).slice(0, 200) : null, JSON.stringify(entries), JSON.stringify(summary)]
+    `INSERT INTO price_sheets (agency_id, project_id, uploaded_by, file_name, entries, summary, source) VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7) RETURNING *`,
+    [actor.agency_id, project.id, actor.id, fileName ? String(fileName).slice(0, 200) : null, JSON.stringify(entries), JSON.stringify(summary), source]
   );
   return { ok: true, sheet: rows[0] };
 }
@@ -357,6 +364,8 @@ const pricesJob = () => ({
 });
 
 module.exports = {
+  storePreview,
+  projectOf,
   STALE_DAYS,
   upload,
   getSheet,
