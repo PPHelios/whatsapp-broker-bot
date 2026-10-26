@@ -22,7 +22,8 @@ const DAILY_CAP = 10;
 const TELEGRAM_DAILY_CAP = 50;
 const DROP_MIN_PCT = 2;
 const LINES = 5;
-const BROKER_COLS = "id, agency_id, name, role, is_active, preferred_lang, phone_number, phone_normalized, notify_prefs, telegram_chat_id";
+const BROKER_COLS = "id, agency_id, name, role, is_active, preferred_lang, phone_number, phone_normalized, notify_prefs, telegram_chat_id, quiet_line";
+const QUIET_DAYS = 60; // N3: "60 days since you spoke" on a client that fits
 
 /** The broker's daily ceiling: match alerts that go to Telegram cost nothing, so only a safety ceiling applies. */
 function capFor(broker, dailyCap) {
@@ -45,18 +46,30 @@ async function sentToday(pool, brokerId, now) {
 
 const money = (n, lang) => Describe.money(n, lang);
 
-/** One hit's line: a new unit, or "📉 9 مليون ← 8.5 مليون" for a price drop. */
-function hitLine(x, lang) {
+/** N3: days since the broker last spoke to the client (or since the lead came in), when 60 or more; else null. */
+function quietDays(lead, now) {
+  const since = lead.last_contact_at || lead.created_at;
+  if (!since) return null;
+  const days = Math.floor((now.getTime() - new Date(since).getTime()) / (24 * 3600 * 1000));
+  return days >= QUIET_DAYS ? days : null;
+}
+
+/** One hit's line: a new unit, or "📉 9 مليون ← 8.5 مليون" for a price drop; with N3's line when the client is quiet. */
+function hitLine(x, lang, { now = new Date(), quietLine = true } = {}) {
   const who = `${Card.refLabel(x.lead.ref)} ${Card.displayName(x.lead, lang)}`;
-  if (x.drop) return `• 📉 ${who} ← ${x.listing.code}: ${money(x.drop.from, lang)} → ${money(x.drop.to, lang)}`;
-  return `• ${who} ← ${Describe.searchResult(x.listing, lang)}`;
+  const main = x.drop ? `• 📉 ${who} ← ${x.listing.code}: ${money(x.drop.from, lang)} → ${money(x.drop.to, lang)}` : `• ${who} ← ${Describe.searchResult(x.listing, lang)}`;
+  const days = quietLine ? quietDays(x.lead, now) : null;
+  if (!days) return main;
+  const never = !x.lead.last_contact_at;
+  const line = lang === "en" ? `   ⏳ ${never ? `No call logged in ${days} days` : `${days} days since you spoke`}: a good reason to call.` : `   ⏳ ${never ? `مفيش مكالمة متسجلة من ${days} يوم` : `بقالك ${days} يوم مكلمتوش`}: فرصة تكلمه.`;
+  return `${main}\n${line}`;
 }
 
 /** One grouped alert: "🏠 3 new units for your clients" with a line per lead and unit (price drops marked 📉). */
 async function alertBroker(pool, broker, hits, { now, sweepKey }) {
   const lang = en(broker) ? "en" : "ar";
   const leads = new Set(hits.map((x) => x.lead.id));
-  const lines = hits.slice(0, LINES).map((x) => hitLine(x, lang));
+  const lines = hits.slice(0, LINES).map((x) => hitLine(x, lang, { now, quietLine: broker.quiet_line !== false }));
   if (hits.length > LINES) lines.push(L(broker, `…و${hits.length - LINES} كمان`, `…and ${hits.length - LINES} more`));
   const single = leads.size === 1 ? hits[0].lead : null;
   const drops = hits.filter((x) => x.drop).length;
@@ -110,7 +123,7 @@ async function sweep(pool, { now = new Date(), watermark = {}, dailyCap = DAILY_
   const perBroker = new Map(); // broker id → [{ lead, listing }]
   for (const [agencyId, ids] of byAgency) {
     const { rows: requests } = await pool.query(
-      `SELECT s.id, s.filters, s.broker_id, l.id AS lead_id, l.ref, l.name, l.phone_e164, l.assigned_broker_id, l.stage
+      `SELECT s.id, s.filters, s.broker_id, l.id AS lead_id, l.ref, l.name, l.phone_e164, l.assigned_broker_id, l.stage, l.last_contact_at, l.created_at AS lead_created_at
          FROM saved_searches s JOIN leads l ON l.id = s.lead_id AND l.agency_id = s.agency_id
         WHERE s.agency_id = $1 AND s.alerts_enabled AND l.stage NOT IN ('won', 'lost')`,
       [agencyId]
@@ -153,7 +166,7 @@ async function sweep(pool, { now = new Date(), watermark = {}, dailyCap = DAILY_
       const to = r.assigned_broker_id;
       if (!to) continue;
       if (!perBroker.has(to)) perBroker.set(to, { agencyId, hits: [] });
-      const lead = { id: r.lead_id, ref: r.ref, name: r.name, phone_e164: r.phone_e164 };
+      const lead = { id: r.lead_id, ref: r.ref, name: r.name, phone_e164: r.phone_e164, last_contact_at: r.last_contact_at, created_at: r.lead_created_at };
       for (const f of fits) {
         if (freshIds.has(f.id)) perBroker.get(to).hits.push({ lead, listing: f });
         else if (drops.has(f.id)) perBroker.get(to).hits.push({ lead, listing: f, drop: { from: drops.get(f.id), to: Number(f.price_value) } });

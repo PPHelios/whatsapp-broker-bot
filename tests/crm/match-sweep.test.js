@@ -145,3 +145,25 @@ test("the job is registered", () => {
   expect(require("../../lib/jobs").buildJobs().map((j) => j.name)).toContain("match_sweep");
   expect(Store.findDuplicate).toBeInstanceOf(Function);
 });
+
+test("N3: a client quiet for 60 days gets the line in the alert; each user can switch it off in Settings", async () => {
+  const l = await lead();
+  await h.query("UPDATE leads SET last_contact_at = now() - interval '75 days', created_at = now() - interval '90 days' WHERE id = $1", [l.id]);
+  await h.insertListing({ code: "HP-Q1", compound: "Hyde Park", price_value: 8e6, area_value: 150 });
+  await run();
+  expect((await alerts()).pop().body).toMatch(/بقالك 75 يوم مكلمتوش/);
+
+  const { agent, csrf } = await signIn(h, "broker");
+  expect((await agent.get("/app/settings")).text).toContain('id="quiet-line"');
+  await agent.post("/app/settings/quiet-line").type("form").send({ _csrf: csrf });
+  await h.insertListing({ code: "HP-Q2", compound: "Hyde Park", price_value: 8e6, area_value: 150 });
+  await run();
+  expect((await alerts()).pop().body).not.toMatch(/يوم/);
+
+  // A recent call: no line even when switched on.
+  await agent.post("/app/settings/quiet-line").type("form").send({ _csrf: csrf, on: "1" });
+  await h.query("UPDATE leads SET last_contact_at = now() - interval '5 days' WHERE id = $1", [l.id]);
+  await h.insertListing({ code: "HP-Q3", compound: "Hyde Park", price_value: 8e6, area_value: 150 });
+  await run();
+  expect((await alerts()).pop().body).not.toMatch(/مكلمتوش/);
+});

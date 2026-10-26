@@ -1586,6 +1586,18 @@
       "register": ["web", "params"],
       "passkeySection": ["params"],
       "labelOf": ["ua"]
+    },
+    "domain/followUpDraft.js": {
+      "MAX_TEXT": "Number",
+      "MAX_STYLE": "Number",
+      "firstName": ["name"],
+      "factsOf": ["params"],
+      "prompt": ["facts", "params"],
+      "parse": ["text"]
+    },
+    "services/followUpDrafts.js": {
+      "draft": ["pool", "broker", "leadKey", "params"],
+      "saveStyle": ["pool", "broker", "text"]
     }
   },
   "invariant_variable_names": {

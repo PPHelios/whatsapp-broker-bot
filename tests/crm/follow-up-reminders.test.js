@@ -124,7 +124,7 @@ test("Done and Postpone from WhatsApp: done offers the next step; postpone moves
 
   const done = (await h.tap("broker", "ld:fudone:L-0001")).find((m) => m.to === h.BROKERS.broker.phone);
   expect(done.text).toMatch(/✅ L-0001: المتابعة خلصت/);
-  expect(ids(done)).toEqual(["ld:fuset:L-0001:2d", expect.stringMatching(/^ld:undo:\d+$/)]);
+  expect(ids(done)).toEqual(["ld:fuset:L-0001:2d", "ld:draft:L-0001", expect.stringMatching(/^ld:undo:\d+$/)]);
   fresh = await Leads.getLead(h.pool, await row("broker"), l.id);
   expect(fresh.follow_up_status).toBe("done");
   // An old button after it's done says so.

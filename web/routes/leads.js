@@ -6,6 +6,7 @@
 "use strict";
 
 const Leads = require("../../services/leads");
+const FollowUpDrafts = require("../../services/followUpDrafts");
 const LeadRequests = require("../../services/leadRequests");
 const Privacy = require("../../services/privacy");
 const Viewings = require("../../services/viewings");
@@ -286,7 +287,7 @@ ${rows.length
   /* The lead page                                                       */
   /* ------------------------------------------------------------------ */
 
-  async function leadPage(req, res, lead, { notice = null, status = 200, undoEvent = null } = {}) {
+  async function leadPage(req, res, lead, { notice = null, status = 200, undoEvent = null, draft = null } = {}) {
     const lang = langOf(req);
     const { broker } = req.session;
     const manager = isManager(broker);
@@ -310,7 +311,16 @@ ${rows.length
           : ""}</div>` : ""}
 ${V.leadHeader(lead, lang)}
 <div class="card row"><form method="post" action="${path}/contacted" class="inline">${hidden}<button type="submit">📞 ${L(lang, "كلمته", "I called")}</button></form>
-  <a class="btn secondary" href="/app/deals/new?lead=${Card.refLabel(lead.ref)}">🤝 ${L(lang, "سجل صفقة", "Record deal")}</a></div>
+  <a class="btn secondary" href="/app/deals/new?lead=${Card.refLabel(lead.ref)}">🤝 ${L(lang, "سجل صفقة", "Record deal")}</a>
+  <form method="post" action="${path}/draft" class="inline">${hidden}<button type="submit" class="secondary">✍️ ${L(lang, "اكتبلي رسالة متابعة", "Draft a follow-up message")}</button></form></div>
+${draft
+  ? html`<section class="card notice ok" id="draft" data-follow-up-draft>
+  <h2>✍️ ${L(lang, "رسالة المتابعة (راجعها قبل ما تبعت)", "Follow-up message (check it before sending)")}</h2>
+  <p style="white-space:pre-line" data-draft-text>${draft.text}</p>
+  ${draft.wa ? html`<p><a class="btn" href="${draft.wa}" target="_blank" rel="noopener noreferrer" data-draft-send>📤 ${L(lang, "ابعتها على واتساب", "Send on WhatsApp")}</a></p>` : html`<p class="muted">${L(lang, "الرقم ده أرضي؛ انسخ الرسالة وابعتها بنفسك.", "This number is a landline; copy the message and send it yourself.")}</p>`}
+  <p class="muted">${L(lang, "اتكتبت من بيانات العميل بس. عشان تبقى بأسلوبك، حط مثال من رسايلك في الإعدادات.", "Written from this client's record only. To make it sound like you, add a sample of your messages in Settings.")}</p>
+</section>`
+  : ""}
 <section class="card" id="stage"><h2>🔄 ${L(lang, "المرحلة", "Stage")}</h2>
   <form method="post" action="${path}/stage" class="row">${hidden}
     <select name="stage">${Stages.STAGES.map((s) => html`<option value="${s}"${s === lead.stage ? html` selected` : ""}>${Stages.stageLabel(s, lang)}</option>`)}</select>
@@ -514,6 +524,16 @@ ${V.bottomBar(lead, lang, broker.name)}`
   });
 
   // "Send to client": a share link with the lead, then WhatsApp opens on the client's chat with the message ready.
+  // N2: the next message to the client, drafted from the lead's record (services/followUpDrafts.js).
+  web.post("/leads/:ref/draft", async (req, res, next) => {
+    const lead = await loadOr404(req, next);
+    if (!lead) return;
+    const lang = langOf(req);
+    const out = await FollowUpDrafts.draft(pool, actor(req), lead.id, { lang });
+    if (out.error) return leadPage(req, res, lead, { status: out.error === "quota" ? 429 : 503, notice: `⚠️ ${L(lang, "مقدرتش أكتب الرسالة دلوقتي، جرب كمان شوية.", "Couldn't draft the message right now; try again shortly.")}` });
+    return leadPage(req, res, out.lead, { draft: out });
+  });
+
   web.post("/leads/:ref/send", async (req, res, next) => {
     if (!(await writeGate(req, res))) return;
     const lead = await loadOr404(req, next);

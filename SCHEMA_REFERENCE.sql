@@ -308,7 +308,9 @@ CREATE TABLE IF NOT EXISTS public.brokers (
   away_until timestamp with time zone,
   deactivated_at timestamp with time zone,
   last_lead_at timestamp with time zone,
-  passkey_enabled boolean DEFAULT false NOT NULL
+  passkey_enabled boolean DEFAULT false NOT NULL,
+  draft_style text,
+  quiet_line boolean DEFAULT true NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.listings (
@@ -1161,6 +1163,7 @@ ALTER TABLE assistant_questions ADD CONSTRAINT assistant_questions_question_chec
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_alg_check CHECK ((alg = ANY (ARRAY['-7'::integer, '-257'::integer])));
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_credential_id_check CHECK (((length(credential_id) >= 16) AND (length(credential_id) <= 1400)));
 ALTER TABLE broker_passkeys ADD CONSTRAINT broker_passkeys_label_check CHECK (((label IS NULL) OR (length(label) <= 120)));
+ALTER TABLE brokers ADD CONSTRAINT brokers_draft_style_check CHECK (((draft_style IS NULL) OR (length(draft_style) <= 600)));
 ALTER TABLE brokers ADD CONSTRAINT brokers_role_check CHECK ((role = ANY (ARRAY['broker'::text, 'agent'::text, 'admin'::text, 'owner'::text, 'manager'::text])));
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_action_check CHECK ((action = ANY (ARRAY['increase'::text, 'status'::text, 'price'::text, 'plan'::text])));
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_channel_check CHECK ((channel = ANY (ARRAY['web'::text, 'bot'::text])));
