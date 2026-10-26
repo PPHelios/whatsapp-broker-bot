@@ -1,9 +1,11 @@
 // web/routes/plan.js — "Plan" (phase 2 step 4): the agency's plan in force, this month's text / voice use against the
 // allowance, seats; managers announce a payment (a plan for 1–12 months, or a voice pack) and get the amount, a
-// reference and where to pay (InstaPay or bank, as the owner set it); the owner confirms on /app/owner.
+// reference and where to pay (InstaPay or bank, as the owner set it); the owner confirms on /app/owner. Managers also
+// get the agency's invite code and link (Release B N9: both agencies get a free month when the invited one pays).
 "use strict";
 
 const Billing = require("../../services/billing");
+const Referrals = require("../../services/referrals");
 const BillingNotices = require("../../services/billingNotices");
 const Plans = require("../../domain/plans");
 const { MANAGER_ROLES } = require("../../lib/authz");
@@ -45,7 +47,30 @@ function paymentCard(p, payTo, lang) {
 </section>`;
 }
 
-function planPage({ a, payments, payTo, lang, manager, notice = null, created = null }) {
+const INVITED = {
+  pending: ["مستنية موافقتنا", "Waiting for our approval"],
+  approved: ["مستنية أول دفعة", "Waiting for its first payment"],
+  rejected: ["اترفضت", "Rejected"],
+  rewarded: ["دفعت: الشهر المجاني اتحسب 🎁", "Paid: free month earned 🎁"]
+};
+
+function referralSection(r, lang) {
+  const text = L(lang, `جرّب WehdatHub لوكالتك. سجّل بالكود ${r.code} وناخد إحنا الاتنين شهر مجاني لما تشترك: ${r.link}`, `Try WehdatHub for your agency. Sign up with code ${r.code} and we both get a free month when you subscribe: ${r.link}`);
+  return html`<section class="card stack" id="referral" data-referral="${r.code}">
+  <h2>🎁 ${L(lang, "ادعي وكالة تانية", "Invite another agency")}</h2>
+  <p>${L(lang, "لما الوكالة اللي دعيتها تدفع أول باقة، إنتوا الاتنين تاخدوا شهر مجاني.", "When an agency you invite pays for its first plan, you both get a free month.")}</p>
+  <p>${L(lang, "كود الدعوة", "Invite code")}: <strong dir="ltr">${r.code}</strong></p>
+  <label>${L(lang, "لينك التسجيل", "Sign-up link")} <input readonly dir="ltr" value="${r.link}"></label>
+  <p><a class="btn secondary" href="https://wa.me/?text=${encodeURIComponent(text)}" target="_blank" rel="noopener">${L(lang, "ابعته على واتساب", "Send on WhatsApp")}</a></p>
+  ${r.credit ? html`<p class="notice ok">${L(lang, `عندك ${r.credit} شهر مجاني هيتضاف لأول دفعة جاية.`, `You have ${r.credit} free month(s) that will be added to your next payment.`)}</p>` : ""}
+  ${r.referredBy ? html`<p class="muted">${L(lang, `وكالتك اتدعت من ${r.referredBy}`, `Your agency was invited by ${r.referredBy}`)}${r.rewarded ? "" : L(lang, " — أول دفعة ليك فيها شهر مجاني.", " — your first payment includes a free month.")}</p>` : ""}
+  ${r.invited.length
+    ? html`<table><tbody>${r.invited.map((x) => html`<tr data-invited><td>${x.name}</td><td>${INVITED[x.referral_rewarded_at ? "rewarded" : x.approval][lang === "en" ? 1 : 0]}</td></tr>`)}</tbody></table>`
+    : ""}
+</section>`;
+}
+
+function planPage({ a, payments, payTo, lang, manager, referral = null, notice = null, created = null }) {
   const p = a.plan;
   return html`<h1>💳 ${L(lang, "الباقة", "Plan")}</h1>
 ${notice || ""}
@@ -76,6 +101,7 @@ ${manager
   <button type="submit" class="secondary">${L(lang, "اشتري", "Buy")}</button>
 </form>`
   : html`<p class="muted">${L(lang, "المدير بس يقدر يغيّر الباقة.", "Only a manager can change the plan.")}</p>`}
+${referral ? referralSection(referral, lang) : ""}
 ${payments.length
   ? html`<section class="card"><h2>${L(lang, "المدفوعات", "Payments")}</h2><div class="scroll"><table><tbody>${payments.map(
       (x) => html`<tr data-ref="${x.reference}"><td dir="ltr">${x.reference}</td><td>${x.kind === "voice_pack" ? L(lang, "باقة فويس", "Voice pack") : `${Plans.planName(Plans.planById(x.plan), lang)} × ${x.months}`}</td><td>${num(x.amount_egp)} ${L(lang, "ج.م", "EGP")}</td><td>${STATUS[x.status][lang === "en" ? 1 : 0]}</td><td dir="ltr">${day(x.created_at)}</td></tr>`
@@ -89,7 +115,8 @@ function register(web, { pool, page }) {
     const broker = req.session.broker;
     const [a, payTo] = await Promise.all([Billing.allowance(pool, broker.agency_id), Billing.payTo(pool)]);
     const payments = isManager(broker) ? await Billing.paymentsOf(pool, broker.agency_id) : [];
-    return page(req, res, { title: L(lang, "الباقة", "Plan"), nav: "settings", body: planPage({ a, payments, payTo, lang, manager: isManager(broker), ...extra }) }, status);
+    const referral = isManager(broker) ? await Referrals.summary(pool, broker.agency_id) : null;
+    return page(req, res, { title: L(lang, "الباقة", "Plan"), nav: "settings", body: planPage({ a, payments, payTo, lang, manager: isManager(broker), referral, ...extra }) }, status);
   };
 
   web.get("/plan", (req, res) => render(req, res));

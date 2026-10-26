@@ -11,6 +11,7 @@ const crypto = require("crypto");
 const Plans = require("../domain/plans");
 const { withTransaction } = require("../lib/db");
 const { MANAGER_ROLES } = require("../lib/authz");
+const Referrals = require("./referrals");
 
 const DAY = 24 * 3600 * 1000;
 const MONTHS = [1, 3, 6, 12];
@@ -168,8 +169,9 @@ async function pendingPayments(db) {
 
 /**
  * The owner confirms a payment: a plan payment extends paid_until by its months from the later of now and the current
- * end (and the agency is no longer a free pilot); a voice pack counts for the month it is confirmed in.
- * @returns {Promise<{ ok, payment, agency } | { error }>}
+ * end (and the agency is no longer a free pilot), plus any referral months it earns (services/referrals.js); a voice
+ * pack counts for the month it is confirmed in.
+ * @returns {Promise<{ ok, payment, agency, referral } | { error }>}
  */
 async function confirmPayment(pool, id, { now = new Date() } = {}) {
   return withTransaction(pool, async (client) => {
@@ -179,19 +181,21 @@ async function confirmPayment(pool, id, { now = new Date() } = {}) {
     if (p.status !== "pending") return { error: "not_pending", payment: p };
     const { rows: done } = await client.query("UPDATE payments SET status = 'confirmed', confirmed_at = $2 WHERE id = $1 RETURNING *", [id, now.toISOString()]);
     let agency;
+    let referral = null;
     if (p.kind === "plan") {
+      referral = await Referrals.onPlanPayment(client, p.agency_id, { now });
       const { rows: a } = await client.query(
         `UPDATE agencies SET plan = $2, pilot = false,
                 paid_until = GREATEST(COALESCE(paid_until, $3::timestamptz), $3::timestamptz) + make_interval(months => $4),
                 updated_at = NOW()
           WHERE id = $1 RETURNING id, name, plan, paid_until, trial_ends_at, pilot, approval`,
-        [p.agency_id, p.plan, now.toISOString(), p.months]
+        [p.agency_id, p.plan, now.toISOString(), p.months + referral.bonus]
       );
       agency = a[0];
     } else {
       agency = await agencyRow(client, p.agency_id);
     }
-    return { ok: true, payment: done[0], agency };
+    return { ok: true, payment: done[0], agency, referral };
   });
 }
 

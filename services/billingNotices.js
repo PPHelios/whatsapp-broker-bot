@@ -25,18 +25,35 @@ function paymentRequested(payment, agency, manager) {
   return ErrorReports.alertOwner([`💳 Payment announced ${payment.reference}`, `${agency.name} · ${manager.name || ""}`, `${what} · ${payment.amount_egp} EGP`, "Confirm on /app/owner once it arrives."].join("\n")).catch(() => {});
 }
 
-function signupRequested(agency, broker) {
-  return ErrorReports.alertOwner([`🆕 Sign-up waiting: ${agency.name}`, `${broker.name} · +${broker.phone_number}`, "Approve or reject on /app/owner."].join("\n")).catch(() => {});
+function signupRequested(agency, broker, referrer = null) {
+  const lines = [`🆕 Sign-up waiting: ${agency.name}`, `${broker.name} · +${broker.phone_number}`];
+  if (referrer) lines.push(`🎁 Invited by ${referrer.name}`);
+  lines.push("Approve or reject on /app/owner.");
+  return ErrorReports.alertOwner(lines.join("\n")).catch(() => {});
 }
 
-function paymentConfirmed(pool, { payment, agency }, { now = new Date() } = {}) {
+async function paymentConfirmed(pool, { payment, agency, referral = null }, { now = new Date() } = {}) {
   const until = agency.paid_until ? day(agency.paid_until) : null;
+  const bonus = referral ? referral.bonus : 0;
+  // The inviting agency hears that its free month landed (on its paid period, or held for its next payment).
+  if (referral && referral.referrer) {
+    const r = referral.referrer;
+    await toManagers(pool, r.id, {
+      dedupeKey: `referral_ok:${payment.agency_id}`,
+      title: (m) =>
+        r.credited
+          ? L(m, `🎁 ${agency.name} اشتركت بدعوتك: شهر مجاني هيتضاف لأول دفعة جاية ليك`, `🎁 ${agency.name} joined on your invite: a free month will be added to your next payment`)
+          : L(m, `🎁 ${agency.name} اشتركت بدعوتك: اتضافلك شهر مجاني`, `🎁 ${agency.name} joined on your invite: a free month was added to your plan`),
+      now
+    });
+  }
   return toManagers(pool, payment.agency_id, {
     dedupeKey: `payment_ok:${payment.id}`,
     title: (m) =>
       payment.kind === "voice_pack"
         ? L(m, `✅ وصل الدفع ${payment.reference}: ${Plans.VOICE_PACK.notes} فويس زيادة الشهر ده`, `✅ Payment ${payment.reference} received: ${Plans.VOICE_PACK.notes} extra voice notes this month`)
-        : L(m, `✅ وصل الدفع ${payment.reference}: الباقة شغالة لحد ${until}`, `✅ Payment ${payment.reference} received: your plan runs until ${until}`),
+        : L(m, `✅ وصل الدفع ${payment.reference}: الباقة شغالة لحد ${until}`, `✅ Payment ${payment.reference} received: your plan runs until ${until}`) +
+          (bonus ? L(m, ` (منهم ${bonus} شهر مجاني من الدعوات 🎁)`, ` (including ${bonus} free month(s) from invites 🎁)`) : ""),
     now
   });
 }
