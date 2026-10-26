@@ -958,6 +958,46 @@ CREATE TABLE IF NOT EXISTS public.compare_links (
   last_alert_at timestamp with time zone
 );
 
+CREATE TABLE IF NOT EXISTS public.commission_terms (
+  project_id uuid NOT NULL,
+  agency_id uuid NOT NULL,
+  mode text DEFAULT 'pct'::text NOT NULL,
+  pct numeric(6,3),
+  amount bigint,
+  tiers jsonb DEFAULT '[]'::jsonb NOT NULL,
+  claim_trigger text DEFAULT 'contract'::text NOT NULL,
+  claim_paid_pct numeric(5,2),
+  payment_days integer DEFAULT 60 NOT NULL,
+  registration_days integer,
+  notes text,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.commissions (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid NOT NULL,
+  deal_id uuid NOT NULL,
+  project_id uuid,
+  developer_id uuid,
+  rate_pct numeric(6,3),
+  expected_amount bigint NOT NULL,
+  status text DEFAULT 'expected'::text NOT NULL,
+  claimable_at timestamp with time zone,
+  claimed_at timestamp with time zone,
+  invoice_no text,
+  invoice_url text,
+  due_on date,
+  payments jsonb DEFAULT '[]'::jsonb NOT NULL,
+  paid_amount bigint DEFAULT 0 NOT NULL,
+  paid_at timestamp with time zone,
+  client_registered_on date,
+  registration_expires_on date,
+  notes text,
+  version integer DEFAULT 1 NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE app_settings ADD CONSTRAINT app_settings_pkey PRIMARY KEY (key);
@@ -966,6 +1006,8 @@ ALTER TABLE broker_search_state ADD CONSTRAINT broker_search_state_pkey PRIMARY 
 ALTER TABLE broker_sessions ADD CONSTRAINT broker_sessions_pkey PRIMARY KEY (broker_id, session_type);
 ALTER TABLE brokers ADD CONSTRAINT brokers_pkey PRIMARY KEY (id);
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_pkey PRIMARY KEY (id);
+ALTER TABLE commission_terms ADD CONSTRAINT commission_terms_pkey PRIMARY KEY (project_id);
+ALTER TABLE commissions ADD CONSTRAINT commissions_pkey PRIMARY KEY (id);
 ALTER TABLE compare_links ADD CONSTRAINT compare_links_pkey PRIMARY KEY (token_hash);
 ALTER TABLE compound_synonyms ADD CONSTRAINT compound_synonyms_pkey PRIMARY KEY (kind, key, synonym);
 ALTER TABLE crm_jobs ADD CONSTRAINT crm_jobs_pkey PRIMARY KEY (name);
@@ -1009,6 +1051,7 @@ ALTER TABLE web_rate_limits ADD CONSTRAINT web_rate_limits_pkey PRIMARY KEY (buc
 ALTER TABLE web_sessions ADD CONSTRAINT web_sessions_pkey PRIMARY KEY (id_hash);
 ALTER TABLE brokers ADD CONSTRAINT brokers_phone_key UNIQUE (phone_number);
 ALTER TABLE brokers ADD CONSTRAINT uq_broker_phone UNIQUE (agency_id, phone_number);
+ALTER TABLE commissions ADD CONSTRAINT commissions_deal_id_key UNIQUE (deal_id);
 ALTER TABLE deals ADD CONSTRAINT deals_agency_id_idem_key_key UNIQUE (agency_id, idem_key);
 ALTER TABLE deals ADD CONSTRAINT deals_agency_id_ref_key UNIQUE (agency_id, ref);
 ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_search_id_listing_id_key UNIQUE (search_id, listing_id);
@@ -1035,6 +1078,20 @@ ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_action_check CHEC
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_channel_check CHECK ((channel = ANY (ARRAY['web'::text, 'bot'::text])));
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_input_check CHECK ((length(input) <= 1000));
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_status_check CHECK ((status = ANY (ARRAY['preview'::text, 'applied'::text, 'undone'::text, 'discarded'::text])));
+ALTER TABLE commission_terms ADD CONSTRAINT commission_terms_amount_check CHECK (((amount IS NULL) OR (amount > 0)));
+ALTER TABLE commission_terms ADD CONSTRAINT commission_terms_claim_paid_pct_check CHECK (((claim_paid_pct IS NULL) OR ((claim_paid_pct > (0)::numeric) AND (claim_paid_pct <= (100)::numeric))));
+ALTER TABLE commission_terms ADD CONSTRAINT commission_terms_claim_trigger_check CHECK ((claim_trigger = ANY (ARRAY['contract'::text, 'down_payment'::text, 'paid_pct'::text])));
+ALTER TABLE commission_terms ADD CONSTRAINT commission_terms_mode_check CHECK ((mode = ANY (ARRAY['pct'::text, 'amount'::text])));
+ALTER TABLE commission_terms ADD CONSTRAINT commission_terms_notes_check CHECK (((notes IS NULL) OR (length(notes) <= 1000)));
+ALTER TABLE commission_terms ADD CONSTRAINT commission_terms_payment_days_check CHECK (((payment_days >= 0) AND (payment_days <= 365)));
+ALTER TABLE commission_terms ADD CONSTRAINT commission_terms_pct_check CHECK (((pct IS NULL) OR ((pct > (0)::numeric) AND (pct <= (20)::numeric))));
+ALTER TABLE commission_terms ADD CONSTRAINT commission_terms_registration_days_check CHECK (((registration_days IS NULL) OR ((registration_days >= 1) AND (registration_days <= 365))));
+ALTER TABLE commissions ADD CONSTRAINT commissions_expected_amount_check CHECK ((expected_amount >= 0));
+ALTER TABLE commissions ADD CONSTRAINT commissions_invoice_no_check CHECK (((invoice_no IS NULL) OR (length(invoice_no) <= 60)));
+ALTER TABLE commissions ADD CONSTRAINT commissions_invoice_url_check CHECK (((invoice_url IS NULL) OR (length(invoice_url) <= 500)));
+ALTER TABLE commissions ADD CONSTRAINT commissions_notes_check CHECK (((notes IS NULL) OR (length(notes) <= 1000)));
+ALTER TABLE commissions ADD CONSTRAINT commissions_paid_amount_check CHECK ((paid_amount >= 0));
+ALTER TABLE commissions ADD CONSTRAINT commissions_status_check CHECK ((status = ANY (ARRAY['expected'::text, 'claimable'::text, 'claimed'::text, 'partly_paid'::text, 'paid'::text, 'cancelled'::text])));
 ALTER TABLE compare_links ADD CONSTRAINT compare_links_lang_check CHECK ((lang = ANY (ARRAY['ar'::text, 'en'::text])));
 ALTER TABLE compare_links ADD CONSTRAINT compare_links_listing_ids_check CHECK (((cardinality(listing_ids) >= 2) AND (cardinality(listing_ids) <= 3)));
 ALTER TABLE compound_synonyms ADD CONSTRAINT compound_synonyms_kind_check CHECK ((kind = ANY (ARRAY['compound'::text, 'developer'::text, 'area'::text])));
@@ -1140,6 +1197,12 @@ ALTER TABLE brokers ADD CONSTRAINT brokers_agency_id_fkey FOREIGN KEY (agency_id
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_created_by_fkey FOREIGN KEY (created_by) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE catalogue_updates ADD CONSTRAINT catalogue_updates_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
+ALTER TABLE commission_terms ADD CONSTRAINT commission_terms_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE commission_terms ADD CONSTRAINT commission_terms_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
+ALTER TABLE commissions ADD CONSTRAINT commissions_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE commissions ADD CONSTRAINT commissions_deal_id_fkey FOREIGN KEY (deal_id) REFERENCES deals(id) ON DELETE CASCADE;
+ALTER TABLE commissions ADD CONSTRAINT commissions_developer_id_fkey FOREIGN KEY (developer_id) REFERENCES developers(id) ON DELETE SET NULL;
+ALTER TABLE commissions ADD CONSTRAINT commissions_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL;
 ALTER TABLE compare_links ADD CONSTRAINT compare_links_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE compare_links ADD CONSTRAINT compare_links_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE deal_splits ADD CONSTRAINT deal_splits_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
@@ -1227,6 +1290,8 @@ CREATE INDEX brokers_agency_idx ON public.brokers USING btree (agency_id);
 CREATE UNIQUE INDEX brokers_phone_normalized_uidx ON public.brokers USING btree (phone_normalized);
 CREATE UNIQUE INDEX brokers_telegram_user_uidx ON public.brokers USING btree (telegram_user_id) WHERE (telegram_user_id IS NOT NULL);
 CREATE INDEX idx_catalogue_updates_agency ON public.catalogue_updates USING btree (agency_id, created_at DESC);
+CREATE INDEX idx_commissions_agency_status ON public.commissions USING btree (agency_id, status);
+CREATE INDEX idx_commissions_developer ON public.commissions USING btree (developer_id);
 CREATE INDEX idx_compare_links_broker ON public.compare_links USING btree (broker_id, created_at DESC);
 CREATE INDEX idx_compound_synonyms_norm ON public.compound_synonyms USING btree (synonym_norm);
 CREATE INDEX idx_deal_splits_broker ON public.deal_splits USING btree (agency_id, broker_id);

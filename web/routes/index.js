@@ -13,6 +13,7 @@ const PRIVATE = [
   require("./leadImports"),
   require("./leads"),
   require("./deals"),
+  require("./commissions"),
   require("./notifications"),
   require("./settings"),
   require("./usage"),
