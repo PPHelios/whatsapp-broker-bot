@@ -593,7 +593,7 @@ async function clientMaterials(db, listing) {
 async function projectForUnit(db, listing) {
   if (!listing?.project_id) return null;
   const { rows } = await db.query(
-    `SELECT p.id, p.name, p.name_en, p.status, p.prices_updated_at, p.delivery_year, p.delivery_quarter, p.delivery_raw, d.name AS developer_name FROM projects p LEFT JOIN developers d ON d.id = p.developer_id
+    `SELECT p.id, p.name, p.name_en, p.status, p.prices_updated_at, p.delivery_year, p.delivery_quarter, p.delivery_raw, p.highlights, d.name AS developer_name FROM projects p LEFT JOIN developers d ON d.id = p.developer_id
      WHERE p.id = $1 AND p.agency_id = $2`,
     [listing.project_id, listing.agency_id]
   );

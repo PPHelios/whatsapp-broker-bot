@@ -14,7 +14,7 @@ const FIELDS = ["dev_code", "building", "property_type", "floor", "area", "area_
 const digits = (s) => String(s ?? "").replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d));
 
 /** "1-3, 5" → [1, 2, 3, 5] (sorted, unique, within the file) | { error }. Empty means page 1 for a one-page file. */
-function parsePages(input, total) {
+function parsePages(input, total, { max = MAX_PAGES } = {}) {
   const s = digits(input).replace(/[،؛;]/g, ",").replace(/\s*(-|–|to|الى|إلى|لـ)\s*/gi, "-").trim();
   if (!s) return total === 1 ? [1] : { error: "pages_required" };
   const out = new Set();
@@ -25,7 +25,7 @@ function parsePages(input, total) {
     const b = m[2] ? Number(m[2]) : a;
     if (a < 1 || b < a || b > total) return { error: "pages_invalid" };
     for (let i = a; i <= b; i++) out.add(i);
-    if (out.size > MAX_PAGES) return { error: "too_many_pages" };
+    if (out.size > max) return { error: "too_many_pages" };
   }
   return [...out].sort((x, y) => x - y);
 }

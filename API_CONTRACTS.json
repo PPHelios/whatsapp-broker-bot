@@ -1463,7 +1463,7 @@
       "PROMPT_VERSION": "String",
       "FIELDS": "Array",
       "PROMPT": "String",
-      "parsePages": ["input", "total"],
+      "parsePages": ["input", "total", "params"],
       "settingOf": ["raw"],
       "settingFields": ["input"],
       "monthKey": ["now"],
@@ -1475,12 +1475,51 @@
       "setForAgency": ["db", "agencyId", "input"],
       "usage": ["db", "agencyId", "params"],
       "overview": ["db", "params"],
-      "read": ["pool", "actor", "projectId", "params", "params"]
+      "read": ["pool", "actor", "projectId", "params", "params"],
+      "pagesOf": ["files", "pages", "params"],
+      "readPages": ["pool", "actor", "projectId", "list", "params"]
     },
     "lib/pdfPages.js": {
       "pageCount": ["buffer"],
       "extract": ["buffer", "pages"],
       "imageFingerprint": ["buffer"]
+    },
+    "domain/brochure.js": {
+      "MAX_LINES": "Number",
+      "MAX_LINE": "Number",
+      "MAX_PAGES": "Number",
+      "FACTS_VERSION": "String",
+      "TOPICS": "Array",
+      "FACTS_PROMPT": "String",
+      "highlightsPrompt": ["project", "facts"],
+      "factsFromAnswer": ["text"],
+      "linesFromAnswer": ["text"],
+      "linesFromText": ["input"],
+      "mergeFacts": ["pages"],
+      "highlightsFor": ["h", "lang"]
+    },
+    "services/brochure.js": {
+      "read": ["pool", "actor", "projectId", "params", "params"],
+      "saveHighlights": ["pool", "actor", "projectId", "input", "params"]
+    },
+    "web/routes/brochure.js": {
+      "register": ["web", "params"],
+      "highlightsSection": ["lang", "manager", "project", "params"]
+    },
+    "domain/sheetSync.js": {
+      "CHECK_EVERY_MS": "Number",
+      "parseLink": ["url"],
+      "exportUrl": ["params"],
+      "isDue": ["sync", "now"],
+      "hasChanges": ["summary"]
+    },
+    "services/sheetSync.js": {
+      "setLink": ["pool", "actor", "projectId", "params"],
+      "checkProject": ["pool", "project", "params"],
+      "checkNow": ["pool", "actor", "projectId", "opts"],
+      "checkDue": ["pool", "params"],
+      "syncJob": [],
+      "fetchCsv": ["sync", "params"]
     }
   },
   "invariant_variable_names": {
