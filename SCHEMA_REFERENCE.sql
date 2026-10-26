@@ -469,7 +469,11 @@ CREATE TABLE IF NOT EXISTS public.projects (
   notes text,
   prices_updated_at timestamp with time zone,
   archived_at timestamp with time zone,
-  stale_reminded_at timestamp with time zone
+  stale_reminded_at timestamp with time zone,
+  brochure jsonb DEFAULT '{}'::jsonb NOT NULL,
+  highlights jsonb DEFAULT '{}'::jsonb NOT NULL,
+  highlights_at timestamp with time zone,
+  sheet_sync jsonb DEFAULT '{}'::jsonb NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.broker_sessions (

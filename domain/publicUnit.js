@@ -4,6 +4,8 @@
 // appear, whatever the row holds.
 "use strict";
 
+const { highlightsFor } = require("./brochure");
+
 const Describe = require("./describe");
 const ClientPlans = require("./clientPlans");
 
@@ -64,6 +66,8 @@ function publicProject(p, materials, lang) {
   return {
     name: (lang === "en" ? p.name_en || p.name : p.name) || null,
     delivery,
+    // C6: the manager's saved highlight lines only (never the brochure facts or AI suggestions).
+    highlights: highlightsFor(p.highlights, lang).slice(0, 5),
     links: materials.map((m) => ({ label: String(m.label || "").slice(0, 80), url: httpsOnly(m.url), kind: m.kind || "other" })).filter((m) => m.url && m.label).slice(0, 8)
   };
 }

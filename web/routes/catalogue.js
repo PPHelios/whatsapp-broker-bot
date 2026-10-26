@@ -11,6 +11,7 @@ const Commissions = require("../../services/commissions");
 const { termsSection } = require("./commissions");
 const { pricesSection, pricesNotice } = require("./priceSheets");
 const PriceReading = require("../../services/priceReading");
+const { highlightsSection } = require("./brochure");
 const { html } = require("../html");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
@@ -177,7 +178,7 @@ function planForm(lang, projectId, phases, pl = {}) {
 </form>`;
 }
 
-function projectPage(lang, manager, data, developers, { notice = null, prices = null, commissionTerms = null } = {}) {
+function projectPage(lang, manager, data, developers, { notice = null, prices = null, commissionTerms = null, highlights = null } = {}) {
   const { project: p, developer: d, phases, plans, materials, units } = data;
   const base = `/app/catalogue/projects/${p.id}`;
   const phaseName = (id) => phases.find((x) => x.id === id)?.name;
@@ -190,6 +191,7 @@ ${notice || ""}
   <p>🏢 ${d ? d.name : "—"}${manager && d?.contact_name ? ` · ${d.contact_name}` : ""}${manager && d?.contact_phone ? html` · <a href="tel:${d.contact_phone}" dir="ltr" data-developer-contact>${d.contact_phone}</a>` : ""}</p>
   ${manager && p.notes ? html`<p class="muted">🔒 ${p.notes}</p>` : ""}
 </section>
+${highlights || ""}
 ${prices || ""}
 ${commissionTerms || ""}
 ${manager ? html`<details class="card"><summary>✏️ ${L(lang, "تعديل المشروع", "Edit project")}</summary>${projectForm(lang, developers, p, base)}
@@ -278,7 +280,9 @@ function register(web, { pool, page }) {
     const prices = pricesSection(lang, manager, { project: data.project, units: data.units, sheets, increases, phases: data.phases, reading });
     // C8: the developer's commission terms (managers only).
     const commissionTerms = manager ? termsSection(lang, data.project.id, await Commissions.getTerms(pool, actor, data.project.id)) : null;
-    return page(req, res, { title: data.project.name, body: projectPage(lang, manager, data, developers, { notice: notice || pricesNotice(req.query, lang) || savedNotice(req), prices, commissionTerms }) }, status);
+    // C6: highlights (everyone) with the brochure reader (managers).
+    const highlights = highlightsSection(lang, manager, data.project, { reading, query: req.query });
+    return page(req, res, { title: data.project.name, body: projectPage(lang, manager, data, developers, { notice: notice || pricesNotice(req.query, lang) || savedNotice(req), prices, commissionTerms, highlights }) }, status);
   };
 
   /** Runs a service write and answers: 403, 404, the page again with the error (400), or a redirect. */

@@ -3,7 +3,8 @@
 // manager picks the pages; each page is fingerprinted (lib/pdfPages.js) and a page any agency had read before is
 // reused silently: no AI call and not counted. New pages are counted against the agency's monthly page allowance,
 // checked before any call. The rows go to services/priceSheets.js storePreview, so nothing is saved before the
-// manager checks the usual preview and applies it.
+// manager checks the usual preview and applies it. pagesOf and readPages are shared with the brochure reader
+// (services/brochure.js, C6), under the same switch, allowance and cache.
 "use strict";
 
 const AI = require("../lib/ai");
@@ -54,38 +55,29 @@ async function inBatches(items, fn) {
   return out;
 }
 
-/** One page to the model → rows | { error }. */
-async function readPage(pool, actor, page) {
+/** One page to the model with a prompt → { result, model } | { error }. */
+async function readPage(pool, actor, page, { prompt, parse, operationType = "price_list_read" }) {
   try {
     const res = await AI.generateWithCascade({
-      contents: [{ role: "user", parts: [{ text: R.PROMPT }, { inlineData: { mimeType: page.mime, data: page.data.toString("base64") } }] }],
+      contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: page.mime, data: page.data.toString("base64") } }] }],
       config: { responseMimeType: "application/json", temperature: 0 },
-      operationType: "price_list_read",
+      operationType,
       ctx: { pool, broker: actor }
     });
-    const parsed = R.rowsFromAnswer(res.text);
-    return parsed.error ? { error: parsed.error } : { rows: parsed.rows, model: res.modelUsed };
+    const parsed = parse(res.text);
+    return parsed.error ? { error: parsed.error } : { result: parsed.result, model: res.modelUsed };
   } catch (err) {
-    console.warn("Price list read failed:", err.message);
+    console.warn("Document page read failed:", err.message);
     return { error: "AI_FAILED" };
   }
 }
 
 /**
- * Reads a PDF (pages picked by the manager) or up to 10 photos into a price-sheet preview.
- * @param {Object} input - { files: [{ buffer, mimetype, originalname }], pages: "1-3, 5" }
- * @returns {Promise<{ ok, sheet, read, reused } | { error, left?, needed? }>}
+ * The pages to read from an upload: one PDF with the picked pages, or up to 10 photos.
+ * @returns {Promise<{ list: [{ label, mime, data, fingerprint }], pdf } | { error, total? }>}
  */
-async function read(pool, actor, projectId, { files = [], pages = "" } = {}, { now = new Date() } = {}) {
-  if (!isManager(actor)) return { error: "forbidden" };
-  const project = await PriceSheets.projectOf(pool, actor, projectId);
-  if (!project) return { error: "not_found" };
-  const setting = await settingOf(pool, actor.agency_id);
-  if (!setting.enabled) return { error: "OFF" };
+async function pagesOf(files, pages, { version, maxPages = R.MAX_PAGES }) {
   if (!files.length) return { error: "NO_FILE" };
-
-  // The pages to read: [{ label, mime, data, fingerprint }].
-  let list = [];
   const pdf = files.find((f) => f.mimetype === "application/pdf" || /\.pdf$/i.test(f.originalname || ""));
   if (pdf) {
     if (files.length > 1) return { error: "ONE_PDF" };
@@ -95,55 +87,86 @@ async function read(pool, actor, projectId, { files = [], pages = "" } = {}, { n
     } catch (e) {
       return { error: e.code || "NOT_PDF" };
     }
-    const picked = R.parsePages(pages, total);
+    const picked = R.parsePages(pages, total, { max: maxPages });
     if (picked.error) return { error: picked.error, total };
-    list = (await Pdf.extract(pdf.buffer, picked)).map((p) => ({ label: p.page, mime: "application/pdf", data: p.pdf, fingerprint: `${R.PROMPT_VERSION}:${p.fingerprint}` }));
-  } else {
-    if (files.some((f) => !IMAGE_TYPES.test(f.mimetype || ""))) return { error: "NOT_SUPPORTED" };
-    if (files.length > R.MAX_PAGES) return { error: "too_many_pages" };
-    list = files.map((f, i) => ({ label: i + 1, mime: f.mimetype, data: f.buffer, fingerprint: `${R.PROMPT_VERSION}:${Pdf.imageFingerprint(f.buffer)}` }));
+    const list = (await Pdf.extract(pdf.buffer, picked)).map((p) => ({ label: p.page, mime: "application/pdf", data: p.pdf, fingerprint: `${version}:${p.fingerprint}` }));
+    return { list, pdf };
   }
+  if (files.some((f) => !IMAGE_TYPES.test(f.mimetype || ""))) return { error: "NOT_SUPPORTED" };
+  if (files.length > maxPages) return { error: "too_many_pages" };
+  return { list: files.map((f, i) => ({ label: i + 1, mime: f.mimetype, data: f.buffer, fingerprint: `${version}:${Pdf.imageFingerprint(f.buffer)}` })), pdf: null };
+}
 
+/**
+ * Reads pages with the shared cache and the agency's monthly allowance: cached pages (any agency) are free; new pages
+ * are checked against the allowance first, then read; every page read is logged (reused or not).
+ * @returns {Promise<{ results: Map(fingerprint → result), fresh, failed: [label], reused } | { error: "ALLOWANCE", left, needed }>}
+ */
+async function readPages(pool, actor, projectId, list, { prompt, parse, operationType, now = new Date() }) {
   const { rows: known } = await pool.query("SELECT fingerprint, rows FROM price_page_reads WHERE fingerprint = ANY($1::text[])", [list.map((p) => p.fingerprint)]);
-  const cached = new Map(known.map((k) => [k.fingerprint, k.rows]));
-  const fresh = list.filter((p) => !cached.has(p.fingerprint));
+  const results = new Map(known.map((k) => [k.fingerprint, k.rows]));
+  const fresh = list.filter((p) => !results.has(p.fingerprint));
   const use = await usage(pool, actor.agency_id, { now });
   if (fresh.length > use.left) return { error: "ALLOWANCE", left: use.left, needed: fresh.length };
-
-  const results = await inBatches(fresh, (p) => readPage(pool, actor, p));
-  const failed = fresh.filter((_, i) => results[i].error).map((p) => p.label);
+  const out = await inBatches(fresh, (p) => readPage(pool, actor, p, { prompt, parse, operationType }));
+  const failed = [];
   for (const [i, p] of fresh.entries()) {
-    const r = results[i];
-    if (r.error) continue;
-    await pool.query("INSERT INTO price_page_reads (fingerprint, rows, model) VALUES ($1, $2::jsonb, $3) ON CONFLICT (fingerprint) DO NOTHING", [p.fingerprint, JSON.stringify(r.rows), r.model]);
-    cached.set(p.fingerprint, r.rows);
+    if (out[i].error) {
+      failed.push(p.label);
+      continue;
+    }
+    await pool.query("INSERT INTO price_page_reads (fingerprint, rows, model) VALUES ($1, $2::jsonb, $3) ON CONFLICT (fingerprint) DO NOTHING", [p.fingerprint, JSON.stringify(out[i].result), out[i].model]);
+    results.set(p.fingerprint, out[i].result);
   }
-  // Every page that was read is logged; only new reads count against the allowance.
   const freshSet = new Set(fresh.map((p) => p.fingerprint));
   for (const p of list) {
-    if (!cached.has(p.fingerprint)) continue;
+    if (!results.has(p.fingerprint)) continue;
     await pool.query("INSERT INTO price_read_log (agency_id, project_id, broker_id, fingerprint, reused, created_at) VALUES ($1, $2, $3, $4, $5, $6)", [
       actor.agency_id,
-      project.id,
+      projectId,
       actor.id,
       p.fingerprint,
       !freshSet.has(p.fingerprint),
       now.toISOString()
     ]);
   }
-  if (failed.length === list.length) return { error: "AI_FAILED" };
+  return { results, read: fresh.length - failed.length, failed, reused: list.length - fresh.length };
+}
+
+const parseRows = (text) => {
+  const r = R.rowsFromAnswer(text);
+  return r.error ? r : { result: r.rows };
+};
+
+/**
+ * Reads a PDF (pages picked by the manager) or up to 10 photos into a price-sheet preview.
+ * @param {Object} input - { files: [{ buffer, mimetype, originalname }], pages: "1-3, 5" }
+ * @returns {Promise<{ ok, sheet, read, reused, failed } | { error, left?, needed? }>}
+ */
+async function read(pool, actor, projectId, { files = [], pages = "" } = {}, { now = new Date() } = {}) {
+  if (!isManager(actor)) return { error: "forbidden" };
+  const project = await PriceSheets.projectOf(pool, actor, projectId);
+  if (!project) return { error: "not_found" };
+  const setting = await settingOf(pool, actor.agency_id);
+  if (!setting.enabled) return { error: "OFF" };
+  const got = await pagesOf(files, pages, { version: R.PROMPT_VERSION });
+  if (got.error) return got;
+  const { list, pdf } = got;
+  const r = await readPages(pool, actor, project.id, list, { prompt: R.PROMPT, parse: parseRows, operationType: "price_list_read", now });
+  if (r.error) return r;
+  if (r.failed.length === list.length) return { error: "AI_FAILED" };
 
   // Row numbers run on across pages ("page 2 row 3" becomes 2003) so the preview can point at the page.
   const tableRows = [];
-  for (const p of list) (cached.get(p.fingerprint) || []).forEach((r, i) => tableRows.push({ rowNumber: Number(p.label) * 1000 + i + 1, cells: r.cells }));
-  if (!tableRows.length) return { error: "NO_ROWS", failed };
+  for (const p of list) (r.results.get(p.fingerprint) || []).forEach((row, i) => tableRows.push({ rowNumber: Number(p.label) * 1000 + i + 1, cells: row.cells }));
+  if (!tableRows.length) return { error: "NO_ROWS", failed: r.failed };
   const name = pdf ? `${pdf.originalname || "price-list.pdf"} (${list.map((p) => p.label).join(", ")})` : `${files.length} photo(s)`;
-  const r = await PriceSheets.storePreview(pool, actor, project, tableRows, {
+  const stored = await PriceSheets.storePreview(pool, actor, project, tableRows, {
     fileName: name,
     source: "ai",
-    extra: { ai: { pages: list.map((p) => p.label), failed, read: fresh.length - failed.length, reused: list.length - fresh.length } }
+    extra: { ai: { pages: list.map((p) => p.label), failed: r.failed, read: r.read, reused: r.reused } }
   });
-  return { ...r, read: fresh.length - failed.length, reused: list.length - fresh.length, failed };
+  return { ...stored, read: r.read, reused: r.reused, failed: r.failed };
 }
 
-module.exports = { settingOf, setForAgency, usage, overview, read };
+module.exports = { settingOf, setForAgency, usage, overview, read, pagesOf, readPages };

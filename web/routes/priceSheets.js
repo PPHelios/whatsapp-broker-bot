@@ -3,10 +3,12 @@
 // announce an increase ("+7% from 1 November"). pricesSection() is the project page's prices card (freshness badge,
 // units with price per m², sheets, increases). services/priceSheets.js does the work. Release B C5: a PDF or photos
 // of a price list read by AI into the same preview (services/priceReading.js), when the app owner switched it on.
+// C9: a project linked to the developer's shared Google Sheet, checked daily (services/sheetSync.js).
 "use strict";
 
 const PriceSheets = require("../../services/priceSheets");
 const PriceReading = require("../../services/priceReading");
+const SheetSync = require("../../services/sheetSync");
 const Reading = require("../../domain/priceReading");
 const Catalogue = require("../../services/catalogue");
 const Commission = require("../../domain/commission");
@@ -56,6 +58,37 @@ const typeLabel = (t) => t || "—";
 const areaText = (e) => (e.area ? `${e.area}${e.area_to ? `–${e.area_to}` : ""} m²` : "—");
 
 /** The project page's prices card (C2). */
+const SYNC_STATUS = {
+  same: ["مفيش تغيير", "no change"],
+  no_changes: ["مفيش تغيير", "no change"],
+  preview: ["فيه تغييرات مستنية مراجعتك", "changes waiting for your review"],
+  applied: ["التغييرات اتطبقت", "changes applied"],
+  error: ["مش بيتقري", "can't be read"]
+};
+const SYNC_ERRORS = {
+  sheet_link: ["ده مش لينك شيت جوجل صحيح.", "That isn't a valid Google Sheets link."],
+  sheet_not_shared: ["الشيت مش متشارك «أي حد معاه اللينك».", "The sheet isn't shared with \"anyone with the link\"."],
+  sheet_fetch: ["مقدرناش نوصل للشيت؛ جرب تاني.", "Couldn't reach the sheet; try again."],
+  TOO_LARGE: ["الشيت أكبر من 5 ميجا.", "The sheet is larger than 5 MB."],
+  NO_HEADER: ["مش لاقيين صف العناوين في الشيت.", "No header row found in the sheet."]
+};
+
+/** C9: the project's Google Sheet link, its last check and "Check now" (managers). */
+function syncForm(lang, base, project) {
+  const s = project.sheet_sync || {};
+  const status = s.status ? (SYNC_STATUS[s.status] || SYNC_STATUS.error)[lang === "en" ? 1 : 0] : null;
+  return html`<details class="stack" data-sheet-sync${s.id ? html` open` : ""}><summary>🔗 ${L(lang, "ربط بشيت جوجل من المطور", "Link the developer's Google Sheet")}</summary>
+    <form method="post" action="${base}/sheet-sync" class="stack">
+      <label>${L(lang, "لينك الشيت (متشارك «أي حد معاه اللينك»)", "Sheet link (shared with \"anyone with the link\")")} <input name="url" type="url" dir="ltr" maxlength="500" value="${s.url || ""}" placeholder="https://docs.google.com/spreadsheets/d/…"></label>
+      <label class="check"><input type="checkbox" name="auto_apply" value="1"${s.auto_apply ? html` checked` : ""}> ${L(lang, "طبّق التغييرات لوحدها (من غير ما أراجع)", "Apply changes on their own (without my review)")}</label>
+      <p class="muted">${L(lang, "بنقرا الشيت مرة كل يوم. لو اتغير بتجيلك معاينة تراجعها، أو بيتطبق لوحده لو علّمت فوق. الوحدات اللي اختفت من الشيت مش بتتعلم مباعة لوحدها أبداً. سيبه فاضي عشان تشيل الربط.", "We read the sheet once a day. When it changes you get a preview to review, or it applies on its own if ticked. Units that disappear from the sheet are never marked sold automatically. Leave it empty to remove the link.")}</p>
+      <button type="submit" class="secondary">${L(lang, "احفظ الربط", "Save link")}</button>
+    </form>
+    ${s.id ? html`<p data-sync-status="${s.status || "never"}">${L(lang, "آخر مراجعة", "Last check")}: <span dir="ltr">${s.checked_at ? String(s.checked_at).slice(0, 16).replace("T", " ") : "—"}</span>${status ? ` · ${status}` : ""}${s.status === "error" && SYNC_ERRORS[s.error] ? ` (${SYNC_ERRORS[s.error][lang === "en" ? 1 : 0]})` : ""}${s.status === "preview" && s.sheet_id ? html` · <a href="${base}/sheets/${s.sheet_id}">${L(lang, "راجع", "Review")}</a>` : ""}</p>
+    <form method="post" action="${base}/sheet-sync/check"><button type="submit" class="secondary">${L(lang, "راجع دلوقتي", "Check now")}</button></form>` : ""}
+  </details>`;
+}
+
 /** The AI reader's form (C5): only when the owner switched it on for the agency. */
 function readForm(lang, base, reading) {
   if (!reading?.enabled) return "";
@@ -85,6 +118,7 @@ function pricesSection(lang, manager, { project, units, sheets, increases, phase
     <button type="submit" class="secondary">${L(lang, "معاينة الشيت", "Preview the sheet")}</button>
   </form>
   ${readForm(lang, base, reading)}
+  ${syncForm(lang, base, project)}
   <form method="post" action="${base}/increases" class="row" data-increase-form>
     <label>${L(lang, "زيادة معلنة %", "Announced change %")} <input name="pct" required inputmode="decimal" dir="ltr" size="5" placeholder="7"></label>
     <label>${L(lang, "من يوم", "From")} <input name="effective_on" type="date" required></label>
@@ -154,6 +188,25 @@ function register(web, { pool, page }) {
     return res.redirect(303, `/app/catalogue/projects/${req.params.id}/sheets/${r.sheet.id}`);
   });
 
+  web.post("/catalogue/projects/:id/sheet-sync", async (req, res) => {
+    const r = await SheetSync.setLink(pool, req.session.broker, req.params.id, { url: req.body.url, autoApply: req.body.auto_apply === "1" });
+    if (r.error === "forbidden") return forbidden(req, res);
+    if (r.error === "not_found") return notFound(req, res);
+    if (r.error) return res.redirect(303, back(req, `sync_error=${r.error}`));
+    if (!r.sync.id) return res.redirect(303, back(req, "sync=removed"));
+    // Check straight away, so a wrong link shows now rather than tomorrow.
+    const c = await SheetSync.checkNow(pool, req.session.broker, req.params.id);
+    return res.redirect(303, c.status === "error" ? back(req, `sync_error=${c.error}`) : back(req, `sync=${c.status}`));
+  });
+
+  web.post("/catalogue/projects/:id/sheet-sync/check", async (req, res) => {
+    const c = await SheetSync.checkNow(pool, req.session.broker, req.params.id);
+    if (c.error === "forbidden") return forbidden(req, res);
+    if (c.error === "not_found") return notFound(req, res);
+    if (c.status === "preview") return res.redirect(303, `/app/catalogue/projects/${req.params.id}/sheets/${c.sheet.id}`);
+    return res.redirect(303, c.status === "error" ? back(req, `sync_error=${c.error}`) : back(req, `sync=${c.status}`));
+  });
+
   web.get("/catalogue/projects/:id/sheets/:sid", async (req, res) => {
     const broker = req.session.broker;
     if (!isManager(broker)) return forbidden(req, res);
@@ -200,6 +253,11 @@ function pricesNotice(query, lang) {
   if (query.sheet_error) {
     const extra = query.sheet_error === "ALLOWANCE" ? L(lang, ` محتاج ${Number(query.needed) || 0} وفاضل ${Number(query.left) || 0}.`, ` Needs ${Number(query.needed) || 0}, ${Number(query.left) || 0} left.`) : "";
     return html`<p class="card notice bad" role="alert">❌ ${(READ_ERRORS[query.sheet_error] || READ_ERRORS.NOT_XLSX)[lang === "en" ? 1 : 0]}${extra}</p>`;
+  }
+  if (query.sync_error) return html`<p class="card notice bad" role="alert">❌ ${(SYNC_ERRORS[query.sync_error] || SYNC_ERRORS.sheet_fetch)[lang === "en" ? 1 : 0]}</p>`;
+  if (query.sync) {
+    const text = { removed: ["الربط اتشال.", "Link removed."], same: ["الشيت زي ما هو.", "The sheet hasn't changed."], no_changes: ["مفيش تغيير في الأسعار.", "No price changes."], applied: ["التغييرات اتطبقت من الشيت.", "Changes applied from the sheet."] }[query.sync];
+    if (text) return html`<p class="card notice ok" role="status">✅ ${text[lang === "en" ? 1 : 0]}</p>`;
   }
   if (query.increase_error) return html`<p class="card notice bad" role="alert">❌ ${query.increase_error === "pct" ? L(lang, "النسبة رقم بين -50 و 100 (ومش صفر).", "The % is a number from -50 to 100 (not zero).") : L(lang, "اختار اليوم.", "Pick the date.")}</p>`;
   if (query.applied) {

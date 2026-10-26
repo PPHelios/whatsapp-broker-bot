@@ -98,6 +98,7 @@ function projectSection(u) {
   const p = u.project;
   if (!p || (!p.name && !p.links.length)) return "";
   return html`<section class="card" id="project"><h2>🏗️ ${p.name || ""}</h2>
+  ${p.highlights?.length ? html`<ul data-public-highlights>${p.highlights.map((l) => html`<li>✨ ${l}</li>`)}</ul>` : ""}
   ${p.delivery ? html`<p>🔑 ${L(lang, "التسليم", "Delivery")}: <span dir="ltr">${p.delivery}</span></p>` : ""}
   ${p.links.length ? html`<ul>${p.links.map((m) => html`<li><a href="${m.url}" target="_blank" rel="noopener noreferrer">${m.label}</a></li>`)}</ul>` : ""}
 </section>`;
