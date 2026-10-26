@@ -270,7 +270,7 @@ async function listIncreases(db, actor, projectId) {
   return rows;
 }
 
-/** Moves every active priced unit of the project (or phase) by the %, rounded to the nearest 1,000; once. */
+/** Moves every active priced catalogue unit of the project (or phase; resale units linked by brokers keep their price) by the %, rounded to the nearest 1,000; once. */
 async function applyIncrease(pool, inc, { now = new Date() } = {}) {
   const client = await pool.connect();
   try {
@@ -281,7 +281,7 @@ async function applyIncrease(pool, inc, { now = new Date() } = {}) {
       return null;
     }
     const { rows: units } = await client.query(
-      "SELECT id, agency_id, price_value FROM listings WHERE project_id = $1 AND status = 'active' AND price_value > 0 AND ($2::uuid IS NULL OR phase_id = $2) FOR UPDATE",
+      "SELECT id, agency_id, price_value FROM listings WHERE project_id = $1 AND status = 'active' AND price_value > 0 AND details->>'catalogue' = 'true' AND ($2::uuid IS NULL OR phase_id = $2) FOR UPDATE",
       [inc.project_id, inc.phase_id]
     );
     for (const u of units) {

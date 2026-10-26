@@ -277,6 +277,7 @@
       "matchEdit": ["text"]
     },
     "lib/listingStore.js": {
+      "findCatalogueMatch": ["db", "agencyId", "l", "params"],
       "photosOf": ["db", "listing", "params"],
       "coverPhotos": ["db", "agencyId", "listings"],
       "findByCode": ["db", "agencyId", "code", "params"],
@@ -846,7 +847,9 @@
       "TOLERANCE": "Number",
       "placeKey": ["l"],
       "comparable": ["l"],
-      "sameUnit": ["a", "b"]
+      "sameUnit": ["a", "b"],
+      "sameCompound": ["a", "b"],
+      "catalogueMatch": ["a", "b"]
     },
     "services/leadRequests.js": {
       "MAX_REQUESTS": "Number",
@@ -1284,6 +1287,7 @@
       "syncUnits": ["db", "projectId"],
       "linkUnits": ["db", "actor", "projectId", "params"],
       "unlinkUnit": ["db", "actor", "projectId", "listingId"],
+      "linkResale": ["db", "actor", "listing", "projectId"],
       "saveMaterial": ["db", "actor", "projectId", "input"],
       "setMaterialVisibility": ["db", "actor", "projectId", "materialId", "visible"],
       "deleteMaterial": ["db", "actor", "projectId", "materialId"],
