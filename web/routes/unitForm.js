@@ -132,7 +132,10 @@ function register(web, { pool, page }) {
     const form = Form.unitFromForm(req.body);
     const ev = evaluate({ existing, form, lang, photoCount: current + filesOf(req, "photos").length });
     const duplicate = ev.ok ? await Store.findDuplicate(pool, req.session.broker.agency_id, ev.listing, { excludeId: existing?.id }) : null;
-    return res.type("html").send(String(reviewPanel({ ...ev, listing: { ...ev.listing, code: existing?.code || form.code } }, lang, { duplicate })));
+    const catalogue = ev.ok && !duplicate && !existing?.details?.catalogue
+      ? await Store.findCatalogueMatch(pool, req.session.broker.agency_id, ev.listing, { excludeId: existing?.id }).catch(() => null)
+      : null;
+    return res.type("html").send(String(reviewPanel({ ...ev, listing: { ...ev.listing, code: existing?.code || form.code } }, lang, { duplicate, catalogue })));
   });
 
   // ✅ Create: the field table must pass; insert-only (a used code is refused, never overwritten).

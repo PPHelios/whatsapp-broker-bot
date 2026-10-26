@@ -140,15 +140,18 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
 const duplicateNotice = (code, lang) =>
   html`<p class="notice warn" data-duplicate="${code}">⚠️ ${L(lang, "شكلها نفس الوحدة", "This looks like")} <a href="/app/units/${encodeURIComponent(code)}">${code}</a> ${L(lang, "اللي عندك. لو دي وحدة تانية، احفظ برضه.", "already listed. If it is another unit, save anyway.")}</p>`;
 
+const catalogueNotice = (c, lang) =>
+  html`<p class="notice" data-catalogue-match="${c.code}">ℹ️ ${L(lang, "شبه", "Looks like")} ${c.model ? L(lang, "نموذج", "a model") : c.dev_code ? `${L(lang, "الوحدة", "unit")} ${c.dev_code}` : L(lang, "وحدة", "a unit")} ${L(lang, "في مشروع", "in")} ${c.project || "—"} ${L(lang, "في الكتالوج", "in your catalogue")} (<a href="/app/units/${encodeURIComponent(c.code)}">${c.code}</a>). ${L(lang, "لو هي نفسها، استخدم وحدة الكتالوج.", "If it is the same, use the catalogue unit.")}</p>`;
+
 /** Review panel: what blocks saving, the field warnings (only here and in WhatsApp review), the preview. */
-function reviewPanel(evaluation, lang = "ar", { duplicate = null } = {}) {
+function reviewPanel(evaluation, lang = "ar", { duplicate = null, catalogue = null } = {}) {
   const { blockers, warnings, listing } = evaluation;
   return html`<section class="card" data-review="${blockers.length ? "blocked" : "ok"}">
   <h2>📋 ${L(lang, "مراجعة قبل الحفظ", "Review before saving")}</h2>
   ${blockers.length
     ? html`<div class="notice bad card"><strong>⛔ ${L(lang, "ناقص لإتمام الحفظ:", "Still needed to save:")}</strong><ul>${blockers.map((b) => html`<li data-blocker="${b.field}">${lang === "en" ? b.label_en : b.label_ar}</li>`)}</ul></div>`
     : html`<p class="ok">✅ ${L(lang, "جاهزة للحفظ.", "Ready to save.")}</p>`}
-  ${duplicate ? duplicateNotice(duplicate, lang) : ""}
+  ${duplicate ? duplicateNotice(duplicate, lang) : catalogue ? catalogueNotice(catalogue, lang) : ""}
   ${warnings.length ? html`<ul class="warn">${warnings.map((w) => html`<li data-warning="${w.field}">${Rules.warningLine(w, lang)}</li>`)}</ul>` : ""}
   ${factList({ ...listing, code: listing.code || "—" }, lang)}
 </section>`;

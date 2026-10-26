@@ -5,7 +5,7 @@
 // (a unit that has its own plans, payment_terms.plans_own, keeps them).
 "use strict";
 
-const { isManager } = require("../lib/authz");
+const { isManager, canEdit } = require("../lib/authz");
 const { normalizeArabicDigits } = require("../lib/listingText");
 
 const STATUSES = ["launching", "selling", "sold_out"];
@@ -489,6 +489,30 @@ async function unlinkUnit(db, actor, projectId, listingId) {
   return rows[0] ? { ok: true } : { error: "not_found" };
 }
 
+/**
+ * C3: a broker links their own resale unit (a resale contract) to a catalogue project, or clears it. The unit keeps
+ * its own payment terms (plans_own), so the project's plans never overwrite the contract. Catalogue units are linked
+ * by managers on the project page instead. { ok, project_id } | { error }
+ */
+async function linkResale(db, actor, listing, projectId) {
+  if (!listing || !canEdit(actor, listing)) return { error: "forbidden" };
+  if (listing.details?.catalogue) return { error: "catalogue_unit" };
+  let project = null;
+  if (projectId) {
+    project = await projectRow(db, actor, projectId);
+    if (!project || project.archived_at) return { error: "not_found" };
+  }
+  const { rows } = await db.query(
+    `UPDATE listings SET project_id = $3, phase_id = NULL, version = version + 1, updated_at = now(),
+            payment_terms = jsonb_set(jsonb_set(COALESCE(payment_terms, '{}'::jsonb), '{plans}',
+              COALESCE((SELECT jsonb_agg(p) FROM jsonb_array_elements(COALESCE(payment_terms->'plans', '[]'::jsonb)) p WHERE p->>'source' IS DISTINCT FROM 'project'), '[]'::jsonb)),
+              '{plans_own}', to_jsonb($4::boolean))
+     WHERE id = $1 AND agency_id = $2 RETURNING id`,
+    [listing.id, actor.agency_id, project?.id || null, Boolean(project)]
+  );
+  return rows[0] ? { ok: true, project_id: project?.id || null } : { error: "not_found" };
+}
+
 /* ---------------------------------------------------------------------- */
 /* Materials                                                               */
 /* ---------------------------------------------------------------------- */
@@ -569,7 +593,7 @@ async function clientMaterials(db, listing) {
 async function projectForUnit(db, listing) {
   if (!listing?.project_id) return null;
   const { rows } = await db.query(
-    `SELECT p.id, p.name, p.name_en, p.status, p.prices_updated_at, d.name AS developer_name FROM projects p LEFT JOIN developers d ON d.id = p.developer_id
+    `SELECT p.id, p.name, p.name_en, p.status, p.prices_updated_at, p.delivery_year, p.delivery_quarter, p.delivery_raw, d.name AS developer_name FROM projects p LEFT JOIN developers d ON d.id = p.developer_id
      WHERE p.id = $1 AND p.agency_id = $2`,
     [listing.project_id, listing.agency_id]
   );
@@ -680,6 +704,7 @@ module.exports = {
   syncUnits,
   linkUnits,
   unlinkUnit,
+  linkResale,
   saveMaterial,
   setMaterialVisibility,
   deleteMaterial,

@@ -42,9 +42,10 @@ async function wantedSection(pool, broker, listing, lang, csrf) {
 
 /** "EGP 52,000 per m² · 8% above the median of 12 units in Hyde Park" (sale and rent apart; ≥ 5 other units). */
 /** The unit's catalogue project (C1) and its links; internal ones are marked (brokers may use them, clients never see them). */
-function projectLine(p, lang) {
+function projectLine(p, lang, { catalogue = true } = {}) {
   const fresh = PriceSheets.freshness(p);
-  return html`<p data-project="${p.id}">🏗️ <a href="/app/catalogue/projects/${p.id}">${lang === "en" ? p.name_en || p.name : p.name}</a>${p.developer_name ? ` · ${p.developer_name}` : ""}${p.prices_updated_at ? html` · <span data-prices-fresh="${fresh}">${fresh === "stale" ? "⚠️ " : "🏷️ "}${L(lang, "أسعار شيت", "prices of")} <span dir="ltr">${new Date(p.prices_updated_at).toISOString().slice(0, 10)}</span>${fresh === "stale" ? L(lang, " (السعر ممكن يكون اتغير)", " (price may have changed)") : ""}</span>` : ""}</p>
+  const delivery = p.delivery_year ? `${p.delivery_quarter ? `Q${p.delivery_quarter} ` : ""}${p.delivery_year}` : p.delivery_raw || "";
+  return html`<p data-project="${p.id}">🏗️ <a href="/app/catalogue/projects/${p.id}">${lang === "en" ? p.name_en || p.name : p.name}</a>${p.developer_name ? ` · ${p.developer_name}` : ""}${delivery ? html` · <span data-project-delivery>🔑 ${L(lang, "تسليم المشروع", "project delivery")} <span dir="ltr">${delivery}</span></span>` : ""}${catalogue && p.prices_updated_at ? html` · <span data-prices-fresh="${fresh}">${fresh === "stale" ? "⚠️ " : "🏷️ "}${L(lang, "أسعار شيت", "prices of")} <span dir="ltr">${new Date(p.prices_updated_at).toISOString().slice(0, 10)}</span>${fresh === "stale" ? L(lang, " (السعر ممكن يكون اتغير)", " (price may have changed)") : ""}</span>` : ""}</p>
   ${p.materials.length ? html`<p class="muted">${p.materials.map((m, i) => html`${i ? " · " : ""}<a href="${m.url}" target="_blank" rel="noopener noreferrer">${m.label}</a>${m.client_visible ? "" : " 🔒"}`)}</p>` : ""}`;
 }
 
@@ -52,6 +53,19 @@ function projectLine(p, lang) {
 function historyLine(rows, lang) {
   if (rows.length < 2) return "";
   return html`<details data-price-history><summary>📈 ${L(lang, "تاريخ السعر", "Price history")}</summary><ul>${rows.map((r) => html`<li><span dir="ltr">${new Date(r.changed_at).toISOString().slice(0, 10)}</span>: ${Commission.money(r.price, lang)}</li>`)}</ul></details>`;
+}
+
+/** C3: link a broker's own resale unit to a catalogue project (its contract keeps its own terms). */
+function resaleLinkForm(listing, project, projects, lang, csrf) {
+  if (!projects.length && !project) return "";
+  return html`<details id="resale-project" ${project ? "" : "open"}><summary>🏗️ ${L(lang, "ربط الوحدة بمشروع في الكتالوج", "Link this unit to a catalogue project")}</summary>
+  <form method="post" action="/app/units/${encodeURIComponent(listing.code)}/project" class="row">
+    <input type="hidden" name="_csrf" value="${csrf}">
+    <select name="project_id"><option value="">${L(lang, "— بدون مشروع —", "— No project —")}</option>${projects.map((p) => html`<option value="${p.id}" ${p.id === listing.project_id ? "selected" : ""}>${lang === "en" ? p.name_en || p.name : p.name}</option>`)}</select>
+    <button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>
+  </form>
+  <p class="muted">${L(lang, "العقد بيفضل بشروط الدفع بتاعته. المشروع بيظهر التسليم والروابط بس.", "The contract keeps its own payment terms. The project adds its delivery and links only.")}</p>
+</details>`;
 }
 
 function marketLine(m, listing, lang) {
@@ -177,6 +191,16 @@ ${rows.length
     return res.send(file.buffer);
   });
 
+  web.post("/units/:code/project", async (req, res, next) => {
+    const { broker } = req.session;
+    const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!listing || !Authz.canView(broker, listing)) return next();
+    const out = await Catalogue.linkResale(pool, broker, listing, req.body.project_id || null);
+    if (out.error === "forbidden" || out.error === "catalogue_unit") return res.status(403).send("forbidden");
+    if (out.error) return res.status(400).send("bad project");
+    return res.redirect(303, `/app/units/${encodeURIComponent(listing.code)}?saved=1`);
+  });
+
   web.get("/units/:code", async (req, res, next) => {
     const lang = langOf(req);
     const { broker } = req.session;
@@ -186,6 +210,7 @@ ${rows.length
     const market = listing.status === "active" ? await Insights.forUnit(pool, listing) : null;
     const [project, prices] = await Promise.all([Catalogue.projectForUnit(pool, listing), PriceSheets.history(pool, listing)]);
     const status = { active: L(lang, "🟢 متاحة", "🟢 Available"), sold: L(lang, "🔴 مباعة", "🔴 Sold"), archived: L(lang, "📁 مؤرشفة", "📁 Archived") }[listing.status] || listing.status;
+    const linkable = !listing.details?.catalogue && listing.market === "resale" && listing.status === "active" && Authz.canEdit(broker, listing);
     const conf = Describe.compactLine({ code: "", confirmed_at: listing.confirmed_at }, lang).match(/✅ \S+/);
     return page(req, res, {
       title: listing.code,
@@ -194,7 +219,8 @@ ${rows.length
   ${req.query.saved ? html`<p class="notice card ok">✅ ${L(lang, "تم الحفظ", "Saved")}</p>` : ""}
   <h1>${listing.code} · ${status}${conf ? html` <span class="muted">${conf[0]}</span>` : ""}</h1>
   ${factList(listing, lang)}
-  ${project ? projectLine(project, lang) : ""}
+  ${project ? projectLine(project, lang, { catalogue: Boolean(listing.details?.catalogue) }) : ""}
+  ${linkable ? resaleLinkForm(listing, project, await Catalogue.listProjects(pool, broker), lang, req.session.csrf) : ""}
   ${market ? marketLine(market, listing, lang) : ""}
   ${historyLine(prices, lang)}
   ${images.length ? html`<div class="photos">${images.map((i) => html`<img src="${i.url}" alt="" loading="lazy">`)}</div>` : ""}
