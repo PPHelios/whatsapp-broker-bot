@@ -7,6 +7,7 @@
 
 const Leads = require("../../services/leads");
 const FollowUpDrafts = require("../../services/followUpDrafts");
+const LeadMerge = require("../../services/leadMerge");
 const LeadRequests = require("../../services/leadRequests");
 const Privacy = require("../../services/privacy");
 const Viewings = require("../../services/viewings");
@@ -341,7 +342,15 @@ ${draft
 </section>
 ${viewingSection({ lead, viewing, unit, path, hidden, lang })}
 ${manager
-  ? html`<section class="card" id="privacy"><h2>🔒 ${L(lang, "بيانات العميل (للمدير)", "Client data (managers)")}</h2>
+  ? html`<section class="card" id="merge"><h2>🔗 ${L(lang, "دمج عميل مكرر", "Merge a duplicate")}</h2>
+  <p class="muted">${L(lang, "لو العميل ده متسجل مرتين برقمين مختلفين: اكتب رقم السجل التاني (L-…) مرتين، وكل حاجة فيه (أرقامه، تاريخه، طلباته، معايناته، صفقاته) هتتنقل هنا، والسجل التاني هيتمسح. مينفعش يترجع.", "If this client is saved twice under two numbers: type the other record's reference (L-…) twice; everything on it (numbers, history, requests, viewings, deals) moves here and the other record is deleted. This can't be undone.")}</p>
+  <form method="post" action="${path}/merge" class="row">${hidden}
+    <label>${L(lang, "السجل التاني", "The other record")}<input name="other" required dir="ltr" placeholder="L-0042" size="8"></label>
+    <label>${L(lang, "اكتبه تاني للتأكيد", "Type it again to confirm")}<input name="confirm" required dir="ltr" size="8"></label>
+    <button type="submit" class="danger">🔗 ${L(lang, "ادمج هنا", "Merge into this one")}</button>
+  </form>
+</section>
+<section class="card" id="privacy"><h2>🔒 ${L(lang, "بيانات العميل (للمدير)", "Client data (managers)")}</h2>
   <p><a class="btn secondary" href="${path}/export">📦 ${L(lang, "تصدير بياناته (zip)", "Export their data (zip)")}</a></p>
   <form method="post" action="${path}/erase" class="row">${hidden}
     <label>${L(lang, "للمسح النهائي اكتب آخر 4 أرقام من رقمه", "To erase for good, type the last 4 digits of their number")}<input name="confirm" inputmode="numeric" maxlength="4" pattern="[0-9٠-٩]{4}" required dir="ltr"></label>
@@ -406,6 +415,7 @@ ${V.bottomBar(lead, lang, broker.name)}`
       contacted: L(lang, "📞 اتسجل إنك كلمته.", "📞 Marked as contacted."),
       assigned: L(lang, "✅ اتسلم.", "✅ Assigned."),
       undone: L(lang, "↩️ اتلغى.", "↩️ Undone."),
+      merged: L(lang, "🔗 السجلين اتدمجوا في سجل واحد.", "🔗 The two records are now one."),
       request: L(lang, "🔎 الطلب اتحفظ؛ هتتبلغ بالوحدات الجديدة اللي تناسبه.", "🔎 Request saved; you'll hear about new units that fit."),
       request_removed: L(lang, "🗑️ الطلب اتمسح.", "🗑️ Request removed."),
       viewing: L(lang, "✅ المعاينة اتحفظت. الرقم ده أرضي، ابعت اللينك بنفسك.", "✅ Viewing saved. This number is a landline; send the link yourself.")
@@ -524,6 +534,20 @@ ${V.bottomBar(lead, lang, broker.name)}`
   });
 
   // "Send to client": a share link with the lead, then WhatsApp opens on the client's chat with the message ready.
+  // N8: managers merge a duplicate record into this one (services/leadMerge.js).
+  web.post("/leads/:ref/merge", async (req, res, next) => {
+    const lead = await loadOr404(req, next);
+    if (!lead) return;
+    const lang = langOf(req);
+    const out = await LeadMerge.merge(pool, actor(req), lead.id, String(req.body.other || "").trim(), { confirm: String(req.body.confirm || "").trim() });
+    if (out.error === "forbidden") return res.status(403).send(L(lang, "للمديرين بس.", "Managers only."));
+    if (out.error) {
+      const why = { not_found: L(lang, "مش لاقيين السجل التاني.", "The other record wasn't found."), same: L(lang, "ده نفس السجل.", "That's this same record."), confirm: L(lang, "التأكيد مش مطابق لرقم السجل التاني.", "The confirmation doesn't match the other record's reference.") }[out.error];
+      return leadPage(req, res, lead, { status: 422, notice: `⚠️ ${why}` });
+    }
+    return res.redirect(303, `${V.leadPath(out.lead)}?done=merged`);
+  });
+
   // N2: the next message to the client, drafted from the lead's record (services/followUpDrafts.js).
   web.post("/leads/:ref/draft", async (req, res, next) => {
     const lead = await loadOr404(req, next);

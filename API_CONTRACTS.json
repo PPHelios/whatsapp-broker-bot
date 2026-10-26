@@ -1623,6 +1623,25 @@
       "progress": ["db", "agencyId", "params"],
       "briefLine": ["p", "lang", "money"],
       "pct": ["n", "of"]
+    },
+    "domain/winLoss.js": {
+      "REASONS": "Object",
+      "classify": ["reason"],
+      "label": ["key", "lang"],
+      "winRate": ["won", "lost"]
+    },
+    "services/winLoss.js": {
+      "PERIODS": "Array",
+      "NONE": "String",
+      "report": ["db", "manager", "params"]
+    },
+    "web/routes/winLoss.js": {
+      "register": ["web", "params"]
+    },
+    "services/leadMerge.js": {
+      "MAX_PHONES": "Number",
+      "mergedFields": ["keep", "drop"],
+      "merge": ["pool", "manager", "keepKey", "dropKey", "params"]
     }
   },
   "invariant_variable_names": {
