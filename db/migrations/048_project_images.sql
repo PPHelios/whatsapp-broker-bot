@@ -18,3 +18,4 @@ CREATE TABLE IF NOT EXISTS project_images (
 );
 CREATE INDEX IF NOT EXISTS project_images_project_idx ON project_images (project_id, position);
 CREATE INDEX IF NOT EXISTS project_images_listings_idx ON project_images USING gin (listing_ids);
+ALTER TABLE project_images ENABLE ROW LEVEL SECURITY;
