@@ -69,6 +69,7 @@
   | `049_lead_routing.sql` | Lead routing (P2): `agencies.lead_routing` (round-robin switch, broker order, who got the last lead) |
   | `050_onboarding.sql` | Onboarding: `brokers.onboarding` (welcome card closed, one-time bot hints, day 1/3/7 nudges sent); existing brokers marked as done |
   | `051_assistant_resolved.sql` | `assistant_questions.resolved_at`: an unanswered question leaves the list once a manager adds the info |
+  | `052_unit_privacy.sql` | Agency-only unit location and secret details: `projects.lat/lng` (inherited by its units), `unit_access_requests` (a broker asks, the unit's broker or a manager answers); `agencies.crm_settings.secret_details` = restricted (default) or all |
   | `038_assistant.sql` | The assistant (C10 + N1): `project_contexts` (per project summary, facts, source key, built time), `assistant_questions` (question log: channel, found, web, scopes), `agencies.assistant` (owner's web switch and monthly web answers) |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.

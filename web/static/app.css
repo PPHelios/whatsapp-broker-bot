@@ -370,10 +370,10 @@ body:has(.pick input:checked) .bulkbar { display: flex; }
 .board summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-height: 52px; padding: 6px 4px; cursor: pointer; }
 .board summary .muted { flex-basis: 100%; padding-inline-start: 38px; }
 .board .medal { width: 28px; text-align: center; }
-.facts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin: 4px 0 8px; padding-inline-start: 38px; }
-.facts div { display: flex; justify-content: space-between; gap: 6px; }
-.facts dt { color: var(--muted); font-size: 0.85rem; }
-.facts dd { margin: 0; font-weight: 700; }
+.bfacts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin: 4px 0 8px; padding-inline-start: 38px; }
+.bfacts div { display: flex; justify-content: space-between; gap: 6px; }
+.bfacts dt { color: var(--muted); font-size: 0.85rem; }
+.bfacts dd { margin: 0; font-weight: 700; }
 .grid label:has(input[type="datetime-local"]), .grid label:has(input[type="date"]), .grid label:has(textarea) { grid-column: 1 / -1; }
 .leadhead h1 { margin: 0; font-size: 1.35rem; }
 .leadhead p { margin: 6px 0; }

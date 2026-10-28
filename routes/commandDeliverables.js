@@ -130,7 +130,9 @@ async function deliverCollateral(listing, broker, lang, pool = null) {
  * Reusable Deliverable Handler: Direct Unit Code Inspection Card (ING-04)
  */
 async function deliverUnitInspectionCard(listing, broker, lang, pool = null) {
-  const detailsCard = T.formatInternalListingDetails(listing, lang);
+  // Secret details (owner, commission, address, pin) only for whoever the agency allows (services/unitPrivacy.js).
+  const view = pool ? await require("../services/unitPrivacy").forBroker(pool, broker, listing) : { listing: require("../services/unitPrivacy").redact(listing), hidden: false };
+  const detailsCard = T.formatInternalListingDetails(view.listing, lang) + (view.hidden ? (lang === "en" ? "\n🔒 Private details: ask on the website (unit page)." : "\n🔒 البيانات الخاصة: اطلبها من صفحة الوحدة على الموقع.") : "");
   const buttons = cardButtons(listing, lang);
 
   // Telegram (6.4): the unit's photos as an album above the card (free there; WhatsApp keeps text only).

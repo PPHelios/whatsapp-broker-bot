@@ -28,6 +28,7 @@ const Session = require("../session");
 const { uploads, VOICE } = require("../uploads");
 const { html } = require("../html");
 const { icon } = require("../icons");
+const UnitPrivacy = require("../../services/unitPrivacy");
 const V = require("../views/leads");
 const { refineForm } = require("../views/searchForm");
 
@@ -64,7 +65,8 @@ function viewingSection({ lead, viewing: v, unit, path, hidden, lang }) {
   <form method="post" action="${path}/viewing" class="grid">${hidden}
     <label>${L(lang, "إمتى (بتوقيت القاهرة)", "When (Cairo time)")}<input type="datetime-local" name="at" required value="${at ? Stages.toCairoLocal(at) : Stages.nextHourLocal()}"></label>
     <label>${L(lang, "كود الوحدة", "Unit code")}<input name="unit" dir="ltr" value="${(open && v.code) || unit?.code || ""}"></label>
-    <label>${L(lang, "المكان", "Place")}<input name="place" maxlength="200" value="${(open && v.place) || ""}" placeholder="${L(lang, "مثلاً: بوابة 3، هايد بارك", "e.g. Gate 3, Hyde Park")}"></label>
+    <label>${L(lang, "المكان", "Place")}<input name="place" maxlength="200" value="${(open && v.place) || unit?.mapsUrl || ""}" placeholder="${L(lang, "مثلاً: بوابة 3، هايد بارك", "e.g. Gate 3, Hyde Park")}"></label>
+    ${unit?.mapsUrl ? "" : html`<p class="muted small">${L(lang, "اختياري: ابعت للعميل مكان المقابلة.", "Optional: send the client the meeting point.")} <button type="button" class="link" data-my-location data-fail="${L(lang, "مقدرناش نجيب مكانك.", "Couldn't get your location.")}" hidden>${L(lang, "استخدم مكاني دلوقتي", "Use where I am now")}</button></p>`}
     <button type="submit">📲 ${v ? L(lang, "ابعت ميعاد جديد للعميل", "Send a new time to the client") : L(lang, "ابعت الميعاد للعميل على واتساب", "Send the time to the client on WhatsApp")}</button>
   </form>
 </section>`;
@@ -302,7 +304,9 @@ ${rows.length
     const brokers = manager ? await activeBrokers(pool, broker.agency_id) : [];
     const viewing = await Viewings.latestFor(pool, broker.agency_id, lead.id);
     const leases = await Leases.forTenant(pool, broker.agency_id, lead.id);
-    const unit = lead.follow_up_listing_id ? (await pool.query("SELECT code FROM listings WHERE id = $1 AND agency_id = $2", [lead.follow_up_listing_id, broker.agency_id])).rows[0] : null;
+    const unit = lead.follow_up_listing_id ? (await pool.query("SELECT * FROM listings WHERE id = $1 AND agency_id = $2", [lead.follow_up_listing_id, broker.agency_id])).rows[0] : null;
+    // The viewing place starts from the unit's agency-only pin when this broker may see it.
+    if (unit && (await UnitPrivacy.canSee(pool, broker, unit))) unit.mapsUrl = UnitPrivacy.mapsUrl(await UnitPrivacy.pinOf(pool, unit));
     const path = V.leadPath(lead);
     const hidden = html`<input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="version" value="${lead.version}">`;
     return page(

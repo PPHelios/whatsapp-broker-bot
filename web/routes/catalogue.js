@@ -168,6 +168,7 @@ function projectForm(lang, developers, p = {}, action = "/app/catalogue/projects
     <label>${L(lang, "المنطقة", "District")} <input name="district" maxlength="80" value="${p.district || ""}"></label>
     <label>${L(lang, "المدينة", "City")} <input name="city" maxlength="80" value="${p.city || ""}"></label>
   </div>
+  <label>🔒 ${L(lang, "لوكيشن المشروع (للوكالة بس): لينك جوجل ماب", "Project location (agency only): Google Maps link")} <input name="pin" dir="ltr" autocomplete="off" value="${p.lat != null ? `${p.lat}, ${p.lng}` : ""}"></label>
   <div class="row">
     <label>${L(lang, "سنة الاستلام", "Delivery year")} <input name="delivery_year" inputmode="numeric" dir="ltr" size="5" value="${val(p.delivery_year)}"></label>
     <label>${L(lang, "الربع (1-4)", "Quarter (1-4)")} <input name="delivery_quarter" inputmode="numeric" dir="ltr" size="2" value="${val(p.delivery_quarter)}"></label>

@@ -95,6 +95,8 @@ async function handleInteractive(broker, message, ctx) {
     recentButtonClicks.set(clickKey, now + 3000);
   }
 
+  // A location pin's unit choice (pin:<code>:<lat>:<lng>).
+  if (await require("./unitPin").handlePinButton(broker, replyId, ctx)) return "done";
   // CRM lead buttons (ld:*): each reloads the lead and checks rights (lib/leadIntake.js).
   if (await LeadIntake.handleButton(broker, replyId, ctx)) return "done";
   // Deal review buttons (dl:*): the deal waits server-side (lib/deals.js).
