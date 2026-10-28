@@ -473,6 +473,28 @@
       }, { enableHighAccuracy: true, timeout: 15000 });
     });
   }
+  // Lead board: drag a card onto another column to move it (the card's own Move form does the save).
+  var board = document.querySelector("[data-board]");
+  if (board) {
+    var dragged = null;
+    board.addEventListener("dragstart", function (e) {
+      dragged = e.target.closest && e.target.closest(".bcard");
+      if (dragged && e.dataTransfer) e.dataTransfer.setData("text/plain", dragged.getAttribute("data-lead"));
+    });
+    board.addEventListener("dragover", function (e) { if (dragged && e.target.closest(".bcol")) e.preventDefault(); });
+    board.addEventListener("drop", function (e) {
+      var col = e.target.closest(".bcol");
+      if (!dragged || !col) return;
+      e.preventDefault();
+      var form = dragged.querySelector("form.bmove");
+      var select = form && form.querySelector("select[name=stage]");
+      var stage = col.getAttribute("data-stage");
+      if (!select || select.value === stage) return;
+      if (!select.querySelector('option[value="' + stage + '"]')) { toast(EN ? "Mark Lost from the lead page." : "«ضاع» من صفحة العميل.", true); return; }
+      select.value = stage;
+      form.requestSubmit ? form.requestSubmit() : form.submit();
+    });
+  }
   // Voice search: the mic in a search box dictates into it and searches. Shown only where the browser can listen.
   var Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
   function listen(btn) {

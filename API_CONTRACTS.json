@@ -1810,6 +1810,16 @@
       "pendingFor": ["pool", "actor", "listing"],
       "hasPending": ["pool", "broker", "listing"],
       "decide": ["pool", "actor", "listing", "requestId", "approve"]
+    },
+    "services/ownerAgencies.js": {
+      "ACTIONS": "Array",
+      "list": ["db", "params"],
+      "get": ["db", "agencyId", "params"],
+      "setPlan": ["db", "owner", "agencyId", "params"],
+      "suspend": ["pool", "owner", "agencyId", "params"],
+      "resume": ["pool", "owner", "agencyId"],
+      "announce": ["pool", "owner", "params"],
+      "auditLog": ["db", "params"]
     }
   },
   "invariant_variable_names": {

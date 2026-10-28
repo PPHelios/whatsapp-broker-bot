@@ -119,6 +119,35 @@ function register(web, { pool, page }) {
   /* The list                                                            */
   /* ------------------------------------------------------------------ */
 
+  /* The lead board: one column per stage, swipe across; drag a card (or pick a stage) to move it. */
+  web.get("/leads/board", async (req, res) => {
+    const lang = langOf(req);
+    const { broker } = req.session;
+    const manager = isManager(broker);
+    const brokerId = manager && req.query.broker ? String(req.query.broker) : null;
+    const open = Stages.STAGES.filter((s) => !Stages.isClosed(s));
+    const cols = await Promise.all(Stages.STAGES.map(async (s) => [s, await Leads.listLeads(pool, broker, { stage: s, brokerId, limit: Stages.isClosed(s) ? 10 : 40, offset: 0 })]));
+    const brokers = manager ? await activeBrokers(pool, broker.agency_id) : [];
+    const moved = /^L-\d{4,6}$/.test(String(req.query.moved || "")) ? req.query.moved : null;
+    const card = (l) => html`<li class="bcard" data-lead="${Card.refLabel(l.ref)}" draggable="true">
+      <a href="${V.leadPath(l)}"><strong>${Card.displayName(l, lang)}</strong> <span class="muted small" dir="ltr">${Card.refLabel(l.ref)}</span></a>
+      <span class="muted small">${l.follow_up_status === "open" ? `⏰ ${V.when(l.next_follow_up_at, lang)}` : L(lang, "مفيش خطوة جاية", "No next step")}${manager ? ` · ${l.assignee_name || L(lang, "مش متسلم", "Unassigned")}` : ""}</span>
+      <form method="post" action="${V.leadPath(l, "/stage")}" class="bmove"><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="version" value="${l.version}"><input type="hidden" name="back" value="board">
+        <select name="stage" aria-label="${L(lang, "انقل لـ", "Move to")}">${open.concat("won").map((s) => html`<option value="${s}"${s === l.stage ? html` selected` : ""}>${Stages.stageLabel(s, lang)}</option>`)}</select><button type="submit" class="secondary small">${L(lang, "انقل", "Move")}</button></form>
+    </li>`;
+    return page(req, res, {
+      title: L(lang, "لوحة العملاء", "Lead board"),
+      nav: "leads",
+      body: html`<div class="row between"><h1>${L(lang, "لوحة العملاء", "Lead board")}</h1><a class="btn secondary small" href="/app/leads">${L(lang, "القايمة", "List")}</a></div>
+${moved ? html`<p class="card notice ok" role="status">✅ ${L(lang, `${moved} اتنقل.`, `${moved} moved.`)}${req.query.undo ? html` <a href="/app/leads/${moved}">${L(lang, "افتحه للتراجع", "Open it to undo")}</a>` : ""}</p>` : ""}
+${manager
+  ? html`<form method="get" action="/app/leads/board"><select name="broker" data-autosubmit aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل الفريق", "Whole team")}</option><option value="none"${brokerId === "none" ? html` selected` : ""}>${L(lang, "مش متسلم", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${b.id === brokerId ? html` selected` : ""}>${b.name}</option>`)}</select><noscript><button type="submit">${L(lang, "تطبيق", "Apply")}</button></noscript></form>`
+  : ""}
+<p class="muted small">${L(lang, "اسحب العميل لعمود تاني، أو اختار المرحلة واضغط «انقل». «ضاع» من صفحة العميل عشان سبب الضياع.", "Drag a lead to another column, or pick a stage and tap Move. Mark Lost from the lead page (it needs a reason).")}</p>
+<div class="board-cols" data-board>${cols.map(([s, r]) => html`<section class="bcol" id="col-${s}" data-stage="${s}"><h2>${Stages.stageLabel(s, lang)} <b>${r.rows.length}${r.more ? "+" : ""}</b></h2><ol>${r.rows.map(card)}</ol></section>`)}</div>`
+    });
+  });
+
   web.get("/leads", async (req, res) => {
     const lang = langOf(req);
     const { broker } = req.session;
@@ -153,7 +182,7 @@ function register(web, { pool, page }) {
     return page(req, res, {
       title: L(lang, "العملاء", "Leads"),
       nav: "leads",
-      body: html`<div class="row between"><h1>${L(lang, "العملاء", "Leads")}</h1><span class="row"><a class="btn secondary small" href="/app/leads/import" aria-label="${L(lang, "استيراد من ملف", "Import a file")}">${icon("import", 18)}</a><a class="btn small" href="/app/leads/new">${icon("plus", 18)} ${L(lang, "عميل جديد", "New lead")}</a></span></div>
+      body: html`<div class="row between"><h1>${L(lang, "العملاء", "Leads")}</h1><span class="row"><a class="btn secondary small" href="/app/leads/board" aria-label="${L(lang, "لوحة العملاء", "Lead board")}">${icon("board", 18)}</a><a class="btn secondary small" href="/app/leads/import" aria-label="${L(lang, "استيراد من ملف", "Import a file")}">${icon("import", 18)}</a><a class="btn small" href="/app/leads/new">${icon("plus", 18)} ${L(lang, "عميل جديد", "New lead")}</a></span></div>
 ${/^L-\d{4,6}$/.test(String(req.query.erased || "")) ? html`<p class="card notice" role="status">🔒 ${L(lang, `العميل ${req.query.erased} اتمسح نهائياً.`, `Client ${req.query.erased} was erased for good.`)}</p>` : ""}
 <form method="get" action="/app/leads" class="stack">
   <input type="hidden" name="tab" value="${tab}">
@@ -464,6 +493,8 @@ ${V.bottomBar(lead, lang, broker.name)}`
       const version = req.body.version === undefined || req.body.version === "" ? null : Number(req.body.version);
       const r = await run(req, lead, version);
       if (r.ok && r.redirect) return res.redirect(303, r.redirect);
+      // From the lead board: back to the board, on the column the lead moved to.
+      if ((r.ok || r.unchanged) && req.body.back === "board") return res.redirect(303, `/app/leads/board?moved=${Card.refLabel((r.lead || lead).ref)}${r.eventId ? `&undo=${r.eventId}` : ""}#col-${req.body.stage || ""}`);
       if (r.ok || r.unchanged) return res.redirect(303, `${V.leadPath(r.lead || lead)}?done=${doneKey}${r.eventId ? `&undo=${r.eventId}` : ""}`);
       const fresh = (await Leads.getLead(pool, req.session.broker, lead.id)) || lead;
       if (r.conflict) {
