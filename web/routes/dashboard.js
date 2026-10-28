@@ -320,7 +320,7 @@ function register(web, { pool, page }) {
       : `أهلاً ${b.name}! ${r.agency.name} اتفعّلت على WehdatHub: ${Plans.TRIAL.days} يوم تجربة مجانية على باقة المكتب. دوس على اللينك ده عشان تبدأ على تيليجرام (يشتغل مرة واحدة، لمدة ٧ أيام): ${r.url || ""}`;
     const wa = r.url ? Phone.waMeUrl(b.phone_number, text) : null;
     return ownerView(req, res, html`<section class="card notice ok" role="status" data-approved="${r.agency.id}"><h2>✅ ${L(lang, `${r.agency.name} اتوافق عليها؛ التجربة شغالة.`, `${r.agency.name} approved; the trial has started.`)}</h2>
-${r.url ? html`<p dir="ltr"><input readonly value="${r.url}" aria-label="${L(lang, "لينك البداية", "Start link")}"></p>` : html`<p class="muted">${L(lang, "بوت تيليجرام مش متظبط (TELEGRAM_BOT_USERNAME).", "The Telegram bot isn't set up (TELEGRAM_BOT_USERNAME).")}</p>`}
+${r.url ? html`<p class="row" dir="ltr"><input readonly value="${r.url}" id="start-link" aria-label="${L(lang, "لينك البداية", "Start link")}"> <button type="button" class="secondary" data-copy="#start-link">📋 ${L(lang, "نسخ", "Copy")}</button></p>` : html`<p class="muted">${L(lang, "بوت تيليجرام مش متظبط (TELEGRAM_BOT_USERNAME).", "The Telegram bot isn't set up (TELEGRAM_BOT_USERNAME).")}</p>`}
 ${wa ? html`<p><a class="btn" href="${wa}" target="_blank" rel="noopener noreferrer">📤 ${L(lang, "ابعته على واتساب", "Send on WhatsApp")}</a></p>` : ""}</section>`);
   }));
 
