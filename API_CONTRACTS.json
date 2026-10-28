@@ -1526,6 +1526,15 @@
       "apply": ["pool", "actor", "projectId", "body"],
       "discard": ["pool", "actor", "projectId"]
     },
+    "services/aiUsageLog.js": {
+      "FEATURES": "Object",
+      "featureLabel": ["f", "lang"],
+      "monthOf": ["now"],
+      "list": ["db", "agencyId", "params"],
+      "filtersOf": ["q"],
+      "cairoTime": ["d"],
+      "workbook": ["log", "lang"]
+    },
     "services/brochure.js": {
       "read": ["pool", "actor", "projectId", "params", "params"],
       "saveHighlights": ["pool", "actor", "projectId", "input", "params"]
