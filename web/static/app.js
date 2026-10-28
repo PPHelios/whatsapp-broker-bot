@@ -386,6 +386,63 @@
     var lum = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
     document.documentElement.setAttribute("data-theme", lum < 0.5 ? "dark" : "light");
   })();
+  // Telegram Mini App bridge (no SDK: the CSP allows only our own scripts). Telegram's Back button goes back a page,
+  // its Main button presses the page's main action ([data-tg-main], the first one not hidden), and the safe area
+  // Telegram reports pads the page. Outside Telegram nothing here runs.
+  (function () {
+    var inTg = false;
+    try {
+      if (/tgWebAppData=|tgWebAppPlatform=/.test(location.hash)) sessionStorage.setItem("tgApp", "1");
+      inTg = sessionStorage.getItem("tgApp") === "1";
+    } catch (err) { inTg = /tgWebAppPlatform=/.test(location.hash); }
+    if (!inTg) return;
+    var root = document.documentElement;
+    root.classList.add("tg-app");
+    function post(type, data) {
+      var body = JSON.stringify(data || {});
+      try {
+        if (window.TelegramWebviewProxy && window.TelegramWebviewProxy.postEvent) window.TelegramWebviewProxy.postEvent(type, body);
+        else if (window.external && "notify" in window.external) window.external.notify(JSON.stringify({ eventType: type, eventData: data || {} }));
+        else if (window.parent !== window) window.parent.postMessage(JSON.stringify({ eventType: type, eventData: data || {} }), "https://web.telegram.org");
+      } catch (err) { /* not inside Telegram after all */ }
+    }
+    var handlers = {};
+    function receive(type, data) { if (handlers[type]) handlers[type](data || {}); }
+    window.Telegram = window.Telegram || {};
+    window.Telegram.WebView = window.Telegram.WebView || {};
+    window.Telegram.WebView.receiveEvent = receive;
+    window.addEventListener("message", function (e) {
+      if (e.origin !== "https://web.telegram.org") return;
+      try { var m = typeof e.data === "string" ? JSON.parse(e.data) : e.data; if (m && m.eventType) receive(m.eventType, m.eventData); } catch (err) { /* not ours */ }
+    });
+    var home = location.pathname === "/app/" || location.pathname === "/app";
+    post("web_app_setup_back_button", { is_visible: !home });
+    handlers.back_button_pressed = function () { if (history.length > 1) history.back(); else location.href = "/app/"; };
+    function shown(el) { return el && !el.disabled && !el.closest("[hidden]"); }
+    function mainTarget() {
+      var all = document.querySelectorAll("[data-tg-main]");
+      for (var i = 0; i < all.length; i++) if (shown(all[i])) return all[i];
+      return null;
+    }
+    function refreshMain() {
+      var el = mainTarget();
+      var css = getComputedStyle(root);
+      if (!el) { post("web_app_setup_main_button", { is_visible: false }); root.classList.remove("tg-main-on"); return; }
+      post("web_app_setup_main_button", { is_visible: true, is_active: true, text: (el.textContent || "").trim().slice(0, 64), color: css.getPropertyValue("--brand").trim() || "#2b7bd6", text_color: "#ffffff" });
+      root.classList.add("tg-main-on");
+    }
+    handlers.main_button_pressed = function () { var el = mainTarget(); if (el) el.click(); };
+    function pad(name, d) { ["top", "bottom", "left", "right"].forEach(function (k) { if (typeof d[k] === "number") root.style.setProperty("--tg-" + name + "-" + k, d[k] + "px"); }); }
+    handlers.safe_area_changed = function (d) { pad("safe", d); };
+    handlers.content_safe_area_changed = function (d) { pad("content", d); };
+    post("web_app_request_safe_area");
+    post("web_app_request_content_safe_area");
+    post("web_app_ready");
+    post("web_app_expand");
+    refreshMain();
+    document.addEventListener("steps:change", refreshMain);
+    document.addEventListener("htmx:load", refreshMain);
+  })();
   var EN = document.documentElement.lang === "en";
   // One message style (a toast above the bottom bar) for short results and for errors.
   var toastTimer = null;
@@ -511,6 +568,7 @@
     prev.type = "button"; prev.className = "secondary"; prev.textContent = form.getAttribute("data-prev") || "Back";
     var next = document.createElement("button");
     next.type = "button"; next.textContent = form.getAttribute("data-next") || "Next";
+    next.setAttribute("data-tg-main", "");
     nav.appendChild(prev); nav.appendChild(next);
     form.insertBefore(bar, form.firstChild.nextSibling);
     form.appendChild(nav);
@@ -528,6 +586,7 @@
       prev.hidden = at === 1;
       next.hidden = at === names.length;
       window.scrollTo(0, 0);
+      document.dispatchEvent(new CustomEvent("steps:change"));
     }
     next.addEventListener("click", function () {
       var fields = form.querySelectorAll('[data-step="' + at + '"] input, [data-step="' + at + '"] select, [data-step="' + at + '"] textarea');

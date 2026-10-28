@@ -166,7 +166,7 @@ ${notice ? html`<div class="card notice bad" role="alert">⚠️ ${notice}</div>
   <label class="check"><input type="checkbox" name="mark_sold" value="1"${v.mark_sold === "1" ? html` checked` : ""}> ${L(lang, "علّم الوحدة اتباعت (لو بتاعتك)", "Mark the unit sold (if it's yours)")}</label>
   <label>${L(lang, "ملاحظات", "Notes")}<textarea name="notes" maxlength="1000">${v.notes || ""}</textarea></label>
   <p class="muted">${L(lang, "العميل هيتعلم «اتقفلت ✅». الصفقة مش بتتلغي من هنا؛ المدير يقدر يصححها.", "The lead becomes Won ✅. A deal can't be undone here; a manager can correct it.")}</p>
-  <button type="submit">💾 ${L(lang, "سجل الصفقة", "Save the deal")}</button>
+  <button type="submit" data-tg-main>💾 ${L(lang, "سجل الصفقة", "Save the deal")}</button>
 </form>`
     }, status);
   }
