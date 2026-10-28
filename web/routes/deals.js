@@ -13,6 +13,7 @@ const { parseCommission } = require("../../lib/deals");
 const T = require("../../lib/text");
 const { isManager, canEditDeal } = require("../../lib/authz");
 const { html } = require("../html");
+const { dealsSwitch } = require("../views/tabs");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
@@ -86,6 +87,7 @@ function register(web, { pool, page }) {
       title: L(lang, "الصفقات", "Deals"),
       nav: "deals",
       body: html`<h1>🤝 ${L(lang, "الصفقات", "Deals")}</h1>
+${dealsSwitch(lang, "/app/deals")}
 <p><a class="btn secondary" href="/app/commissions" data-commissions-link>💸 ${L(lang, "عمولات المطورين", "Developer commissions")}</a></p>
 <section class="card" id="totals"><h2>📊 ${manager ? L(lang, "إجمالي الشهور", "Monthly totals") : L(lang, "نصيبك كل شهر", "Your share per month")}</h2>
 ${totals.length
@@ -110,6 +112,20 @@ ${rows.length
   });
 
   /* Recording a deal */
+  /** Suggestions for the client and unit boxes: the broker's open leads and active units (a manager's: the agency's). */
+  async function pickers(db, broker) {
+    const { rows } = await Leads.listLeads(db, broker, { limit: 100 });
+    const leads = rows.filter((x) => !["won", "lost"].includes(x.stage));
+    const units = (
+      await db.query(
+        `SELECT code, title, compound, location, price_display FROM listings
+          WHERE agency_id = $1 AND status = 'active' AND ($2::uuid IS NULL OR broker_id = $2) ORDER BY updated_at DESC LIMIT 200`,
+        [broker.agency_id, isManager(broker) ? null : broker.id]
+      )
+    ).rows;
+    return { leads, units };
+  }
+
   async function form(req, res, { values = {}, notice = null, status = 200 } = {}) {
     const lang = langOf(req);
     const { broker } = req.session;
@@ -117,6 +133,7 @@ ${rows.length
     const team = await colleagues(pool, broker);
     const v = { lead: req.query.lead || "", unit: req.query.unit || "", mark_sold: "1", ...values };
     const lead = v.lead ? await Leads.getLead(pool, broker, v.lead) : null;
+    const picks = await pickers(pool, broker);
     return page(req, res, {
       title: L(lang, "صفقة جديدة", "New deal"),
       nav: "deals",
@@ -124,9 +141,11 @@ ${rows.length
 ${notice ? html`<div class="card notice bad" role="alert">⚠️ ${notice}</div>` : ""}
 <form method="post" action="/app/deals/new" class="card stack">
   <input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="idem" value="${v.idem || crypto.randomBytes(8).toString("hex")}">
-  <label>${L(lang, "العميل (L-…)", "Client (L-…)")}<input name="lead" required dir="ltr" value="${v.lead}"></label>
+  <label>${L(lang, "العميل (L-…)", "Client (L-…)")}<input name="lead" required dir="ltr" value="${v.lead}" list="deal-leads" autocomplete="off" placeholder="${L(lang, "اكتب الاسم أو L-…", "Type a name or L-…")}"></label>
+  <datalist id="deal-leads">${picks.leads.map((x) => html`<option value="${Card.refLabel(x.ref)}">${Card.displayName(x, lang)}</option>`)}</datalist>
   ${lead ? html`<p class="muted">👤 ${Card.displayName(lead, lang)}</p>` : ""}
-  <label>${L(lang, "كود الوحدة", "Unit code")}<input name="unit" dir="ltr" value="${v.unit}"></label>
+  <label>${L(lang, "كود الوحدة", "Unit code")}<input name="unit" dir="ltr" value="${v.unit}" list="deal-units" autocomplete="off"></label>
+  <datalist id="deal-units">${picks.units.map((u) => html`<option value="${u.code}">${[u.title || u.compound || u.location, u.price_display].filter(Boolean).join(" · ")}</option>`)}</datalist>
   <label>${L(lang, "النوع", "Type")}<select name="deal_type"><option value="">${L(lang, "زي الوحدة", "As the unit")}</option><option value="sale"${v.deal_type === "sale" ? html` selected` : ""}>${L(lang, "بيع", "Sale")}</option><option value="rent"${v.deal_type === "rent" ? html` selected` : ""}>${L(lang, "إيجار", "Rent")}</option></select></label>
   <label>${L(lang, "السعر (فاضي = سعر الوحدة)", "Price (empty = the unit's price)")}<input name="price" inputmode="decimal" value="${v.price || ""}" placeholder="${L(lang, "8.5 مليون", "8.5M")}"></label>
   <label>${L(lang, "العمولة: نسبة أو مبلغ", "Commission: a % or an amount")}<input name="commission" required value="${v.commission || ""}" placeholder="2% / 170000"></label>

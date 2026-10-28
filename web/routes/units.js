@@ -17,6 +17,8 @@ const LeaseRules = require("../../domain/leases");
 const Commission = require("../../domain/commission");
 const { icon } = require("../icons");
 const Privacy = require("../../services/unitPrivacy");
+const Bulk = require("../../services/bulk");
+const { logOperation } = require("../../lib/db");
 const { html } = require("../html");
 const { resultItem, factList } = require("../views/units");
 
@@ -107,7 +109,8 @@ function leaseSection(listing, lease, lang, csrf, notice, tenants = []) {
 
 /** F10: the agency's leads to pick a tenant from (tenants first, then the most recent), as "L-0042 Name". */
 function register(web, { pool, page }) {
-  web.get("/units", async (req, res) => {
+  /** The units list; a bulk edit's answer shows on top of it (notice). */
+  async function unitsList(req, res, { notice = null, code = 200 } = {}) {
     const lang = langOf(req);
     const { broker } = req.session;
     const status = STATUSES.includes(req.query.status) ? req.query.status : "active";
@@ -122,6 +125,7 @@ function register(web, { pool, page }) {
       title: L(lang, "الوحدات", "Units"),
       nav: "units",
       body: html`<div class="row between"><h1>${L(lang, "الوحدات", "Units")}</h1><a class="btn small" href="/app/units/new">${icon("plus", 18)} ${L(lang, "وحدة", "Unit")}</a></div>
+${notice || ""}
 <nav class="seg" aria-label="${L(lang, "الحالة", "Status")}">
   ${tab("active", L(lang, "متاحة", "Available"))}${tab("sold", L(lang, "مباعة", "Sold"))}${tab("archived", L(lang, "مؤرشفة", "Archived"))}
 </nav>
@@ -141,6 +145,33 @@ ${rows.length
   <button type="submit">${L(lang, "تطبيق على المختار", "Apply to selected")}</button>
 </form>`
   : html`<div class="card empty"><p>${L(lang, "مفيش وحدات هنا.", "No units here.")}</p><a class="btn" href="/app/units/new">${L(lang, "ضيف وحدة", "Add a unit")}</a></div>`}`
+    }, code);
+  }
+  web.get("/units", (req, res) => unitsList(req, res));
+
+  /* Bulk edit from the units list: the answer shows on the list itself. */
+  web.post("/units/bulk", async (req, res) => {
+    const lang = langOf(req);
+    const { broker } = req.session;
+    let out;
+    try {
+      out = await Bulk.bulkUpdate(pool, broker, { codes: [].concat(req.body.code || []), action: req.body.action, pct: req.body.pct });
+    } catch (err) {
+      if (err.code !== "INVALID_BULK") throw err;
+      return unitsList(req, res, { code: 422, notice: html`<p class="card notice bad" role="alert">⚠️ ${L(lang, "اختار وحدات وإجراء صحيح (النسبة من -50% لـ +100%).", "Pick units and a valid action (percent from -50% to +100%).")}</p>` });
+    }
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_bulk_edit", metadata: { action: req.body.action, pct: req.body.pct || null, updated: out.updated.length, forbidden: out.forbidden.length, conflicts: out.conflicts.length } });
+    const line = (label, list) => (list.length ? html`<li data-outcome>${label}: ${list.length} <span class="muted">${list.join("، ")}</span></li>` : "");
+    return unitsList(req, res, {
+      notice: html`<div class="card notice ok" role="status" data-bulk-result>
+  <ul>
+    ${line(L(lang, "اتعدلت", "Updated"), out.updated)}
+    ${line(L(lang, "مش من حقك تعدلها", "Not yours to change"), out.forbidden)}
+    ${line(L(lang, "أسعار مطور (بتتعدل بشيت الأسعار)", "Developer prices (change them with the price sheet)"), out.skipped)}
+    ${line(L(lang, "اتغيرت في نفس اللحظة، جرب تاني", "Changed at the same moment, try again"), out.conflicts)}
+    ${line(L(lang, "مش موجودة", "Not found"), out.missing)}
+  </ul>
+</div>`
     });
   });
 

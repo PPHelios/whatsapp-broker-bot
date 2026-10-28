@@ -436,7 +436,25 @@ details.sheet { padding-block: 4px; }
 .fold > .card { padding-block: .75rem; }
 .foldhead { cursor: pointer; display: flex; align-items: center; justify-content: space-between; margin: 0; }
 .foldhead::after { content: "▾"; color: var(--muted, #888); transition: transform .15s; }
-.folded > .foldhead::after { transform: rotate(90deg); }
-[dir="rtl"] .folded > .foldhead::after { transform: rotate(-90deg); }
+.folded > .foldhead::after { transform: rotate(-90deg); }
+[dir="rtl"] .folded > .foldhead::after { transform: rotate(90deg); }
 .folded > :not(.foldhead) { display: none !important; }
 .fold > .card:not(.folded) > .foldhead { margin-bottom: .75rem; }
+
+/* Team: one card per member */
+.members { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
+.member { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+.member[data-active="0"] { opacity: .7; }
+.m-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.m-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 10px 0; }
+.m-facts dt { font-size: .75rem; color: var(--muted); }
+.m-facts dd { margin: 0; font-weight: 600; }
+.m-actions { gap: 6px; }
+.invite > summary { cursor: pointer; font-weight: 700; }
+.invite[open] > summary { margin-bottom: 10px; }
+
+/* Import hub: the tab bar as big tiles */
+.tiles .tab-bar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 0; background: none; }
+.tiles .tab-bar label { flex-direction: column; gap: 4px; min-height: 84px; padding: 10px 6px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); text-align: center; font-size: .85rem; white-space: normal; }
+.tiles .tab-bar .ti { font-size: 1.6rem; line-height: 1; }
+.tiles > .t1:checked ~ .tab-bar .l1, .tiles > .t2:checked ~ .tab-bar .l2, .tiles > .t3:checked ~ .tab-bar .l3 { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand) inset; }

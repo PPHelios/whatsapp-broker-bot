@@ -127,7 +127,7 @@ describe("sessions and CSRF", () => {
     const nav = (text) => (text.match(/<h1>[^<]*<\/h1>([\s\S]*?)<\/main>/) || [])[1] || "";
     const broker = nav((await (await signIn(h, "broker")).agent.get("/app/more")).text);
     expect(broker).toContain("/app/catalogue");
-    expect(broker).toContain("/app/commissions");
+    expect(broker).toContain("/app/deals");
     expect(broker).not.toContain("/app/dashboard");
     const { resetConfig } = require("../../config");
     process.env.OWNER_BROKER_IDS = h.BROKERS.admin.id;

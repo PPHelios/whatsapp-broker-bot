@@ -23,6 +23,7 @@ const Intake = require("../../services/leadIntake");
 const Plans = require("../../domain/plans");
 const Phone = require("../../domain/phone");
 const { html } = require("../html");
+const { tabs } = require("../views/tabs");
 const { icon } = require("../icons");
 const Privacy = require("../../services/unitPrivacy");
 const OwnerAgencies = require("../../services/ownerAgencies");
@@ -375,17 +376,11 @@ function announceSection(log, lang, csrf) {
 </section>`;
 }
 
-const ownerTabs = (lang, panels) => html`<div class="tabs otabs">
-  ${panels.map((_, i) => html`<input type="radio" name="owner_tab" id="ot-${i + 1}" class="tab-radio t${i + 1}"${i === 0 ? html` checked` : ""}>`)}
-  <div class="tab-bar" role="tablist">${panels.map(([label], i) => html`<label for="ot-${i + 1}" role="tab" class="l${i + 1}">${label}</label>`)}</div>
-  ${panels.map(([, body], i) => html`<div class="tab-panel p${i + 1}" data-tab="ot-${i + 1}">${body}</div>`)}
-</div>`;
-
 function ownerPage(d, lang, { billing = null, notice = null, reading = [], assistant = [], referrals = null, intakes = [], stuck = [], limits = null, agencies = [], log = [], csrf = "" } = {}) {
   const usd = (n) => `$${Number(n).toFixed(n < 1 ? 4 : 2)}`;
   return html`<h1>${L(lang, "متابعة التطبيق", "App tracking")}</h1>
 ${notice || ""}
-${ownerTabs(lang, [
+${tabs("owner_tab", [
   [L(lang, "الوكالات", "Agencies"), html`${agenciesSection(agencies, lang)}${stuckSection(stuck, lang)}${announceSection(log, lang, csrf)}`],
   [L(lang, "الفلوس", "Money"), html`${billing ? billingSections(billing, lang) : ""}${referrals ? referralsSection(referrals, lang) : ""}${limits ? limitsSection(limits, lang) : ""}`],
   [L(lang, "الأدوات", "Tools"), html`${intakeSection(intakes, lang)}${readingSection(reading, lang)}${assistantSection(assistant, lang)}`],

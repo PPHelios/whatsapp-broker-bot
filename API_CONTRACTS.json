@@ -1214,6 +1214,11 @@
     "services/quotas.js": {
       "forAgency": ["db", "agencyId", "params"]
     },
+    "web/views/tabs.js": {
+      "tabs": ["name", "panels", "params"],
+      "seg": ["label", "items", "current"],
+      "dealsSwitch": ["lang", "current"]
+    },
     "web/views/quotas.js": {
       "quotaSection": ["items", "lang"]
     },
