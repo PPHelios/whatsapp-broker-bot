@@ -3,6 +3,7 @@
 "use strict";
 
 jest.mock("../../lib/whatsapp", () => require("../harness/fake-whatsapp"));
+jest.mock("../../lib/telegram", () => require("../harness/fake-telegram"));
 jest.mock("../../lib/ai", () => require("../harness/fake-ai"));
 jest.mock("../../lib/supabase", () => require("../harness/fake-supabase"));
 
@@ -19,6 +20,15 @@ beforeEach(async () => {
   h = await createHarness();
 });
 afterAll(closeHarness);
+// Alerts reach brokers on Telegram (or the website), never WhatsApp.
+beforeAll(() => {
+  process.env.TELEGRAM_BOT_TOKEN = "123:test";
+  require("../../config").resetConfig();
+});
+afterAll(() => {
+  delete process.env.TELEGRAM_BOT_TOKEN;
+  require("../../config").resetConfig();
+});
 
 const BROWSER = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148";
 const PREVIEW = "WhatsApp/2.24.20.89 A";
@@ -170,19 +180,20 @@ describe("the public page", () => {
 });
 
 describe("opened alerts", () => {
-  const alerts = () => h.WA.outbox.filter((m) => /فتح رابط الوحدة|opened the link/.test(m.text || ""));
+  const alerts = () => h.TG.outbox.filter((m) => /فتح رابط الوحدة|opened the link/.test(m.text || ""));
 
   test("a client's open alerts the broker who shared it, once per 6 hours; previews and colleagues do not count", async () => {
+    await h.tgLink("broker");
     await seedUnit();
     const path = await sharedLink();
-    h.WA.outbox.length = 0;
+    h.TG.outbox.length = 0;
 
     await open(path, PREVIEW); // WhatsApp builds the link preview when the broker sends it
     await open(path, "facebookexternalhit/1.1");
     expect(alerts()).toHaveLength(0);
 
     await open(path);
-    expect(alerts()).toEqual([expect.objectContaining({ to: "201000000001", text: expect.stringMatching(/العميل فتح رابط الوحدة #PUB-1/) })]);
+    expect(alerts()).toEqual([expect.objectContaining({ chatId: String(h.TG_IDS.broker), text: expect.stringMatching(/العميل فتح رابط الوحدة #PUB-1/) })]);
     await open(path);
     expect(alerts()).toHaveLength(1);
 
@@ -197,15 +208,15 @@ describe("opened alerts", () => {
     await open(path);
     expect(alerts()).toHaveLength(2);
     expect(alerts()[1].text).toMatch(/\(3 مرات\)/);
-    const counted = await h.query("SELECT status, metadata->>'kind' AS kind FROM operation_logs WHERE operation_type = 'wa_outbound' AND metadata->>'kind' = 'notify_share_opened'");
-    expect(counted).toHaveLength(2);
+    expect(h.WA.outbox.filter((m) => /فتح رابط الوحدة/.test(m.text || ""))).toHaveLength(0);
     expect(await h.query("SELECT count(*)::int AS n FROM operation_logs WHERE operation_type = 'share_opened'")).toEqual([{ n: 3 }]);
   });
 
   test("an English broker gets the alert in English; bot detection covers common previewers", async () => {
+    await h.tgLink("admin");
     await seedUnit({ broker_id: h.BROKERS.admin.id });
     const path = await sharedLink("PUB-1", "admin");
-    h.WA.outbox.length = 0;
+    h.TG.outbox.length = 0;
     await open(path);
     expect(alerts()[0].text).toMatch(/Your client opened the link for #PUB-1/);
     for (const ua of ["TelegramBot (like TwitterBot)", "Slackbot-LinkExpanding 1.0", "Mozilla/5.0 (compatible; Googlebot/2.1)", "", "curl/8.0"]) expect([ua, Share.isBot(ua)]).toEqual([ua, true]);

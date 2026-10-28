@@ -74,12 +74,12 @@ ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "�
   <h2>🔔 ${L(lang, "التنبيهات توصلك فين؟", "Where do alerts reach you?")}</h2>
   <p class="muted">${L(
     lang,
-    "تليجرام والموقع ببلاش؛ واتساب بيستخدم رصيد رسايل الوكالة. لما رصيد واتساب يخلص أو نافذة الـ24 ساعة تتقفل، التنبيه بيوصل على الموقع. التنبيه بيوصل على قناة واحدة بس، وكله بيتسجل في 🔔.",
-    "Telegram and the website are free; WhatsApp uses your agency's message credits. When the credits run out or the 24-hour window closes, alerts come on the website. Each alert comes on one channel only, and all of them are kept in 🔔."
+    "التنبيهات بتوصل على تليجرام أو الموقع، ببلاش. لو تليجرام مش متوصل، بتوصل على الموقع، وكلها بتتسجل في 🔔.",
+    "Alerts come on Telegram or the website, free. If Telegram isn't linked they come on the website, and all of them are kept in 🔔."
   )}</p>
   ${Notifications.KINDS.map(
     (k) => html`<label>${Notifications.KIND_LABELS[k][lang === "en" ? 1 : 0]}${prefs.off.includes(k) ? html` <span class="muted" data-switched-off>(${L(lang, "مقفولة من المدير؛ في 🔔 بس", "switched off by your manager; in 🔔 only")})</span>` : ""}
-    <select name="ch_${k}" data-kind="${k}">${tgOn ? opt(k, "both", L(lang, "تليجرام والموقع (ببلاش)", "Telegram and website (free)")) : ""}${tgOn ? opt(k, "telegram", L(lang, "تليجرام بس (ببلاش)", "Telegram only (free)")) : ""}${opt(k, "web", L(lang, "الموقع (ببلاش)", "Website (free)"))}${opt(k, "whatsapp", L(lang, "واتساب (من الرصيد)", "WhatsApp (uses credits)"))}</select>
+    <select name="ch_${k}" data-kind="${k}">${tgOn ? opt(k, "both", L(lang, "تليجرام والموقع (ببلاش)", "Telegram and website (free)")) : ""}${tgOn ? opt(k, "telegram", L(lang, "تليجرام بس (ببلاش)", "Telegram only (free)")) : ""}${opt(k, "web", L(lang, "الموقع (ببلاش)", "Website (free)"))}</select>
   </label>`
   )}
   <h2>🌙 ${L(lang, "ساعات الهدوء (بتوقيت القاهرة)", "Quiet hours (Cairo time)")}</h2>
