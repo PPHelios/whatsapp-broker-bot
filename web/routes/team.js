@@ -50,7 +50,7 @@ function linkCard(broker, url, agencyName, lang) {
   const wa = Phone.waMeUrl(broker.phone_number, Team.inviteText(broker, url, agencyName));
   return html`<section class="card notice ok" data-start-link>
   <h2>📨 ${L(lang, `لينك تيليجرام لـ ${broker.name}`, `Telegram link for ${broker.name}`)}</h2>
-  <p dir="ltr"><input readonly value="${url}" aria-label="${L(lang, "لينك البداية", "Start link")}"></p>
+  <p class="row" dir="ltr"><input readonly value="${url}" id="start-link" aria-label="${L(lang, "لينك البداية", "Start link")}"> <button type="button" class="secondary" data-copy="#start-link">📋 ${L(lang, "نسخ", "Copy")}</button></p>
   <p class="muted">${L(lang, "يشتغل مرة واحدة لمدة ٧ أيام. ابعته للوسيط؛ أول ما يدوس عليه حسابه على تيليجرام يتربط.", "Works once, for 7 days. Send it to the broker; tapping it links their Telegram account.")}</p>
   ${wa ? html`<p><a class="btn" href="${wa}" target="_blank" rel="noopener noreferrer">📤 ${L(lang, "ابعته على واتساب", "Send on WhatsApp")}</a></p>` : ""}
 </section>`;

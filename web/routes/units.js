@@ -1,6 +1,7 @@
 // web/routes/units.js — Units in the web app: the agency's list and one unit's page (agency-scoped)
 "use strict";
 
+const Stages = require("../../domain/leadStages");
 const Store = require("../../lib/listingStore");
 const Authz = require("../../lib/authz");
 const Describe = require("../../domain/describe");
@@ -79,9 +80,9 @@ function marketLine(m, listing, lang) {
 }
 
 /** N4: the lease card on a rent unit (who may edit it). */
-function leaseSection(listing, lease, lang, csrf, notice) {
+function leaseSection(listing, lease, lang, csrf, notice, tenants = []) {
   const end = lease ? LeaseRules.ymd(LeaseRules.endDate(lease)) : null;
-  const notes = { saved: L(lang, "✅ الإيجار اتحفظ.", "✅ Lease saved."), removed: L(lang, "الإيجار اتمسح.", "Lease removed."), bad_start_date: L(lang, "اختار تاريخ بداية.", "Choose a start date."), bad_months: L(lang, "المدة بالشهور من 1 لـ 120.", "Length in months, 1 to 120."), bad_rent: L(lang, "الإيجار مش مفهوم.", "The rent isn't valid."), bad_increase_pct: L(lang, "الزيادة من 0 لـ 100%.", "Increase from 0 to 100%."), bad_not_rent: L(lang, "الوحدة دي مش إيجار.", "This unit isn't for rent.") };
+  const notes = { saved: L(lang, "✅ الإيجار اتحفظ.", "✅ Lease saved."), removed: L(lang, "الإيجار اتمسح.", "Lease removed."), bad_start_date: L(lang, "اختار تاريخ بداية.", "Choose a start date."), bad_months: L(lang, "المدة بالشهور من 1 لـ 120.", "Length in months, 1 to 120."), bad_rent: L(lang, "الإيجار مش مفهوم.", "The rent isn't valid."), bad_increase_pct: L(lang, "الزيادة من 0 لـ 100%.", "Increase from 0 to 100%."), bad_not_rent: L(lang, "الوحدة دي مش إيجار.", "This unit isn't for rent."), bad_bad_tenant: L(lang, "رقم العميل (L-…) مش موجود.", "That lead reference (L-…) doesn't exist.") };
   return html`<section class="card stack" id="lease" data-lease="${lease ? "yes" : "no"}">
   <h2>🔑 ${L(lang, "عقد الإيجار والتذكير بالتجديد", "Lease and renewal reminders")}</h2>
   ${notice && notes[notice] ? html`<p class="notice" data-lease-notice="${notice}">${notes[notice]}</p>` : ""}
@@ -89,8 +90,9 @@ function leaseSection(listing, lease, lang, csrf, notice) {
   ${lease ? html`<p data-lease-end>${L(lang, `العقد بيخلص ${end}`, `The lease ends ${end}`)}${lease.remind ? " · 🔔" : ""}</p>` : ""}
   <form method="post" action="/app/units/${encodeURIComponent(listing.code)}/lease" class="grid">
     <input type="hidden" name="_csrf" value="${csrf}">
-    <label>${L(lang, "اسم المستأجر (اختياري)", "Tenant name (optional)")}<input name="tenant_name" maxlength="120" value="${lease?.tenant_name || ""}"></label>
-    <label>${L(lang, "بداية العقد", "Lease start")}<input type="date" name="start_date" required value="${lease ? LeaseRules.ymd(lease.start_date) : ""}"></label>
+    <label>${L(lang, "المستأجر: رقم العميل (L-0042) أو الاسم (اختياري)", "Tenant: lead ref (L-0042) or name (optional)")}<input name="tenant_name" maxlength="120" list="tenant-leads" autocomplete="off" value="${lease?.tenant_name || ""}"></label>
+    <datalist id="tenant-leads">${tenants.map((t) => html`<option value="${t.label}"></option>`)}</datalist>
+    <label>${L(lang, "بداية العقد", "Lease start")}<input type="date" name="start_date" required value="${lease ? LeaseRules.ymd(lease.start_date) : Stages.cairoDay()}"></label>
     <label>${L(lang, "المدة (شهور)", "Length (months)")}<input type="number" name="months" min="1" max="120" required value="${lease?.months || 12}"></label>
     <label>${L(lang, "الإيجار الشهري (اختياري)", "Monthly rent (optional)")}<input name="rent" inputmode="numeric" value="${lease?.rent ? Math.round(Number(lease.rent)) : ""}"></label>
     <label>${L(lang, "الزيادة السنوية % (اختياري)", "Yearly increase % (optional)")}<input name="increase_pct" inputmode="decimal" value="${lease?.increase_pct ?? ""}"></label>
@@ -101,6 +103,7 @@ function leaseSection(listing, lease, lang, csrf, notice) {
 </section>`;
 }
 
+/** F10: the agency's leads to pick a tenant from (tenants first, then the most recent), as "L-0042 Name". */
 function register(web, { pool, page }) {
   web.get("/units", async (req, res) => {
     const lang = langOf(req);
@@ -265,7 +268,7 @@ ${rows.length
     ${images.length && listing.status === "active" ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(listing.code)}/share-media">📤 ${L(lang, "ابعت الصور للعميل", "Send photos to a client")}</a>` : ""}
   </div>
 </article>
-${listing.listing_type === "rent" && Authz.canEdit(broker, listing) ? leaseSection(listing, await Leases.forListing(pool, listing), lang, req.session.csrf, req.query.lease) : ""}
+${listing.listing_type === "rent" && Authz.canEdit(broker, listing) ? leaseSection(listing, await Leases.forListing(pool, listing), lang, req.session.csrf, req.query.lease, await Leases.tenantChoices(pool, broker)) : ""}
 ${listing.status === "active" ? await wantedSection(pool, broker, listing, lang, req.session.csrf) : ""}
 ${await shareSection(broker, listing, lang)}`
     });

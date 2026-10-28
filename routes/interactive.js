@@ -701,6 +701,16 @@ async function handleInteractive(broker, message, ctx) {
     return await S.handleMore(broker, ctx);
   }
 
+  // F5: a numbered search result → that unit's album and card (as sending its code does).
+  if (replyId.startsWith("open:")) {
+    const code = T.extractCleanCode(replyId.slice(5)).toUpperCase();
+    const { rows } = await pool.query("SELECT * FROM listings WHERE agency_id = $1 AND code_norm = $2 LIMIT 1", [broker.agency_id, code]);
+    if (rows.length) {
+      await require("./commandState").setRecentBrokerListing(pool, broker.id, rows[0].code, ctx.recentBrokerListings);
+      return await require("./commandDeliverables").deliverUnitInspectionCard(rows[0], broker, lang, pool);
+    }
+  }
+
   // 17. Unrecognized or Stale Button ID
   await reply(
     broker,

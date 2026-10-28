@@ -4,6 +4,7 @@
 // terms (termsSection on the project page). Brokers: their own share and the state, read only.
 "use strict";
 
+const Stages = require("../../domain/leadStages");
 const Commissions = require("../../services/commissions");
 const C = require("../../domain/commissionTracker");
 const Commission = require("../../domain/commission");
@@ -150,7 +151,7 @@ ${notice}
 <section class="card stack">
   ${c.status === "expected" ? form("claimable", "", `✅ ${L(lang, "بقت جاهزة للمطالبة", "Mark claimable")}`) : ""}
   ${["expected", "claimable"].includes(c.status) ? form("claim", html`<input name="invoice_no" required maxlength="60" placeholder="${L(lang, "رقم الفاتورة", "Invoice no.")}" dir="ltr" size="10"><input name="invoice_url" placeholder="https://" dir="ltr" size="20"><input type="date" name="claimed_on">`, `🧾 ${L(lang, "اتطالب", "Claim")}`) : ""}
-  ${open ? form("payment", html`<input name="amount" required inputmode="numeric" dir="ltr" size="10" placeholder="${L(lang, "المبلغ", "Amount")}"><input type="date" name="paid_on">`, `💰 ${L(lang, "سجّل دفعة", "Record a payment")}`) : ""}
+  ${open ? form("payment", html`<input name="amount" required inputmode="numeric" dir="ltr" size="10" placeholder="${L(lang, "المبلغ", "Amount")}"><input type="date" name="paid_on" value="${Stages.cairoDay()}">`, `💰 ${L(lang, "سجّل دفعة", "Record a payment")}`) : ""}
   ${form("registration", html`<input type="date" name="registered_on" required value="${c.client_registered_on ? day(c.client_registered_on) : ""}">`, `📝 ${L(lang, "تاريخ تسجيل العميل", "Client registration date")}`)}
   ${form("expected", html`<input name="amount" required inputmode="numeric" dir="ltr" size="10" value="${c.expected_amount}">`, `✏️ ${L(lang, "عدّل المتوقع", "Correct the expected amount")}`)}
   ${c.status === "cancelled" ? form("reopen", "", L(lang, "رجّعها", "Reopen")) : c.status !== "paid" ? form("cancel", "", `❌ ${L(lang, "إلغاء", "Cancel")}`) : ""}

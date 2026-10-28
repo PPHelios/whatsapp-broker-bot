@@ -81,7 +81,7 @@ ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "�
   )}</p>
   ${Notifications.KINDS.map(
     (k) => html`<label>${Notifications.KIND_LABELS[k][lang === "en" ? 1 : 0]}${prefs.off.includes(k) ? html` <span class="muted" data-switched-off>(${L(lang, "مقفولة من المدير؛ في 🔔 بس", "switched off by your manager; in 🔔 only")})</span>` : ""}
-    <select name="ch_${k}" data-kind="${k}">${tgOn ? opt(k, "telegram", L(lang, "تليجرام (ببلاش)", "Telegram (free)")) : ""}${opt(k, "web", L(lang, "الموقع (ببلاش)", "Website (free)"))}${opt(k, "whatsapp", L(lang, "واتساب (من الرصيد)", "WhatsApp (uses credits)"))}</select>
+    <select name="ch_${k}" data-kind="${k}">${tgOn ? opt(k, "both", L(lang, "تليجرام والموقع (ببلاش)", "Telegram and website (free)")) : ""}${tgOn ? opt(k, "telegram", L(lang, "تليجرام بس (ببلاش)", "Telegram only (free)")) : ""}${opt(k, "web", L(lang, "الموقع (ببلاش)", "Website (free)"))}${opt(k, "whatsapp", L(lang, "واتساب (من الرصيد)", "WhatsApp (uses credits)"))}</select>
   </label>`
   )}
   <h2>🌙 ${L(lang, "ساعات الهدوء (بتوقيت القاهرة)", "Quiet hours (Cairo time)")}</h2>

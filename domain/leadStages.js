@@ -101,6 +101,14 @@ function fromCairoLocal(text) {
   return Number.isNaN(at.getTime()) ? null : at;
 }
 
+/** F9: a date or time field's default: the next round hour (Cairo) as "YYYY-MM-DDTHH:00". */
+function nextHourLocal(now = new Date()) {
+  return toCairoLocal(new Date(Math.floor(now.getTime() / 3600000) * 3600000 + 3600000)).slice(0, 13) + ":00";
+}
+
+/** F9: today in Cairo as "YYYY-MM-DD". */
+const cairoDay = (now = new Date()) => toCairoLocal(now).slice(0, 10);
+
 /** An instant → "2026-11-02T15:00" in Cairo time (for datetime-local inputs). */
 function toCairoLocal(at) {
   if (!at) return "";
@@ -129,5 +137,7 @@ module.exports = {
   cairoOffsetMinutes,
   cairoDayAt,
   fromCairoLocal,
-  toCairoLocal
+  toCairoLocal,
+  nextHourLocal,
+  cairoDay
 };

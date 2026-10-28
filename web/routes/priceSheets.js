@@ -6,6 +6,7 @@
 // C9: a project linked to the developer's shared Google Sheet, checked daily (services/sheetSync.js).
 "use strict";
 
+const Stages = require("../../domain/leadStages");
 const PriceSheets = require("../../services/priceSheets");
 const PriceReading = require("../../services/priceReading");
 const SheetSync = require("../../services/sheetSync");
@@ -115,13 +116,14 @@ function pricesSection(lang, manager, { project, units, sheets, increases, phase
   ${manager ? html`<form method="post" action="${base}/sheets" enctype="multipart/form-data" class="stack" data-sheet-upload>
     <label>${L(lang, "ارفع شيت المطور (.xlsx أو CSV)", "Upload the developer's sheet (.xlsx or CSV)")} <input type="file" name="sheet" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required></label>
     <p class="muted">${L(lang, "الأعمدة: كود الوحدة، النوع، المبنى أو المرحلة، الدور، المساحة (أو من–إلى)، الغرف، الحديقة، الروف، السعر، الحالة. صف من غير كود = موديل «يبدأ من». هتشوف الجديد والمتغير قبل أي حفظ.", "Columns: unit code, type, building or phase, floor, area (or from–to), bedrooms, garden, roof, price, status. A row without a code is a model (\"from\" price). You see what is new and what changed before anything is saved.")}</p>
+    <p class="muted">${L(lang, "المطلوب في كل صف: السعر بس.", "Required in each row: the price only.")} <a href="/app/static/samples/price-sheet-sample.csv" download>${L(lang, "نزّل شيت مثال", "Download a sample sheet")}</a></p>
     <button type="submit" class="secondary">${L(lang, "معاينة الشيت", "Preview the sheet")}</button>
   </form>
   ${readForm(lang, base, reading)}
   ${syncForm(lang, base, project)}
   <form method="post" action="${base}/increases" class="row" data-increase-form>
     <label>${L(lang, "زيادة معلنة %", "Announced change %")} <input name="pct" required inputmode="decimal" dir="ltr" size="5" placeholder="7"></label>
-    <label>${L(lang, "من يوم", "From")} <input name="effective_on" type="date" required></label>
+    <label>${L(lang, "من يوم", "From")} <input name="effective_on" type="date" required value="${Stages.cairoDay()}"></label>
     ${phases.length ? html`<label>${L(lang, "المرحلة", "Phase")} <select name="phase_id"><option value="">${L(lang, "كل المشروع", "Whole project")}</option>${phases.map((p) => html`<option value="${p.id}">${p.name}</option>`)}</select></label>` : ""}
     <button type="submit" class="secondary">${L(lang, "سجّل الزيادة", "Schedule it")}</button>
   </form>

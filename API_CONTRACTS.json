@@ -392,7 +392,8 @@
       "synonymRows": [],
       "findPlaces": ["text"],
       "resolvePlace": ["text"],
-      "placeName": ["kind", "key"]
+      "placeName": ["kind", "key"],
+      "snapCompound": ["name", "agencyNames"]
     },
     "domain/searchText.js": {
       "normalizeSearch": ["text"],
@@ -737,7 +738,9 @@
       "cairoOffsetMinutes": ["at"],
       "cairoDayAt": ["now", "daysAhead", "hour"],
       "fromCairoLocal": ["text"],
-      "toCairoLocal": ["at"]
+      "toCairoLocal": ["at"],
+      "nextHourLocal": ["now"],
+      "cairoDay": ["now"]
     },
     "domain/leadCard.js": {
       "refLabel": ["ref"],
@@ -1618,6 +1621,8 @@
     },
     "services/leases.js": {
       "forListing": ["db", "listing"],
+      "forTenant": ["db", "agencyId", "leadId"],
+      "tenantChoices": ["db", "broker"],
       "save": ["db", "actor", "listing", "form"],
       "remove": ["db", "actor", "listing"],
       "upcoming": ["db", "manager", "params"],

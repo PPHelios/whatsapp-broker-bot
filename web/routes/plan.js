@@ -60,7 +60,7 @@ function referralSection(r, lang) {
   <h2>🎁 ${L(lang, "ادعي وكالة تانية", "Invite another agency")}</h2>
   <p>${L(lang, "لما الوكالة اللي دعيتها تدفع أول باقة، إنتوا الاتنين تاخدوا شهر مجاني.", "When an agency you invite pays for its first plan, you both get a free month.")}</p>
   <p>${L(lang, "كود الدعوة", "Invite code")}: <strong dir="ltr">${r.code}</strong></p>
-  <label>${L(lang, "لينك التسجيل", "Sign-up link")} <input readonly dir="ltr" value="${r.link}"></label>
+  <label>${L(lang, "لينك التسجيل", "Sign-up link")} <span class="row"><input readonly dir="ltr" value="${r.link}" id="referral-link"> <button type="button" class="secondary" data-copy="#referral-link">📋 ${L(lang, "نسخ", "Copy")}</button></span></label>
   <p><a class="btn secondary" href="https://wa.me/?text=${encodeURIComponent(text)}" target="_blank" rel="noopener">${L(lang, "ابعته على واتساب", "Send on WhatsApp")}</a></p>
   ${r.credit ? html`<p class="notice ok">${L(lang, `عندك ${r.credit} شهر مجاني هيتضاف لأول دفعة جاية.`, `You have ${r.credit} free month(s) that will be added to your next payment.`)}</p>` : ""}
   ${r.referredBy ? html`<p class="muted">${L(lang, `وكالتك اتدعت من ${r.referredBy}`, `Your agency was invited by ${r.referredBy}`)}${r.rewarded ? "" : L(lang, " — أول دفعة ليك فيها شهر مجاني.", " — your first payment includes a free month.")}</p>` : ""}

@@ -100,4 +100,62 @@ function placeName(kind, key) {
   return { ar: syns.find((s) => /[؀-ۿ]/.test(s)) || syns[0], en: syns.find((s) => !/[؀-ۿ]/.test(s)) || syns[0] };
 }
 
-module.exports = { AREAS, DEVELOPERS, COMPOUNDS, synonymRows, findPlaces, resolvePlace, placeName };
+/** Edit distance (Levenshtein), stopping early past max. */
+function distance(a, b, max = 3) {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    let best = i;
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      best = Math.min(best, cur[j]);
+    }
+    if (best > max) return max + 1;
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+// Spelling-blind form for the fuzzy match: no spaces, a letter said twice once ("هاييد" = "هايد").
+const fuzzKey = (s) => normalizeSearch(s).replace(/\s+/g, "").replace(/(.)\1+/g, "$1");
+
+/**
+ * F6: a compound name as the AI heard it ("هاييد بارك") snapped to a known one ("هايد بارك"): the agency's own names
+ * first (its units and catalogue projects), then the common compounds. Only a close, unambiguous match snaps
+ * (1 letter off, 2 for long names); an exact known name or anything else comes back unchanged.
+ * @returns {{ name: string, changed: boolean }}
+ */
+function snapCompound(name, agencyNames = []) {
+  const raw = String(name || "").trim();
+  if (!raw) return { name: raw, changed: false };
+  const arabic = /[؀-ۿ]/.test(raw);
+  const key = fuzzKey(raw);
+  const candidates = [];
+  for (const n of agencyNames) if (n && /[؀-ۿ]/.test(n) === arabic) candidates.push(String(n).trim());
+  for (const [, , ...syns] of Object.values(COMPOUNDS)) {
+    const pick = syns.find((s) => /[؀-ۿ]/.test(s) === arabic);
+    for (const s of syns) if (/[؀-ۿ]/.test(s) === arabic) candidates.push({ syn: s, display: arabic ? pick : syns.find((x) => !/[؀-ۿ]/.test(x)) });
+  }
+  const norm = normalizeSearch(raw);
+  for (const c of candidates) if (normalizeSearch(typeof c === "string" ? c : c.syn) === norm) return { name: raw, changed: false };
+  const max = key.length >= 8 ? 2 : 1;
+  let best = null;
+  let tie = false;
+  for (const c of candidates) {
+    const syn = typeof c === "string" ? c : c.syn;
+    const display = typeof c === "string" ? c : c.display.replace(/\b\w/g, (x) => x.toUpperCase());
+    const ck = fuzzKey(syn);
+    if (ck.length < 3) continue;
+    const d = ck === key ? 0 : distance(key, ck, max);
+    if (d > max) continue;
+    if (!best || d < best.d) {
+      best = { d, display };
+      tie = false;
+    } else if (d === best.d && normalizeSearch(display) !== normalizeSearch(best.display)) tie = true;
+  }
+  if (!best || tie) return { name: raw, changed: false };
+  return { name: best.display, changed: normalizeSearch(best.display) !== norm };
+}
+
+module.exports = { AREAS, DEVELOPERS, COMPOUNDS, synonymRows, findPlaces, resolvePlace, placeName, snapCompound };

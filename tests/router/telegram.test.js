@@ -177,7 +177,7 @@ describe("notifications on Telegram (step 2)", () => {
   test("an unlinked broker with no choice still defaults to WhatsApp", async () => {
     const prefs = N.prefsOf(await row("broker"), { telegramLinked: false });
     expect(prefs.channels.match).toBe("whatsapp");
-    expect(N.prefsOf(await row("broker"), { telegramLinked: true }).channels.match).toBe("telegram");
+    expect(N.prefsOf(await row("broker"), { telegramLinked: true }).channels.match).toBe("both");
   });
 
   test("a sign-in link asked for on the website goes to Telegram when linked", async () => {
@@ -196,7 +196,7 @@ describe("notifications on Telegram (step 2)", () => {
     const { signIn } = require("../harness/web");
     const me = await signIn(h, "broker");
     const page = await me.agent.get("/app/settings");
-    expect(page.text).toMatch(/<select name="ch_match" data-kind="match"><option value="telegram" selected>/);
+    expect(page.text).toMatch(/<select name="ch_match" data-kind="match"><option value="both" selected>/);
   });
 });
 

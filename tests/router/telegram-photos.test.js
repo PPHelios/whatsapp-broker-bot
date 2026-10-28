@@ -1,5 +1,5 @@
 // tests/router/telegram-photos.test.js — 6.4: unit photos on Telegram. A unit card gets its photos as an album above
-// it (hero first, documents left out, at most 10); search results get one cover per unit, captioned "N. CODE"; units
+// it (hero first, documents left out, at most 10); search results carry a numbered button per unit that opens its album and card (F5); units
 // without photos send no album; WhatsApp brokers get no photos (each would cost a credit).
 "use strict";
 
@@ -55,22 +55,21 @@ test("one photo goes as a photo; no photos sends no album", async () => {
   expect(albums(await h.tgText("broker", "HP-3"))).toEqual([]);
 });
 
-test("search results get one cover per unit with photos, captioned with its number in the list", async () => {
+test("F5: search results carry no photos; a numbered button per result opens that unit's album and card", async () => {
   const a = await h.insertListing({ code: "HP-10", price_value: 9000000 });
   await h.insertListing({ code: "HP-11", price_value: 8000000 });
-  const c = await h.insertListing({ code: "HP-12", price_value: 7000000 });
   await photos(a, 3);
-  await photos(c, 2);
   const out = await h.tgText("broker", "هايد بارك");
-  const [album] = albums(out);
-  expect(album).toBeDefined();
+  expect(albums(out)).toEqual([]);
   const list = out.find((e) => e.method === "sendMessage" && /وحدة مطابقة/.test(e.text || ""));
+  const buttons = list.keyboard.flat();
   const lines = String(list.text).split("\n");
-  for (const item of album.urls) {
-    const [n, code] = item.caption.split(". ");
-    expect(lines.find((l) => l.startsWith(`${n}.`))).toContain(code);
-  }
-  expect(album.urls.map((i) => i.caption.split(". ")[1]).sort()).toEqual(["HP-10", "HP-12"]);
+  const n = lines.find((l) => l.includes("HP-10")).match(/^(\d+)\./)[1];
+  const btn = buttons.find((b) => b.text === `${n}. HP-10`);
+  expect(btn).toBeDefined();
+  const opened = await h.tgTap("broker", btn.callback_data);
+  expect(albums(opened)[0].urls[0]).toMatchObject({ caption: "#HP-10" });
+  expect(opened.some((e) => e.method === "sendMessage" && /HP-10/.test(e.text || "") && e.keyboard)).toBe(true);
 });
 
 test("WhatsApp brokers get no photos with cards or results", async () => {
