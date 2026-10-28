@@ -392,7 +392,8 @@
       "synonymRows": [],
       "findPlaces": ["text"],
       "resolvePlace": ["text"],
-      "placeName": ["kind", "key"]
+      "placeName": ["kind", "key"],
+      "snapCompound": ["name", "agencyNames"]
     },
     "domain/searchText.js": {
       "normalizeSearch": ["text"],

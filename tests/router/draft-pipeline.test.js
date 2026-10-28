@@ -382,3 +382,15 @@ describe("Extraction failure keeps the draft", () => {
     expect(await listings()).toHaveLength(1);
   });
 });
+
+describe("F6: compound names snap to known ones", () => {
+  test("«هاييد بارك» as the AI heard it is saved as «هايد بارك» and the card says so", async () => {
+    await h.text("broker", "اضافة");
+    await h.text("broker", "شقة في هاييد بارك 200 متر 3 غرف 10 مليون");
+    answerExtraction(extraction({ compound: "هاييد بارك", compound_en: "Hyde Park" }));
+    const review = await h.text("broker", "تم");
+    expect(textOf(review)).toContain("اسم الكمبوند اتصحح: هاييد بارك ← هايد بارك");
+    await h.tap("broker", "draft_confirm");
+    expect((await listings())[0].compound).toBe("هايد بارك");
+  });
+});
