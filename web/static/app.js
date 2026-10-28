@@ -42,7 +42,8 @@
   });
   // <form data-confirm="…">: ask before a step that can't be undone from the page (deactivating a broker).
   document.addEventListener("submit", function (e) {
-    var msg = e.target && e.target.getAttribute && e.target.getAttribute("data-confirm");
+    var by = e.submitter && e.submitter.getAttribute && e.submitter.getAttribute("data-confirm");
+    var msg = by || (e.target && e.target.getAttribute && e.target.getAttribute("data-confirm"));
     if (msg && !window.confirm(msg)) e.preventDefault();
   });
   // Script errors from our own files go to the server (lib/errorReports.js), at most 5 per page.
@@ -369,4 +370,119 @@
       .then(function (j) { if (j && j.next) location.replace(j.next); else fail(); })
       .catch(fail);
   })();
+
+  // Theme: the Mini App follows Telegram's light or dark theme (its colours come in the URL fragment when Telegram
+  // opens the page, kept for the session); elsewhere the phone's setting applies through CSS.
+  (function () {
+    var params = null;
+    try {
+      var m = /tgWebAppThemeParams=([^&]+)/.exec(location.hash);
+      if (m) sessionStorage.setItem("tgTheme", decodeURIComponent(m[1]));
+      params = JSON.parse(sessionStorage.getItem("tgTheme") || "null");
+    } catch (err) { params = null; }
+    var bg = params && params.bg_color;
+    if (!bg || !/^#[0-9a-f]{6}$/i.test(bg)) return;
+    var n = parseInt(bg.slice(1), 16);
+    var lum = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+    document.documentElement.setAttribute("data-theme", lum < 0.5 ? "dark" : "light");
+  })();
+  var EN = document.documentElement.lang === "en";
+  // One message style (a toast above the bottom bar) for short results and for errors.
+  var toastTimer = null;
+  function toast(text, bad) {
+    var box = document.querySelector("[data-toast-box]");
+    if (!box || !text) return;
+    box.textContent = text;
+    box.className = "toast" + (bad ? " bad" : "");
+    box.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { box.hidden = true; }, bad ? 6000 : 4000);
+  }
+  window.whToast = toast;
+  document.addEventListener("click", function (e) {
+    if (e.target.closest && e.target.closest("[data-toast-box]")) e.target.closest("[data-toast-box]").hidden = true;
+  });
+  // A short success line after a save (no links or fields in it) shows as the toast instead of at the page top.
+  document.addEventListener("DOMContentLoaded", function () {
+    var main = document.getElementById("main");
+    var n = main && main.querySelector(".notice.ok");
+    if (!n || n.querySelector("a, input, button, form") || n.textContent.trim().length > 90) return;
+    toast(n.textContent.replace(/\s+/g, " ").trim(), false);
+    n.hidden = true;
+  });
+  // htmx buttons (Fill from description, Review, duplicate check): say so when the server can't be reached.
+  document.addEventListener("htmx:responseError", function (e) {
+    var code = e.detail && e.detail.xhr ? e.detail.xhr.status : 0;
+    toast(EN ? "Something went wrong (" + code + "). Try again." : "حصلت مشكلة (" + code + "). جرب تاني.", true);
+  });
+  function unreachable() {
+    toast(EN ? "Couldn't reach the server. Check the connection and try again." : "مقدرناش نوصل للسيرفر. اتأكد من النت وجرب تاني.", true);
+  }
+  document.addEventListener("htmx:sendError", unreachable);
+  document.addEventListener("htmx:timeout", unreachable);
+  // Every POST form locks its buttons after the first tap, so a slow server doesn't save the same thing twice.
+  // Disabled a moment later, so the tapped button's own name and value are still sent.
+  function unlock() {
+    var busy = document.querySelectorAll("button.busy, button[data-locked]");
+    for (var i = 0; i < busy.length; i++) { busy[i].disabled = false; busy[i].classList.remove("busy"); busy[i].removeAttribute("data-locked"); }
+  }
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (e.defaultPrevented || !form || (form.getAttribute("method") || "").toLowerCase() !== "post") return;
+    if (form.hasAttribute("data-no-lock") || form.getAttribute("target")) return;
+    var tapped = e.submitter;
+    setTimeout(function () {
+      var buttons = form.querySelectorAll("button[type=submit], button:not([type])");
+      for (var i = 0; i < buttons.length; i++) { buttons[i].disabled = true; buttons[i].setAttribute("data-locked", ""); }
+      if (tapped && tapped.classList) tapped.classList.add("busy");
+    }, 0);
+    setTimeout(unlock, 15000);
+  });
+  window.addEventListener("pageshow", unlock);
+  // <select data-autosubmit>: changing it applies the filter at once (no inline handlers under the CSP).
+  document.addEventListener("change", function (e) {
+    var t = e.target;
+    if (t && t.hasAttribute && t.hasAttribute("data-autosubmit") && t.form) t.form.submit();
+  });
+  // Tabs made of radios: a link to something inside a hidden tab (#merge, #timeline) opens that tab first.
+  function openTabFor(hash) {
+    var el = hash && hash.length > 1 && document.getElementById(decodeURIComponent(hash.slice(1)));
+    var panel = el && el.closest && el.closest(".tab-panel[data-tab]");
+    var radio = panel && document.getElementById(panel.getAttribute("data-tab"));
+    if (radio && !radio.checked) { radio.checked = true; el.scrollIntoView(); }
+  }
+  openTabFor(location.hash);
+  window.addEventListener("hashchange", function () { openTabFor(location.hash); });
+  // Voice search: the mic in a search box dictates into it and searches. Shown only where the browser can listen.
+  var Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+  function listen(btn) {
+    var form = btn.form || btn.closest("form");
+    var input = form && form.querySelector("input[name=q]");
+    if (!input) return;
+    var rec = new Speech();
+    rec.lang = EN ? "en-US" : "ar-EG";
+    rec.interimResults = true;
+    btn.classList.add("busy");
+    rec.onresult = function (ev) {
+      var text = "";
+      for (var i = 0; i < ev.results.length; i++) text += ev.results[i][0].transcript;
+      input.value = text;
+      if (ev.results[ev.results.length - 1].isFinal && text.trim()) form.submit();
+    };
+    rec.onerror = function () { toast(EN ? "Couldn't hear you. Try again or type." : "مسمعناش كويس. جرب تاني أو اكتب.", true); };
+    rec.onend = function () { btn.classList.remove("busy"); };
+    try { rec.start(); } catch (_) { btn.classList.remove("busy"); }
+  }
+  if (Speech) {
+    var mics = document.querySelectorAll("[data-mic]");
+    for (var m = 0; m < mics.length; m++) {
+      mics[m].hidden = false;
+      mics[m].addEventListener("click", function () { listen(this); });
+    }
+    var auto = document.querySelector("[data-voice-start]");
+    if (auto && mics[0]) listen(mics[0]);
+  } else {
+    var start = document.querySelector("[data-voice-start]");
+    if (start) start.focus();
+  }
 })();

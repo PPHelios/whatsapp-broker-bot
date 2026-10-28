@@ -158,7 +158,7 @@ describe("the pages", () => {
     expect((await b.agent.get("/app/catalogue")).text).toMatch(/iCity/);
     const rival = await signIn(h, "rival");
     expect((await rival.agent.get(url)).status).toBe(404);
-    expect((await agent.get("/app/")).text).toMatch(/href="\/app\/catalogue"/);
+    expect((await agent.get("/app/more")).text).toMatch(/href="\/app\/catalogue"/);
   });
 
   test("a linked unit's page names its project and links (internal ones marked); the bot's collateral lists them", async () => {

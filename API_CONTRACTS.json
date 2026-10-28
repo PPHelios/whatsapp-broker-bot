@@ -463,6 +463,8 @@
       "withCsrf": ["pageHtml", "csrf"],
       "NAV": "Array",
       "navFor": ["broker"],
+      "TABS": "Array",
+      "tabOf": ["path", "nav"],
       "HTMX_CONFIG": "Object"
     },
     "web/index.js": {
@@ -1785,6 +1787,11 @@
       "sourcesFor": ["pool", "agencyId"],
       "quietCheck": ["pool", "params"],
       "quietJob": []
+    },
+    "web/icons.js": {
+      "icon": ["name", "size"],
+      "MARK": "Object",
+      "PATHS": "Object"
     }
   },
   "invariant_variable_names": {

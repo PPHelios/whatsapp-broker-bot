@@ -135,8 +135,24 @@ async function agencyDashboard(pool, manager, { days = 30, now = new Date(), bro
     .filter((b) => b.active || b.deals || b.leads)
     .sort((a, b) => b.deals - a.deals || b.commission - a.commission || b.forward - a.forward || b.contacted - a.contacted || a.name.localeCompare(b.name));
   const leads = brokers.reduce((n, b) => n + b.leads, 0);
+  // New leads per week (last 8 weeks, oldest first) and the period's top sources, for the bars on the page.
+  const weekStart = new Date(now.getTime() - 8 * 7 * DAY);
+  const { rows: wk } = await pool.query(
+    `SELECT floor(extract(epoch FROM ($2::timestamptz - created_at)) / 604800)::int AS ago, count(*)::int AS n
+       FROM leads WHERE agency_id = $1 AND created_at >= $3${who ? " AND assigned_broker_id = $4" : ""} GROUP BY 1`,
+    who ? [agencyId, now.toISOString(), weekStart.toISOString(), who] : [agencyId, now.toISOString(), weekStart.toISOString()]
+  );
+  const weekly = Array.from({ length: 8 }, (_, i) => wk.find((r) => r.ago === 7 - i)?.n || 0);
+  const { rows: sources } = await pool.query(
+    `SELECT coalesce(nullif(source, ''), '-') AS source, count(*)::int AS n
+       FROM leads WHERE agency_id = $1 AND created_at >= $2${who ? " AND assigned_broker_id = $3" : ""}
+      GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 3`,
+    who ? [agencyId, since.toISOString(), who] : [agencyId, since.toISOString()]
+  );
   return {
     days: period,
+    weekly,
+    sources,
     team: team.rows,
     brokerId: who,
     pipeline,

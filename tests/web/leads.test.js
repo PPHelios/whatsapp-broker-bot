@@ -42,7 +42,7 @@ describe("the list", () => {
     expect(all.text).toContain("Sara Mine");
     expect(all.text).toContain("Omar Theirs");
     expect(all.text).not.toContain("Rival Client");
-    expect(all.text).toMatch(/data-stage="new"><a[^>]*>🆕 New: 2/);
+    expect(all.text).toMatch(/data-stage="new"><a[^>]*>🆕 New <b>2<\/b>/);
     const r = await signIn(h, "rival");
     expect((await r.agent.get("/app/leads")).text).not.toContain("Sara Mine");
   });

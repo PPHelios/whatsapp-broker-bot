@@ -69,7 +69,7 @@ function gallerySection(lang, manager, data, { reading = null, query = {} } = {}
           ? html`<details${i.match_status === "unsure" ? html` open` : ""}><summary>${L(lang, "الوحدات", "Units")}</summary>${units.map((u) => html`<label><input type="checkbox" name="unit" value="${u.id}"${(i.listing_ids || []).includes(u.id) ? html` checked` : ""}> ${u.code}${u.area_value ? ` · ${Number(u.area_value)} m²` : ""}${u.bedrooms !== null && u.bedrooms !== undefined ? ` · ${u.bedrooms}🛏` : ""}</label>`)}<input type="hidden" name="units_sent" value="1"></details>`
           : ""}
         <div class="row"><button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>
-        <button type="submit" class="link" formaction="${base}/${i.id}/delete">${L(lang, "حذف", "Delete")}</button></div>
+        <button type="submit" class="link danger" formaction="${base}/${i.id}/delete" data-confirm="${L(lang, "تمسح الصورة دي؟ مش هينفع ترجعها.", "Delete this photo? This can't be undone.")}">${L(lang, "حذف", "Delete")}</button></div>
       </form>`
         : ""}
     </li>`

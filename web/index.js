@@ -40,7 +40,7 @@ function mountWeb(app, { pool, config }) {
     return res
       .status(status)
       .type("html")
-      .send(withCsrf(layout({ assets: assets.url, broker: s?.broker || null, csrf: s?.csrf || null, unread: s?.unread || 0, ...opts, lang }), s?.csrf));
+      .send(withCsrf(layout({ assets: assets.url, broker: s?.broker || null, csrf: s?.csrf || null, unread: s?.unread || 0, path: String(req.originalUrl || ""), ...opts, lang }), s?.csrf));
   };
   // Behind Render's proxy, req.ip is the client from X-Forwarded-For (rate limits).
   if (config.isProd) app.set("trust proxy", 1);
