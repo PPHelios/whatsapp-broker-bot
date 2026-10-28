@@ -13,6 +13,13 @@ const { pricesSection, pricesNotice } = require("./priceSheets");
 const PriceReading = require("../../services/priceReading");
 const { highlightsSection } = require("./brochure");
 const { html } = require("../html");
+const { uploads } = require("../uploads");
+const Session = require("../session");
+
+// F20: brochures, layouts and plan files kept in storage (PDF or photo).
+const FILE = { name: "file", maxCount: 1, accept: /^(application\/pdf|image\/(jpeg|png|webp))$/ };
+const uploadFile = uploads([FILE], { maxMb: Catalogue.MAX_FILE_MB });
+for (const re of [/^\/catalogue\/projects$/, /^\/catalogue\/projects\/[^/]+\/materials\/upload$/]) Session.allowMultipart(re);
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
@@ -68,10 +75,12 @@ const FIELD = {
   kind: ["اختار نوع اللينك.", "Pick the link type."],
   url: ["اللينك لازم يبدأ بـ https://", "The link must start with https://"],
   codes: ["اكتب كود وحدة واحد على الأقل.", "Type at least one unit code."],
+  file: ["الملف لازم يكون PDF أو صورة (JPG/PNG) لحد 25 ميجا.", "The file must be a PDF or a photo (JPG/PNG) up to 25 MB."],
   duplicate_code: ["في وحدتين بنفس كود المطور في المشروع ده؛ كود المطور بيحدد الوحدة جوه المشروع.", "Two units would share a developer unit code in this project; inside a project the developer's code decides."]
 };
 const errorText = (r, lang) => {
   if (r.error === "duplicate") return L(lang, "الاسم ده موجود قبل كده.", "That name is already used.");
+  if (r.error === "upload_failed") return L(lang, "الملف مارفعش. جرب تاني.", "The file did not upload. Try again.");
   const f = FIELD[r.field];
   return f ? f[lang === "en" ? 1 : 0] : L(lang, "في حاجة مش مظبوطة.", "Something is not right.");
 };
@@ -86,7 +95,7 @@ function statusSelect(name, value, lang) {
 }
 
 function projectForm(lang, developers, p = {}, action = "/app/catalogue/projects") {
-  return html`<form method="post" action="${action}" class="card stack" data-project-form>
+  return html`<form method="post" action="${action}" class="card stack" data-project-form${p.id ? "" : html` enctype="multipart/form-data"`}>
   <label>${L(lang, "اسم المشروع *", "Project name *")} <input name="name" required maxlength="120" value="${p.name || ""}"></label>
   <label>${L(lang, "الاسم بالإنجليزي", "Name in English")} <input name="name_en" maxlength="120" dir="ltr" value="${p.name_en || ""}"></label>
   <label>${L(lang, "المطور", "Developer")} <select name="developer_id"><option value="">—</option>${developers.map((d) => html`<option value="${d.id}"${sel(p.developer_id === d.id)}>${d.name}</option>`)}</select></label>
@@ -102,6 +111,11 @@ function projectForm(lang, developers, p = {}, action = "/app/catalogue/projects
     <label>${L(lang, "الصيانة %", "Maintenance %")} <input name="maintenance_pct" inputmode="decimal" dir="ltr" size="4" value="${val(p.maintenance_pct)}"></label>
   </div>
   <label>${L(lang, "ملاحظات داخلية", "Internal notes")} <textarea name="notes" maxlength="1000" rows="2">${p.notes || ""}</textarea></label>
+  ${p.id ? "" : html`<fieldset data-new-materials><legend>📁 ${L(lang, "الملفات واللينكات (اختياري)", "Materials (optional)")}</legend>
+    <label>${L(lang, "بروشور أو ملف (PDF أو صورة، لحد 25 ميجا)", "Brochure or file (PDF or photo, up to 25 MB)")} <input type="file" name="file" accept="application/pdf,image/jpeg,image/png,image/webp"></label>
+    <label>${L(lang, "أو لينك (Drive، موقع المطور...)", "Or a link (Drive, developer site...)")} <input name="material_url" type="url" dir="ltr" placeholder="https://"></label>
+    <label><input type="checkbox" name="material_client_visible" value="1"> ${L(lang, "يظهر للعميل", "Show to clients")}</label>
+  </fieldset>`}
   <button type="submit">${p.id ? L(lang, "حفظ المشروع", "Save project") : L(lang, "إضافة المشروع", "Add project")}</button>
 </form>`;
 }
@@ -219,9 +233,9 @@ ${manager ? html`<details class="card"><summary>➕ ${L(lang, "نظام سداد
 <section class="card" id="materials">
   <h2>📁 ${L(lang, "الملفات واللينكات", "Materials")}</h2>
   ${materials.length ? html`<ul>${materials.map((m) => html`<li data-material="${m.id}" data-client-visible="${m.client_visible ? "1" : "0"}">
-    <a href="${m.url}" target="_blank" rel="noopener noreferrer">${m.label}</a> · ${label2(KIND, m.kind, lang)}${m.unit_type ? ` · ${m.unit_type}` : ""} · ${m.client_visible ? L(lang, "👁️ بيظهر للعميل", "👁️ Client-visible") : L(lang, "🔒 داخلي", "🔒 Internal")}${m.check_status === "broken" ? html` · <strong data-broken>⚠️ ${L(lang, "مبقاش بيفتح", "Not opening")}</strong>` : ""}
+    <a href="${m.url}" target="_blank" rel="noopener noreferrer">${m.storage_path ? "📎 " : ""}${m.label}</a> · ${label2(KIND, m.kind, lang)}${m.unit_type ? ` · ${m.unit_type}` : ""} · ${m.client_visible ? L(lang, "👁️ بيظهر للعميل", "👁️ Client-visible") : L(lang, "🔒 داخلي", "🔒 Internal")}${m.check_status === "broken" ? html` · <strong data-broken>⚠️ ${L(lang, "مبقاش بيفتح", "Not opening")}</strong>` : ""}
     ${manager ? html`${m.kind === "price_sheet" ? "" : html`<form method="post" action="${base}/materials/${m.id}/visibility" class="inline"><input type="hidden" name="visible" value="${m.client_visible ? "0" : "1"}"><button type="submit" class="link">${m.client_visible ? L(lang, "خليه داخلي", "Make internal") : L(lang, "اعرضه للعميل", "Show to clients")}</button></form>`}
-    <form method="post" action="${base}/materials/${m.id}/delete" class="inline"><button type="submit" class="link">${L(lang, "حذف", "Delete")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "لسه مفيش لينكات.", "No links yet.")}</p>`}
+    <form method="post" action="${base}/materials/${m.id}/delete" class="inline"><button type="submit" class="link">${L(lang, "حذف", "Delete")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "لسه مفيش ملفات أو لينكات.", "No files or links yet.")}</p>`}
   ${manager ? html`<form method="post" action="${base}/materials" class="stack" data-material-form>
     <div class="row">
       <input name="label" required maxlength="80" placeholder="${L(lang, "الاسم (مثلاً: بروشور المرحلة 2)", "Label (e.g. Phase 2 brochure)")}" aria-label="${L(lang, "الاسم", "Label")}">
@@ -232,6 +246,17 @@ ${manager ? html`<details class="card"><summary>➕ ${L(lang, "نظام سداد
     <label><input type="checkbox" name="client_visible" value="1"> ${L(lang, "يظهر للعميل", "Show to clients")}</label>
     <button type="submit" class="secondary">${L(lang, "إضافة لينك", "Add link")}</button>
     <p class="muted">${L(lang, "بنتأكد مرة في الأسبوع إن كل لينك لسه بيفتح ونبلغ المديرين لو واحد وقف.", "Once a week every link is checked and managers hear about broken ones.")}</p>
+  </form>` : ""}
+  ${manager ? html`<form method="post" action="${base}/materials/upload" enctype="multipart/form-data" class="stack" data-material-upload>
+    <h3>📎 ${L(lang, "ارفع ملف", "Upload a file")}</h3>
+    <input type="file" name="file" required accept="application/pdf,image/jpeg,image/png,image/webp" aria-label="${L(lang, "الملف", "File")}">
+    <div class="row">
+      <input name="label" maxlength="80" placeholder="${L(lang, "الاسم (اختياري، اسم الملف لو فاضي)", "Label (optional, file name when empty)")}" aria-label="${L(lang, "الاسم", "Label")}">
+      <select name="kind" aria-label="${L(lang, "النوع", "Type")}">${Catalogue.KINDS.filter((k) => k !== "price_sheet").map((k) => html`<option value="${k}"${sel(k === "brochure")}>${label2(KIND, k, lang)}</option>`)}</select>
+    </div>
+    <input name="unit_type" maxlength="60" placeholder="${L(lang, "نوع الوحدة (للمخطط، اختياري)", "Unit type (for a layout, optional)")}" aria-label="${L(lang, "نوع الوحدة", "Unit type")}">
+    <label><input type="checkbox" name="client_visible" value="1"> ${L(lang, "يظهر للعميل", "Show to clients")}</label>
+    <button type="submit" class="secondary">${L(lang, "رفع", "Upload")}</button>
   </form>` : ""}
 </section>
 
@@ -249,7 +274,7 @@ function register(web, { pool, page }) {
   const forbidden = (req, res) => res.status(403).type("text/plain").send(L(langOf(req), "للمديرين بس", "Managers only"));
   const notFound = (req, res) => res.status(404).type("text/plain").send(L(langOf(req), "مش موجود", "Not found"));
   const title = (lang) => L(lang, "كتالوج المطورين", "Developer catalogue");
-  const SAVED = { 1: ["اتحفظ.", "Saved."], linked: ["الوحدات اتربطت.", "Units linked."] };
+  const SAVED = { 1: ["اتحفظ.", "Saved."], linked: ["الوحدات اتربطت.", "Units linked."], material_bad: ["المشروع اتحفظ، بس الملف أو اللينك ماتضافش. ضيفه من الملفات تحت.", "The project was saved, but the file or link was not added. Add it under Materials below."] };
   const savedNotice = (req) => {
     const s = SAVED[req.query.saved];
     if (!s) return null;
@@ -299,7 +324,19 @@ function register(web, { pool, page }) {
 
   web.get("/catalogue", (req, res) => showList(req, res));
   web.post("/catalogue/developers", write((req) => Catalogue.saveDeveloper(pool, actorOf(req), req.body), { show: showList, done: () => "/app/catalogue?saved=1" }));
-  web.post("/catalogue/projects", write((req) => Catalogue.saveProject(pool, actorOf(req), req.body), { show: showList, done: (_req, r) => `/app/catalogue/projects/${r.project.id}?saved=1` }));
+  // F20: a new project may come with a file and/or a link for its materials.
+  web.post("/catalogue/projects", uploadFile, write(async (req) => {
+    const actor = actorOf(req);
+    const r = await Catalogue.saveProject(pool, actor, req.body);
+    if (r.error) return r;
+    const visible = req.body.material_client_visible;
+    const file = req.files?.file?.[0];
+    const fileR = file ? await Catalogue.uploadMaterial(pool, actor, r.project.id, file, { client_visible: visible }) : { ok: true };
+    const linkR = String(req.body.material_url || "").trim()
+      ? await Catalogue.saveMaterial(pool, actor, r.project.id, { label: L(langOf(req), "لينك", "Link"), kind: "other", url: req.body.material_url, client_visible: visible })
+      : { ok: true };
+    return { ...r, materialFailed: Boolean(fileR.error || linkR.error) };
+  }, { show: showList, done: (_req, r) => `/app/catalogue/projects/${r.project.id}?saved=${r.materialFailed ? "material_bad" : "1"}` }));
 
   const showDeveloper = async (req, res, notice = null, status = 200) => {
     const lang = langOf(req);
@@ -338,6 +375,7 @@ ${developerForm(lang, d, `/app/catalogue/developers/${d.id}`)}
     });
   });
   web.post("/catalogue/projects/:id/materials", write((req) => Catalogue.saveMaterial(pool, actorOf(req), req.params.id, req.body), { show: showProject, done: (req) => `${projectUrl(req)}#materials` }));
+  web.post("/catalogue/projects/:id/materials/upload", uploadFile, write((req) => Catalogue.uploadMaterial(pool, actorOf(req), req.params.id, req.files?.file?.[0], req.body), { show: showProject, done: (req) => `${projectUrl(req)}#materials` }));
   web.post("/catalogue/projects/:id/materials/:mid/visibility", write((req) => Catalogue.setMaterialVisibility(pool, actorOf(req), req.params.id, req.params.mid, req.body.visible === "1"), { show: showProject, done: (req) => `${projectUrl(req)}#materials` }));
   web.post("/catalogue/projects/:id/materials/:mid/delete", write((req) => Catalogue.deleteMaterial(pool, actorOf(req), req.params.id, req.params.mid), { show: showProject, done: (req) => `${projectUrl(req)}#materials` }));
   web.post("/catalogue/projects/:id/units", write((req) => Catalogue.linkUnits(pool, actorOf(req), req.params.id, { codes: req.body.codes, phaseId: req.body.phase_id || null }), {

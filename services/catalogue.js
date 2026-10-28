@@ -7,6 +7,8 @@
 
 const { isManager, canEdit } = require("../lib/authz");
 const { normalizeArabicDigits } = require("../lib/listingText");
+const crypto = require("crypto");
+const Storage = require("../lib/supabase");
 
 const STATUSES = ["launching", "selling", "sold_out"];
 const KINDS = ["master_plan", "brochure", "layout", "video", "location", "website", "price_sheet", "other"];
@@ -16,6 +18,8 @@ const MAX_MILESTONES = 4;
 const MAX_FEES = 4;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const FILE_TYPES = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+const MAX_FILE_MB = 25;
 const isId = (v) => UUID_RE.test(String(v || ""));
 const text = (v, max) => {
   const s = String(v ?? "").replace(/\s+/g, " ").trim();
@@ -571,12 +575,42 @@ async function setMaterialVisibility(db, actor, projectId, materialId, visible) 
   return rows[0] ? { ok: true, material: rows[0] } : { error: "not_found" };
 }
 
+/**
+ * F20: keeps an uploaded PDF or image (brochure, layout, plans file...) in storage as a material. The path has a
+ * random part, so only someone given the link can open it; internal files are never listed to clients.
+ * @param {{ buffer, mimetype, originalname, size }} file
+ */
+async function uploadMaterial(db, actor, projectId, file, input = {}) {
+  if (!isManager(actor)) return { error: "forbidden" };
+  const project = await projectRow(db, actor, projectId);
+  if (!project) return { error: "not_found" };
+  const ext = FILE_TYPES[file?.mimetype];
+  if (!file?.buffer?.length || !ext) return bad("file");
+  if (file.buffer.length > MAX_FILE_MB * 1024 * 1024) return bad("file");
+  const name = String(file.originalname || "").replace(/\.[^.]+$/, "");
+  const label = text(input.label, 80) || text(name, 80) || "file";
+  const kind = KINDS.includes(input.kind) && input.kind !== "price_sheet" ? input.kind : ext === "pdf" ? "brochure" : "other";
+  const safe = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "file";
+  const path = `${actor.agency_id}/projects/${project.id}/${crypto.randomBytes(12).toString("hex")}-${safe}.${ext}`;
+  const url = await Storage.uploadProjectFile(actor.agency_id, path, file.buffer, file.mimetype);
+  if (!url) return { error: "upload_failed" };
+  const clientVisible = input.client_visible === true || input.client_visible === "1" || input.client_visible === "on";
+  const { rows } = await db.query(
+    `INSERT INTO project_materials (agency_id, project_id, label, kind, url, unit_type, client_visible, storage_path, file_bytes, check_status, checked_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'ok', now()) RETURNING *`,
+    [actor.agency_id, project.id, label, kind, url, text(input.unit_type, 60), clientVisible, path, file.buffer.length]
+  );
+  return { ok: true, material: rows[0] };
+}
+
 async function deleteMaterial(db, actor, projectId, materialId) {
   if (!isManager(actor)) return { error: "forbidden" };
   const project = await projectRow(db, actor, projectId);
   if (!project || !isId(materialId)) return { error: "not_found" };
-  const { rowCount } = await db.query("DELETE FROM project_materials WHERE id = $1 AND project_id = $2", [materialId, project.id]);
-  return rowCount ? { ok: true } : { error: "not_found" };
+  const { rows } = await db.query("DELETE FROM project_materials WHERE id = $1 AND project_id = $2 RETURNING storage_path", [materialId, project.id]);
+  if (!rows[0]) return { error: "not_found" };
+  if (rows[0].storage_path) await Storage.deleteStorageFiles([rows[0].storage_path]);
+  return { ok: true };
 }
 
 /** The materials a client may see for a unit's project (C7 builds on this): never internal links. */
@@ -639,7 +673,7 @@ async function linkOpens(url, { fetchImpl = fetch, safe = require("../lib/flyerA
 async function checkLinks(pool, { now = new Date(), opens = linkOpens, notify = null } = {}) {
   const { rows } = await pool.query(
     `SELECT m.*, p.name AS project_name FROM project_materials m JOIN projects p ON p.id = m.project_id
-     WHERE m.checked_at IS NULL OR m.checked_at < $1 ORDER BY m.checked_at NULLS FIRST LIMIT $2`,
+     WHERE m.storage_path IS NULL AND (m.checked_at IS NULL OR m.checked_at < $1) ORDER BY m.checked_at NULLS FIRST LIMIT $2`,
     [new Date(now.getTime() - CHECK_EVERY_MS).toISOString(), CHECK_BATCH]
   );
   let broken = 0;
@@ -684,6 +718,7 @@ const linkCheckJob = () => ({
 module.exports = {
   STATUSES,
   KINDS,
+  MAX_FILE_MB,
   FREQUENCIES,
   MAINTENANCE_DUE,
   num,
@@ -706,6 +741,7 @@ module.exports = {
   unlinkUnit,
   linkResale,
   saveMaterial,
+  uploadMaterial,
   setMaterialVisibility,
   deleteMaterial,
   clientMaterials,
