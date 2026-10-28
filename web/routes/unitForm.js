@@ -203,7 +203,10 @@ function register(web, { pool, page }) {
       if (res2.conflict) return { rollback: true, listing, ev, conflict: true };
       const removed = await Store.removePhotos(client, listing, removeIds);
       await Store.addPhotos(client, listing, photos.urls);
-      return { saved: res2.listing, removed, columns: Object.keys(patch) };
+      // P3: the order the broker dragged the photos into (new photos follow).
+      const order = [].concat(req.body.photo_order || []).filter((id) => /^[0-9a-f-]{36}$/.test(id) && !removeIds.includes(id));
+      const reordered = order.length > 1 && (await Store.reorderPhotos(client, res2.listing, order));
+      return { saved: res2.listing, removed, reordered, columns: Object.keys(patch) };
     });
 
     if (out.missing || out.forbidden) {
@@ -234,7 +237,7 @@ function register(web, { pool, page }) {
     }
     // Storage files are removed outside the transaction (SEC-04).
     if (out.removed.length) Supabase.deleteStorageFiles(out.removed).catch(() => {});
-    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: out.saved.code, operation_type: "web_unit_edit", metadata: { columns: out.columns, photos_added: photos.urls.length, photos_removed: out.removed.length } });
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: out.saved.code, operation_type: "web_unit_edit", metadata: { columns: out.columns, photos_added: photos.urls.length, photos_removed: out.removed.length, photos_reordered: Boolean(out.reordered) } });
     return res.redirect(303, `/app/units/${encodeURIComponent(out.saved.code)}?saved=1`);
   });
 }

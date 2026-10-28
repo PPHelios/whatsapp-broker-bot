@@ -290,6 +290,7 @@
       "nextUnitCode": ["db", "agencyId", "propertyType"],
       "addPhotos": ["db", "listing", "urls"],
       "removePhotos": ["db", "listing", "imageIds"],
+      "reorderPhotos": ["db", "listing", "imageIds"],
       "applyListingPatch": ["db", "broker", "params"],
       "INSERT_COLUMNS": "Array",
       "PATCH_COLUMNS": "Array"
