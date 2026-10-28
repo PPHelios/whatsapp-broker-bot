@@ -144,7 +144,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     <button type="button" class="secondary" hx-post="/app/units/review" hx-encoding="multipart/form-data" hx-include="#unit-form" hx-target="#review">📋 ${L(lang, "مراجعة", "Review")}</button>
     ${duplicate
       ? html`<button type="submit" name="force" value="1">✅ ${L(lang, "احفظ برضه", "Save anyway")}</button>`
-      : html`<button type="submit" name="action" value="save">✅ ${L(lang, "حفظ", "Save")}</button>`}
+      : html`<button type="submit" name="action" value="save" data-tg-main>✅ ${L(lang, "حفظ", "Save")}</button>`}
     ${mode === "edit" ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(code)}">${L(lang, "إلغاء", "Cancel")}</a>` : ""}
   </div>
 </form>`;

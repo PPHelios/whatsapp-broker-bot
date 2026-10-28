@@ -335,6 +335,7 @@
       "paymentHint": ["l", "lang"],
       "featuresLine": ["l", "lang", "max"],
       "compactLine": ["l", "lang"],
+      "resultCard": ["l", "lang"],
       "searchResult": ["l", "lang"],
       "searchResults": ["rows", "params"],
       "planCopy": ["l", "broker", "planIdOrYears", "params"],

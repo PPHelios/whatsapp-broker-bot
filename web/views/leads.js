@@ -74,7 +74,7 @@ function leadForm({ values: v = {}, lang = "ar", csrf = "", brokers = null, noti
     ${erased ? html`<label class="check"><input type="checkbox" name="allow_erased" value="1"> ${L(lang, "العميل طلب يتمسح قبل كده، وهو اللي كلمنا تاني", "The client asked to be deleted before, and contacted us again")}</label>` : ""}
   </fieldset>
   </details>
-  <button type="submit">💾 ${L(lang, "حفظ العميل", "Save the client")}</button>
+  <button type="submit" data-tg-main>💾 ${L(lang, "حفظ العميل", "Save the client")}</button>
 </form>`;
 }
 
