@@ -235,7 +235,7 @@ function mountPublic(app, { pool, assets }) {
     const otherLangUrl = `${base}&lang=${lang === "en" ? "ar" : "en"}`;
     let unit;
     if (listing.status === "active") {
-      const { rows: images } = await pool.query("SELECT url FROM listing_images WHERE listing_id = $1 AND agency_id = $2 ORDER BY position LIMIT 15", [listing.id, listing.agency_id]);
+      const { rows: images } = await pool.query("SELECT url FROM listing_images WHERE listing_id = $1 AND agency_id = $2 AND (role IS NULL OR role NOT IN ('document', 'unrelated')) ORDER BY position LIMIT 15", [listing.id, listing.agency_id]);
       unit = PublicUnit.toPublicUnit(listing, { agency, broker: broker?.is_active ? broker : null, images, lang, ...(await projectOf(listing)) });
     } else {
       unit = PublicUnit.unavailable(listing, { agency, lang });
@@ -284,7 +284,7 @@ function mountPublic(app, { pool, assets }) {
         units.push({ ...PublicUnit.unavailable(listing, { agency: resolved.agency, lang }), per_m2: null });
         continue;
       }
-      const { rows: images } = await pool.query("SELECT url FROM listing_images WHERE listing_id = $1 AND agency_id = $2 ORDER BY position LIMIT 1", [listing.id, listing.agency_id]);
+      const { rows: images } = await pool.query("SELECT url FROM listing_images WHERE listing_id = $1 AND agency_id = $2 AND (role IS NULL OR role NOT IN ('document', 'unrelated', 'layout')) ORDER BY position LIMIT 1", [listing.id, listing.agency_id]);
       const u = PublicUnit.toPublicUnit(listing, { agency: resolved.agency, broker, images, lang, ...(await projectOf(listing)) });
       const perM2 = listing.listing_type !== "rent" && Number(listing.area_value) > 0 && Number(listing.price_value) > 0 ? Math.round(Number(listing.price_value) / Number(listing.area_value)) : null;
       units.push({ ...u, per_m2: perM2 });
