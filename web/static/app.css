@@ -109,3 +109,6 @@ ul.gallery { list-style: none; padding: 0; display: grid; grid-template-columns:
 ul.gallery li { border: 1px solid var(--line, #ddd); border-radius: 8px; padding: 8px; }
 ul.gallery img { width: 100%; height: 120px; object-fit: cover; border-radius: 6px; }
 ul.gallery details label { display: block; }
+ol[data-sortable] { padding-inline-start: 1.5em; }
+ol[data-sortable] > li { display: flex; gap: 8px; align-items: center; padding: 6px 4px; border-bottom: 1px solid var(--line, #ddd); cursor: grab; }
+ol[data-sortable] > li .grow { flex: 1; }
