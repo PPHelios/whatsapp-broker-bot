@@ -1512,6 +1512,20 @@
       "mergeFacts": ["pages"],
       "highlightsFor": ["h", "lang"]
     },
+    "domain/planReading.js": {
+      "MAX_PAGES": "Number",
+      "MAX_PLANS": "Number",
+      "VERSION": "String",
+      "PROMPT": "String",
+      "plansFromAnswer": ["text"],
+      "mergePlans": ["pages"],
+      "formInput": ["p"]
+    },
+    "services/planReading.js": {
+      "read": ["pool", "actor", "projectId", "params", "params"],
+      "apply": ["pool", "actor", "projectId", "body"],
+      "discard": ["pool", "actor", "projectId"]
+    },
     "services/brochure.js": {
       "read": ["pool", "actor", "projectId", "params", "params"],
       "saveHighlights": ["pool", "actor", "projectId", "input", "params"]
