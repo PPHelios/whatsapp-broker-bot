@@ -1196,7 +1196,10 @@
     "services/priceInsights.js": {
       "MIN_UNITS": "Number",
       "byPlace": ["db", "agencyId", "params"],
-      "forUnit": ["db", "listing", "params"]
+      "forUnit": ["db", "listing", "params"],
+      "extrasOf": ["l"],
+      "likeLabel": ["m", "lang"],
+      "noteLine": ["m", "listing", "lang"]
     },
     "web/routes/sources.js": {
       "register": ["web", "params"]
