@@ -31,7 +31,8 @@ test("the form shows on an active unit and a submission becomes the sharing brok
   const path = await sharedLink();
   const page = await request(h.app.app).get(path);
   expect(page.text).toContain('id="interest"');
-  expect(page.text).toContain('name="consent"');
+  expect(page.text).not.toContain('name="consent"'); // F19: a notice line, no tick box
+  expect(page.text).toContain("لما تبعت، بتوافق");
 
   const res = await post(path, { name: "Mona", phone: "01011112222", message: "Is it still available?", consent: "1" });
   expect(res.status).toBe(303);
@@ -48,9 +49,8 @@ test("the form shows on an active unit and a submission becomes the sharing brok
   expect(thanks.text).not.toContain('name="consent"');
 });
 
-test("no consent, no name or a bad phone keep nothing; the honeypot looks fine but keeps nothing", async () => {
+test("no name or a bad phone keep nothing; the honeypot looks fine but keeps nothing", async () => {
   const path = await sharedLink();
-  expect((await post(path, { name: "Mona", phone: "01011112222" })).status).toBe(400);
   expect((await post(path, { name: "", phone: "01011112222", consent: "1" })).status).toBe(400);
   expect((await post(path, { name: "Mona", phone: "123", consent: "1" })).status).toBe(400);
   const bot = await post(path, { name: "Spam", phone: "01011112222", consent: "1", website: "http://spam" });
