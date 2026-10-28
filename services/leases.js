@@ -46,6 +46,17 @@ async function save(db, actor, listing, form) {
 }
 
 /** F10: the leases where this lead is the tenant: [{ code, start_date, months, end }]. */
+// Lead refs a broker can pick as a tenant: managers see the agency, brokers their own leads.
+async function tenantChoices(db, broker) {
+  const mgr = isManager(broker);
+  const { rows } = await db.query(
+    `SELECT ref, name FROM leads WHERE agency_id = $1 ${mgr ? "" : "AND assigned_broker_id = $2"}
+      ORDER BY (kind = 'tenant') DESC, last_activity_at DESC LIMIT 200`,
+    mgr ? [broker.agency_id] : [broker.agency_id, broker.id]
+  );
+  return rows.map((r) => ({ label: `${Card.refLabel(r.ref)}${r.name ? ` ${r.name}` : ""}` }));
+}
+
 async function forTenant(db, agencyId, leadId) {
   const { rows } = await db.query(
     `SELECT z.*, l.code FROM leases z JOIN listings l ON l.id = z.listing_id WHERE z.agency_id = $1 AND z.tenant_lead_id = $2 ORDER BY z.start_date DESC`,
@@ -125,4 +136,4 @@ function reminderJob() {
   return { name: "lease_reminders", everyMs: 60 * 60 * 1000, run: ({ pool, now }) => remindDue(pool, { now }) };
 }
 
-module.exports = { forListing, forTenant, save, remove, upcoming, remindDue, reminderJob };
+module.exports = { forListing, forTenant, tenantChoices, save, remove, upcoming, remindDue, reminderJob };

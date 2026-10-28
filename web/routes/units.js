@@ -104,15 +104,6 @@ function leaseSection(listing, lease, lang, csrf, notice, tenants = []) {
 }
 
 /** F10: the agency's leads to pick a tenant from (tenants first, then the most recent), as "L-0042 Name". */
-async function tenantChoices(pool, broker) {
-  const { rows } = await pool.query(
-    `SELECT ref, name FROM leads WHERE agency_id = $1 ${Authz.isManager(broker) ? "" : "AND assigned_broker_id = $2"}
-      ORDER BY (kind = 'tenant') DESC, last_activity_at DESC LIMIT 200`,
-    Authz.isManager(broker) ? [broker.agency_id] : [broker.agency_id, broker.id]
-  );
-  return rows.map((r) => ({ label: `${Card.refLabel(r.ref)}${r.name ? ` ${r.name}` : ""}` }));
-}
-
 function register(web, { pool, page }) {
   web.get("/units", async (req, res) => {
     const lang = langOf(req);
@@ -277,7 +268,7 @@ ${rows.length
     ${images.length && listing.status === "active" ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(listing.code)}/share-media">📤 ${L(lang, "ابعت الصور للعميل", "Send photos to a client")}</a>` : ""}
   </div>
 </article>
-${listing.listing_type === "rent" && Authz.canEdit(broker, listing) ? leaseSection(listing, await Leases.forListing(pool, listing), lang, req.session.csrf, req.query.lease, await tenantChoices(pool, broker)) : ""}
+${listing.listing_type === "rent" && Authz.canEdit(broker, listing) ? leaseSection(listing, await Leases.forListing(pool, listing), lang, req.session.csrf, req.query.lease, await Leases.tenantChoices(pool, broker)) : ""}
 ${listing.status === "active" ? await wantedSection(pool, broker, listing, lang, req.session.csrf) : ""}
 ${await shareSection(broker, listing, lang)}`
     });
