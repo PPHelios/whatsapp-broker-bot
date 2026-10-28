@@ -192,7 +192,7 @@ describe("Intent guard (B2)", () => {
 
   test("a described unit (intent listing) points to 'اضافة'", async () => {
     h.AI.respond(() => ({ intent: "listing", filters: { property_types: ["apartment"] } }));
-    expect(textOf(await h.text("broker", "عندي شقة للبيع 150 متر"))).toMatch(/اضافة/);
+    expect(textOf(await h.text("broker", "عندي شقة للبيع 150 متر"))).toMatch(/إضافة/);
   });
 });
 

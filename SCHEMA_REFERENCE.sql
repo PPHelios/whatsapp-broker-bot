@@ -487,7 +487,8 @@ CREATE TABLE IF NOT EXISTS public.projects (
   brochure jsonb DEFAULT '{}'::jsonb NOT NULL,
   highlights jsonb DEFAULT '{}'::jsonb NOT NULL,
   highlights_at timestamp with time zone,
-  sheet_sync jsonb DEFAULT '{}'::jsonb NOT NULL
+  sheet_sync jsonb DEFAULT '{}'::jsonb NOT NULL,
+  plans_draft jsonb
 );
 
 CREATE TABLE IF NOT EXISTS public.broker_sessions (
@@ -912,7 +913,9 @@ CREATE TABLE IF NOT EXISTS public.project_materials (
   check_status text,
   checked_at timestamp with time zone,
   broken_since timestamp with time zone,
-  created_at timestamp with time zone DEFAULT now() NOT NULL
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  storage_path text,
+  file_bytes integer
 );
 
 CREATE TABLE IF NOT EXISTS public.price_sheets (
