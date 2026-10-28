@@ -738,7 +738,9 @@
       "cairoOffsetMinutes": ["at"],
       "cairoDayAt": ["now", "daysAhead", "hour"],
       "fromCairoLocal": ["text"],
-      "toCairoLocal": ["at"]
+      "toCairoLocal": ["at"],
+      "nextHourLocal": ["now"],
+      "cairoDay": ["now"]
     },
     "domain/leadCard.js": {
       "refLabel": ["ref"],
@@ -1619,6 +1621,7 @@
     },
     "services/leases.js": {
       "forListing": ["db", "listing"],
+      "forTenant": ["db", "agencyId", "leadId"],
       "save": ["db", "actor", "listing", "form"],
       "remove": ["db", "actor", "listing"],
       "upcoming": ["db", "manager", "params"],

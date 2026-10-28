@@ -1097,7 +1097,8 @@ CREATE TABLE IF NOT EXISTS public.leases (
   remind boolean DEFAULT false NOT NULL,
   reminded text[] DEFAULT '{}'::text[] NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL,
-  updated_at timestamp with time zone DEFAULT now() NOT NULL
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  tenant_lead_id uuid
 );
 
 CREATE TABLE IF NOT EXISTS public.lead_intakes (
@@ -1401,6 +1402,7 @@ ALTER TABLE leads ADD CONSTRAINT leads_follow_up_listing_id_fkey FOREIGN KEY (fo
 ALTER TABLE leases ADD CONSTRAINT leases_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE leases ADD CONSTRAINT leases_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE leases ADD CONSTRAINT leases_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
+ALTER TABLE leases ADD CONSTRAINT leases_tenant_lead_id_fkey FOREIGN KEY (tenant_lead_id) REFERENCES leads(id) ON DELETE SET NULL;
 ALTER TABLE listing_images ADD CONSTRAINT listing_images_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE listing_images ADD CONSTRAINT listing_images_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
 ALTER TABLE listing_prices ADD CONSTRAINT listing_prices_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
@@ -1498,6 +1500,7 @@ CREATE INDEX idx_leads_phones ON public.leads USING gin (phones);
 CREATE INDEX idx_leads_response_due ON public.leads USING btree (response_due_at) WHERE (response_due_at IS NOT NULL);
 CREATE INDEX idx_leads_untouched ON public.leads USING btree (created_at) WHERE ((stage = 'new'::text) AND (last_contact_at IS NULL) AND (nudged_at IS NULL));
 CREATE INDEX idx_leases_agency ON public.leases USING btree (agency_id);
+CREATE INDEX leases_tenant_lead_idx ON public.leases USING btree (tenant_lead_id) WHERE (tenant_lead_id IS NOT NULL);
 CREATE INDEX idx_listing_drafts_updated ON public.listing_drafts USING btree (updated_at);
 CREATE INDEX listing_images_agency_idx ON public.listing_images USING btree (agency_id);
 CREATE INDEX listing_images_agency_phash_idx ON public.listing_images USING btree (agency_id) WHERE (phash IS NOT NULL);
