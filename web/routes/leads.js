@@ -60,7 +60,7 @@ function viewingSection({ lead, viewing: v, unit, path, hidden, lang }) {
   </div>`
     : html`<p class="muted">${L(lang, "حدد ميعاد ووحدة ومكان، وهيتفتح واتساب على شات العميل برسالة فيها لينك يأكد منه أو يختار ميعاد تاني.", "Set a time, unit and place; WhatsApp opens on the client's chat with a link to confirm or pick another time.")}</p>`}
   <form method="post" action="${path}/viewing" class="grid">${hidden}
-    <label>${L(lang, "إمتى (بتوقيت القاهرة)", "When (Cairo time)")}<input type="datetime-local" name="at" required value="${at ? Stages.toCairoLocal(at) : ""}"></label>
+    <label>${L(lang, "إمتى (بتوقيت القاهرة)", "When (Cairo time)")}<input type="datetime-local" name="at" required value="${at ? Stages.toCairoLocal(at) : Stages.nextHourLocal()}"></label>
     <label>${L(lang, "كود الوحدة", "Unit code")}<input name="unit" dir="ltr" value="${(open && v.code) || unit?.code || ""}"></label>
     <label>${L(lang, "المكان", "Place")}<input name="place" maxlength="200" value="${(open && v.place) || ""}" placeholder="${L(lang, "مثلاً: بوابة 3، هايد بارك", "e.g. Gate 3, Hyde Park")}"></label>
     <button type="submit">📲 ${v ? L(lang, "ابعت ميعاد جديد للعميل", "Send a new time to the client") : L(lang, "ابعت الميعاد للعميل على واتساب", "Send the time to the client on WhatsApp")}</button>
@@ -334,7 +334,7 @@ ${draft
 </section>
 <section class="card" id="follow-up"><h2>📅 ${L(lang, "المتابعة", "Follow-up")}</h2>
   <form method="post" action="${path}/follow-up" class="grid">${hidden}
-    <label>${L(lang, "إمتى (بتوقيت القاهرة)", "When (Cairo time)")}<input type="datetime-local" name="at" required value="${lead.follow_up_status === "open" ? Stages.toCairoLocal(lead.next_follow_up_at) : ""}"></label>
+    <label>${L(lang, "إمتى (بتوقيت القاهرة)", "When (Cairo time)")}<input type="datetime-local" name="at" required value="${lead.follow_up_status === "open" ? Stages.toCairoLocal(lead.next_follow_up_at) : Stages.nextHourLocal()}"></label>
     <label>${L(lang, "النوع", "Type")}<select name="kind"><option value="call">${L(lang, "مكالمة", "Call")}</option><option value="viewing"${lead.follow_up_kind === "viewing" ? html` selected` : ""}>${L(lang, "معاينة", "Viewing")}</option></select></label>
     <label>${L(lang, "كود الوحدة (للمعاينة)", "Unit code (viewing)")}<input name="unit" dir="ltr" value="${unit?.code || ""}"></label>
     <label>${L(lang, "ملاحظة", "Note")}<input name="note" maxlength="300" value="${lead.follow_up_status === "open" ? lead.follow_up_note || "" : ""}"></label>

@@ -1,6 +1,7 @@
 // web/routes/units.js — Units in the web app: the agency's list and one unit's page (agency-scoped)
 "use strict";
 
+const Stages = require("../../domain/leadStages");
 const Store = require("../../lib/listingStore");
 const Authz = require("../../lib/authz");
 const Describe = require("../../domain/describe");
@@ -90,7 +91,7 @@ function leaseSection(listing, lease, lang, csrf, notice) {
   <form method="post" action="/app/units/${encodeURIComponent(listing.code)}/lease" class="grid">
     <input type="hidden" name="_csrf" value="${csrf}">
     <label>${L(lang, "اسم المستأجر (اختياري)", "Tenant name (optional)")}<input name="tenant_name" maxlength="120" value="${lease?.tenant_name || ""}"></label>
-    <label>${L(lang, "بداية العقد", "Lease start")}<input type="date" name="start_date" required value="${lease ? LeaseRules.ymd(lease.start_date) : ""}"></label>
+    <label>${L(lang, "بداية العقد", "Lease start")}<input type="date" name="start_date" required value="${lease ? LeaseRules.ymd(lease.start_date) : Stages.cairoDay()}"></label>
     <label>${L(lang, "المدة (شهور)", "Length (months)")}<input type="number" name="months" min="1" max="120" required value="${lease?.months || 12}"></label>
     <label>${L(lang, "الإيجار الشهري (اختياري)", "Monthly rent (optional)")}<input name="rent" inputmode="numeric" value="${lease?.rent ? Math.round(Number(lease.rent)) : ""}"></label>
     <label>${L(lang, "الزيادة السنوية % (اختياري)", "Yearly increase % (optional)")}<input name="increase_pct" inputmode="decimal" value="${lease?.increase_pct ?? ""}"></label>

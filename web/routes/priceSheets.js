@@ -6,6 +6,7 @@
 // C9: a project linked to the developer's shared Google Sheet, checked daily (services/sheetSync.js).
 "use strict";
 
+const Stages = require("../../domain/leadStages");
 const PriceSheets = require("../../services/priceSheets");
 const PriceReading = require("../../services/priceReading");
 const SheetSync = require("../../services/sheetSync");
@@ -121,7 +122,7 @@ function pricesSection(lang, manager, { project, units, sheets, increases, phase
   ${syncForm(lang, base, project)}
   <form method="post" action="${base}/increases" class="row" data-increase-form>
     <label>${L(lang, "زيادة معلنة %", "Announced change %")} <input name="pct" required inputmode="decimal" dir="ltr" size="5" placeholder="7"></label>
-    <label>${L(lang, "من يوم", "From")} <input name="effective_on" type="date" required></label>
+    <label>${L(lang, "من يوم", "From")} <input name="effective_on" type="date" required value="${Stages.cairoDay()}"></label>
     ${phases.length ? html`<label>${L(lang, "المرحلة", "Phase")} <select name="phase_id"><option value="">${L(lang, "كل المشروع", "Whole project")}</option>${phases.map((p) => html`<option value="${p.id}">${p.name}</option>`)}</select></label>` : ""}
     <button type="submit" class="secondary">${L(lang, "سجّل الزيادة", "Schedule it")}</button>
   </form>
