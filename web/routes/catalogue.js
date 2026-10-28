@@ -155,6 +155,7 @@ function planForm(lang, projectId, phases, pl = {}) {
   const fees = [...(pl.extra_fees || []), {}, {}].slice(0, 4);
   return html`<form method="post" action="/app/catalogue/projects/${projectId}/plans" class="card stack" data-plan-form>
   ${pl.id ? html`<input type="hidden" name="id" value="${pl.id}">` : ""}
+  <p class="muted">${L(lang, "المطلوب: اسم النظام والمقدم % (عليهم *). الباقي اختياري.", "Required: plan name and down payment % (marked *). The rest is optional.")}</p>
   <label>${L(lang, "اسم النظام *", "Plan name *")} <input name="name" required maxlength="80" value="${pl.name || ""}" placeholder="${L(lang, "مثلاً: 10% مقدم على 8 سنين", "e.g. 10% down over 8 years")}"></label>
   ${phases.length ? html`<label>${L(lang, "المرحلة", "Phase")} <select name="phase_id"><option value="">${L(lang, "كل المشروع", "Whole project")}</option>${phases.map((ph) => html`<option value="${ph.id}"${sel(pl.phase_id === ph.id)}>${ph.name}</option>`)}</select></label>` : ""}
   <div class="row">

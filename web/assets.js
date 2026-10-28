@@ -12,7 +12,8 @@ const TYPES = {
   ".js": "application/javascript; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
-  ".json": "application/json"
+  ".json": "application/json",
+  ".csv": "text/csv; charset=utf-8"
 };
 
 // Files served under /app/static/ (sw.js is served at /app/sw.js, filled in per version).
@@ -24,7 +25,9 @@ const FILES = {
   "icons/icon.svg": path.join(STATIC_DIR, "icons", "icon.svg"),
   "icons/icon-192.png": path.join(STATIC_DIR, "icons", "icon-192.png"),
   "icons/icon-512.png": path.join(STATIC_DIR, "icons", "icon-512.png"),
-  "icons/maskable-512.png": path.join(STATIC_DIR, "icons", "maskable-512.png")
+  "icons/maskable-512.png": path.join(STATIC_DIR, "icons", "maskable-512.png"),
+  // F12: a sample developer price sheet to download from the project page.
+  "samples/price-sheet-sample.csv": path.join(STATIC_DIR, "samples", "price-sheet-sample.csv")
 };
 
 const hash = (buf) => crypto.createHash("sha256").update(buf).digest("hex").slice(0, 10);

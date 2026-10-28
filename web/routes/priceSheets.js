@@ -116,6 +116,7 @@ function pricesSection(lang, manager, { project, units, sheets, increases, phase
   ${manager ? html`<form method="post" action="${base}/sheets" enctype="multipart/form-data" class="stack" data-sheet-upload>
     <label>${L(lang, "ارفع شيت المطور (.xlsx أو CSV)", "Upload the developer's sheet (.xlsx or CSV)")} <input type="file" name="sheet" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required></label>
     <p class="muted">${L(lang, "الأعمدة: كود الوحدة، النوع، المبنى أو المرحلة، الدور، المساحة (أو من–إلى)، الغرف، الحديقة، الروف، السعر، الحالة. صف من غير كود = موديل «يبدأ من». هتشوف الجديد والمتغير قبل أي حفظ.", "Columns: unit code, type, building or phase, floor, area (or from–to), bedrooms, garden, roof, price, status. A row without a code is a model (\"from\" price). You see what is new and what changed before anything is saved.")}</p>
+    <p class="muted">${L(lang, "المطلوب في كل صف: السعر بس.", "Required in each row: the price only.")} <a href="/app/static/samples/price-sheet-sample.csv" download>${L(lang, "نزّل شيت مثال", "Download a sample sheet")}</a></p>
     <button type="submit" class="secondary">${L(lang, "معاينة الشيت", "Preview the sheet")}</button>
   </form>
   ${readForm(lang, base, reading)}
