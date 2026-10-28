@@ -7,6 +7,7 @@
 
 const Leads = require("../../services/leads");
 const IntakeUrls = require("../../services/leadIntake");
+const Leases = require("../../services/leases");
 const FollowUpDrafts = require("../../services/followUpDrafts");
 const LeadMerge = require("../../services/leadMerge");
 const LeadRequests = require("../../services/leadRequests");
@@ -301,6 +302,7 @@ ${rows.length
     for (const r of requests) r.matches = await LeadRequests.currentMatches(pool, broker.agency_id, r.filters, { limit: 3 });
     const brokers = manager ? await activeBrokers(pool, broker.agency_id) : [];
     const viewing = await Viewings.latestFor(pool, broker.agency_id, lead.id);
+    const leases = await Leases.forTenant(pool, broker.agency_id, lead.id);
     const unit = lead.follow_up_listing_id ? (await pool.query("SELECT code FROM listings WHERE id = $1 AND agency_id = $2", [lead.follow_up_listing_id, broker.agency_id])).rows[0] : null;
     const path = V.leadPath(lead);
     const hidden = html`<input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="version" value="${lead.version}">`;
@@ -314,6 +316,7 @@ ${rows.length
           ? html` <form method="post" action="${path}/undo" class="inline"><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="event" value="${undoEvent}"><button type="submit" class="link">↩️ ${L(lang, "تراجع", "Undo")}</button></form>`
           : ""}</div>` : ""}
 ${V.leadHeader(lead, lang)}
+${manager ? html`<p class="muted" data-merge-hint>🔗 ${L(lang, "نفس العميل متسجل برقم تاني؟", "Same client saved under another number?")} <a href="#merge">${L(lang, "ادمج السجلين", "Merge the two records")}</a></p>` : ""}
 <div class="card row"><form method="post" action="${path}/contacted" class="inline">${hidden}<button type="submit">📞 ${L(lang, "كلمته", "I called")}</button></form>
   <a class="btn secondary" href="/app/deals/new?lead=${Card.refLabel(lead.ref)}">🤝 ${L(lang, "سجل صفقة", "Record deal")}</a>
   <form method="post" action="${path}/draft" class="inline">${hidden}<button type="submit" class="secondary">✍️ ${L(lang, "اكتبلي رسالة متابعة", "Draft a follow-up message")}</button></form></div>
@@ -344,6 +347,11 @@ ${draft
   <form method="post" action="${path}/follow-up/postpone">${hidden}<button type="submit" class="secondary">📅 ${L(lang, "أجّل يوم", "Postpone a day")}</button></form>` : ""}
 </section>
 ${viewingSection({ lead, viewing, unit, path, hidden, lang })}
+${leases.length
+  ? html`<section class="card" id="leases"><h2>🔑 ${L(lang, "إيجار", "Lease")}</h2><ul>${leases.map(
+      (z) => html`<li data-tenant-lease="${z.code}"><a href="/app/units/${encodeURIComponent(z.code)}#lease">${z.code}</a> · ${L(lang, `من ${Stages.cairoDay(new Date(z.start_date))} لحد ${Stages.cairoDay(z.end)}`, `${Stages.cairoDay(new Date(z.start_date))} to ${Stages.cairoDay(z.end)}`)}</li>`
+    )}</ul></section>`
+  : ""}
 ${manager
   ? html`<section class="card" id="merge"><h2>🔗 ${L(lang, "دمج عميل مكرر", "Merge a duplicate")}</h2>
   <p class="muted">${L(lang, "لو العميل ده متسجل مرتين برقمين مختلفين: اكتب رقم السجل التاني (L-…) مرتين، وكل حاجة فيه (أرقامه، تاريخه، طلباته، معايناته، صفقاته) هتتنقل هنا، والسجل التاني هيتمسح. مينفعش يترجع.", "If this client is saved twice under two numbers: type the other record's reference (L-…) twice; everything on it (numbers, history, requests, viewings, deals) moves here and the other record is deleted. This can't be undone.")}</p>
