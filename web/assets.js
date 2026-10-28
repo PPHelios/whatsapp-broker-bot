@@ -13,7 +13,8 @@ const TYPES = {
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".json": "application/json",
-  ".csv": "text/csv; charset=utf-8"
+  ".csv": "text/csv; charset=utf-8",
+  ".woff2": "font/woff2"
 };
 
 // Files served under /app/static/ (sw.js is served at /app/sw.js, filled in per version).
@@ -22,6 +23,9 @@ const FILES = {
   "app.js": path.join(STATIC_DIR, "app.js"),
   "voice.js": path.join(STATIC_DIR, "voice.js"),
   "htmx.min.js": require.resolve("htmx.org/dist/htmx.min.js"),
+  // Cairo, self-hosted (CSP font-src 'self'): regular and bold; 600 renders with the bold face.
+  "fonts/cairo-400.woff2": path.join(STATIC_DIR, "fonts", "cairo-400.woff2"),
+  "fonts/cairo-700.woff2": path.join(STATIC_DIR, "fonts", "cairo-700.woff2"),
   "icons/icon.svg": path.join(STATIC_DIR, "icons", "icon.svg"),
   "icons/icon-192.png": path.join(STATIC_DIR, "icons", "icon-192.png"),
   "icons/icon-512.png": path.join(STATIC_DIR, "icons", "icon-512.png"),
@@ -40,8 +44,11 @@ function loadAssets() {
     const body = fs.readFileSync(file);
     files[name] = { body, type: TYPES[path.extname(name)] || "application/octet-stream", hash: hash(body) };
   }
-  // The brand's colour tokens, generated (domain/brand.js), loaded before app.css.
-  const brand = Buffer.from(cssTokens());
+  // The brand's colour tokens (domain/brand.js) and the Cairo faces at their versioned URLs, loaded before app.css.
+  const face = (w) => files[`fonts/cairo-${w}.woff2`]
+    ? `@font-face { font-family: "Cairo"; font-style: normal; font-weight: ${w === 400 ? "300 500" : "600 900"}; font-display: swap; src: url("/app/static/fonts/cairo-${w}.woff2?v=${files[`fonts/cairo-${w}.woff2`].hash}") format("woff2"); }\n`
+    : "";
+  const brand = Buffer.from(cssTokens() + face(400) + face(700));
   files["brand.css"] = { body: brand, type: TYPES[".css"], hash: hash(brand) };
   const version = hash(Buffer.from(Object.values(files).map((f) => f.hash).join(".")));
   const url = (name) => {

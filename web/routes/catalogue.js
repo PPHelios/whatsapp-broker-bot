@@ -278,7 +278,7 @@ ${manager ? html`<details class="card"><summary>✏️ ${L(lang, "تعديل ا�
 
 <section class="card" id="phases">
   <h2>${L(lang, "المراحل", "Phases")}</h2>
-  ${phases.length ? html`<ul>${phases.map((ph) => html`<li data-phase="${ph.id}">${ph.name} · ${label2(STATUS, ph.status, lang)} · <span dir="ltr">${deliveryText(ph, lang)}</span>${manager ? html` <form method="post" action="${base}/phases/${ph.id}/delete" class="inline"><button type="submit" class="link">${L(lang, "حذف", "Delete")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "مفيش مراحل (المشروع كله مرحلة واحدة).", "No phases (the whole project is one).")}</p>`}
+  ${phases.length ? html`<ul>${phases.map((ph) => html`<li data-phase="${ph.id}">${ph.name} · ${label2(STATUS, ph.status, lang)} · <span dir="ltr">${deliveryText(ph, lang)}</span>${manager ? html` <form method="post" action="${base}/phases/${ph.id}/delete" class="inline" data-confirm="${L(lang, "تمسحها؟ مش هينفع ترجعها.", "Delete this? This can't be undone.")}"><button type="submit" class="link danger">${L(lang, "حذف", "Delete")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "مفيش مراحل (المشروع كله مرحلة واحدة).", "No phases (the whole project is one).")}</p>`}
   ${manager ? html`<form method="post" action="${base}/phases" class="row" data-phase-form>
     <input name="name" required maxlength="80" placeholder="${L(lang, "اسم المرحلة", "Phase name")}" aria-label="${L(lang, "اسم المرحلة", "Phase name")}">
     ${statusSelect("status", "selling", lang)}
@@ -290,7 +290,7 @@ ${manager ? html`<details class="card"><summary>✏️ ${L(lang, "تعديل ا�
 <section class="card" id="plans">
   <h2>💳 ${L(lang, "أنظمة السداد", "Payment plans")}</h2>
   <p class="muted">${L(lang, "النظام بيتطبق على كل وحدات المشروع (أو المرحلة) تلقائي، إلا الوحدة اللي ليها أنظمتها الخاصة.", "A plan applies to every unit of the project (or phase) automatically, except a unit with its own plans.")}</p>
-  ${plans.length ? html`<ul>${plans.map((pl) => html`<li data-plan="${pl.id}"><strong>${pl.name}</strong>${pl.phase_id ? ` (${phaseName(pl.phase_id) || ""})` : ""}: ${planLine(pl, lang)}${manager ? html` · <a href="${base}/plans/${pl.id}">${L(lang, "تعديل", "Edit")}</a> <form method="post" action="${base}/plans/${pl.id}/delete" class="inline"><button type="submit" class="link">${L(lang, "حذف", "Delete")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "لسه مفيش أنظمة سداد.", "No payment plans yet.")}</p>`}
+  ${plans.length ? html`<ul>${plans.map((pl) => html`<li data-plan="${pl.id}"><strong>${pl.name}</strong>${pl.phase_id ? ` (${phaseName(pl.phase_id) || ""})` : ""}: ${planLine(pl, lang)}${manager ? html` · <a href="${base}/plans/${pl.id}">${L(lang, "تعديل", "Edit")}</a> <form method="post" action="${base}/plans/${pl.id}/delete" class="inline" data-confirm="${L(lang, "تمسحها؟ مش هينفع ترجعها.", "Delete this? This can't be undone.")}"><button type="submit" class="link danger">${L(lang, "حذف", "Delete")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "لسه مفيش أنظمة سداد.", "No payment plans yet.")}</p>`}
 </section>
 ${manager ? html`<details class="card"><summary>➕ ${L(lang, "نظام سداد جديد", "New payment plan")}</summary>${planForm(lang, p.id, phases)}</details>` : ""}
 ${plansRead || ""}
@@ -300,7 +300,7 @@ ${plansRead || ""}
   ${materials.length ? html`<ul>${materials.map((m) => html`<li data-material="${m.id}" data-client-visible="${m.client_visible ? "1" : "0"}">
     <a href="${m.url}" target="_blank" rel="noopener noreferrer">${m.storage_path ? "📎 " : ""}${m.label}</a> · ${label2(KIND, m.kind, lang)}${m.unit_type ? ` · ${m.unit_type}` : ""} · ${m.client_visible ? L(lang, "👁️ بيظهر للعميل", "👁️ Client-visible") : L(lang, "🔒 داخلي", "🔒 Internal")}${m.check_status === "broken" ? html` · <strong data-broken>⚠️ ${L(lang, "مبقاش بيفتح", "Not opening")}</strong>` : ""}
     ${manager ? html`${m.kind === "price_sheet" ? "" : html`<form method="post" action="${base}/materials/${m.id}/visibility" class="inline"><input type="hidden" name="visible" value="${m.client_visible ? "0" : "1"}"><button type="submit" class="link">${m.client_visible ? L(lang, "خليه داخلي", "Make internal") : L(lang, "اعرضه للعميل", "Show to clients")}</button></form>`}
-    <form method="post" action="${base}/materials/${m.id}/delete" class="inline"><button type="submit" class="link">${L(lang, "حذف", "Delete")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "لسه مفيش ملفات أو لينكات.", "No files or links yet.")}</p>`}
+    <form method="post" action="${base}/materials/${m.id}/delete" class="inline" data-confirm="${L(lang, "تمسحها؟ مش هينفع ترجعها.", "Delete this? This can't be undone.")}"><button type="submit" class="link danger">${L(lang, "حذف", "Delete")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "لسه مفيش ملفات أو لينكات.", "No files or links yet.")}</p>`}
   ${manager ? html`<form method="post" action="${base}/materials" class="stack" data-material-form>
     <div class="row">
       <input name="label" required maxlength="80" placeholder="${L(lang, "الاسم (مثلاً: بروشور المرحلة 2)", "Label (e.g. Phase 2 brochure)")}" aria-label="${L(lang, "الاسم", "Label")}">

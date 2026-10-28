@@ -15,6 +15,7 @@ const PriceSheets = require("../../services/priceSheets");
 const Leases = require("../../services/leases");
 const LeaseRules = require("../../domain/leases");
 const Commission = require("../../domain/commission");
+const { icon } = require("../icons");
 const { html } = require("../html");
 const { resultItem, factList } = require("../views/units");
 
@@ -119,25 +120,26 @@ function register(web, { pool, page }) {
     return page(req, res, {
       title: L(lang, "الوحدات", "Units"),
       nav: "units",
-      body: html`<h1>🏠 ${L(lang, "الوحدات", "Units")}</h1>
-<nav class="row card">
-  ${tab("active", L(lang, "🟢 متاحة", "🟢 Available"))} ${tab("sold", L(lang, "🔴 مباعة", "🔴 Sold"))} ${tab("archived", L(lang, "📁 مؤرشفة", "📁 Archived"))}
-  <a href="/app/units?status=${status}${mine ? "" : "&mine=1"}">${mine ? L(lang, "كل الوكالة", "Whole agency") : L(lang, "وحداتي بس", "Mine only")}</a>
-  <a href="/app/insights">📊 ${L(lang, "أسعار المتر", "Prices per m²")}</a>
+      body: html`<div class="row between"><h1>${L(lang, "الوحدات", "Units")}</h1><a class="btn small" href="/app/units/new">${icon("plus", 18)} ${L(lang, "وحدة", "Unit")}</a></div>
+<nav class="seg" aria-label="${L(lang, "الحالة", "Status")}">
+  ${tab("active", L(lang, "متاحة", "Available"))}${tab("sold", L(lang, "مباعة", "Sold"))}${tab("archived", L(lang, "مؤرشفة", "Archived"))}
 </nav>
+<p class="row between small">
+  <a class="pill-link${mine ? " on" : ""}" href="/app/units?status=${status}${mine ? "" : "&mine=1"}"${mine ? html` aria-pressed="true"` : ""}>${icon(mine ? "check" : "leads", 16)} ${L(lang, "وحداتي بس", "Mine only")}</a>
+  <a href="/app/insights">${icon("chart", 16)} ${L(lang, "أسعار المتر", "Prices per m²")}</a>
+</p>
 ${rows.length
-  ? html`<form id="bulk" method="post" action="/app/units/bulk" class="card row">
-  <strong>${L(lang, "للمختار:", "Selected:")}</strong>
-  <select name="action">
-    <option value="available">${L(lang, "🟢 لسه متاحة (تأكيد)", "🟢 Still available (confirm)")}</option>
-    <option value="sold">${L(lang, "✅ اتباعت", "✅ Sold")}</option>
-    <option value="archive">${L(lang, "📁 أرشفة", "📁 Archive")}</option>
+  ? html`<p class="muted small">${L(lang, `${rows.length} وحدة · علّم الوحدات عشان تغيّر حالتها مرة واحدة.`, `${rows.length} unit(s) · tick units to change them together.`)}</p>
+<ol class="results">${rows.map((r) => resultItem(r, lang, { selectable: true }))}</ol>
+<form id="bulk" method="post" action="/app/units/bulk" class="bulkbar">
+  <select name="action" aria-label="${L(lang, "للمختار", "Selected")}">
+    <option value="available">${L(lang, "لسه متاحة (تأكيد)", "Still available (confirm)")}</option>
+    <option value="sold">${L(lang, "اتباعت", "Sold")}</option>
+    <option value="archive">${L(lang, "أرشفة", "Archive")}</option>
   </select>
-  <button type="submit">${L(lang, "تطبيق", "Apply")}</button>
-  <span class="muted">${L(lang, "علّم الوحدات اللي عايزها الأول. لتغيير أسعار مشروع برايمري استخدم «زيادة الأسعار» في صفحة المشروع بالكتالوج.", "Tick the units first. To change a primary project's prices use \"Price increase\" on the project page in the Catalogue.")}</span>
-</form>
-<ol class="results">${rows.map((r) => resultItem(r, lang, { selectable: true }))}</ol>`
-  : html`<p class="card">${L(lang, "مفيش وحدات هنا.", "No units here.")}</p>`}`
+  <button type="submit">${L(lang, "تطبيق على المختار", "Apply to selected")}</button>
+</form>`
+  : html`<div class="card empty"><p>${L(lang, "مفيش وحدات هنا.", "No units here.")}</p><a class="btn" href="/app/units/new">${L(lang, "ضيف وحدة", "Add a unit")}</a></div>`}`
     });
   });
 

@@ -9,7 +9,8 @@ const { logOperation } = require("../../lib/db");
 const { formatInterpretation } = require("../../lib/search");
 const Q = require("../../domain/searchQuery");
 const SearchLink = require("../../domain/searchLink");
-const { html } = require("../html");
+const { html, raw } = require("../html");
+const { icon } = require("../icons");
 const { resultItem } = require("../views/units");
 const { refineForm } = require("../views/searchForm");
 
@@ -29,12 +30,14 @@ async function runFilters(pool, agencyId, filters, page) {
   return { ...res, rows, offset };
 }
 
-function searchBox(q, lang) {
-  return html`<form method="get" action="/app/search" class="card stack" role="search">
-  <label>${L(lang, "اكتب طلبك زي ما بتكتبه للبوت", "Type your request as you would to the bot")}
-    <input name="q" value="${q}" placeholder="${L(lang, "شقة 3 غرف في التجمع تحت 9 مليون", "3-bedroom apartment in New Cairo under 9M")}" autocomplete="off"></label>
-  <div class="row"><button type="submit">🔍 ${L(lang, "بحث", "Search")}</button><a href="/app/searches">${L(lang, "⭐ البحث المحفوظ", "⭐ Saved searches")}</a></div>
-</form>`;
+function searchBox(q, lang, { voice = false } = {}) {
+  return html`<form method="get" action="/app/search" class="searchbox" role="search">
+  ${icon("search", 20)}<input name="q" value="${q}" aria-label="${L(lang, "اكتب طلبك زي ما بتكتبه للبوت", "Type your request as you would to the bot")}" placeholder="${L(lang, "شقة 3 غرف في التجمع تحت 9 مليون", "3-bedroom apartment in New Cairo under 9M")}" autocomplete="off"${voice ? raw(" data-voice-start") : ""}>
+  <button type="button" class="mic" data-mic aria-label="${L(lang, "بحث بالصوت", "Voice search")}" hidden>${icon("mic", 20)}</button>
+  <button type="submit" class="sr-only">${L(lang, "بحث", "Search")}</button>
+</form>
+<p class="row between small"><span class="muted">${L(lang, "اكتب أو اتكلم زي ما بتكلم البوت.", "Type or speak as you would to the bot.")}</span><a href="/app/searches">${icon("star", 16)} ${L(lang, "البحث المحفوظ", "Saved searches")}</a></p>
+`;
 }
 
 function pager(token, page, total, lang) {
@@ -56,17 +59,18 @@ function resultsSection({ res, filters, token, page, lang, savedId = null }) {
 ${filters.code ? "" : html`<p><a class="btn secondary" href="/app/leads/new?request=${token}" data-save-request>🔔 ${L(lang, "احفظه طلب عميل", "Save as a client's request")}</a> <span class="muted">${L(lang, "وهتتبلغ أول ما تنزل وحدة تناسبه.", "You'll hear when a unit fits.")}</span></p>`}</div>`;
   }
   return html`<section id="results">
-  ${res.relaxed ? html`<p class="card notice warn">⚠️ ${L(lang, "مفيش تطابق تام — أقرب النتائج لـ", "No exact match — closest units for")} <strong>${interp}</strong></p>` : html`<h2>🔍 ${interp}</h2>`}
-  <p class="muted">${L(lang, `${res.total} وحدة مطابقة`, `${res.total} matching unit(s)`)}${res.total > total ? L(lang, ` (أول ${total})`, ` (first ${total})`) : ""}</p>
-  <ol class="results" start="${res.offset + 1}">${res.rows.map((r) => resultItem(r, lang))}</ol>
-  ${pager(token, page, res.total, lang)}
+  ${res.relaxed ? html`<p class="card notice warn">⚠️ ${L(lang, "مفيش تطابق تام — أقرب النتائج لـ", "No exact match — closest units for")} <strong>${interp}</strong></p>` : html`<h2 class="interp">${interp}</h2>`}
+  <div class="row between"><p class="muted">${L(lang, `${res.total} وحدة مطابقة`, `${res.total} matching unit(s)`)}${res.total > total ? L(lang, ` (أول ${total})`, ` (first ${total})`) : ""}</p>
   ${savedId
     ? ""
-    : html`<form method="post" action="/app/searches" class="row card">
+    : html`<details class="savebox"><summary class="btn secondary small">${icon("star", 16)} ${L(lang, "احفظ البحث", "Save search")}</summary>
+    <form method="post" action="/app/searches" class="row">
     <input type="hidden" name="f" value="${token}">
     <label>${L(lang, "اسم البحث", "Name")}<input name="name" required maxlength="80" value="${interp.slice(0, 80)}"></label>
-    <button type="submit" class="secondary">⭐ ${L(lang, "احفظ البحث", "Save search")}</button>
-  </form>`}
+    <button type="submit">${L(lang, "حفظ", "Save")}</button>
+  </form></details>`}</div>
+  <ol class="results" start="${res.offset + 1}">${res.rows.map((r) => resultItem(r, lang))}</ol>
+  ${pager(token, page, res.total, lang)}
 </section>`;
 }
 
@@ -128,10 +132,10 @@ function register(web, { pool, page }) {
     return page(req, res, {
       title: L(lang, "بحث", "Search"),
       nav: "search",
-      body: html`${searchUrl ? html`<span data-search-url="${searchUrl}" hidden></span>` : ""}${searchBox(q, lang)}
+      body: html`${searchUrl ? html`<span data-search-url="${searchUrl}" hidden></span>` : ""}${searchBox(q, lang, { voice: req.query.voice === "1" })}
+${refineForm(filters || {}, lang)}
 ${message ? html`<p class="card notice">${message}${message.startsWith("📝") ? html` <a href="/app/units/new">${L(lang, "إضافة وحدة", "Add a unit")}</a>` : ""}</p>` : ""}
-${results}
-${refineForm(filters || {}, lang, { open: !filters && !q })}`
+${results}`
     });
   });
 

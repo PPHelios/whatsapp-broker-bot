@@ -16,12 +16,17 @@ const leadPath = (lead, sub = "") => `/app/leads/${Card.refLabel(lead.ref)}${sub
 
 function leadRow(lead, lang, { manager = false, now = new Date() } = {}) {
   const overdue = lead.follow_up_status === "open" && new Date(lead.next_follow_up_at) < now;
-  return html`<li class="card result" data-lead="${Card.refLabel(lead.ref)}">
-  <a class="line" href="${leadPath(lead)}">${Card.refLabel(lead.ref)} · ${Card.displayName(lead, lang)}</a>
-  <div class="muted">${Stages.stageLabel(lead.stage, lang)} · ${Stages.kindLabel(lead.kind, lang)}${lead.source ? ` · ${Stages.sourceLabel(lead.source, lang)}` : ""}${lead.hot_at ? " · 🔥" : ""}</div>
-  <div class="${overdue ? "bad-text" : "muted"}">${lead.follow_up_status === "open"
-    ? `⏰ ${when(lead.next_follow_up_at, lang)}${overdue ? L(lang, " (متأخرة)", " (overdue)") : ""}`
-    : Stages.isClosed(lead.stage) ? "" : L(lang, "⏰ مفيش خطوة جاية", "⏰ No next step")}${manager ? ` · 🧑‍💼 ${lead.assignee_name || L(lang, "مش متسلم", "Unassigned")}` : ""}</div>
+  const phone = (lead.phones || [])[0];
+  const digits = phone ? String(phone).replace(/\D/g, "") : "";
+  return html`<li class="card leadcard" data-lead="${Card.refLabel(lead.ref)}">
+  <a class="lc-main" href="${leadPath(lead)}">
+    <span class="lc-top"><strong>${Card.displayName(lead, lang)}</strong><span class="muted small" dir="ltr">${Card.refLabel(lead.ref)}</span></span>
+    <span class="tags"><span class="chip">${Stages.stageLabel(lead.stage, lang)}</span>${lead.hot_at ? html`<span class="chip hot">${L(lang, "مهتم جداً", "Very interested")}</span>` : ""}<span class="muted small">${Stages.kindLabel(lead.kind, lang)}${lead.source ? ` · ${Stages.sourceLabel(lead.source, lang)}` : ""}</span></span>
+    <span class="${overdue ? "bad-text" : "muted"} small">${lead.follow_up_status === "open"
+      ? `⏰ ${when(lead.next_follow_up_at, lang)}${overdue ? L(lang, " (متأخرة)", " (overdue)") : ""}`
+      : Stages.isClosed(lead.stage) ? "" : L(lang, "⏰ مفيش خطوة جاية", "⏰ No next step")}${manager ? ` · ${lead.assignee_name || L(lang, "مش متسلم", "Unassigned")}` : ""}</span>
+  </a>
+  ${digits ? html`<a class="lc-call" href="tel:+${digits}" aria-label="${L(lang, "اتصال", "Call")} ${Card.displayName(lead, lang)}">${raw('<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>')}</a>` : ""}
 </li>`;
 }
 
@@ -68,14 +73,14 @@ function leadForm({ values: v = {}, lang = "ar", csrf = "", brokers = null, noti
 
 /** The lead's header: every number with a real Call link, stage, kind, next step, assignee, notes. */
 function leadHeader(lead, lang) {
-  return html`<article class="card" data-lead="${Card.refLabel(lead.ref)}" data-version="${lead.version}">
-  <h1>👤 ${Card.displayName(lead, lang)} · ${Card.refLabel(lead.ref)}${lead.hot_at ? " 🔥" : ""}</h1>
-  <p>${Stages.kindLabel(lead.kind, lang)} · <strong>${Stages.stageLabel(lead.stage, lang)}</strong>${lead.stage === "lost" && lead.lost_reason ? ` (${lead.lost_reason})` : ""}${lead.source ? ` · ${Stages.sourceLabel(lead.source, lang)}` : ""}</p>
+  return html`<article class="card leadhead" data-lead="${Card.refLabel(lead.ref)}" data-version="${lead.version}">
+  <div class="lc-top"><h1>${Card.displayName(lead, lang)}</h1><span class="chip" dir="ltr">${Card.refLabel(lead.ref)}</span></div>
+  <p class="tags"><span class="chip new">${Stages.stageLabel(lead.stage, lang)}</span>${lead.hot_at ? html`<span class="chip hot">${L(lang, "مهتم جداً", "Very interested")}</span>` : ""}<span class="muted">${Stages.kindLabel(lead.kind, lang)}${lead.stage === "lost" && lead.lost_reason ? ` (${lead.lost_reason})` : ""}${lead.source ? ` · ${Stages.sourceLabel(lead.source, lang)}` : ""}</span></p>
   <ul class="tags">${(lead.phones || []).map((p) => html`<li><a href="${Phone.telUrl(p)}" dir="ltr">${Phone.displayPhone(p)}</a></li>`)}</ul>
-  <p>${lead.follow_up_status === "open"
+  <p class="${lead.follow_up_status === "open" && new Date(lead.next_follow_up_at) < new Date() ? "bad-text" : ""}">${lead.follow_up_status === "open"
     ? `⏰ ${lead.follow_up_kind === "viewing" ? L(lang, "معاينة", "Viewing") : L(lang, "متابعة", "Follow-up")}: ${when(lead.next_follow_up_at, lang)}${lead.follow_up_note ? ` · ${lead.follow_up_note}` : ""}`
     : Stages.isClosed(lead.stage) ? "" : L(lang, "⏰ مفيش خطوة جاية", "⏰ No next step")}</p>
-  <p class="muted">🧑‍💼 ${lead.assignee_name || L(lang, "مش متسلم لحد", "Unassigned")} · ${Stages.basisLabel(lead.lawful_basis, lang)}</p>
+  <p class="muted small">${lead.assignee_name || L(lang, "مش متسلم لحد", "Unassigned")} · ${Stages.basisLabel(lead.lawful_basis, lang)}</p>
   ${lead.notes ? html`<p class="pre">📝 ${lead.notes}</p>` : ""}
 </article>`;
 }

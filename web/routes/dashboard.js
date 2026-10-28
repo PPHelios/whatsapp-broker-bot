@@ -61,40 +61,67 @@ function leaseEnds(rows, lang) {
 }
 
 function agencyPage(d, lang) {
-  const tile = (label, value, attr) => html`<div class="card tile" data-kpi="${attr}"><div class="muted">${label}</div><strong>${value}</strong></div>`;
-  return html`<h1>📈 ${L(lang, "لوحة الوكالة", "Agency dashboard")}</h1>
-<p class="row"><a class="btn secondary" href="/app/sources">📣 ${L(lang, "مصادر العملاء وتكلفة الإعلانات", "Lead sources and ad cost")}</a> <a class="btn secondary" href="/app/winloss">📉 ${L(lang, "المكسب والخسارة", "Win and loss")}</a></p>
-<form method="get" action="/app/dashboard" class="row" data-dash-filters>
-  <nav class="row" aria-label="${L(lang, "الفترة", "Period")}">${Dash.PERIODS.map(
-    (p) => html`<a class="btn ${p === d.days ? "" : "secondary"}" href="/app/dashboard?days=${p}${d.brokerId ? html`&broker=${d.brokerId}` : ""}"${p === d.days ? html` aria-current="page"` : ""}>${L(lang, `${p} يوم`, `${p} days`)}</a>`
+  const kpi = (label, value, attr) => html`<div class="kpi" data-kpi="${attr}"><span class="muted small">${label}</span><strong>${value}</strong></div>`;
+  const q = d.brokerId ? `&broker=${d.brokerId}` : "";
+  const todo = [
+    ["uncontacted", d.uncontacted, L(lang, "عملاء جداد محدش كلمهم", "New leads nobody called"), "/app/leads?tab=new"],
+    ["overdue", d.overdue, L(lang, "متابعات متأخرة", "Overdue follow-ups"), "/app/leads?tab=overdue"],
+    ["unassigned", d.unassigned, L(lang, "عملاء من غير بروكر", "Leads with no broker"), "/app/leads?broker=none"],
+    ["stale", d.units.stale, L(lang, "وحدات محتاجة تأكيد (21 يوم)", "Units to confirm (21 days)"), "/app/units"]
+  ];
+  const maxStage = Math.max(1, ...Object.values(d.pipeline));
+  const maxWeek = Math.max(1, ...(d.weekly || []));
+  return html`<h1>${L(lang, "لوحة الوكالة", "Agency dashboard")}</h1>
+<form method="get" action="/app/dashboard" class="stack" data-dash-filters>
+  <nav class="seg" aria-label="${L(lang, "الفترة", "Period")}">${Dash.PERIODS.map(
+    (p) => html`<a href="/app/dashboard?days=${p}${q}"${p === d.days ? html` aria-current="page"` : ""}>${L(lang, `${p} يوم`, `${p} days`)}</a>`
   )}</nav>
   <input type="hidden" name="days" value="${d.days}">
-  <label>${L(lang, "البروكر", "Broker")} <select name="broker" onchange="this.form.submit()"><option value="">${L(lang, "الكل", "Everyone")}</option>${d.team.map((b) => html`<option value="${b.id}"${b.id === d.brokerId ? html` selected` : ""}>${b.name}</option>`)}</select></label>
+  <select name="broker" data-autosubmit aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل الفريق", "Whole team")}</option>${d.team.map((b) => html`<option value="${b.id}"${b.id === d.brokerId ? html` selected` : ""}>${b.name}</option>`)}</select>
   <noscript><button type="submit">${L(lang, "تطبيق", "Apply")}</button></noscript>
 </form>
-<div class="grid">
-  ${tile(L(lang, "عملاء جداد", "New leads"), d.leads, "leads")}
-  ${tile(L(lang, "صفقات", "Deals"), d.deals.n, "deals")}
-  ${tile(L(lang, "العمولة", "Commission"), money(d.deals.commission, lang), "commission")}
-  ${tile(L(lang, "لسه محدش كلمهم", "Not contacted yet"), d.uncontacted, "uncontacted")}
-  ${tile(L(lang, "متابعات متأخرة", "Overdue follow-ups"), d.overdue, "overdue")}
-  ${tile(L(lang, "من غير بروكر", "Unassigned"), d.unassigned, "unassigned")}
-  ${tile(L(lang, "وحدات متاحة", "Active units"), d.units.active, "units")}
-  ${tile(L(lang, "محتاجة تأكيد (21 يوم)", "To confirm (21 days)"), d.units.stale, "stale")}
+<div class="kpis">
+  ${kpi(L(lang, "عملاء جداد", "New leads"), d.leads, "leads")}
+  ${kpi(L(lang, "صفقات", "Deals"), d.deals.n, "deals")}
+  ${kpi(L(lang, "العمولة", "Commission"), money(d.deals.commission, lang), "commission")}
+  ${kpi(L(lang, "وحدات متاحة", "Active units"), d.units.active, "units")}
 </div>
-<section class="card">
+${todo.some(([, n]) => n)
+  ? html`<section class="card list" id="needs-action"><h2>${L(lang, "محتاج تتصرف", "Needs action")}</h2><ul class="rows">${todo.filter(([, n]) => n).map(
+      ([k, n, label, href]) => html`<li data-kpi="${k}"><a class="listrow" href="${href}">${label}<b class="chip late">${n}</b></a></li>`
+    )}</ul></section>`
+  : html`<p class="card notice ok" id="needs-action">${L(lang, "مفيش حاجة متأخرة. شغل نضيف.", "Nothing late. Clean work.")}</p>`}
+${d.weekly && d.weekly.some(Boolean)
+  ? html`<section class="card" id="weekly"><h2>${L(lang, "عملاء جداد كل أسبوع", "New leads per week")}</h2>
+  <ol class="bars" aria-label="${L(lang, "آخر 8 أسابيع", "Last 8 weeks")}">${d.weekly.map((n, i) => html`<li title="${n}"><span class="bar" data-h="${Math.round((n * 10) / maxWeek)}"></span><span class="small">${n}</span><span class="muted small">${i === 7 ? L(lang, "ده", "now") : `-${7 - i}`}</span></li>`)}</ol>
+</section>`
+  : ""}
+<section class="card" id="funnel">
   <h2>${L(lang, "المراحل دلوقتي", "Pipeline now")}</h2>
-  <table><tbody>${Stages.STAGES.map((s) => html`<tr data-stage="${s}"><td>${Stages.stageLabel(s, lang)}</td><td><progress max="${Math.max(1, ...Object.values(d.pipeline))}" value="${d.pipeline[s]}"></progress></td><td>${d.pipeline[s]}</td></tr>`)}</tbody></table>
+  <ul class="funnel">${Stages.STAGES.map((s) => html`<li data-stage="${s}"><a href="/app/leads?tab=${s}">${Stages.stageLabel(s, lang)}</a><progress max="${maxStage}" value="${d.pipeline[s]}"></progress><b>${d.pipeline[s]}</b></li>`)}</ul>
 </section>
-<section class="card">
-  <h2>🏆 ${L(lang, `ترتيب البروكرز (آخر ${d.days} يوم)`, `Leaderboard (last ${d.days} days)`)}</h2>
+${d.sources && d.sources.length
+  ? html`<section class="card" id="top-sources"><h2>${L(lang, "أكتر مصادر العملاء", "Top lead sources")}</h2>
+  <ul class="rows">${d.sources.map((x) => html`<li class="listrow">${x.source === "-" ? L(lang, "من غير مصدر", "No source") : Stages.sourceLabel(x.source, lang)}<b>${x.n}</b></li>`)}</ul>
+  <p class="row"><a href="/app/sources">${L(lang, "المصادر وتكلفة الإعلانات", "Sources and ad cost")}</a> · <a href="/app/winloss">${L(lang, "المكسب والخسارة", "Win and loss")}</a></p>
+</section>`
+  : html`<p class="row"><a href="/app/sources">${L(lang, "المصادر وتكلفة الإعلانات", "Sources and ad cost")}</a> · <a href="/app/winloss">${L(lang, "المكسب والخسارة", "Win and loss")}</a></p>`}
+<section class="card" id="leaderboard">
+  <h2>${L(lang, `ترتيب البروكرز (آخر ${d.days} يوم)`, `Leaderboard (last ${d.days} days)`)}</h2>
   ${d.board.length
-    ? html`<div class="scroll"><table>
-  <thead><tr><th>#</th><th>${L(lang, "البروكر", "Broker")}</th><th>${L(lang, "صفقات", "Deals")}</th><th>${L(lang, "عمولته", "Commission")}</th><th>${L(lang, "عملاء جداد", "New leads")}</th><th>${L(lang, "مكالمات", "Contacted")}</th><th>${L(lang, "تحريك للأمام", "Moved forward")}</th><th>${L(lang, "معاينات", "Viewings")}</th><th>${L(lang, "وحدات أضافها", "Units added")}</th><th>${L(lang, "وقت الرد", "Response time")}</th><th>${L(lang, "عملاء مفتوحين", "Open leads")}</th></tr></thead>
-  <tbody>${d.board.map(
-    (b, i) => html`<tr data-broker="${b.id}"><td>${medal(i)}</td><td>${b.name}</td><td>${b.deals}</td><td>${money(b.commission, lang)}</td><td>${b.leads}</td><td>${b.contacted}</td><td>${b.forward}</td><td>${b.viewings}</td><td>${b.units}</td><td>${minutes(b.responseMin, lang)}</td><td>${b.open}</td></tr>`
-  )}</tbody></table></div>
-  <p class="muted">${L(lang, "الترتيب: الصفقات، بعدين العمولة، بعدين التحريك للأمام. وقت الرد = الوسيط من وصول العميل لأول مكالمة.", "Ranked by deals, then commission, then moves forward. Response time = median from a lead arriving to its first contact.")}</p>`
+    ? html`<ol class="board">${d.board.map(
+        (b, i) => html`<li data-broker="${b.id}"><details><summary><span class="medal">${medal(i)}</span><strong>${b.name}</strong><span class="muted small">${L(lang, `${b.deals} صفقة`, `${b.deals} deal(s)`)} · ${money(b.commission, lang)}</span></summary>
+  <dl class="facts">
+    <div><dt>${L(lang, "عملاء جداد", "New leads")}</dt><dd>${b.leads}</dd></div>
+    <div><dt>${L(lang, "مكالمات", "Contacted")}</dt><dd>${b.contacted}</dd></div>
+    <div><dt>${L(lang, "تحريك للأمام", "Moved forward")}</dt><dd>${b.forward}</dd></div>
+    <div><dt>${L(lang, "معاينات", "Viewings")}</dt><dd>${b.viewings}</dd></div>
+    <div><dt>${L(lang, "وحدات أضافها", "Units added")}</dt><dd>${b.units}</dd></div>
+    <div><dt>${L(lang, "وقت الرد", "Response time")}</dt><dd>${minutes(b.responseMin, lang)}</dd></div>
+    <div><dt>${L(lang, "عملاء مفتوحين", "Open leads")}</dt><dd>${b.open}</dd></div>
+  </dl></details></li>`
+      )}</ol>
+  <p class="muted small">${L(lang, "الترتيب: الصفقات، بعدين العمولة، بعدين التحريك للأمام. وقت الرد = الوسيط من وصول العميل لأول مكالمة.", "Ranked by deals, then commission, then moves forward. Response time = median from a lead arriving to its first contact.")}</p>`
     : html`<p class="muted">${L(lang, "مفيش نشاط في الفترة دي.", "No activity in this period.")}</p>`}
 </section>`;
 }
