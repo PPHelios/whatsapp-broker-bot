@@ -76,7 +76,7 @@ function marketLine(m, listing, lang) {
   const diff = m.diffPct === null || Math.abs(m.diffPct) < 3
     ? L(lang, "قريب من", "close to")
     : m.diffPct > 0 ? L(lang, `أعلى ${m.diffPct}% من`, `${m.diffPct}% above`) : L(lang, `أقل ${-m.diffPct}% من`, `${-m.diffPct}% below`);
-  return html`<p class="muted" data-market="${m.diffPct}">📊 ${n(m.perM2)} ${L(lang, "ج.م للمتر", "EGP per m²")}${listing.listing_type === "rent" ? L(lang, " في الشهر", " a month") : ""} · ${diff} ${L(lang, `وسيط ${m.units} وحدة في ${m.place}`, `the median of ${m.units} units in ${m.place}`)} (${n(m.median)}) · <a href="/app/insights">${L(lang, "أسعار المتر", "Prices per m²")}</a></p>`;
+  return html`<p class="muted" data-market="${m.diffPct}">📊 ${n(m.perM2)} ${L(lang, "ج.م للمتر", "EGP per m²")}${listing.listing_type === "rent" ? L(lang, " في الشهر", " a month") : ""} · ${diff} ${L(lang, `وسيط ${m.units} وحدة${Insights.likeLabel(m, lang) ? ` (${Insights.likeLabel(m, lang)})` : ""} في ${m.place}`, `the median of ${m.units} ${Insights.likeLabel(m, lang) ? `${Insights.likeLabel(m, lang)} ` : ""}units in ${m.place}`)} (${n(m.median)}) · <a href="/app/insights">${L(lang, "أسعار المتر", "Prices per m²")}</a></p>`;
 }
 
 /** N4: the lease card on a rent unit (who may edit it). */

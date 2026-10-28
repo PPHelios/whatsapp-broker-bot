@@ -37,7 +37,7 @@ test("median, lowest and highest per compound, sale and rent apart, only with 5+
 test("a unit is compared with the other units of its compound; too few others â†’ nothing", async () => {
   await units("Hyde Park", "sale", [40000, 45000, 50000, 55000, 60000, 54000]);
   const [l] = await h.query("SELECT * FROM listings WHERE code = 'HY-s5'");
-  expect(await Insights.forUnit(h.pool, l)).toEqual({ place: "Hyde Park", perM2: 54000, median: 50000, units: 5, diffPct: 8 });
+  expect(await Insights.forUnit(h.pool, l)).toEqual({ place: "Hyde Park", perM2: 54000, median: 50000, units: 5, diffPct: 8, like: { finishing: null, extras: null } });
   await units("Mivida", "sale", [60000, 61000, 62000, 63000, 64000]);
   const [m] = await h.query("SELECT * FROM listings WHERE code = 'MI-s0'");
   expect(await Insights.forUnit(h.pool, m)).toBeNull();
@@ -50,4 +50,23 @@ test("a unit is compared with the other units of its compound; too few others â†
   expect(ins.text).toMatch(/data-kind="sale"[\s\S]*data-place="Hyde Park"/);
   expect(ins.text).toMatch(/data-place="Mivida"/);
   expect((await agent.get("/app/units")).text).toMatch(/href="\/app\/insights"/);
+});
+
+test("P1: like with like: same finishing, and for rent the same extras; else the whole compound", async () => {
+  await units("Zayed Dunes", "sale", [40000, 41000, 42000, 43000, 44000], { finishing: "semi_finished" });
+  for (const [i, p] of [60000, 61000, 62000, 63000, 64000].entries()) await h.insertListing({ code: `ZF-${i}`, compound: "Zayed Dunes", listing_type: "sale", area_value: 100, price_value: p * 100, finishing: "fully_finished" });
+  await h.insertListing({ code: "ZD-NEW", compound: "Zayed Dunes", listing_type: "sale", area_value: 100, price_value: 66e5, finishing: "fully_finished" });
+  const [l] = await h.query("SELECT * FROM listings WHERE code = 'ZD-NEW'");
+  const m = await Insights.forUnit(h.pool, l);
+  expect(m).toMatchObject({ median: 62000, units: 5, diffPct: 6, like: { finishing: "fully_finished", extras: null } });
+  expect(Insights.noteLine(m, l, "en")).toContain("6% above the median of 5 Fully finished units in Zayed Dunes");
+
+  // Rent: 5 furnished and 5 empty flats; a furnished one is compared with the furnished ones.
+  await units("Palm Hills", "rent", [500, 520, 540, 560, 580], { finishing: "fully_finished", furnishing: "furnished" });
+  for (let i = 0; i < 5; i++) await h.insertListing({ code: `PE-${i}`, compound: "Palm Hills", listing_type: "rent", area_value: 100, price_value: 25000, finishing: "fully_finished" });
+  const furnished = { agency_id: h.AGENCY_A, compound: "Palm Hills", listing_type: "rent", area_value: 100, price_value: 54000, finishing: "fully_finished", furnishing: "furnished", feature_keys: [] };
+  expect(await Insights.forUnit(h.pool, furnished)).toMatchObject({ median: 540, diffPct: 0, like: { extras: "furnished" } });
+  expect(Insights.extrasOf({ feature_keys: ["ac_installed"] })).toBe("kitchen_ac");
+  // A kitchen-and-ACs flat has no group of its own (fewer than 5): same finishing, any extras.
+  expect(await Insights.forUnit(h.pool, { ...furnished, furnishing: null, feature_keys: ["kitchen_installed"] })).toMatchObject({ units: 10, like: { finishing: "fully_finished", extras: null } });
 });

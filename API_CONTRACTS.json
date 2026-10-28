@@ -290,6 +290,7 @@
       "nextUnitCode": ["db", "agencyId", "propertyType"],
       "addPhotos": ["db", "listing", "urls"],
       "removePhotos": ["db", "listing", "imageIds"],
+      "reorderPhotos": ["db", "listing", "imageIds"],
       "applyListingPatch": ["db", "broker", "params"],
       "INSERT_COLUMNS": "Array",
       "PATCH_COLUMNS": "Array"
@@ -1195,7 +1196,10 @@
     "services/priceInsights.js": {
       "MIN_UNITS": "Number",
       "byPlace": ["db", "agencyId", "params"],
-      "forUnit": ["db", "listing", "params"]
+      "forUnit": ["db", "listing", "params"],
+      "extrasOf": ["l"],
+      "likeLabel": ["m", "lang"],
+      "noteLine": ["m", "listing", "lang"]
     },
     "web/routes/sources.js": {
       "register": ["web", "params"]

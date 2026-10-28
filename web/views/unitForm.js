@@ -118,9 +118,12 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
 
   <section class="card"><h2>📷 ${L(lang, "الصور (حتى 15)", "Photos (up to 15)")}</h2>
     ${images.length
-      ? html`<div class="photos">${images.map(
-          (i) => html`<label class="check"><img src="${i.url}" alt="" loading="lazy"><input type="checkbox" name="remove_photo" value="${i.id}">${L(lang, "حذف", "Remove")}</label>`
-        )}</div>`
+      ? html`<p class="muted">${L(lang, "اسحب الصور (أو استخدم الأسهم) لترتيبها؛ الأولى هي الغلاف. الترتيب اليدوي مش بيتغير بالذكاء الاصطناعي.", "Drag the photos (or use the arrows) to order them; the first is the cover. A hand-set order is never changed by AI.")}</p>
+    <ol data-sortable class="photo-order">${images.map(
+          (i) => html`<li draggable="true" data-photo="${i.id}"><input type="hidden" name="photo_order" value="${i.id}"><img src="${i.url}" alt="" loading="lazy">
+      <label class="check grow"><input type="checkbox" name="remove_photo" value="${i.id}">${L(lang, "حذف", "Remove")}</label>
+      <button type="button" class="secondary" data-move="up" aria-label="${L(lang, "لفوق", "Up")}">↑</button><button type="button" class="secondary" data-move="down" aria-label="${L(lang, "لتحت", "Down")}">↓</button></li>`
+        )}</ol>`
       : ""}
     <input type="file" name="photos" accept="image/*" multiple>
   </section>
