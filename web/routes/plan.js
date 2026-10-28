@@ -74,7 +74,7 @@ function referralSection(r, lang) {
 
 function planPage({ a, quotas = null, limits = {}, payments, payTo, lang, manager, referral = null, notice = null, created = null }) {
   const p = a.plan;
-  return html`<h1>💳 ${L(lang, "الباقة", "Plan")}</h1>
+  return html`<h1>${L(lang, "الباقة", "Plan")}</h1>
 ${notice || ""}
 ${created ? paymentCard(created, payTo, lang) : ""}
 <section class="card" data-plan="${p.id}" data-source="${a.source}">
@@ -92,8 +92,9 @@ ${created ? paymentCard(created, payTo, lang) : ""}
 ${manager
   ? html`<form method="post" action="/app/plan/pay" class="card stack">
   <h2>${L(lang, "اختار باقة", "Choose a plan")}</h2>
-  <div class="grid">${Plans.PLANS.map(
-    (x) => html`<label class="card tile check"><input type="radio" name="plan" value="${x.id}" ${x.id === (a.source === "paid" ? p.id : "office") ? "checked" : ""}> <span><strong>${Plans.planName(x, lang)}</strong> · ${num(x.priceEgp)} ${L(lang, "ج.م/شهر", "EGP/month")}<br><span class="muted">${x.seats} ${L(lang, "مستخدم", "users")} · ${num(x.text)} ${L(lang, "نصي", "text")} · ${num(x.voice)} ${L(lang, "فويس", "voice")} · ${num(limits[x.id] ?? x.units)} ${L(lang, "وحدة", "units")}</span></span></label>`
+  <div class="plancards">${Plans.PLANS.map(
+    (x) => html`<label class="plancard"><input type="radio" name="plan" value="${x.id}" ${x.id === (a.source === "paid" ? p.id : "office") ? "checked" : ""}><strong>${Plans.planName(x, lang)}</strong><span class="price">${num(x.priceEgp)} <small>${L(lang, "ج.م/شهر", "EGP/month")}</small></span>
+      <ul><li>${x.seats} ${L(lang, "مستخدم", "users")}</li><li>${num(x.text)} ${L(lang, "طلب نصي", "text requests")}</li><li>${num(x.voice)} ${L(lang, "فويس", "voice notes")}</li><li>${num(limits[x.id] ?? x.units)} ${L(lang, "وحدة متاحة", "available units")}</li></ul></label>`
   )}</div>
   <label>${L(lang, "المدة", "Period")} <select name="months">${Billing.MONTHS.map((m) => html`<option value="${m}">${m === 1 ? L(lang, "شهر", "1 month") : L(lang, `${m} شهور`, `${m} months`)}</option>`)}</select></label>
   <input type="hidden" name="kind" value="plan">

@@ -7,7 +7,7 @@ const { getConfig } = require("../../config");
 const { html } = require("../html");
 const Passkeys = require("../../services/passkeys");
 const { passkeySection } = require("./passkeys");
-const { MANAGER_ROLES, isManager } = require("../../lib/authz");
+const { isManager } = require("../../lib/authz");
 const Storage = require("../../lib/supabase");
 const Session = require("../session");
 const { uploads } = require("../uploads");
@@ -63,11 +63,9 @@ function register(web, { pool, page }) {
       nav: "settings",
       body: html`<h1>⚙️ ${L(lang, "الإعدادات", "Settings")}</h1>
 ${saved ? html`<p class="card notice ok" role="status">✅ ${L(lang, "اتحفظت.", "Saved.")}</p>` : ""}
-${MANAGER_ROLES.includes(String(broker.role || "").toLowerCase())
-  ? html`<nav class="card row" aria-label="${L(lang, "للمديرين", "For managers")}"><a class="btn secondary" href="/app/team">👥 ${L(lang, "فريقي", "My team")}</a><a class="btn secondary" href="/app/dashboard">📈 ${L(lang, "لوحة الوكالة", "Agency dashboard")}</a><a class="btn secondary" href="/app/usage">📊 ${L(lang, "الاستهلاك", "Usage")}</a><a class="btn secondary" href="/app/plan">💳 ${L(lang, "الباقة", "Plan")}</a></nav>`
-  : ""}
 ${pushed === "ok" ? html`<p class="card notice ok" role="status">🔔 ${L(lang, "اتبعت إشعار تجربة.", "Test notification sent.")}</p>` : ""}
 ${pushed === "none" ? html`<p class="card notice bad" role="status">${L(lang, "الإشعارات مش مفعلة على أي جهاز لسه.", "Notifications aren't on in any browser yet.")}</p>` : ""}
+<div class="fold" data-fold>
 <form method="post" action="/app/settings" class="card stack">
   <h2>🌐 ${L(lang, "اللغة", "Language")}</h2>
   <label>${L(lang, "لغة الموقع ورسايل البوت", "Website and bot language")}
@@ -123,7 +121,8 @@ ${passkeySection({ enabled: await Passkeys.isEnabled(pool, broker), keys: await 
     "آيفون: افتح الموقع من Safari ← زرار المشاركة ← «إضافة إلى الشاشة الرئيسية»، وبعدين افتحه من الأيقونة وفعّل الإشعارات.",
     "iPhone: open the site in Safari → Share → \"Add to Home Screen\", then open it from the icon and turn notifications on."
   )}</p>
-</section>`
+</section>
+</div>`
     });
   });
 
