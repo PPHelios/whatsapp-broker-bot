@@ -65,11 +65,18 @@ test("a CSV plans file: preview, edit, save ticked plans; the file is kept inter
   expect(plans).toHaveLength(1);
   expect(plans[0]).toMatchObject({ name: "Ten over eight", frequency: "monthly" });
   expect(plans[0].extra_fees).toEqual([{ label: "Club", amount: 150000 }]);
-  expect((await h.query("SELECT plans_draft FROM projects WHERE id = $1", [project.id]))[0].plans_draft).toBeNull();
+  expect((await h.query("SELECT plans_draft FROM projects WHERE id = $1", [project.id]))[0].plans_draft).toMatchObject({ plans: [], applied: { file_name: "plans.csv" } });
+  // F22: the assistant's context names the file and its date.
+  const ctx = await require("../../services/projectContext").contextFor(h.pool, admin.agency_id, project.id);
+  expect(ctx.summary).toMatch(/Payment plans were read from the file plans\.csv on \d{4}-\d{2}-\d{2}\./);
+  expect(ctx.summary).toMatch(/Uploaded files: 💳 plans\.csv \(other, \d{4}-\d{2}-\d{2}\)\./);
+  expect(ctx.summary).toContain("Payment plans: Ten over eight");
 
   // The same sheet again is read from the cache (not counted); discard clears it.
   expect((await PlanReading.read(h.pool, admin, project.id, { files: [file] })).reused).toBe(1);
   expect((await PriceReading.usage(h.pool, admin.agency_id)).used).toBe(1);
+  expect((await agent.get(url)).text).toContain("data-plans-draft");
   await agent.post(`${url}/plans/draft/discard`).set("X-CSRF-Token", csrf).type("form").send("");
-  expect((await h.query("SELECT plans_draft FROM projects WHERE id = $1", [project.id]))[0].plans_draft).toBeNull();
+  expect((await agent.get(url)).text).not.toContain("data-plans-draft");
+  expect((await h.query("SELECT plans_draft FROM projects WHERE id = $1", [project.id]))[0].plans_draft.applied.file_name).toBe("plans.csv");
 });

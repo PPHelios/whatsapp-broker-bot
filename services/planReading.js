@@ -65,7 +65,7 @@ async function read(pool, actor, projectId, { files = [], pages = "" } = {}, { n
   for (const f of sheet ? [] : files.slice(0, P.MAX_PAGES)) await Catalogue.uploadMaterial(pool, actor, project.id, f, { label: `💳 ${String(f.originalname || "plans").slice(0, 70)}`, kind: "other" });
   if (sheet) await Catalogue.uploadMaterial(pool, actor, project.id, sheet, { label: `💳 ${fileName.slice(0, 70)}`, kind: "other" });
 
-  const draft = { plans, file_name: fileName, pages: got.list.map((p) => p.label), failed: r.failed, read_at: now.toISOString() };
+  const draft = { plans, applied: project.plans_draft?.applied || null, file_name: fileName, pages: got.list.map((p) => p.label), failed: r.failed, read_at: now.toISOString() };
   await pool.query("UPDATE projects SET plans_draft = $3::jsonb WHERE id = $1 AND agency_id = $2", [project.id, actor.agency_id, JSON.stringify(draft)]);
   return { ok: true, plans, read: r.read, reused: r.reused, failed: r.failed };
 }
@@ -100,7 +100,12 @@ async function apply(pool, actor, projectId, body = {}) {
     if (r.ok) saved++;
     else failed.push(String(input.name || p.name));
   }
-  if (!failed.length) await pool.query("UPDATE projects SET plans_draft = NULL WHERE id = $1", [project.id]);
+  // The preview goes; the file's name and date stay for the assistant (F22).
+  if (!failed.length && saved) {
+    const d = project.plans_draft;
+    const applied = { file_name: d.file_name, read_at: d.read_at, applied_at: new Date().toISOString() };
+    await pool.query("UPDATE projects SET plans_draft = $2::jsonb WHERE id = $1", [project.id, JSON.stringify({ plans: [], applied })]);
+  }
   return { ok: true, saved, failed };
 }
 
@@ -108,7 +113,8 @@ async function discard(pool, actor, projectId) {
   if (!isManager(actor)) return { error: "forbidden" };
   const project = await projectOf(pool, actor, projectId);
   if (!project) return { error: "not_found" };
-  await pool.query("UPDATE projects SET plans_draft = NULL WHERE id = $1", [project.id]);
+  const applied = project.plans_draft?.applied;
+  await pool.query("UPDATE projects SET plans_draft = $2::jsonb WHERE id = $1", [project.id, applied ? JSON.stringify({ plans: [], applied }) : null]);
   return { ok: true };
 }
 

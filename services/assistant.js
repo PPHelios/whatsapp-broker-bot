@@ -79,7 +79,7 @@ async function projectBlocks(pool, broker, question, scopes) {
     const lines = [ctx.summary];
     if (f.brochure?.facts?.length) lines.push(`Brochure (read ${f.brochure.as_of}): ${f.brochure.facts.join(" | ")}`);
     blocks.push({ title: `Project ${p.name}`, as_of: f.prices?.as_of || cairoDay(new Date(ctx.built_at)), text: lines.join("\n") });
-    dates.push({ project: p.name, prices: f.prices?.as_of || null, brochure: f.brochure?.as_of || null });
+    dates.push({ project: p.name, prices: f.prices?.as_of || null, brochure: f.brochure?.as_of || null, plans: f.sources?.plans?.as_of || null });
   }
   // Nothing named and nothing personal asked: the list of projects we have, so "not in our data" is accurate.
   if (!named.length && !scopes.clients && !scopes.followups && projects.length) {
@@ -174,7 +174,7 @@ async function unitBlock(pool, broker, projectIds) {
 
 /**
  * @returns {Promise<{ answer, found, lang, dates, web: { answer, sources } | null, webOff, webLimit } | { error }>}
- *   dates: [{ project, prices, brochure }] for the projects the answer could use (shown under the answer).
+ *   dates: [{ project, prices, brochure, plans }] for the projects the answer could use (shown under the answer).
  */
 async function ask(pool, broker, question, { channel = "web", now = new Date() } = {}) {
   const q = String(question || "").trim().slice(0, A.MAX_QUESTION);
@@ -241,7 +241,7 @@ async function ask(pool, broker, question, { channel = "web", now = new Date() }
 function datesLine(dates, lang) {
   const en = lang === "en";
   const parts = dates.map((d) => {
-    const bits = [d.prices ? (en ? `prices ${d.prices}` : `الأسعار ${d.prices}`) : null, d.brochure ? (en ? `brochure ${d.brochure}` : `البروشور ${d.brochure}`) : null].filter(Boolean);
+    const bits = [d.prices ? (en ? `prices ${d.prices}` : `الأسعار ${d.prices}`) : null, d.brochure ? (en ? `brochure ${d.brochure}` : `البروشور ${d.brochure}`) : null, d.plans ? (en ? `plans file ${d.plans}` : `ملف الأنظمة ${d.plans}`) : null].filter(Boolean);
     return bits.length ? `${d.project}: ${bits.join(en ? ", " : "، ")}` : null;
   });
   const list = parts.filter(Boolean);
