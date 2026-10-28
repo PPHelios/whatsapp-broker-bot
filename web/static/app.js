@@ -495,6 +495,91 @@
       form.requestSubmit ? form.requestSubmit() : form.submit();
     });
   }
+  // Stepped forms (<form data-steps="A|B|C">): one step at a time with a progress bar, Back and Next. Next checks only
+  // the fields of the step on screen. Without this script every step simply shows.
+  function stepForm(form) {
+    if (!form || form.hasAttribute("data-stepped")) return;
+    var names = form.getAttribute("data-steps").split("|");
+    var parts = form.querySelectorAll("[data-step]");
+    if (!parts.length) return;
+    form.setAttribute("data-stepped", "");
+    var bar = document.createElement("div");
+    bar.className = "stepbar";
+    var nav = document.createElement("div");
+    nav.className = "row stepnav";
+    var prev = document.createElement("button");
+    prev.type = "button"; prev.className = "secondary"; prev.textContent = form.getAttribute("data-prev") || "Back";
+    var next = document.createElement("button");
+    next.type = "button"; next.textContent = form.getAttribute("data-next") || "Next";
+    nav.appendChild(prev); nav.appendChild(next);
+    form.insertBefore(bar, form.firstChild.nextSibling);
+    form.appendChild(nav);
+    var at = 1;
+    function show(n) {
+      at = Math.max(1, Math.min(names.length, n));
+      for (var i = 0; i < parts.length; i++) parts[i].hidden = String(at) !== parts[i].getAttribute("data-step");
+      bar.innerHTML = "";
+      for (var k = 0; k < names.length; k++) {
+        var dot = document.createElement("span");
+        dot.className = "stepdot" + (k + 1 < at ? " done" : k + 1 === at ? " on" : "");
+        dot.textContent = (k + 1) + ". " + names[k];
+        bar.appendChild(dot);
+      }
+      prev.hidden = at === 1;
+      next.hidden = at === names.length;
+      window.scrollTo(0, 0);
+    }
+    next.addEventListener("click", function () {
+      var fields = form.querySelectorAll('[data-step="' + at + '"] input, [data-step="' + at + '"] select, [data-step="' + at + '"] textarea');
+      for (var i = 0; i < fields.length; i++) if (fields[i].willValidate && !fields[i].checkValidity()) { fields[i].reportValidity(); return; }
+      show(at + 1);
+    });
+    prev.addEventListener("click", function () { show(at - 1); });
+    // A required field left empty on an earlier step: jump back to it instead of a silent failed submit.
+    form.addEventListener("invalid", function (e) {
+      var part = e.target.closest && e.target.closest("[data-step]");
+      if (part && part.hidden) { show(Number(part.getAttribute("data-step"))); setTimeout(function () { e.target.reportValidity(); }, 0); }
+    }, true);
+    show(1);
+  }
+  function initSteps(root) {
+    var forms = (root || document).querySelectorAll("form[data-steps]");
+    for (var i = 0; i < forms.length; i++) stepForm(forms[i]);
+    if (root && root.matches && root.matches("form[data-steps]")) stepForm(root);
+  }
+  initSteps(document);
+  document.addEventListener("htmx:load", function (e) { initSteps(e.target); });
+  // Folded settings ([data-fold]): each card's first heading opens and closes it. All start closed except the first,
+  // the one a #hash points into, and any holding a notice or an error.
+  function initFold(box) {
+    var cards = box.querySelectorAll(":scope > .card");
+    var target = location.hash && document.getElementById(location.hash.slice(1));
+    for (var i = 0; i < cards.length; i++) {
+      var card = cards[i];
+      var head = card.querySelector("h2");
+      if (!head || head.parentNode !== card) continue;
+      head.classList.add("foldhead");
+      head.setAttribute("role", "button");
+      head.setAttribute("tabindex", "0");
+      var open = i === 0 || (target && card.contains(target)) || card.querySelector(".notice, [aria-invalid=true]");
+      card.classList.toggle("folded", !open);
+      head.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+  }
+  function toggleFold(head) {
+    var card = head.parentNode;
+    var closed = card.classList.toggle("folded");
+    head.setAttribute("aria-expanded", closed ? "false" : "true");
+  }
+  var folds = document.querySelectorAll("[data-fold]");
+  for (var f = 0; f < folds.length; f++) initFold(folds[f]);
+  document.addEventListener("click", function (e) {
+    var head = e.target.closest && e.target.closest("[data-fold] .foldhead");
+    if (head) toggleFold(head);
+  });
+  document.addEventListener("keydown", function (e) {
+    if ((e.key === "Enter" || e.key === " ") && e.target.classList && e.target.classList.contains("foldhead")) { e.preventDefault(); toggleFold(e.target); }
+  });
   // Voice search: the mic in a search box dictates into it and searches. Shown only where the browser can listen.
   var Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
   function listen(btn) {

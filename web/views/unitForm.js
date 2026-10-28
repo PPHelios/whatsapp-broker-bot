@@ -28,13 +28,15 @@ const freqOptions = (lang) => [["", "—"], ...FREQUENCIES.map((f) => [f, Descri
 function unitForm({ values: v, mode = "new", code = null, version = null, images = [], lang = "ar", notice = null, error = null, review = null, csrf = "", duplicate = null }) {
   const action = mode === "edit" ? `/app/units/${encodeURIComponent(code)}/edit` : "/app/units/new";
   const groups = [...new Set(Features.FEATURES.map((f) => f.group))];
-  return html`<form id="unit-form" method="post" action="${action}" enctype="multipart/form-data" class="stack">
+  // A new unit is added in 4 steps (app.js shows one at a time); editing, an error or a review shows everything.
+  const stepped = mode === "new" && !error && !review && !duplicate;
+  return html`<form id="unit-form" method="post" action="${action}" enctype="multipart/form-data" class="stack"${stepped ? html` data-steps="${L(lang, "الوحدة والسعر|التسليم والدفع|المميزات|الصور والحفظ", "Unit and price|Delivery and payment|Features|Photos and save")}" data-next="${L(lang, "التالي", "Next")}" data-prev="${L(lang, "رجوع", "Back")}"` : ""}>
   <input type="hidden" name="_csrf" value="${csrf}">
   ${notice ? html`<p class="card notice">${notice}</p>` : ""}
   ${error ? html`<p class="card notice bad" role="alert">${error}</p>` : ""}
   ${mode === "edit" ? html`<input type="hidden" name="version" value="${version}"><input type="hidden" name="code" value="${code}">` : ""}
 
-  <section class="card stack">
+  <section class="card stack" data-step="1">
     <h2>✨ ${L(lang, "املأ من وصف أو فويس", "Fill from a description or a voice note")}</h2>
     <label>${L(lang, "الوصف (زي ما بتبعته للبوت)", "Description (as you would send it to the bot)")}<textarea name="describe" rows="3"></textarea></label>
     <div class="row">
@@ -44,7 +46,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     </div>
   </section>
 
-  <section class="card"><h2>🏠 ${L(lang, "الوحدة", "Unit")}</h2><div class="grid">
+  <section class="card" data-step="1"><h2>🏠 ${L(lang, "الوحدة", "Unit")}</h2><div class="grid">
     ${mode === "new" ? input("code", L(lang, "الكود (اختياري)", "Code (optional)"), v.code, { dir: "ltr" }) : html`<p><strong>${code}</strong></p>`}
     ${select("listing_type", L(lang, "بيع أو إيجار *", "Sale or rent *"), v.listing_type, [["", "—"], ["sale", L(lang, "بيع", "Sale")], ["rent", L(lang, "إيجار", "Rent")]])}
     ${select("market", L(lang, "ريسيل أو برايمري", "Resale or primary"), v.market, [["resale", L(lang, "ريسيل", "Resale")], ["primary", L(lang, "برايمري (من المطور)", "Primary (developer)")]])}
@@ -66,13 +68,13 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     ${input("roof_area", L(lang, "الروف م²", "Roof m²"), v.roof_area, { type: "number", extra: ' min="0" step="any"' })}
   </div></section>
 
-  <section class="card"><h2>🗓 ${L(lang, "التسليم", "Delivery")}</h2><div class="grid">
+  <section class="card" data-step="2"><h2>🗓 ${L(lang, "التسليم", "Delivery")}</h2><div class="grid">
     <label class="check"><input type="checkbox" name="is_ready" value="1"${chk(v.is_ready)}>${L(lang, "استلام فوري", "Ready to move")}</label>
     ${input("delivery_year", L(lang, "سنة التسليم", "Delivery year"), v.delivery_year, { type: "number", extra: ' min="2000" max="2100"' })}
     ${select("delivery_quarter", L(lang, "الربع", "Quarter"), v.delivery_quarter, [["", "—"], ["1", "Q1"], ["2", "Q2"], ["3", "Q3"], ["4", "Q4"]])}
   </div></section>
 
-  <section class="card tabs" data-tabs="pay"><h2>💳 ${L(lang, "الدفع", "Payment")}</h2>
+  <section class="card tabs" data-tabs="pay" data-step="2"><h2>💳 ${L(lang, "الدفع", "Payment")}</h2>
     <input type="radio" name="pay_tab" id="pay-tab-resale" class="tab-radio" value="resale"${chk(v.market !== "primary")}>
     <input type="radio" name="pay_tab" id="pay-tab-primary" class="tab-radio" value="primary"${chk(v.market === "primary")}>
     <div class="tab-bar" role="tablist"><label for="pay-tab-resale" role="tab">${L(lang, "ريسيل بالتقسيط", "Resale with installments")}</label><label for="pay-tab-primary" role="tab">${L(lang, "برايمري", "Primary")}</label></div>
@@ -103,7 +105,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     </div>
   </section>
 
-  <section class="card"><h2>✨ ${L(lang, "المميزات", "Features")}</h2>
+  <section class="card" data-step="3"><h2>✨ ${L(lang, "المميزات", "Features")}</h2>
     ${groups.map(
       (g) => html`<div class="row">${Features.FEATURES.filter((f) => f.group === g).map(
         (f) => html`<label class="check"><input type="checkbox" name="feature" value="${f.key}"${chk(v.feature.includes(f.key))}>${lang === "en" ? f.en : f.ar}</label>`
@@ -113,7 +115,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     <label>${L(lang, "وصف للعميل", "Description for clients")}<textarea name="clean_summary" rows="2">${v.clean_summary}</textarea></label>
   </section>
 
-  <section class="card"><h2>🔒 ${L(lang, "بيانات داخلية (مش بتظهر للعميل)", "Internal (never shown to clients)")}</h2><div class="grid">
+  <section class="card" data-step="3"><h2>🔒 ${L(lang, "بيانات داخلية (مش بتظهر للعميل)", "Internal (never shown to clients)")}</h2><div class="grid">
     ${input("owner_name", L(lang, "المالك", "Owner"), v.owner_name)}
     ${input("owner_phone", L(lang, "تليفون المالك", "Owner phone"), v.owner_phone, { type: "tel", dir: "ltr" })}
     ${input("owner_lead", L(lang, "كود العميل لو المالك عميل عندك (L-0042)", "Lead code if the owner is your client (L-0042)"), v.owner_lead, { dir: "ltr", extra: ' placeholder="L-0042" list="lead-codes"' })}
@@ -122,7 +124,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
   </div>
   <label>${L(lang, "ملاحظات", "Notes")}<textarea name="notes" rows="2">${v.notes}</textarea></label></section>
 
-  <section class="card"><h2>📷 ${L(lang, "الصور (حتى 15)", "Photos (up to 15)")}</h2>
+  <section class="card" data-step="4"><h2>📷 ${L(lang, "الصور (حتى 15)", "Photos (up to 15)")}</h2>
     ${images.length
       ? html`<p class="muted">${L(lang, "اسحب الصور (أو استخدم الأسهم) لترتيبها؛ الأولى هي الغلاف. لو رتّبتها بنفسك مش بنستخدم الذكاء الاصطناعي للترتيب، وده بيوفر رصيدك.", "Drag the photos (or use the arrows) to order them; the first is the cover. A hand-set order skips AI ordering, which saves your AI credits.")}</p>
     <ol data-sortable class="photo-order">${images.map(
@@ -137,8 +139,8 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     <label class="check" data-photo-manual-box><input type="checkbox" name="photo_manual" value="on" data-photo-manual> ${L(lang, "رتّبتها بنفسي: من غير ترتيب بالذكاء الاصطناعي (بيوفر رصيد الذكاء الاصطناعي)", "I ordered them myself: no AI ordering (saves AI credits)")}</label>
   </section>
 
-  <div id="review">${review || ""}</div>
-  <div class="row">
+  <div id="review" data-step="4">${review || ""}</div>
+  <div class="row" data-step="4">
     <button type="button" class="secondary" hx-post="/app/units/review" hx-encoding="multipart/form-data" hx-include="#unit-form" hx-target="#review">📋 ${L(lang, "مراجعة", "Review")}</button>
     ${duplicate
       ? html`<button type="submit" name="force" value="1">✅ ${L(lang, "احفظ برضه", "Save anyway")}</button>`
