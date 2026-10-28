@@ -12,6 +12,9 @@ const { termsSection } = require("./commissions");
 const { pricesSection, pricesNotice } = require("./priceSheets");
 const PriceReading = require("../../services/priceReading");
 const { highlightsSection } = require("./brochure");
+const PlanReading = require("../../services/planReading");
+const PR = require("../../domain/planReading");
+const RateLimit = require("../../lib/rateLimit");
 const { html } = require("../html");
 const { uploads } = require("../uploads");
 const Session = require("../session");
@@ -19,7 +22,65 @@ const Session = require("../session");
 // F20: brochures, layouts and plan files kept in storage (PDF or photo).
 const FILE = { name: "file", maxCount: 1, accept: /^(application\/pdf|image\/(jpeg|png|webp))$/ };
 const uploadFile = uploads([FILE], { maxMb: Catalogue.MAX_FILE_MB });
-for (const re of [/^\/catalogue\/projects$/, /^\/catalogue\/projects\/[^/]+\/materials\/upload$/]) Session.allowMultipart(re);
+const PLANS_DOC = { name: "doc", maxCount: PR.MAX_PAGES, accept: /^(application\/pdf|image\/(jpeg|png|webp|heic|heif)|text\/(csv|plain|comma-separated-values)|application\/(vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet|vnd\.ms-excel|csv|octet-stream|zip))$/ };
+const uploadPlansDoc = uploads([PLANS_DOC], { maxMb: 25 });
+for (const re of [/^\/catalogue\/projects$/, /^\/catalogue\/projects\/[^/]+\/materials\/upload$/, /^\/catalogue\/projects\/[^/]+\/plans\/read$/]) Session.allowMultipart(re);
+
+// F21: reading a developer's payment plans file.
+const PLAN_READ_ERRORS = {
+  OFF: ["قراءة الملفات مش مفعّلة لوكالتك.", "Document reading isn't switched on for your agency."],
+  NO_FILE: ["اختار ملف.", "Choose a file."],
+  ONE_PDF: ["ملف واحد بس في المرة (أو صور).", "One file at a time (or photos)."],
+  NOT_PDF: ["الملف ده مش PDF مقروء.", "That file isn't a readable PDF."],
+  NOT_XLSX: ["الشيت لازم يكون .xlsx أو CSV.", "The sheet must be .xlsx or CSV."],
+  TOO_LARGE: ["الشيت أكبر من 5 ميجا.", "The sheet is larger than 5 MB."],
+  NOT_SUPPORTED: ["PDF أو صور أو إكسيل بس.", "A PDF, photos or an Excel sheet only."],
+  pages_required: ["اكتب أرقام الصفحات (مثلاً 1-3).", "Enter the page numbers (e.g. 1-3)."],
+  pages_invalid: ["أرقام الصفحات مش مظبوطة.", "The page numbers aren't valid."],
+  too_many_pages: [`${PR.MAX_PAGES} صفحات بالكتير.`, `At most ${PR.MAX_PAGES} pages.`],
+  ALLOWANCE: ["صفحات الشهر مش كفاية.", "This month's pages aren't enough."],
+  AI_FAILED: ["القراءة فشلت؛ جرب تاني.", "Reading failed; try again."],
+  NO_PLANS: ["ملقيناش أنظمة سداد في الملف.", "No payment plans found in the file."]
+};
+
+/** The plans file reader (managers, when document reading is on) and the preview to tick, edit and save. */
+function plansReadSection(lang, project, reading, query = {}) {
+  const base = `/app/catalogue/projects/${project.id}`;
+  const draft = project.plans_draft;
+  const err = query.plans_error ? PLAN_READ_ERRORS[query.plans_error] || PLAN_READ_ERRORS.AI_FAILED : null;
+  const notice = err
+    ? html`<p class="notice bad" role="alert">❌ ${err[lang === "en" ? 1 : 0]}${query.plans_error === "ALLOWANCE" ? L(lang, ` محتاج ${Number(query.needed) || 0} وفاضل ${Number(query.left) || 0}.`, ` Needs ${Number(query.needed) || 0}, ${Number(query.left) || 0} left.`) : ""}</p>`
+    : query.plans_saved
+      ? html`<p class="notice ok" role="status">✅ ${L(lang, `اتحفظ ${Number(query.plans_saved) || 0} نظام.`, `${Number(query.plans_saved) || 0} plan(s) saved.`)}${query.plans_failed ? html` ❌ ${L(lang, "مااتحفظش", "Not saved")}: ${String(query.plans_failed).slice(0, 200)}` : ""}</p>`
+      : "";
+  const preview = draft?.plans?.length
+    ? html`<form method="post" action="${base}/plans/draft/apply" class="stack" data-plans-draft>
+    <p>🤖 ${L(lang, `أنظمة اتقرت من ${draft.file_name}. علّم اللي عايزه، عدّل لو محتاج، واحفظ.`, `Plans read from ${draft.file_name}. Tick the ones you want, edit if needed, and save.`)}</p>
+    ${draft.plans.map((pl, i) => html`<fieldset data-draft-plan="${i}"><legend><label><input type="checkbox" name="pick" value="${i}" checked> ${pl.name}</label></legend>
+      <div class="row">
+        <label>${L(lang, "الاسم", "Name")} <input name="name_${i}" maxlength="80" value="${pl.name}"></label>
+        <label>${L(lang, "المقدم %", "Down %")} <input name="down_${i}" inputmode="decimal" dir="ltr" size="4" value="${val(pl.down_payment_pct)}"></label>
+        <label>${L(lang, "سنين", "Years")} <input name="years_${i}" inputmode="decimal" dir="ltr" size="3" value="${val(pl.years)}"></label>
+        <label>${L(lang, "القسط", "Installments")} <select name="frequency_${i}">${Catalogue.FREQUENCIES.map((f) => html`<option value="${f}"${sel(pl.frequency === f)}>${label2(FREQ, f, lang)}</option>`)}</select></label>
+        <label>${L(lang, "خصم %", "Discount %")} <input name="discount_${i}" inputmode="decimal" dir="ltr" size="4" value="${val(pl.discount_pct)}"></label>
+        <label>${L(lang, "الصيانة %", "Maintenance %")} <input name="maintenance_${i}" inputmode="decimal" dir="ltr" size="4" value="${val(pl.maintenance_pct)}"></label>
+      </div>
+      <p class="muted">${planLine(pl, lang)}</p></fieldset>`)}
+    <div class="row"><button type="submit">${L(lang, "احفظ المعلّم", "Save ticked plans")}</button>
+    <button type="submit" class="secondary" formaction="${base}/plans/draft/discard">${L(lang, "تجاهل", "Discard")}</button></div>
+  </form>`
+    : "";
+  const form = reading?.enabled
+    ? html`<form method="post" action="${base}/plans/read" enctype="multipart/form-data" class="stack" data-plans-read>
+    <label>🤖 ${L(lang, "ارفع ملف أنظمة السداد من المطور (PDF أو صور أو إكسيل)", "Upload the developer's payment plans file (PDF, photos or Excel)")} <input type="file" name="doc" accept="application/pdf,image/jpeg,image/png,image/webp,.xlsx,.csv" multiple required></label>
+    <label>${L(lang, "الصفحات (للـ PDF)", "Pages (for a PDF)")} <input name="pages" dir="ltr" placeholder="1-3" maxlength="40"></label>
+    <p class="muted">${L(lang, `${PR.MAX_PAGES} صفحات بالكتير (الشيت بصفحة)، من صفحات الشهر (فاضل ${reading.left}). مفيش حاجة بتتحفظ قبل ما تراجع. الملف بيتحفظ في الملفات (داخلي).`, `At most ${PR.MAX_PAGES} pages (a sheet counts as one), from this month's pages (${reading.left} left). Nothing is saved until you check it. The file is kept under Materials (internal).`)}</p>
+    <button type="submit" class="secondary">${L(lang, "اقرا الأنظمة", "Read the plans")}</button>
+  </form>`
+    : "";
+  return notice || preview || form ? html`<section class="card stack" id="plans-read">${notice}${preview}${form}</section>` : "";
+}
+
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
@@ -193,7 +254,7 @@ function planForm(lang, projectId, phases, pl = {}) {
 </form>`;
 }
 
-function projectPage(lang, manager, data, developers, { notice = null, prices = null, commissionTerms = null, highlights = null } = {}) {
+function projectPage(lang, manager, data, developers, { notice = null, prices = null, commissionTerms = null, highlights = null, plansRead = null } = {}) {
   const { project: p, developer: d, phases, plans, materials, units } = data;
   const base = `/app/catalogue/projects/${p.id}`;
   const phaseName = (id) => phases.find((x) => x.id === id)?.name;
@@ -229,6 +290,7 @@ ${manager ? html`<details class="card"><summary>✏️ ${L(lang, "تعديل ا�
   ${plans.length ? html`<ul>${plans.map((pl) => html`<li data-plan="${pl.id}"><strong>${pl.name}</strong>${pl.phase_id ? ` (${phaseName(pl.phase_id) || ""})` : ""}: ${planLine(pl, lang)}${manager ? html` · <a href="${base}/plans/${pl.id}">${L(lang, "تعديل", "Edit")}</a> <form method="post" action="${base}/plans/${pl.id}/delete" class="inline"><button type="submit" class="link">${L(lang, "حذف", "Delete")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "لسه مفيش أنظمة سداد.", "No payment plans yet.")}</p>`}
 </section>
 ${manager ? html`<details class="card"><summary>➕ ${L(lang, "نظام سداد جديد", "New payment plan")}</summary>${planForm(lang, p.id, phases)}</details>` : ""}
+${plansRead || ""}
 
 <section class="card" id="materials">
   <h2>📁 ${L(lang, "الملفات واللينكات", "Materials")}</h2>
@@ -308,7 +370,8 @@ function register(web, { pool, page }) {
     const commissionTerms = manager ? termsSection(lang, data.project.id, await Commissions.getTerms(pool, actor, data.project.id)) : null;
     // C6: highlights (everyone) with the brochure reader (managers).
     const highlights = highlightsSection(lang, manager, data.project, { reading, query: req.query });
-    return page(req, res, { title: data.project.name, nav: "catalogue", body: projectPage(lang, manager, data, developers, { notice: notice || pricesNotice(req.query, lang) || savedNotice(req), prices, commissionTerms, highlights }) }, status);
+    const plansRead = manager ? plansReadSection(lang, data.project, reading, req.query) : null;
+    return page(req, res, { title: data.project.name, nav: "catalogue", body: projectPage(lang, manager, data, developers, { notice: notice || pricesNotice(req.query, lang) || savedNotice(req), prices, commissionTerms, highlights, plansRead }) }, status);
   };
 
   /** Runs a service write and answers: 403, 404, the page again with the error (400), or a redirect. */
@@ -361,6 +424,26 @@ ${developerForm(lang, d, `/app/catalogue/developers/${d.id}`)}
   web.post("/catalogue/projects/:id/phases", write((req) => Catalogue.savePhase(pool, actorOf(req), req.params.id, req.body), { show: showProject, done: (req) => `${projectUrl(req)}#phases` }));
   web.post("/catalogue/projects/:id/phases/:phaseId/delete", write((req) => Catalogue.deletePhase(pool, actorOf(req), req.params.id, req.params.phaseId), { show: showProject, done: (req) => `${projectUrl(req)}#phases` }));
   web.post("/catalogue/projects/:id/plans", write((req) => Catalogue.savePlan(pool, actorOf(req), req.params.id, req.body), { show: showProject, done: (req) => `${projectUrl(req)}#plans` }));
+  web.post("/catalogue/projects/:id/plans/read", uploadPlansDoc, async (req, res) => {
+    const lang = langOf(req);
+    const broker = actorOf(req);
+    if (!isManager(broker)) return forbidden(req, res);
+    const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
+    if (!gate.allowed) return res.status(429).type("text/plain").send(L(lang, "رفعت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment."));
+    const r = await PlanReading.read(pool, broker, req.params.id, { files: req.files?.doc || [], pages: req.body.pages });
+    if (r.error === "not_found") return notFound(req, res);
+    if (r.error) return res.redirect(303, `/app/catalogue/projects/${req.params.id}?plans_error=${encodeURIComponent(r.error)}${r.error === "ALLOWANCE" ? `&left=${r.left}&needed=${r.needed}` : ""}#plans-read`);
+    return res.redirect(303, `/app/catalogue/projects/${req.params.id}#plans-read`);
+  });
+  web.post("/catalogue/projects/:id/plans/draft/apply", async (req, res) => {
+    const r = await PlanReading.apply(pool, actorOf(req), req.params.id, req.body);
+    if (r.error === "forbidden") return forbidden(req, res);
+    if (r.error === "not_found") return notFound(req, res);
+    if (r.error) return res.redirect(303, `/app/catalogue/projects/${req.params.id}?plans_error=${r.error}#plans-read`);
+    const failed = r.failed.length ? `&plans_failed=${encodeURIComponent(r.failed.join(", "))}` : "";
+    return res.redirect(303, `/app/catalogue/projects/${req.params.id}?plans_saved=${r.saved}${failed}#plans`);
+  });
+  web.post("/catalogue/projects/:id/plans/draft/discard", write((req) => PlanReading.discard(pool, actorOf(req), req.params.id), { show: showProject, done: (req) => `/app/catalogue/projects/${req.params.id}#plans` }));
   web.post("/catalogue/projects/:id/plans/:planId/delete", write((req) => Catalogue.deletePlan(pool, actorOf(req), req.params.id, req.params.planId), { show: showProject, done: (req) => `${projectUrl(req)}#plans` }));
   web.get("/catalogue/projects/:id/plans/:planId", async (req, res) => {
     const lang = langOf(req);

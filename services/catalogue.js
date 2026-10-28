@@ -18,7 +18,9 @@ const MAX_MILESTONES = 4;
 const MAX_FEES = 4;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const FILE_TYPES = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+const FILE_TYPES = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx", "text/csv": "csv" };
+// Browsers often send a sheet as octet-stream; its extension decides then.
+const typeOf = (file) => FILE_TYPES[file?.mimetype] || { xlsx: "xlsx", csv: "csv" }[String(file?.originalname || "").split(".").pop().toLowerCase()];
 const MAX_FILE_MB = 25;
 const isId = (v) => UUID_RE.test(String(v || ""));
 const text = (v, max) => {
@@ -584,7 +586,7 @@ async function uploadMaterial(db, actor, projectId, file, input = {}) {
   if (!isManager(actor)) return { error: "forbidden" };
   const project = await projectRow(db, actor, projectId);
   if (!project) return { error: "not_found" };
-  const ext = FILE_TYPES[file?.mimetype];
+  const ext = typeOf(file);
   if (!file?.buffer?.length || !ext) return bad("file");
   if (file.buffer.length > MAX_FILE_MB * 1024 * 1024) return bad("file");
   const name = String(file.originalname || "").replace(/\.[^.]+$/, "");
@@ -592,7 +594,8 @@ async function uploadMaterial(db, actor, projectId, file, input = {}) {
   const kind = KINDS.includes(input.kind) && input.kind !== "price_sheet" ? input.kind : ext === "pdf" ? "brochure" : "other";
   const safe = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "file";
   const path = `${actor.agency_id}/projects/${project.id}/${crypto.randomBytes(12).toString("hex")}-${safe}.${ext}`;
-  const url = await Storage.uploadProjectFile(actor.agency_id, path, file.buffer, file.mimetype);
+  const mime = Object.keys(FILE_TYPES).find((k) => FILE_TYPES[k] === ext);
+  const url = await Storage.uploadProjectFile(actor.agency_id, path, file.buffer, mime);
   if (!url) return { error: "upload_failed" };
   const clientVisible = input.client_visible === true || input.client_visible === "1" || input.client_visible === "on";
   const { rows } = await db.query(

@@ -64,7 +64,7 @@
   | `044_referrals.sql` | Agency referrals (N9): `agencies.referral_code` (unique, made on first view), `referred_by`, `referral_rewarded_at`, `referral_credit_months` |
   | `045_lead_intake.sql` | Lead intake (L1, L7): `lead_intakes` (per-agency secret URL, SHA-256 only; source, quiet days, last lead) and `lead_intake_log` (outcome, sender lead id, phone last 4 only) |
   | `046_lease_tenant_lead.sql` | Lease tenant as a lead (F10): `leases.tenant_lead_id` (the lease shows on that lead) |
-  | `047_material_files.sql` | Uploaded project files (F20): `project_materials.storage_path`, `file_bytes` (PDF/photo in storage; not link-checked) |
+  | `047_material_files.sql` | Uploaded project files (F20): `project_materials.storage_path`, `file_bytes` (PDF/photo/sheet in storage; not link-checked); payment plans file preview (F21): `projects.plans_draft` |
   | `038_assistant.sql` | The assistant (C10 + N1): `project_contexts` (per project summary, facts, source key, built time), `assistant_questions` (question log: channel, found, web, scopes), `agencies.assistant` (owner's web switch and monthly web answers) |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
