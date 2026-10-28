@@ -123,6 +123,25 @@ describe("sessions and CSRF", () => {
     expect((await request(web()).post("/app/leads/new").set("Referer", "https://evil.example/app/x")).status).toBe(401);
   });
 
+  test("F25: the top menu shows Dashboard to managers and App tracking to the owner only", async () => {
+    const nav = (text) => (text.match(/<nav class="nav">([\s\S]*?)<\/nav>/) || [])[1] || "";
+    const broker = nav((await (await signIn(h, "broker")).agent.get("/app/")).text);
+    expect(broker).toContain("/app/catalogue");
+    expect(broker).toContain("/app/commissions");
+    expect(broker).not.toContain("/app/dashboard");
+    const { resetConfig } = require("../../config");
+    process.env.OWNER_BROKER_IDS = h.BROKERS.admin.id;
+    resetConfig();
+    try {
+      const admin = nav((await (await signIn(h, "admin")).agent.get("/app/")).text);
+      expect(admin).toContain("/app/dashboard");
+      expect(admin).toContain("/app/owner");
+    } finally {
+      delete process.env.OWNER_BROKER_IDS;
+      resetConfig();
+    }
+  });
+
   test("private pages are never cached and carry the CSRF token for htmx", async () => {
     const { agent } = await signIn(h, "broker");
     const r = await agent.get("/app/");

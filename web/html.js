@@ -81,8 +81,19 @@ const NAV = [
   { key: "leads", href: "/app/leads", ar: "👤 العملاء", en: "👤 Leads" },
   { key: "deals", href: "/app/deals", ar: "🤝 الصفقات", en: "🤝 Deals" },
   { key: "add", href: "/app/units/new", ar: "➕ إضافة", en: "➕ Add" },
-  { key: "import", href: "/app/import", ar: "📥 استيراد", en: "📥 Import" }
+  { key: "import", href: "/app/import", ar: "📥 استيراد", en: "📥 Import" },
+  // F17 + F25: pages that were only buttons on the home page; some by role.
+  { key: "catalogue", href: "/app/catalogue", ar: "🏗️ الكتالوج", en: "🏗️ Catalogue" },
+  { key: "commissions", href: "/app/commissions", ar: "💰 العمولات", en: "💰 Commissions" },
+  { key: "dashboard", href: "/app/dashboard", ar: "📈 لوحة الوكالة", en: "📈 Dashboard", who: "manager" },
+  { key: "owner", href: "/app/owner", ar: "🛠️ متابعة التطبيق", en: "🛠️ App tracking", who: "owner" }
 ];
+
+/** The menu links this broker sees (managers: Dashboard; the app owner: App tracking too). */
+function navFor(broker) {
+  const Dash = require("../services/dashboards");
+  return NAV.filter((n) => !n.who || (n.who === "manager" ? Dash.isManager(broker) : Dash.isOwner(broker)));
+}
 
 function topBar({ broker, nav, lang, unread = 0 }) {
   const en = lang === "en";
@@ -90,7 +101,7 @@ function topBar({ broker, nav, lang, unread = 0 }) {
   <a class="brand" href="/app/">WehdatHub</a>
   <a class="lang" data-lang-switch href="?lang=${en ? "ar" : "en"}" hreflang="${en ? "ar" : "en"}" lang="${en ? "ar" : "en"}">${en ? "عربي" : "English"}</a>
   ${broker
-    ? html`<nav class="nav">${NAV.map(
+    ? html`<nav class="nav">${navFor(broker).map(
         (n) => html`<a href="${n.href}"${n.key === nav ? raw(' aria-current="page"') : ""}>${en ? n.en : n.ar}</a>`
       )}</nav>
   <a class="bell" href="/app/notifications" aria-label="${en ? "Notifications" : "التنبيهات"}"${nav === "notifications" ? raw(' aria-current="page"') : ""}>🔔${unread ? html`<span class="badge" data-unread="${unread}">${unread > 99 ? "99+" : unread}</span>` : ""}</a>
@@ -112,4 +123,4 @@ function withCsrf(pageHtml, csrf) {
   );
 }
 
-module.exports = { SafeHtml, html, raw, escapeHtml, jsonAttr, layout, withCsrf, NAV, HTMX_CONFIG };
+module.exports = { SafeHtml, html, raw, escapeHtml, jsonAttr, layout, withCsrf, NAV, navFor, HTMX_CONFIG };

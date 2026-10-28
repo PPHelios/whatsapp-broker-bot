@@ -80,7 +80,7 @@ function register(web, { pool, page }) {
     const devs = manager ? [...new Map(rows.filter((r) => r.developer_id).map((r) => [r.developer_id, r.developer_name])).entries()] : [];
     return page(req, res, {
       title: L(lang, "العمولات", "Commissions"),
-      nav: "deals",
+      nav: "commissions",
       body: html`<h1>💸 ${L(lang, "عمولات المطورين", "Developer commissions")}</h1>
 ${manager ? html`<section class="card row" data-commission-totals>
   <span>${L(lang, "متوقع", "Expected")}: <strong>${money(t.expected, lang)}</strong></span>
@@ -112,7 +112,7 @@ ${devs.length ? html`<p class="muted">${L(lang, "كشف حساب:", "Statements:
     }
     return page(req, res, {
       title: st.developer.name,
-      nav: "deals",
+      nav: "commissions",
       body: html`<h1>📄 ${L(lang, "كشف عمولات", "Commission statement")}: ${st.developer.name}</h1>
 <p class="row"><a href="/app/commissions">${L(lang, "رجوع للعمولات", "Back to commissions")}</a> <a class="btn secondary" href="/app/commissions/developers/${st.developer.id}?format=xlsx" data-statement-xlsx>⬇️ Excel</a></p>
 <section class="card row" data-statement-totals="${st.totals.outstanding}">
@@ -137,7 +137,7 @@ ${devs.length ? html`<p class="muted">${L(lang, "كشف حساب:", "Statements:
     const open = C.OPEN.includes(c.status);
     return page(req, res, {
       title: dealLabel(c.deal_ref),
-      nav: "deals",
+      nav: "commissions",
       body: html`<h1>💸 ${dealLabel(c.deal_ref)} · ${c.unit_code || ""}</h1>
 ${notice}
 <section class="card">
