@@ -166,7 +166,7 @@ async function receiveFor(pool, intake, body, { now = new Date(), test = false }
   try {
     // The intake acts as a manager of its agency (so it can assign); nobody is "the one who added it".
     const actor = { id: null, agency_id: intake.agency_id, role: "admin", name: intake.name, preferred_lang: "ar" };
-    const next = await LeadRules.nextBroker(pool, intake.agency_id, { now });
+    const next = await LeadRules.nextBroker(pool, intake.agency_id, { now, advance: true });
     const notes = [lead.notes, ...extra].filter(Boolean).join("\n");
     const res = await Leads.captureLead(
       pool,

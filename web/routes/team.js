@@ -86,6 +86,22 @@ function rulesCard(rules, lang) {
 </form>`;
 }
 
+function routingCard({ routing, brokers }, lang) {
+  return html`<form method="post" action="/app/team/routing" class="card stack" data-lead-routing>
+  <h2>🔁 ${L(lang, "مين ياخد العملاء الجداد", "Who gets new leads")}</h2>
+  <label class="row"><input type="checkbox" name="round_robin" value="on"${routing.round_robin ? html` checked` : ""}> ${L(lang, "توزيع بالدور على الوسطاء", "Round robin between brokers")}</label>
+  <p class="muted">${L(lang, "لو مقفول، العملاء اللي جايين من الإعلانات والفورمز بيفضلوا مع المديرين يوزعوهم بإيدهم، ومفيش تحويل تلقائي.", "When off, leads from ads and forms stay with the managers to hand out themselves, and nothing moves on its own.")}</p>
+  <p class="muted">${L(lang, "اسحب الأسماء (أو استخدم الأسهم) لترتيب الدور: الأول ياخد العميل الجاي، وبعده اللي تحته. اللي في إجازة بيتعدّى.", "Drag the names (or use the arrows) to set the order: the first gets the next lead, then the one below. Anyone away is skipped.")}</p>
+  <ol data-sortable>${brokers.map(
+    (b) => html`<li draggable="true" data-routing-broker="${b.id}"><input type="hidden" name="order" value="${b.id}">
+    <span class="grow">${b.name} <span class="muted">(${b.role})</span>${routing.last === b.id ? html` <span class="badge">${L(lang, "خد آخر عميل", "got the last lead")}</span>` : ""}</span>
+    <span data-open-leads>${L(lang, `${b.open_leads} عميل مفتوح`, `${b.open_leads} open leads`)}</span>
+    <button type="button" class="secondary" data-move="up" aria-label="${L(lang, "لفوق", "Up")}">↑</button><button type="button" class="secondary" data-move="down" aria-label="${L(lang, "لتحت", "Down")}">↓</button></li>`
+  )}</ol>
+  <button type="submit">${L(lang, "احفظ", "Save")}</button>
+</form>`;
+}
+
 function speedCell(s, lang) {
   if (!s || (!s.responded && !s.missed)) return "—";
   const parts = [];
@@ -123,7 +139,7 @@ function cairoDay(d) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(d));
 }
 
-function teamPage({ team, lang, rules, speed, notice = null, link = null, now = new Date() }) {
+function teamPage({ team, lang, rules, speed, routing, notice = null, link = null, now = new Date() }) {
   const today = cairoDay(now);
   return html`<h1>👥 ${L(lang, "الفريق والقواعد", "Team and rules")}</h1>
 ${notice}
@@ -155,6 +171,7 @@ ${link || ""}
   <p class="muted">${L(lang, "الإيقاف بيقفل دخوله فوراً وبيرجّع عملاءه للمديرين. الحسابات مش بتتمسح؛ الموقوفين في الآخر، والأقدم في الآخر خالص.", "Deactivating signs them out at once and returns their leads to the managers. Accounts are never deleted; former brokers are listed last, the longest gone at the very end.")}</p>
   <p class="muted">${L(lang, "سرعة الرد: متوسط الدقايق من ما العميل يتسلم لحد أول مكالمة، للعملاء اللي حد تاني سلّمهم.", "Speed to lead: median minutes from a lead being given to the first contact, for leads someone else gave them.")}</p>
 </section>
+${routingCard(routing, lang)}
 ${rulesCard(rules, lang)}`;
 }
 
@@ -166,7 +183,8 @@ function register(web, { pool, page }) {
     if (!team) return forbidden(req, res);
     const rules = await LeadRules.getRules(pool, req.session.broker.agency_id);
     const speed = await LeadRules.speedToLead(pool, req.session.broker.agency_id, { waitMinutes: rules.wait_minutes });
-    return page(req, res, { title: L(lang, "الفريق والقواعد", "Team and rules"), nav: "settings", body: teamPage({ team, lang, rules, speed, ...extra }) }, status);
+    const routing = await LeadRules.routingList(pool, req.session.broker.agency_id);
+    return page(req, res, { title: L(lang, "الفريق والقواعد", "Team and rules"), nav: "settings", body: teamPage({ team, lang, rules, speed, routing, ...extra }) }, status);
   };
   const bad = (code, lang) => html`<p class="card notice bad" role="alert">❌ ${errorText(code, lang)}</p>`;
 
@@ -203,6 +221,16 @@ function register(web, { pool, page }) {
     const msg = r.rules.enabled
       ? L(lang, `✅ القاعدة شغالة: ${r.rules.wait_minutes} دقيقة في ساعات الشغل.`, `✅ The rule is on: ${r.rules.wait_minutes} minutes in working hours.`)
       : L(lang, "✅ اتحفظت؛ القاعدة مقفولة.", "✅ Saved; the rule is off.");
+    return render(req, res, { notice: html`<p class="card notice ok" role="status">${msg}</p>` });
+  });
+
+  web.post("/team/routing", async (req, res) => {
+    const lang = langOf(req);
+    const r = await LeadRules.saveRouting(pool, req.session.broker, { roundRobin: req.body.round_robin === "on", order: req.body.order });
+    if (r.error) return render(req, res, { notice: bad(r.error, lang) }, r.error === "forbidden" ? 403 : 400);
+    const msg = r.routing.round_robin
+      ? L(lang, "✅ اتحفظ: العملاء الجداد بيتوزعوا بالترتيب ده.", "✅ Saved: new leads go round in this order.")
+      : L(lang, "✅ اتحفظ: التوزيع بالدور مقفول؛ العملاء الجداد بيفضلوا مع المديرين.", "✅ Saved: round robin is off; new leads stay with the managers.");
     return render(req, res, { notice: html`<p class="card notice ok" role="status">${msg}</p>` });
   });
 

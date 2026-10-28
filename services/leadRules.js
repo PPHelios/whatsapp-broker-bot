@@ -79,18 +79,74 @@ async function setSwitches(pool, manager, brokerId, off) {
   return rows[0] ? { ok: true, broker: rows[0], off: clean } : { error: "not_found" };
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** P2: the agency's lead routing: { round_robin, order: [broker ids], last }. */
+async function routingOf(db, agencyId) {
+  const { rows } = await db.query("SELECT lead_routing FROM agencies WHERE id = $1", [agencyId]);
+  const r = rows[0]?.lead_routing || {};
+  return { round_robin: r.round_robin !== false, order: Array.isArray(r.order) ? r.order.filter((id) => UUID_RE.test(id)) : [], last: UUID_RE.test(r.last || "") ? r.last : null };
+}
+
+/** The managers' switch and order (broker ids, first gets the next lead). */
+async function saveRouting(pool, manager, { roundRobin, order }) {
+  if (!isManager(manager)) return { error: "forbidden" };
+  const { rows } = await pool.query("SELECT id FROM brokers WHERE agency_id = $1 AND is_active", [manager.agency_id]);
+  const known = new Set(rows.map((r) => r.id));
+  const clean = [...new Set([].concat(order ?? []).filter((id) => known.has(id)))];
+  const now = await routingOf(pool, manager.agency_id);
+  const routing = { round_robin: Boolean(roundRobin), order: clean, last: now.last };
+  await pool.query("UPDATE agencies SET lead_routing = $2::jsonb WHERE id = $1", [manager.agency_id, JSON.stringify(routing)]);
+  return { ok: true, routing };
+}
+
+/** Active brokers in routing order with their open leads (stage not won or lost): the managers' list. */
+async function routingList(db, agencyId) {
+  const routing = await routingOf(db, agencyId);
+  const { rows } = await db.query(
+    `SELECT b.id, b.name, b.role, b.away_until,
+            (SELECT count(*)::int FROM leads l WHERE l.assigned_broker_id = b.id AND l.agency_id = b.agency_id AND l.stage NOT IN ('won', 'lost')) AS open_leads
+       FROM brokers b WHERE b.agency_id = $1 AND b.is_active
+      ORDER BY (lower(b.role) = 'broker') DESC, b.name, b.id`,
+    [agencyId]
+  );
+  const pos = new Map(routing.order.map((id, i) => [id, i]));
+  rows.sort((a, b) => (pos.has(a.id) ? pos.get(a.id) : 1e6) - (pos.has(b.id) ? pos.get(b.id) : 1e6));
+  return { routing, brokers: rows };
+}
+
 /**
- * The next broker for a lead: active, not away, not excluded; brokers (role broker) before managers; the one who has
- * gone longest without a lead first, then by name.
+ * The next broker for a lead: active, not away, not excluded. P2: none when the agency switched round robin off; with
+ * a set order, the next one in that order after the last broker who got a lead (brokers not in the order come after,
+ * brokers before managers); without an order, brokers before managers, the one who has gone longest without a lead
+ * first. advance: remember who got it, so the next lead goes to the one after.
  */
-async function nextBroker(db, agencyId, { exclude = [], now = new Date() } = {}) {
+async function nextBroker(db, agencyId, { exclude = [], now = new Date(), advance = false } = {}) {
+  const routing = await routingOf(db, agencyId);
+  if (!routing.round_robin) return null;
   const { rows } = await db.query(
     `SELECT ${BROKER_COLS} FROM brokers
       WHERE agency_id = $1 AND is_active AND NOT (id = ANY($2::uuid[])) AND (away_until IS NULL OR away_until <= $3)
-      ORDER BY (lower(role) = 'broker') DESC, last_lead_at NULLS FIRST, name, id LIMIT 1`,
+      ORDER BY (lower(role) = 'broker') DESC, last_lead_at NULLS FIRST, name, id`,
     [agencyId, exclude, now.toISOString()]
   );
-  return rows[0] || null;
+  let pick = rows[0] || null;
+  if (routing.order.length && rows.length) {
+    const pos = new Map(routing.order.map((id, i) => [id, i]));
+    const ordered = [...rows].sort((a, b) => (pos.has(a.id) ? pos.get(a.id) : 1e6 + rows.indexOf(a)) - (pos.has(b.id) ? pos.get(b.id) : 1e6 + rows.indexOf(b)));
+    const all = [...routing.order, ...ordered.filter((b) => !pos.has(b.id)).map((b) => b.id)];
+    const start = routing.last ? all.indexOf(routing.last) + 1 : 0;
+    const eligible = new Set(ordered.map((b) => b.id));
+    for (let i = 0; i < all.length; i++) {
+      const id = all[(start + i) % all.length];
+      if (eligible.has(id)) {
+        pick = ordered.find((b) => b.id === id);
+        break;
+      }
+    }
+  }
+  if (pick && advance) await db.query("UPDATE agencies SET lead_routing = lead_routing || jsonb_build_object('last', $2::text) WHERE id = $1", [agencyId, pick.id]);
+  return pick;
 }
 
 /** Scheduler step: moves every lead past its deadline. → { moved, stopped } */
@@ -123,7 +179,7 @@ async function moveOverdue(pool, { now = new Date(), limit = BATCH } = {}) {
         [lead.id, lead.agency_id]
       );
       const exclude = [lead.assigned_broker_id, ...past.map((r) => r.id).filter(Boolean)];
-      const next = lead.response_jumps < rules.max_jumps ? await nextBroker(client, lead.agency_id, { exclude, now }) : null;
+      const next = lead.response_jumps < rules.max_jumps ? await nextBroker(client, lead.agency_id, { exclude, now, advance: true }) : null;
       if (!next) {
         await clear();
         stopped.push({ lead, reason: lead.response_jumps < rules.max_jumps ? "nobody" : "max" });
@@ -249,4 +305,7 @@ async function speedToLead(pool, agencyId, { days = 30, now = new Date(), waitMi
   return out;
 }
 
-module.exports = { SWITCHABLE, getRules, saveRules, deadlineFor, setAway, setSwitches, nextBroker, moveOverdue, responseJob, speedToLead, cairoMidnight };
+module.exports = { SWITCHABLE, getRules, saveRules, deadlineFor, setAway, setSwitches, nextBroker,
+  routingOf,
+  saveRouting,
+  routingList, moveOverdue, responseJob, speedToLead, cairoMidnight };

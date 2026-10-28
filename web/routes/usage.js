@@ -4,6 +4,8 @@
 const Credits = require("../../lib/credits");
 const UnitCode = require("../../domain/unitCode");
 const { MANAGER_ROLES } = require("../../lib/authz");
+const AiLog = require("../../services/aiUsageLog");
+const Dash = require("../../services/dashboards");
 const { html } = require("../html");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
@@ -27,7 +29,58 @@ const optInt = (v) => {
   return Number.isInteger(n) && n > 0 ? n : null;
 };
 
+/** F24: the AI use log with its filters and the Excel link. base = the page's path. */
+function aiLogPage(lang, log, filters, base, title) {
+  const q = (extra = {}) => {
+    const p = new URLSearchParams(Object.entries({ month: log.month, broker: filters.brokerId || "", feature: filters.feature || "", ...extra }).filter(([, v]) => v));
+    return p.toString();
+  };
+  const KIND = { text: ["نص", "Text"], voice: ["فويس", "Voice"], page: ["صفحة", "Page"] };
+  return html`<h1>🤖 ${title}</h1>
+<form method="get" action="${base}" class="card row" data-ai-log-filter>
+  <label>${L(lang, "الشهر", "Month")} <input type="month" name="month" value="${log.month}" dir="ltr"></label>
+  <label>${L(lang, "المستخدم", "User")} <select name="broker"><option value="">${L(lang, "الكل", "Everyone")}</option>${log.brokers.map((b) => html`<option value="${b.id}"${filters.brokerId === b.id ? html` selected` : ""}>${b.name}</option>`)}</select></label>
+  <label>${L(lang, "الخاصية", "Feature")} <select name="feature"><option value="">${L(lang, "الكل", "All")}</option>${log.features.map((f) => html`<option value="${f}"${filters.feature === f ? html` selected` : ""}>${AiLog.featureLabel(f, lang)}</option>`)}</select></label>
+  <button type="submit" class="secondary">${L(lang, "عرض", "Show")}</button>
+  <a class="btn secondary" href="${base}.xlsx?${q()}" data-ai-log-export>⬇️ ${L(lang, "إكسيل", "Excel")}</a>
+</form>
+<section class="card">
+  <p data-ai-log-totals>${L(lang, `نص: ${log.totals.text} · فويس: ${log.totals.voice} · صفحات: ${log.totals.page} · صفحات ببلاش: ${log.totals.free}`, `Text: ${log.totals.text} · Voice: ${log.totals.voice} · Pages: ${log.totals.page} · Free pages: ${log.totals.free}`)}</p>
+  <p class="muted">${L(lang, "النص والفويس من رصيد الباقة الشهري؛ الصفحات من صفحات قراءة الملفات. الصفحة اللي اتقرت قبل كده (لأي وكالة) ببلاش.", "Text and voice count against the plan's monthly allowance; pages against the document pages. A page read before (by any agency) is free.")}</p>
+  ${log.rows.length
+    ? html`<div class="scroll"><table><thead><tr><th>${L(lang, "الوقت", "Time")}</th><th>${L(lang, "المستخدم", "User")}</th><th>${L(lang, "الخاصية", "Feature")}</th><th>${L(lang, "اتحسب من", "Counted as")}</th></tr></thead>
+  <tbody>${log.rows.map((r) => html`<tr data-ai-row="${r.feature}"><td dir="ltr">${AiLog.cairoTime(r.at)}</td><td>${r.broker}</td><td>${AiLog.featureLabel(r.feature, lang)}</td><td>${KIND[r.kind][lang === "en" ? 1 : 0]}${r.free ? L(lang, " (ببلاش)", " (free)") : ""}</td></tr>`)}</tbody></table></div>`
+    : html`<p class="muted">${L(lang, "مفيش استهلاك في الفترة دي.", "No use in this period.")}</p>`}
+</section>`;
+}
+
 function register(web, { pool, page }) {
+  // F24: managers see their agency's AI log; the app owner any agency's (/app/owner links here).
+  const logFor = async (req, res, agencyId, base, title, xlsx) => {
+    const lang = langOf(req);
+    const filters = AiLog.filtersOf(req.query);
+    const log = await AiLog.list(pool, agencyId, filters);
+    if (xlsx) {
+      return res
+        .set({ "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": `attachment; filename="ai-usage-${log.month}.xlsx"` })
+        .send(await AiLog.workbook(log, lang));
+    }
+    return page(req, res, { title, nav: "settings", body: aiLogPage(lang, log, filters, base, title) });
+  };
+  for (const xlsx of [false, true]) {
+    web.get(`/usage/log${xlsx ? ".xlsx" : ""}`, (req, res) => {
+      const { broker } = req.session;
+      if (!isManager(broker)) return res.status(403).type("text/plain").send(L(langOf(req), "للمديرين بس", "Managers only"));
+      return logFor(req, res, broker.agency_id, "/app/usage/log", L(langOf(req), "سجل استهلاك الذكاء الاصطناعي", "AI usage log"), xlsx);
+    });
+    web.get(`/owner/agencies/:id/ai-log${xlsx ? ".xlsx" : ""}`, async (req, res) => {
+      if (!Dash.isOwner(req.session.broker) || !/^[0-9a-f-]{36}$/i.test(req.params.id)) return res.status(404).type("text/plain").send("Not found");
+      const { rows } = await pool.query("SELECT name FROM agencies WHERE id = $1", [req.params.id]);
+      if (!rows[0]) return res.status(404).type("text/plain").send("Not found");
+      return logFor(req, res, req.params.id, `/app/owner/agencies/${req.params.id}/ai-log`, `${L(langOf(req), "استهلاك الذكاء الاصطناعي", "AI usage")}: ${rows[0].name}`, xlsx);
+    });
+  }
+
   web.get("/usage", async (req, res) => {
     const lang = langOf(req);
     const { broker } = req.session;
@@ -63,6 +116,7 @@ ${req.query.saved === "1" ? html`<p class="card notice ok" role="status">✅ ${L
     : html`<p class="muted">${L(lang, "مفيش رسايل الشهر ده.", "No messages this month.")}</p>`}
   <p class="muted">${L(lang, "نصيحة: البحث الطويل والإضافة والاستيراد ببلاش على الموقع.", "Tip: long searches, adding units and imports are free on the website.")}</p>
 </section>
+${manager ? html`<p class="card"><a href="/app/usage/log" data-ai-log-link>🤖 ${L(lang, "سجل استهلاك الذكاء الاصطناعي (سطر بسطر، مع تصدير إكسيل)", "AI usage log (line by line, with Excel export)")}</a></p>` : ""}
 ${manager
   ? html`<section class="card">
   <h2>${L(lang, "كل الوسطاء", "Every broker")}</h2>

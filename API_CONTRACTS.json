@@ -1465,6 +1465,9 @@
       "setAway": ["pool", "manager", "brokerId", "day", "params"],
       "setSwitches": ["pool", "manager", "brokerId", "off"],
       "nextBroker": ["db", "agencyId", "params"],
+      "routingOf": ["db", "agencyId"],
+      "saveRouting": ["pool", "manager", "params"],
+      "routingList": ["db", "agencyId"],
       "moveOverdue": ["pool", "params"],
       "responseJob": [],
       "speedToLead": ["pool", "agencyId", "params"],
@@ -1525,6 +1528,37 @@
       "read": ["pool", "actor", "projectId", "params", "params"],
       "apply": ["pool", "actor", "projectId", "body"],
       "discard": ["pool", "actor", "projectId"]
+    },
+    "services/aiUsageLog.js": {
+      "FEATURES": "Object",
+      "featureLabel": ["f", "lang"],
+      "monthOf": ["now"],
+      "list": ["db", "agencyId", "params"],
+      "filtersOf": ["q"],
+      "cairoTime": ["d"],
+      "workbook": ["log", "lang"]
+    },
+    "domain/gallery.js": {
+      "VERSION": "String",
+      "MAX_FILES": "Number",
+      "KINDS": "Array",
+      "TYPES": "Array",
+      "PROMPT": "String",
+      "classify": ["text"],
+      "roleOf": ["kind"],
+      "matchUnits": ["layout", "units"]
+    },
+    "services/projectGallery.js": {
+      "upload": ["pool", "actor", "projectId", "params", "params"],
+      "list": ["db", "actor", "projectId"],
+      "update": ["db", "actor", "projectId", "imageId", "params"],
+      "remove": ["db", "actor", "projectId", "imageId"],
+      "sharedFor": ["db", "listing", "params"],
+      "layoutsFor": ["db", "listing"]
+    },
+    "web/routes/gallery.js": {
+      "register": ["web", "params"],
+      "gallerySection": ["lang", "manager", "data", "params"]
     },
     "services/brochure.js": {
       "read": ["pool", "actor", "projectId", "params", "params"],

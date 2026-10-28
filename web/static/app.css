@@ -103,3 +103,12 @@ progress { width: 100%; height: 14px; accent-color: var(--brand); }
 table.compare th[scope="col"] { vertical-align: top; min-width: 160px; }
 table.compare img.thumb { width: 160px; max-width: 100%; height: 110px; object-fit: cover; border-radius: 8px; }
 table.compare ul.facts { margin: 0; padding-inline-start: 1em; }
+
+/* F23: project gallery */
+ul.gallery { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+ul.gallery li { border: 1px solid var(--line, #ddd); border-radius: 8px; padding: 8px; }
+ul.gallery img { width: 100%; height: 120px; object-fit: cover; border-radius: 6px; }
+ul.gallery details label { display: block; }
+ol[data-sortable] { padding-inline-start: 1.5em; }
+ol[data-sortable] > li { display: flex; gap: 8px; align-items: center; padding: 6px 4px; border-bottom: 1px solid var(--line, #ddd); cursor: grab; }
+ol[data-sortable] > li .grow { flex: 1; }

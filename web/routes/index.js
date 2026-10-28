@@ -28,6 +28,7 @@ const PRIVATE = [
   require("./insights"),
   require("./catalogueUpdates"),
   require("./brochure"),
+  require("./gallery"),
   require("./catalogue"),
   require("./priceSheets")
 ];

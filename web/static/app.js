@@ -253,6 +253,31 @@
       })
       .catch(fail);
   });
+  // <ol data-sortable>: reorder items by dragging or with their [data-move="up|down"] buttons; each item's hidden
+  // input carries its id, so the form posts the new order (lead routing, project photo order).
+  var dragged = null;
+  document.addEventListener("dragstart", function (e) {
+    var li = e.target.closest && e.target.closest("[data-sortable] > li");
+    if (!li) return;
+    dragged = li;
+    e.dataTransfer.effectAllowed = "move";
+  });
+  document.addEventListener("dragover", function (e) {
+    var li = e.target.closest && e.target.closest("[data-sortable] > li");
+    if (!dragged || !li || li === dragged || li.parentNode !== dragged.parentNode) return;
+    e.preventDefault();
+    var r = li.getBoundingClientRect();
+    li.parentNode.insertBefore(dragged, e.clientY > r.top + r.height / 2 ? li.nextSibling : li);
+  });
+  document.addEventListener("dragend", function () { dragged = null; });
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-sortable] [data-move]");
+    if (!b) return;
+    e.preventDefault();
+    var li = b.closest("li");
+    if (b.getAttribute("data-move") === "up" && li.previousElementSibling) li.parentNode.insertBefore(li, li.previousElementSibling);
+    if (b.getAttribute("data-move") === "down" && li.nextElementSibling) li.parentNode.insertBefore(li.nextElementSibling, li);
+  });
   // Mini App sign-in (/app/tg): Telegram puts its signed initData in the URL fragment as tgWebAppData.
   (function () {
     var box = document.getElementById("tg-signin");

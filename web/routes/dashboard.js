@@ -252,7 +252,7 @@ ${assistantSection(assistant, lang)}
   <div class="scroll"><table>
   <thead><tr><th>${L(lang, "الوكالة", "Agency")}</th><th>${L(lang, "وسطاء", "Brokers")}</th><th>Telegram</th><th>${L(lang, "طلبات AI", "AI calls")}</th><th>${L(lang, "فشلت", "Failed")}</th><th>${L(lang, "التكلفة", "Cost")}</th></tr></thead>
   <tbody>${d.agencies.map(
-    (a) => html`<tr data-agency="${a.id}"><td>${a.name}</td><td>${a.brokers ?? 0}</td><td>${a.telegram ?? 0}</td><td>${a.calls}</td><td>${a.failed}</td><td dir="ltr">${usd(a.usd)}</td></tr>`
+    (a) => html`<tr data-agency="${a.id}"><td><a href="/app/owner/agencies/${a.id}/ai-log" title="${L(lang, "سجل الذكاء الاصطناعي", "AI log")}">${a.name}</a></td><td>${a.brokers ?? 0}</td><td>${a.telegram ?? 0}</td><td>${a.calls}</td><td>${a.failed}</td><td dir="ltr">${usd(a.usd)}</td></tr>`
   )}</tbody>
   <tfoot><tr><td colspan="5">${L(lang, "الإجمالي", "Total")}</td><td dir="ltr" data-total-usd="${d.totalUsd.toFixed(4)}">${usd(d.totalUsd)}</td></tr></tfoot></table></div>
 </section>

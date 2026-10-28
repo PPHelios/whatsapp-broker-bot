@@ -6,6 +6,7 @@
 
 const express = require("express");
 const Leads = require("../../services/leads");
+const Gallery = require("../../services/projectGallery");
 const Notifications = require("../../lib/notifications");
 const Card = require("../../domain/leadCard");
 const Share = require("../../lib/shareLinks");
@@ -234,7 +235,11 @@ function mountPublic(app, { pool, assets }) {
     const otherLangUrl = `${base}&lang=${lang === "en" ? "ar" : "en"}`;
     let unit;
     if (listing.status === "active") {
-      const { rows: images } = await pool.query("SELECT url FROM listing_images WHERE listing_id = $1 AND agency_id = $2 AND (role IS NULL OR role NOT IN ('document', 'unrelated')) ORDER BY position LIMIT 15", [listing.id, listing.agency_id]);
+      const { rows: own } = await pool.query("SELECT url FROM listing_images WHERE listing_id = $1 AND agency_id = $2 AND (role IS NULL OR role NOT IN ('document', 'unrelated')) ORDER BY position LIMIT 15", [listing.id, listing.agency_id]);
+      // F23: the unit's layouts and the project's shared photos follow the unit's own.
+      const layouts = (await Gallery.layoutsFor(pool, listing)).filter((i) => i.mime.startsWith("image/"));
+      const seen = new Set();
+      const images = [...own, ...layouts, ...(await Gallery.sharedFor(pool, listing))].filter((i) => !seen.has(i.url) && seen.add(i.url)).slice(0, 15);
       unit = PublicUnit.toPublicUnit(listing, { agency, broker: broker?.is_active ? broker : null, images, lang, ...(await projectOf(listing)) });
     } else {
       unit = PublicUnit.unavailable(listing, { agency, lang });
