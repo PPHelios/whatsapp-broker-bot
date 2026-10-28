@@ -63,7 +63,7 @@ describe("P13: the review card flags a unit already listed", () => {
 
 describe("Add by voice → review → confirm (plan verification #1)", () => {
   test("resale installment unit 'بحري ناصية فيها غرفة مربية', no delivery", async () => {
-    await h.text("broker", "اضافة");
+    await h.text("broker", "اضافه") // F4: spelling-blind command;
     await h.voice("broker");
     answerExtraction(extraction());
 
