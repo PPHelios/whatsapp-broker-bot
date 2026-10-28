@@ -62,6 +62,7 @@
   | `042_leases.sql` | Rental renewals (N4): `leases` (one per rented unit: tenant, start, months, rent, yearly increase %, remind, reminder keys sent) |
   | `043_targets.sql` | Monthly targets (N6): `brokers.target_deals`, `brokers.target_commission` (standing monthly targets set by managers) |
   | `044_referrals.sql` | Agency referrals (N9): `agencies.referral_code` (unique, made on first view), `referred_by`, `referral_rewarded_at`, `referral_credit_months` |
+  | `045_lead_intake.sql` | Lead intake (L1, L7): `lead_intakes` (per-agency secret URL, SHA-256 only; source, quiet days, last lead) and `lead_intake_log` (outcome, sender lead id, phone last 4 only) |
   | `038_assistant.sql` | The assistant (C10 + N1): `project_contexts` (per project summary, facts, source key, built time), `assistant_questions` (question log: channel, found, web, scopes), `agencies.assistant` (owner's web switch and monthly web answers) |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.

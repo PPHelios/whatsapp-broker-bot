@@ -26,8 +26,8 @@ function leadRow(lead, lang, { manager = false, now = new Date() } = {}) {
 }
 
 /** The add form. values: { message, name, phone1..3, kind, source, source_other, lawful_basis, notes, assign_to, request (a search token saved as the client's request) } */
-function leadForm({ values: v = {}, lang = "ar", csrf = "", brokers = null, notice = null, error = null, duplicate = null, erased = false }) {
-  const known = Stages.SOURCES.some(([en]) => en === v.source);
+function leadForm({ values: v = {}, lang = "ar", csrf = "", brokers = null, notice = null, error = null, duplicate = null, erased = false, extraSources = [] }) {
+  const known = Stages.SOURCES.some(([en]) => en === v.source) || extraSources.includes(v.source);
   return html`<form id="lead-form" method="post" action="/app/leads/new" class="stack">
   <input type="hidden" name="_csrf" value="${csrf}">
   ${v.request ? html`<input type="hidden" name="request" value="${v.request}">` : ""}
@@ -49,7 +49,7 @@ function leadForm({ values: v = {}, lang = "ar", csrf = "", brokers = null, noti
     <label>${L(lang, "رقم تاني", "Second phone")}<input name="phone2" value="${v.phone2 || ""}" dir="ltr" inputmode="tel" hx-post="/app/leads/check" hx-trigger="change" hx-target="#dup" hx-include="#lead-form"></label>
     <label>${L(lang, "رقم تالت", "Third phone")}<input name="phone3" value="${v.phone3 || ""}" dir="ltr" inputmode="tel"></label>
     <label>${L(lang, "النوع", "Type")}<select name="kind">${Stages.KINDS.map((k) => html`<option value="${k}"${sel((v.kind || "buyer") === k)}>${Stages.kindLabel(k, lang)}</option>`)}</select></label>
-    <label>${L(lang, "المصدر", "Source")}<select name="source"><option value="">—</option>${Stages.SOURCES.map(([en, ar]) => html`<option value="${en}"${sel(v.source === en)}>${lang === "en" ? en : ar}</option>`)}<option value="other"${sel(v.source && !known)}>${L(lang, "أخرى", "Other")}</option></select></label>
+    <label>${L(lang, "المصدر", "Source")}<select name="source"><option value="">—</option>${Stages.SOURCES.map(([en, ar]) => html`<option value="${en}"${sel(v.source === en)}>${lang === "en" ? en : ar}</option>`)}${extraSources.map((x) => html`<option value="${x}"${sel(v.source === x)}>${x}</option>`)}<option value="other"${sel(v.source && !known)}>${L(lang, "أخرى", "Other")}</option></select></label>
     <label>${L(lang, "مصدر تاني (اكتبه)", "Other source (type it)")}<input name="source_other" value="${v.source && !known ? v.source : v.source_other || ""}" maxlength="60"></label>
     ${brokers
       ? html`<label>${L(lang, "يتسلم لـ", "Assign to")}<select name="assign_to"><option value="">${L(lang, "مش متسلم لحد", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${sel(v.assign_to === b.id)}>${b.name}</option>`)}</select></label>`

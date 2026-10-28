@@ -16,6 +16,7 @@ const Billing = require("../../services/billing");
 const BillingNotices = require("../../services/billingNotices");
 const Signup = require("../../services/signup");
 const Referrals = require("../../services/referrals");
+const Intake = require("../../services/leadIntake");
 const Plans = require("../../domain/plans");
 const Phone = require("../../domain/phone");
 const { html } = require("../html");
@@ -153,6 +154,42 @@ function readingSection(rows, lang) {
 </section>`;
 }
 
+/** L1/L2: each agency's lead intake URLs (Make.com lead ads, forms): make one, test it, stop it. */
+function intakeSection(rows, lang) {
+  const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "—");
+  return html`<section class="card" id="lead-intake">
+  <h2>📨 ${L(lang, "استقبال العملاء الأوتوماتيك (Make / فورم)", "Automatic lead intake (Make / forms)")}</h2>
+  <p class="muted">${L(lang, "لكل وكالة لينك سري. في Make: سيناريو Facebook Lead Ads ← HTTP POST على اللينك ده (JSON). العميل بياخد المصدر، وبيروح للوسيط اللي عليه الدور، والوسيط بيوصله تنبيه. اللينك بيظهر مرة واحدة بس.", "One secret URL per source. In Make: a Facebook Lead Ads scenario → HTTP POST (JSON) to this URL. Leads get the source and go to the next broker in turn, who is alerted. The URL is shown once only.")}
+</p>
+  <details><summary>${L(lang, "خطوات ربط وكالة (Make + إعلانات فيسبوك)", "Agency setup steps (Make + Facebook lead ads)")}</summary><ol>
+    <li>${L(lang, "الوكالة تضيف حسابك على فيسبوك لصفحتها بصلاحية العملاء (Leads)، ولو «Leads Access Manager» مقفول تسمح لـ Make.", "The agency adds your Facebook account to its Page with leads access; if Leads Access Manager is restricted, it also allows Make.")}</li>
+    <li>${L(lang, "اعمل لينك جديد هنا للوكالة وانسخه.", "Make a new URL here for the agency and copy it.")}</li>
+    <li>${L(lang, "في Make: انسخ سيناريو القالب (docs/make-lead-ads.md)، اختار صفحة الوكالة والفورم، وحط اللينك في موديول HTTP.", "In Make: clone the template scenario (docs/make-lead-ads.md), pick the agency's Page and form, and paste the URL into the HTTP module.")}</li>
+    <li>${L(lang, "دوس 🧪 تجربة هنا، وبعدها ابعت عميل تجربة من أداة Meta Lead Ads Testing Tool واتأكد إنه ظهر عند وسيط.", "Press 🧪 Test here, then send a test lead from Meta's Lead Ads Testing Tool and check it reaches a broker.")}</li>
+    <li>${L(lang, "شغّل السيناريو (Immediately). خطة Make المجانية فيها سيناريوهين شغالين بس.", "Turn the scenario on (Immediately). Make's free plan runs 2 active scenarios only.")}</li>
+  </ol></details>
+  <div class="scroll"><table>
+  <thead><tr><th>${L(lang, "الوكالة", "Agency")}</th><th>${L(lang, "الاسم", "Name")}</th><th>${L(lang, "المصدر", "Source")}</th><th>${L(lang, "آخر عميل", "Last lead")}</th><th>${L(lang, "30 يوم", "30 days")}</th><th></th></tr></thead>
+  <tbody>${rows.flatMap(({ agency, intakes }) =>
+    intakes.map(
+      (i) => html`<tr data-intake="${i.id}"${i.revoked_at ? html` class="muted"` : ""}><td>${agency.name}</td><td>${i.name} <span class="muted" dir="ltr">…${i.token_hint}</span></td><td>${i.source}</td><td dir="ltr">${day(i.last_lead_at)}</td>
+      <td>${i.created_30} ${L(lang, "جديد", "new")}${i.failed_30 ? html` · <span class="bad">${i.failed_30} ${L(lang, "فشل", "failed")}</span>` : ""}</td>
+      <td>${i.revoked_at
+        ? L(lang, "متوقف", "Stopped")
+        : html`<div class="row"><form method="post" action="/app/owner/intake/${i.id}/test"><button type="submit" class="secondary">🧪 ${L(lang, "تجربة", "Test")}</button></form>
+        <form method="post" action="/app/owner/intake/${i.id}/revoke" data-confirm="${L(lang, "اللينك هيبطل يشتغل. متأكد؟", "The URL will stop working. Sure?")}"><button type="submit" class="secondary">⛔ ${L(lang, "وقّف", "Stop")}</button></form></div>`}</td></tr>`
+    )
+  )}</tbody></table></div>
+  <form method="post" action="/app/owner/intake" class="row">
+    <label>${L(lang, "الوكالة", "Agency")} <select name="agency" required>${rows.map(({ agency }) => html`<option value="${agency.id}">${agency.name}</option>`)}</select></label>
+    <label>${L(lang, "الاسم", "Name")} <input name="name" required maxlength="60" value="Facebook ads (Make)"></label>
+    <label>${L(lang, "المصدر", "Source")} <input name="source" required maxlength="60" value="Facebook"></label>
+    <label>${L(lang, "تنبيه لو مفيش عملاء (أيام)", "Alert after quiet days")} <input name="quiet_days" type="number" min="1" max="60" value="3" size="3"></label>
+    <button type="submit">➕ ${L(lang, "لينك جديد", "New URL")}</button>
+  </form>
+</section>`;
+}
+
 /** C10/N1: the assistant's web answers, off per agency until switched on here, with a monthly count. */
 function assistantSection(rows, lang) {
   return html`<section class="card" id="assistant-web">
@@ -192,12 +229,13 @@ function referralsSection(r, lang) {
 </section>`;
 }
 
-function ownerPage(d, lang, { billing = null, notice = null, reading = [], assistant = [], referrals = null } = {}) {
+function ownerPage(d, lang, { billing = null, notice = null, reading = [], assistant = [], referrals = null, intakes = [] } = {}) {
   const usd = (n) => `$${Number(n).toFixed(n < 1 ? 4 : 2)}`;
   return html`<h1>🛠️ ${L(lang, "متابعة التطبيق", "App tracking")}</h1>
 ${notice || ""}
 ${billing ? billingSections(billing, lang) : ""}
 ${referrals ? referralsSection(referrals, lang) : ""}
+${intakeSection(intakes, lang)}
 ${readingSection(reading, lang)}
 ${assistantSection(assistant, lang)}
 <section class="card">
@@ -253,8 +291,8 @@ function register(web, { pool, page }) {
   const ownerView = async (req, res, notice = null, status = 200) => {
     const d = await Dash.ownerDashboard(pool, req.session.broker);
     if (!d) return notFound(req, res, page);
-    const [open, signups, payments, payTo, trials, reading, assistant, referrals] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Assistant.overview(pool), Referrals.overview(pool)]);
-    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials }, notice, reading, assistant, referrals }) }, status);
+    const [open, signups, payments, payTo, trials, reading, assistant, referrals, intakes] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Assistant.overview(pool), Referrals.overview(pool), Intake.overview(pool)]);
+    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials }, notice, reading, assistant, referrals, intakes }) }, status);
   };
   const ok = (text) => html`<p class="card notice ok" role="status">✅ ${text}</p>`;
   const bad = (text) => html`<p class="card notice bad" role="alert">❌ ${text}</p>`;
@@ -339,6 +377,29 @@ ${wa ? html`<p><a class="btn" href="${wa}" target="_blank" rel="noopener norefer
     const r = id ? await Assistant.setWeb(pool, id, { enabled: req.body.enabled === "on", webMonth: req.body.web_month }) : { error: "not_found" };
     if (r.error) return ownerView(req, res, bad(L(lang, "الردود رقم من 0 لـ 1000.", "Answers must be 0 to 1000.")), 400);
     return ownerView(req, res, ok(r.web ? L(lang, `${r.agency.name}: البحث على الإنترنت مفعّل، ${r.web_month} رد في الشهر.`, `${r.agency.name}: web answers on, ${r.web_month} a month.`) : L(lang, `${r.agency.name}: البحث على الإنترنت مقفول.`, `${r.agency.name}: web answers off.`)));
+  }));
+
+  web.post("/owner/intake", ownerOnly(async (req, res, lang) => {
+    const id = /^[0-9a-f-]{36}$/i.test(String(req.body.agency || "")) ? req.body.agency : null;
+    const r = id ? await Intake.create(pool, id, { name: req.body.name, source: req.body.source, quietDays: req.body.quiet_days }) : { error: "not_found" };
+    if (r.error) return ownerView(req, res, bad(L(lang, "اكتب الاسم والمصدر، والأيام من 1 لـ 60.", "Fill in the name and source; quiet days 1 to 60.")), 400);
+    return ownerView(req, res, html`<section class="card notice ok" role="status" data-intake-created="${r.intake.id}"><h2>✅ ${L(lang, `لينك ${r.agency.name} جاهز`, `${r.agency.name}'s URL is ready`)}</h2>
+<p>${L(lang, "انسخه دلوقتي: مش هيظهر تاني. حطه في Make (HTTP → Make a request، POST، Body JSON).", "Copy it now: it won't be shown again. Put it in Make (HTTP → Make a request, POST, JSON body).")}</p>
+<p class="row" dir="ltr"><input readonly value="${r.url}" id="intake-url" aria-label="URL"> <button type="button" class="secondary" data-copy="#intake-url">📋 ${L(lang, "نسخ", "Copy")}</button></p></section>`);
+  }));
+
+  web.post("/owner/intake/:id/test", ownerOnly(async (req, res, lang) => {
+    const id = uuidParam(req);
+    const r = id ? await Intake.testIntake(pool, id) : { json: { ok: false } };
+    return r.json.ok
+      ? ownerView(req, res, ok(L(lang, `التجربة نجحت: اللينك شغال (المصدر ${r.json.source}). مفيش عميل اتسجل.`, `Test passed: the URL works (source ${r.json.source}). No lead was saved.`)))
+      : ownerView(req, res, bad(L(lang, "التجربة فشلت: اللينك متوقف أو مش موجود.", "Test failed: the URL is stopped or missing.")), 400);
+  }));
+
+  web.post("/owner/intake/:id/revoke", ownerOnly(async (req, res, lang) => {
+    const id = uuidParam(req);
+    const r = id ? await Intake.revoke(pool, id) : { error: "not_found" };
+    return r.error ? ownerView(req, res, bad(L(lang, "اللينك متوقف بالفعل.", "That URL is already stopped.")), 400) : ownerView(req, res, ok(L(lang, `«${r.intake.name}» اتوقف.`, `"${r.intake.name}" stopped.`)));
   }));
 
   web.post("/owner/pay-to", ownerOnly(async (req, res, lang) => {
