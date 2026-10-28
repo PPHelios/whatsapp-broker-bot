@@ -19,6 +19,16 @@ h2 { font-size: 1.1rem; margin: 16px 0 8px; }
 .nav { display: flex; gap: 12px; flex-wrap: wrap; }
 .nav a[aria-current="page"] { border-block-end: 2px solid var(--accent); }
 .logout { margin-inline-start: auto; }
+/* F18: the bell, settings and menu links are at least 44px to tap; on phones the menu is one row that scrolls. */
+.top .bell, .top a[href="/app/settings"] { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; font-size: 1.3rem; }
+.top .logout button { min-height: 44px; }
+.nav a { display: inline-flex; align-items: center; min-height: 44px; }
+@media (max-width: 640px) {
+  .top { gap: 4px 8px; padding: 6px 12px; }
+  .nav { order: 9; flex: 1 0 100%; flex-wrap: nowrap; overflow-x: auto; gap: 4px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .nav a { flex: none; padding: 0 10px; white-space: nowrap; border-radius: 999px; background: rgba(255, 255, 255, 0.08); }
+  .nav a[aria-current="page"] { background: rgba(255, 255, 255, 0.2); border: 0; }
+}
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-block: var(--gap); }
 .muted { color: var(--muted); font-size: 0.9rem; }
 .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
