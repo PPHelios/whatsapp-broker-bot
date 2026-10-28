@@ -290,7 +290,7 @@
       "nextUnitCode": ["db", "agencyId", "propertyType"],
       "addPhotos": ["db", "listing", "urls"],
       "removePhotos": ["db", "listing", "imageIds"],
-      "reorderPhotos": ["db", "listing", "imageIds"],
+      "reorderPhotos": ["db", "listing", "imageIds", "params"],
       "applyListingPatch": ["db", "broker", "params"],
       "INSERT_COLUMNS": "Array",
       "PATCH_COLUMNS": "Array"
@@ -583,17 +583,19 @@
       "finishing": ["v"]
     },
     "domain/chatExport.js": {
+      "DEFAULT_DAYS": "Number",
+      "defaultSince": ["now"],
       "MAX_POSTS": "Number",
       "MAX_PHOTOS": "Number",
       "isChatExport": ["text"],
       "parseChatExport": ["text"],
       "splitPasted": ["text"],
       "looksLikeListing": ["text"],
-      "candidatePosts": ["text"],
+      "candidatePosts": ["text", "params"],
       "atMs": ["at"],
       "parseWithAttachments": ["text"],
       "assignPhotos": ["messages", "posts"],
-      "candidatePostsWithPhotos": ["text"]
+      "candidatePostsWithPhotos": ["text", "params"]
     },
     "lib/sheets.js": {
       "MAX_BYTES": "Number",
@@ -1207,6 +1209,12 @@
       "report": ["pool", "actor", "params"],
       "saveSpend": ["pool", "actor", "params"]
     },
+    "services/quotas.js": {
+      "forAgency": ["db", "agencyId", "params"]
+    },
+    "web/views/quotas.js": {
+      "quotaSection": ["items", "lang"]
+    },
     "services/priceInsights.js": {
       "MIN_UNITS": "Number",
       "byPlace": ["db", "agencyId", "params"],
@@ -1636,6 +1644,8 @@
       "webSources": ["grounding"]
     },
     "services/assistant.js": {
+      "webUsed": ["db", "agencyId", "now"],
+      "addInfo": ["pool", "manager", "params"],
       "ask": ["pool", "broker", "question", "params"],
       "datesLine": ["dates", "lang"],
       "unanswered": ["pool", "manager", "params"],

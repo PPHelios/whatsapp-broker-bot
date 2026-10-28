@@ -68,11 +68,14 @@ ${scripts ? html`<script src="${assets("htmx.min.js")}" defer></script>
 </head>
 <body>
 ${broker || nav || langSwitch ? topBar({ broker, nav, lang, unread }) : ""}
-<main id="main">${broker && nav ? screenTip(nav, lang) : ""}${body}</main>
+<main id="main">${broker && nav ? html`<a class="backlink" data-back href="${BACK[nav] || "/app/"}">${en ? "← Back" : "→ رجوع"}</a>${screenTip(nav, lang)}` : ""}${body}</main>
 ${broker ? footer(broker, lang) : ""}
 </body>
 </html>`;
 }
+
+// Where ← Back goes without history: a sub-page returns to its list, the rest to the home page.
+const BACK = { search: "/app/search", units: "/app/units", leads: "/app/leads", deals: "/app/deals", catalogue: "/app/catalogue" };
 
 /** Onboarding: the "?" tip of a main screen (3-4 steps, domain/onboarding.js). */
 function screenTip(nav, lang) {

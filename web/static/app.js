@@ -253,6 +253,23 @@
       })
       .catch(fail);
   });
+  // A search answered from ?q= becomes its ?f= link in the history, so Back from a unit returns to the same results
+  // without asking the AI again.
+  document.addEventListener("DOMContentLoaded", function () {
+    var el = document.querySelector("[data-search-url]");
+    if (el && window.history && history.replaceState) history.replaceState(null, "", el.getAttribute("data-search-url"));
+  });
+  // ← Back: the previous page when it is ours, else the link's own address.
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest && e.target.closest("a[data-back]");
+    if (!a) return;
+    var ours = false;
+    try { ours = document.referrer && new URL(document.referrer).origin === location.origin; } catch (err) { ours = false; }
+    if (ours && history.length > 1) {
+      e.preventDefault();
+      history.back();
+    }
+  });
   // <ol data-sortable>: reorder items by dragging or with their [data-move="up|down"] buttons; each item's hidden
   // input carries its id, so the form posts the new order (lead routing, project photo order).
   var dragged = null;
@@ -269,7 +286,10 @@
     var r = li.getBoundingClientRect();
     li.parentNode.insertBefore(dragged, e.clientY > r.top + r.height / 2 ? li.nextSibling : li);
   });
-  document.addEventListener("dragend", function () { dragged = null; });
+  document.addEventListener("dragend", function () {
+    if (dragged && dragged.parentNode) dragged.parentNode.dispatchEvent(new CustomEvent("sorted", { bubbles: true }));
+    dragged = null;
+  });
   document.addEventListener("click", function (e) {
     var b = e.target.closest && e.target.closest("[data-sortable] [data-move]");
     if (!b) return;
@@ -277,6 +297,59 @@
     var li = b.closest("li");
     if (b.getAttribute("data-move") === "up" && li.previousElementSibling) li.parentNode.insertBefore(li, li.previousElementSibling);
     if (b.getAttribute("data-move") === "down" && li.nextElementSibling) li.parentNode.insertBefore(li.nextElementSibling, li);
+    li.parentNode.dispatchEvent(new CustomEvent("sorted", { bubbles: true }));
+  });
+  // Add/edit a unit: chosen photos show as a list the broker can drag (or move with arrows) before saving; the file
+  // input is rebuilt in that order, so the unit's photos are stored in the order shown (the first is the cover).
+  document.addEventListener("change", function (e) {
+    var input = e.target;
+    if (input.matches && input.matches("select[name=market]")) {
+      var tab = document.getElementById(input.value === "primary" ? "pay-tab-primary" : "pay-tab-resale");
+      if (tab) tab.checked = true;
+    }
+    if (!input.matches || !input.matches("input[data-photo-sort]") || !window.DataTransfer) return;
+    var form = input.form;
+    var list = form && form.querySelector("[data-photo-preview]");
+    if (!list) return;
+    input._files = Array.prototype.slice.call(input.files);
+    var render = function () {
+      list.innerHTML = "";
+      input._files.forEach(function (f, i) {
+        var li = document.createElement("li");
+        li.draggable = true;
+        li.setAttribute("data-file", String(i));
+        var img = document.createElement("img");
+        img.alt = "";
+        img.src = URL.createObjectURL(f);
+        var name = document.createElement("span");
+        name.className = "grow";
+        name.textContent = (i + 1) + ". " + f.name;
+        var up = document.createElement("button");
+        up.type = "button"; up.className = "secondary"; up.setAttribute("data-move", "up"); up.textContent = "\u2191";
+        var down = document.createElement("button");
+        down.type = "button"; down.className = "secondary"; down.setAttribute("data-move", "down"); down.textContent = "\u2193";
+        li.appendChild(img); li.appendChild(name); li.appendChild(up); li.appendChild(down);
+        list.appendChild(li);
+      });
+      list.hidden = !input._files.length;
+      var hint = form.querySelector("[data-photo-preview-hint]");
+      if (hint) hint.hidden = input._files.length < 2;
+    };
+    list.onsorted = null;
+    if (!list._wired) {
+      list._wired = true;
+      list.addEventListener("sorted", function () {
+        var order = Array.prototype.map.call(list.children, function (li) { return Number(li.getAttribute("data-file")); });
+        input._files = order.map(function (i) { return input._files[i]; });
+        var dt = new DataTransfer();
+        input._files.forEach(function (f) { dt.items.add(f); });
+        input.files = dt.files;
+        var manual = form.querySelector("[data-photo-manual]");
+        if (manual) manual.checked = true;
+        render();
+      });
+    }
+    render();
   });
   // Mini App sign-in (/app/tg): Telegram puts its signed initData in the URL fragment as tgWebAppData.
   (function () {

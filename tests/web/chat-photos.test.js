@@ -62,6 +62,19 @@ async function exportZip(photos, chat = CHAT_ANDROID) {
   return zip.generateAsync({ type: "nodebuffer" });
 }
 
+describe("start date", () => {
+  test("posts before the chosen date are dropped; the default is 30 days back", () => {
+    const text = [
+      "01/01/2026, 10:15 - Ahmed: شقة للبيع في ميفيدا 200 متر 3 غرف السعر 12 مليون",
+      "24/10/2026, 10:20 - Sara: فيلا في هايد بارك 300 متر 4 غرف السعر 25 مليون"
+    ].join("\n");
+    expect(Chat.candidatePostsWithPhotos(text).posts).toHaveLength(2);
+    expect(Chat.candidatePostsWithPhotos(text, { since: "2026-09-01" }).posts.map((p) => p.sender)).toEqual(["Sara"]);
+    expect(Chat.candidatePosts(text, { since: "2026-09-01" }).posts.map((p) => p.sender)).toEqual(["Sara"]);
+    expect(Chat.defaultSince(new Date("2026-10-28T00:00:00Z"))).toBe("2026-09-28");
+  });
+});
+
 describe("matching photos to posts", () => {
   test("Android and iOS exports: each photo goes to the same sender's nearest post within minutes", () => {
     const android = Chat.candidatePostsWithPhotos(CHAT_ANDROID);

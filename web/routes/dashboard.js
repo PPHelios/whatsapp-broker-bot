@@ -11,6 +11,8 @@ const Targets = require("../../services/targets");
 const Reading = require("../../domain/priceReading");
 const Dash = require("../../services/dashboards");
 const Onboarding = require("../../services/onboarding");
+const Quotas = require("../../services/quotas");
+const { quotaSection } = require("../views/quotas");
 const Stages = require("../../domain/leadStages");
 const Commission = require("../../domain/commission");
 const Billing = require("../../services/billing");
@@ -62,9 +64,14 @@ function agencyPage(d, lang) {
   const tile = (label, value, attr) => html`<div class="card tile" data-kpi="${attr}"><div class="muted">${label}</div><strong>${value}</strong></div>`;
   return html`<h1>📈 ${L(lang, "لوحة الوكالة", "Agency dashboard")}</h1>
 <p class="row"><a class="btn secondary" href="/app/sources">📣 ${L(lang, "مصادر العملاء وتكلفة الإعلانات", "Lead sources and ad cost")}</a> <a class="btn secondary" href="/app/winloss">📉 ${L(lang, "المكسب والخسارة", "Win and loss")}</a></p>
-<nav class="row" aria-label="${L(lang, "الفترة", "Period")}">${Dash.PERIODS.map(
-    (p) => html`<a class="btn ${p === d.days ? "" : "secondary"}" href="/app/dashboard?days=${p}"${p === d.days ? html` aria-current="page"` : ""}>${L(lang, `${p} يوم`, `${p} days`)}</a>`
+<form method="get" action="/app/dashboard" class="row" data-dash-filters>
+  <nav class="row" aria-label="${L(lang, "الفترة", "Period")}">${Dash.PERIODS.map(
+    (p) => html`<a class="btn ${p === d.days ? "" : "secondary"}" href="/app/dashboard?days=${p}${d.brokerId ? html`&broker=${d.brokerId}` : ""}"${p === d.days ? html` aria-current="page"` : ""}>${L(lang, `${p} يوم`, `${p} days`)}</a>`
   )}</nav>
+  <input type="hidden" name="days" value="${d.days}">
+  <label>${L(lang, "البروكر", "Broker")} <select name="broker" onchange="this.form.submit()"><option value="">${L(lang, "الكل", "Everyone")}</option>${d.team.map((b) => html`<option value="${b.id}"${b.id === d.brokerId ? html` selected` : ""}>${b.name}</option>`)}</select></label>
+  <noscript><button type="submit">${L(lang, "تطبيق", "Apply")}</button></noscript>
+</form>
 <div class="grid">
   ${tile(L(lang, "عملاء جداد", "New leads"), d.leads, "leads")}
   ${tile(L(lang, "صفقات", "Deals"), d.deals.n, "deals")}
@@ -77,7 +84,7 @@ function agencyPage(d, lang) {
 </div>
 <section class="card">
   <h2>${L(lang, "المراحل دلوقتي", "Pipeline now")}</h2>
-  <table><tbody>${Stages.STAGES.map((s) => html`<tr data-stage="${s}"><td>${Stages.stageLabel(s, lang)}</td><td>${d.pipeline[s]}</td></tr>`)}</tbody></table>
+  <table><tbody>${Stages.STAGES.map((s) => html`<tr data-stage="${s}"><td>${Stages.stageLabel(s, lang)}</td><td><progress max="${Math.max(1, ...Object.values(d.pipeline))}" value="${d.pipeline[s]}"></progress></td><td>${d.pipeline[s]}</td></tr>`)}</tbody></table>
 </section>
 <section class="card">
   <h2>🏆 ${L(lang, `ترتيب البروكرز (آخر ${d.days} يوم)`, `Leaderboard (last ${d.days} days)`)}</h2>
@@ -318,10 +325,10 @@ ${assistantSection(assistant, lang)}
 function register(web, { pool, page }) {
   web.get("/dashboard", async (req, res) => {
     const lang = langOf(req);
-    const d = await Dash.agencyDashboard(pool, req.session.broker, { days: req.query.days });
+    const d = await Dash.agencyDashboard(pool, req.session.broker, { days: req.query.days, brokerId: String(req.query.broker || "") || null });
     if (!d) return res.status(403).type("text/plain").send(L(lang, "للمديرين بس", "Managers only"));
-    const [leases, targets] = await Promise.all([Leases.upcoming(pool, req.session.broker), Targets.progress(pool, req.session.broker.agency_id)]);
-    return page(req, res, { title: L(lang, "لوحة الوكالة", "Agency dashboard"), nav: "dashboard", body: html`${agencyPage(d, lang)}${targetsSection([...targets.values()], lang)}${leaseEnds(leases || [], lang)}` });
+    const [leases, targets, quotas] = await Promise.all([Leases.upcoming(pool, req.session.broker), Targets.progress(pool, req.session.broker.agency_id), Quotas.forAgency(pool, req.session.broker.agency_id)]);
+    return page(req, res, { title: L(lang, "لوحة الوكالة", "Agency dashboard"), nav: "dashboard", body: html`${agencyPage(d, lang)}${quotaSection(quotas, lang)}${targetsSection([...targets.values()], lang)}${leaseEnds(leases || [], lang)}` });
   });
 
   const ownerView = async (req, res, notice = null, status = 200) => {

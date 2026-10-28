@@ -132,10 +132,9 @@ ${rows.length
     <option value="available">${L(lang, "🟢 لسه متاحة (تأكيد)", "🟢 Still available (confirm)")}</option>
     <option value="sold">${L(lang, "✅ اتباعت", "✅ Sold")}</option>
     <option value="archive">${L(lang, "📁 أرشفة", "📁 Archive")}</option>
-    <option value="price_pct">${L(lang, "💰 تغيير السعر %", "💰 Change price %")}</option>
   </select>
-  <label>% <input class="narrow" name="pct" type="number" step="0.5" min="-50" max="100"></label>
   <button type="submit">${L(lang, "تطبيق", "Apply")}</button>
+  <span class="muted">${L(lang, "علّم الوحدات اللي عايزها الأول. لتغيير أسعار مشروع برايمري استخدم «زيادة الأسعار» في صفحة المشروع بالكتالوج.", "Tick the units first. To change a primary project's prices use \"Price increase\" on the project page in the Catalogue.")}</span>
 </form>
 <ol class="results">${rows.map((r) => resultItem(r, lang, { selectable: true }))}</ol>`
   : html`<p class="card">${L(lang, "مفيش وحدات هنا.", "No units here.")}</p>`}`
@@ -258,6 +257,7 @@ ${rows.length
   <h1>${listing.code} · ${status}${conf ? html` <span class="muted">${conf[0]}</span>` : ""}</h1>
   ${factList(listing, lang)}
   ${project ? projectLine(project, lang, { catalogue: Boolean(listing.details?.catalogue) }) : ""}
+  ${listing.details?.owner_lead && Authz.canEdit(broker, listing) ? html`<p class="muted" data-owner-lead>🔗 ${L(lang, "المالك عميل عندك", "The owner is your client")}: <a href="/app/leads/${encodeURIComponent(listing.details.owner_lead)}">${listing.details.owner_lead}</a></p>` : ""}
   ${linkable ? resaleLinkForm(listing, project, await Catalogue.listProjects(pool, broker), lang, req.session.csrf) : ""}
   ${market ? marketLine(market, listing, lang) : ""}
   ${historyLine(prices, lang)}

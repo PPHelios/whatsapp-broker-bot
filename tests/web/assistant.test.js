@@ -160,3 +160,21 @@ test("Telegram: «اسأل …» answers with the dates and a Send on WhatsApp b
   expect(textOf(web)).toContain("غير مؤكد");
   expect(textOf(web)).toContain("https://news.example/badya");
 });
+
+test("a manager adds the missing information to a project or unit; the assistant uses it and the question leaves the list", async () => {
+  const { admin, project } = await seed();
+  fakeModel();
+  const broker = await row("broker");
+  await Assistant.ask(h.pool, broker, "What is the club membership fee at Badya?");
+  const [q] = await Assistant.unanswered(h.pool, admin);
+  expect(q.question).toContain("club membership");
+  expect(await Assistant.addInfo(h.pool, broker, { questionId: q.id, project: project.id, text: "Club fee 300,000" })).toEqual({ error: "forbidden" });
+  expect(await Assistant.addInfo(h.pool, admin, { questionId: q.id, project: project.id, text: " " })).toEqual({ error: "empty" });
+  expect(await Assistant.addInfo(h.pool, admin, { questionId: q.id, project: project.id, text: "Club fee 300,000 EGP" })).toMatchObject({ ok: true, target: { kind: "project", name: "Badya" } });
+  expect(await Assistant.unanswered(h.pool, admin)).toEqual([]);
+  const ctx = await ProjectContext.contextFor(h.pool, admin.agency_id, project.id);
+  expect(ctx.summary).toContain("Agency notes: Club fee 300,000 EGP");
+  expect(await Assistant.addInfo(h.pool, admin, { unit: "BD-1", text: "Parking included" })).toMatchObject({ ok: true, target: { kind: "unit", name: "BD-1" } });
+  expect((await h.query("SELECT details FROM listings WHERE code = 'BD-1'"))[0].details.notes).toBe("Parking included");
+  expect(await Assistant.addInfo(h.pool, admin, { unit: "NOPE-1", text: "x" })).toEqual({ error: "not_found" });
+});

@@ -62,6 +62,20 @@ describe("agency dashboard (7.2)", () => {
     expect(page.text).not.toContain("Rival");
   });
 
+  test("the team filter narrows every number to one broker and ignores a broker of another agency", async () => {
+    await seedActivity();
+    const admin = await row("admin");
+    const all = await Dash.agencyDashboard(h.pool, admin, { days: 30 });
+    const one = await Dash.agencyDashboard(h.pool, admin, { days: 30, brokerId: h.BROKERS.broker.id });
+    expect(one.brokerId).toBe(h.BROKERS.broker.id);
+    expect(one.board.every((b) => b.id === h.BROKERS.broker.id)).toBe(true);
+    expect(one.leads).toBeLessThanOrEqual(all.leads);
+    expect((await Dash.agencyDashboard(h.pool, admin, { days: 30, brokerId: h.BROKERS.rival.id })).brokerId).toBeNull();
+    const page = await (await signIn(h, "admin")).agent.get(`/app/dashboard?lang=en&broker=${h.BROKERS.broker.id}`);
+    expect(page.text).toContain("data-dash-filters");
+    expect(page.text).toMatch(/<progress[^>]*data-?|<progress/);
+  });
+
   test("a broker can't open it; an unknown period falls back to 30 days", async () => {
     const b = await signIn(h, "broker");
     expect((await b.agent.get("/app/dashboard")).status).toBe(403);

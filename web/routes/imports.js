@@ -174,6 +174,7 @@ function register(web, { pool, page }) {
   <h2>💬 ${L(lang, "بوستات الجروبات", "Group posts")}</h2>
   <label>${L(lang, "الصق البوستات (سيب سطرين فاضيين بين كل بوست)", "Paste the posts (two empty lines between posts)")}<textarea name="text" rows="6"></textarea></label>
   <label>${L(lang, "أو ارفع تصدير الشات من واتساب (.txt أو .zip)", "Or upload a WhatsApp chat export (.txt or .zip)")}<input type="file" name="chat" accept=".txt,.zip,text/plain,application/zip"></label>
+  <label>${L(lang, "استورد البوستات من تاريخ", "Import posts from")}<input type="date" name="since" value="${Chat.defaultSince()}"></label>
   <p class="muted">${L(lang, `بنقرا لحد ${Chat.MAX_POSTS} بوست في المرة، وبنعلّم المكرر.`, `Up to ${Chat.MAX_POSTS} posts at a time; duplicates are flagged.`)}</p>
   <button type="submit">${L(lang, "اقرأ البوستات", "Read the posts")}</button>
 </form>
@@ -183,6 +184,7 @@ function register(web, { pool, page }) {
   <input type="hidden" name="filename" value="">
   <h2>📷 ${L(lang, "تصدير شات بالصور", "Chat export with photos")}</h2>
   <p class="muted">${L(lang, `من واتساب: الجروب ← المزيد ← تصدير الشات ← «إرفاق الوسائط». ارفع الـ zip هنا (لحد ${Math.round(Supabase.CHAT_ZIP_MAX_BYTES / 1048576)} ميجا): كل صورة بتروح للبوست بتاعها (نفس الراسل وفي خلال دقايق)، لحد ${Chat.MAX_PHOTOS} صورة للوحدة، وبنعلّم الصور اللي موجودة على وحدة عندك.`, `In WhatsApp: the group → More → Export chat → "Attach media". Upload the zip here (up to ${Math.round(Supabase.CHAT_ZIP_MAX_BYTES / 1048576)} MB): each photo goes to its post (same sender, within minutes), up to ${Chat.MAX_PHOTOS} a unit, and photos already on one of your units are flagged.`)}</p>
+  <label>${L(lang, "استورد البوستات من تاريخ", "Import posts from")}<input type="date" name="since" value="${Chat.defaultSince()}"></label>
   <input type="file" accept=".zip,application/zip" data-zip-file required>
   <progress max="100" value="0" hidden data-zip-progress></progress>
   <p class="muted" hidden data-zip-status data-msg-big="${L(lang, "الملف أكبر من المسموح.", "The file is larger than allowed.")}" data-msg-fail="${L(lang, "الرفع فشل. جرب تاني.", "The upload failed. Try again.")}" data-msg-wait="${L(lang, "جاري الرفع…", "Uploading…")}"></p>
@@ -234,7 +236,7 @@ function register(web, { pool, page }) {
     if (!gate.allowed) return importPage(req, res, html`<p class="card notice bad">⏳ ${L(lang, "رفعت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment.")}</p>`, 429);
     const file = (req.files?.chat || [])[0];
     const text = [String(req.body.text || ""), await chatText(file)].filter((t) => t.trim()).join("\n\n\n");
-    const found = Chat.candidatePosts(text);
+    const found = Chat.candidatePosts(text, { since: req.body.since });
     if (file && ChatPhotos.isZip(file.buffer)) {
       // A small zip sent with the form: read with its photos in the background, pasted posts first.
       const id = await Imports.startGroupImport(pool, broker, [], {
@@ -242,7 +244,7 @@ function register(web, { pool, page }) {
         ctx: { pool, broker, agency: req.session.agency, lang },
         lang,
         filename: String(file.originalname || "").slice(0, 120),
-        prepare: (importId) => ChatPhotos.postsFromExport(pool, broker, importId, { buffer: file.buffer }, { extraPosts: found.posts })
+        prepare: (importId) => ChatPhotos.postsFromExport(pool, broker, importId, { buffer: file.buffer }, { extraPosts: found.posts, since: req.body.since })
       });
       logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", metadata: { kind: "group_zip", bytes: file.buffer.length } });
       return res.redirect(303, `/app/import/${id}`);
@@ -293,7 +295,7 @@ function register(web, { pool, page }) {
           if (err.code === "TOO_LARGE") return { error: "too_large" };
           throw err;
         }
-        return ChatPhotos.postsFromExport(pool, broker, importId, { file: tmp });
+        return ChatPhotos.postsFromExport(pool, broker, importId, { file: tmp }, { since: req.body.since });
       },
       cleanup: async () => {
         await fs.promises.unlink(tmp).catch(() => {});

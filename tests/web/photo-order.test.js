@@ -77,3 +77,22 @@ test("managers switch AI photo ordering off on My usage; curation is skipped", a
   await agent.post("/app/usage/agency").type("form").send({ _csrf: csrf, monthly: "1000", ai_photo_order: "on" });
   expect((await h.query("SELECT crm_settings FROM agencies WHERE id = $1", [l.agency_id]))[0].crm_settings.ai_photo_order).toBe(true);
 });
+
+test("add form: ticking 'I ordered them myself' stores the photos as a manual order that AI curation skips", async () => {
+  const sharp = require("sharp");
+  const png = await sharp({ create: { width: 8, height: 8, channels: 3, background: "#888" } }).png().toBuffer();
+  const { agent, csrf } = await signIn(h, "admin");
+  const page = await agent.get("/app/units/new?lang=en");
+  expect(page.text).toContain("saves AI credits");
+  let r = agent.post("/app/units/new").field("_csrf", csrf).field("force", "1").field("photo_manual", "on");
+  for (const [k, v] of Object.entries(FIELDS)) r = r.field(k, v);
+  r = r.attach("photos", png, { filename: "a.png", contentType: "image/png" }).attach("photos", png, { filename: "b.png", contentType: "image/png" });
+  const res = await r;
+  expect(res.status).toBe(303);
+  const code = decodeURIComponent(res.headers.location.match(/units\/([^?]+)/)[1]);
+  const [unit] = await h.query("SELECT id, details FROM listings WHERE code = $1", [code]);
+  expect(unit.details.photo_order).toBe("manual");
+  const out = await ensureListingImagesCurated(unit.id, { pool: h.pool });
+  expect(out).toHaveLength(2);
+  expect(AI.calls.filter((x) => x.operation === "vision_curation")).toHaveLength(0);
+});

@@ -138,7 +138,7 @@ async function followUpBlock(pool, broker, now) {
 
 async function unitBlock(pool, broker, projectIds) {
   const { rows } = await pool.query(
-    `SELECT l.code, l.property_type, l.listing_type, l.price_value, l.area_value, l.bedrooms, l.compound, l.district, l.city, l.finishing, l.delivery_year, l.is_ready, p.name AS project
+    `SELECT l.code, l.property_type, l.listing_type, l.price_value, l.area_value, l.bedrooms, l.compound, l.district, l.city, l.finishing, l.delivery_year, l.is_ready, l.details->>'notes' AS note, p.name AS project
        FROM listings l LEFT JOIN projects p ON p.id = l.project_id
       WHERE l.agency_id = $1 AND l.status = 'active' AND (cardinality($2::uuid[]) = 0 OR l.project_id = ANY($2::uuid[]))
       ORDER BY l.updated_at DESC LIMIT $3`,
@@ -159,7 +159,8 @@ async function unitBlock(pool, broker, projectIds) {
             u.bedrooms !== null && u.bedrooms !== undefined ? `${u.bedrooms} bd` : null,
             [u.project || u.compound, u.district, u.city].filter(Boolean).join(", ") || null,
             u.finishing || null,
-            u.is_ready ? "ready" : u.delivery_year ? `delivery ${u.delivery_year}` : null
+            u.is_ready ? "ready" : u.delivery_year ? `delivery ${u.delivery_year}` : null,
+            u.note ? `note: ${String(u.note).slice(0, 200)}` : null
           ]
             .filter(Boolean)
             .join(" · ")
@@ -252,11 +253,45 @@ function datesLine(dates, lang) {
 async function unanswered(pool, manager, { limit = 30 } = {}) {
   if (!isManager(manager)) return null;
   const { rows } = await pool.query(
-    `SELECT q.question, q.created_at, q.web, b.name AS broker_name FROM assistant_questions q LEFT JOIN brokers b ON b.id = q.broker_id
-      WHERE q.agency_id = $1 AND NOT q.found ORDER BY q.created_at DESC LIMIT $2`,
+    `SELECT q.id, q.question, q.created_at, q.web, b.name AS broker_name FROM assistant_questions q LEFT JOIN brokers b ON b.id = q.broker_id
+      WHERE q.agency_id = $1 AND NOT q.found AND q.resolved_at IS NULL ORDER BY q.created_at DESC LIMIT $2`,
     [manager.agency_id, limit]
   );
   return rows;
 }
 
-module.exports = { ask, datesLine, unanswered, webSetting, setWeb, overview };
+/**
+ * A manager adds the information a question needed: to a project's notes (the assistant's project context is rebuilt)
+ * or to a unit's internal notes. → { ok, target } | { error: forbidden|empty|not_found }
+ */
+async function addInfo(pool, manager, { questionId = null, project = null, unit = null, text }) {
+  if (!isManager(manager)) return { error: "forbidden" };
+  const note = String(text || "").trim().slice(0, 500);
+  if (!note) return { error: "empty" };
+  let target = null;
+  if (String(unit || "").trim()) {
+    const Store = require("../lib/listingStore");
+    const listing = await Store.findByCode(pool, manager.agency_id, String(unit).trim());
+    if (!listing) return { error: "not_found" };
+    await pool.query(
+      `UPDATE listings SET details = jsonb_set(details, '{notes}', to_jsonb(left(concat_ws(E'\n', NULLIF(details->>'notes', ''), $3::text), 1000))), updated_at = now() WHERE id = $1 AND agency_id = $2`,
+      [listing.id, manager.agency_id, note]
+    );
+    target = { kind: "unit", name: listing.code };
+  } else if (/^[0-9a-f-]{36}$/i.test(String(project || ""))) {
+    const { rows } = await pool.query(
+      "UPDATE projects SET notes = left(concat_ws(E'\n', NULLIF(notes, ''), $3::text), 1500), updated_at = now() WHERE id = $1 AND agency_id = $2 RETURNING name",
+      [project, manager.agency_id, note]
+    );
+    if (!rows[0]) return { error: "not_found" };
+    target = { kind: "project", name: rows[0].name };
+  } else {
+    return { error: "not_found" };
+  }
+  if (/^\d{1,12}$/.test(String(questionId || ""))) {
+    await pool.query("UPDATE assistant_questions SET resolved_at = now() WHERE id = $1 AND agency_id = $2", [questionId, manager.agency_id]);
+  }
+  return { ok: true, target };
+}
+
+module.exports = { webUsed, addInfo, ask, datesLine, unanswered, webSetting, setWeb, overview };

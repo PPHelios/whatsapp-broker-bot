@@ -83,7 +83,8 @@ function register(web, { pool, page }) {
     let source = "form";
     const t0 = Date.now();
 
-    if (q) {
+    // A search link (?f=) is the result of an earlier search: Back and reloads use it without asking the AI again.
+    if (q && !req.query.f) {
       const gate = await RateLimit.hit(pool, `search:broker:${broker.id}`, RateLimit.LIMITS.searchBroker);
       if (!gate.allowed) return page(req, res, { title: L(lang, "بحث", "Search"), nav: "search", body: html`${searchBox(q, lang)}<p class="card notice bad">⏳ ${L(lang, "بحث كتير في دقيقة. استنى شوية.", "Too many searches in a minute. Wait a moment.")}</p>` }, 429);
       const parsed = await Search.parseRequest(AI, { text: q, ctx: searchCtx(req) });
@@ -107,10 +108,12 @@ function register(web, { pool, page }) {
     }
 
     let results = "";
+    let searchUrl = null;
     if (filters) {
       const token = SearchLink.encodeFilters(filters);
       const out = await runFilters(pool, broker.agency_id, filters, pageNo);
       results = resultsSection({ res: out, filters, token, page: pageNo, lang });
+      searchUrl = `/app/search?f=${token}${pageNo > 1 ? `&page=${pageNo}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}`;
       logOperation(pool, {
         agency_id: broker.agency_id,
         broker_id: broker.id,
@@ -125,7 +128,7 @@ function register(web, { pool, page }) {
     return page(req, res, {
       title: L(lang, "بحث", "Search"),
       nav: "search",
-      body: html`${searchBox(q, lang)}
+      body: html`${searchUrl ? html`<span data-search-url="${searchUrl}" hidden></span>` : ""}${searchBox(q, lang)}
 ${message ? html`<p class="card notice">${message}${message.startsWith("📝") ? html` <a href="/app/units/new">${L(lang, "إضافة وحدة", "Add a unit")}</a>` : ""}</p>` : ""}
 ${results}
 ${refineForm(filters || {}, lang, { open: !filters && !q })}`

@@ -20,6 +20,17 @@ const SECTIONS = [
     ]
   },
   {
+    id: "limits",
+    title: ["🚦 الحدود والرصيد", "🚦 Limits and credits"],
+    items: [
+      ["باقتك ليها رصيد شهري من رسايل الذكاء الاصطناعي (نص) والفويس، وعدد وحدات متاحة، وعدد مستخدمين. الوحدات المباعة والمؤرشفة مش بتتحسب.", "Your plan has a monthly allowance of AI messages (text) and voice notes, a number of available units and a number of users. Sold and archived units don't count."],
+      ["قراية قوايم الأسعار (PDF وصور) بالذكاء الاصطناعي ليها حد صفحات شهري ومقفولة لحد ما صاحب التطبيق يفتحها. الصفحة اللي اتقرت قبل كده ببلاش، وشيت الإكسيل بيتقرا ببلاش.", "AI reading of price lists (PDF and photos) has a monthly page limit and is off until the app owner switches it on. A page read before is free, and an Excel sheet is read free."],
+      ["ردود المساعد من الإنترنت اختيارية، ليها حد شهري، ومكتوب عليها غير مؤكد. الرد من بيانات وكالتك مش بيتحسب منها.", "Assistant web answers are optional, have a monthly limit and are labelled unverified. Answers from your agency's data don't use it."],
+      ["ترتيب الصور بإيدك (سحب وإفلات) بيوفر رصيد الذكاء الاصطناعي. المدير يقفل ترتيب الصور بالذكاء الاصطناعي لكل الوكالة من صفحة استخدامي.", "Ordering photos by hand (drag and drop) saves AI credits. A manager can switch AI photo ordering off for the whole agency on My usage."],
+      ["المدير يشوف كل الحدود وكام استهلكت من لوحة الوكالة، وصفحة الباقة فيها الأسعار والترقية. لو الحد خلص، كل حاجة بتفضل شغالة بإيدك وبياناتك مش بتتمسح.", "Managers see every limit and how much is used on the agency dashboard; the Plan page has prices and upgrades. When a limit is reached everything keeps working by hand and your data is never deleted."]
+    ]
+  },
+  {
     id: "units",
     title: ["🏠 الوحدات", "🏠 Units"],
     items: [

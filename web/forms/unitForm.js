@@ -19,8 +19,8 @@ const FORM_COLUMNS = [
   "delivery_raw", "down_payment_value", "remaining_amount", "installment_value", "payment_frequency", "installments_end",
   "installment_years", "maintenance_pct"
 ];
-const FORM_DETAILS = ["land_area", "garden_area", "roof_area", "project", "developer", "rent_period", "currency", "owner_name", "owner_phone", "commission", "co_broker", "notes", "clean_summary"];
-const INTERNAL_DETAILS = ["owner_name", "owner_phone", "commission", "co_broker", "notes"];
+const FORM_DETAILS = ["land_area", "garden_area", "roof_area", "project", "developer", "rent_period", "currency", "owner_name", "owner_phone", "owner_lead", "commission", "co_broker", "notes", "clean_summary"];
+const INTERNAL_DETAILS = ["owner_name", "owner_phone", "owner_lead", "commission", "co_broker", "notes"];
 
 const one = (v) => (Array.isArray(v) ? v[v.length - 1] : v);
 const many = (v) => (v === undefined || v === null || v === "" ? [] : Array.isArray(v) ? v : [v]);
@@ -114,6 +114,7 @@ function unitFromForm(body = {}) {
       currency: oneOf(body.currency, ["USD", "EUR"]),
       owner_name: str(body.owner_name, 120),
       owner_phone: str(body.owner_phone, 40),
+      owner_lead: str(body.owner_lead, 20),
       commission: str(body.commission, 120),
       co_broker: str(body.co_broker, 120),
       notes: str(body.notes, 1000),

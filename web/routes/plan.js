@@ -10,6 +10,8 @@ const BillingNotices = require("../../services/billingNotices");
 const Plans = require("../../domain/plans");
 const { MANAGER_ROLES } = require("../../lib/authz");
 const { html } = require("../html");
+const Quotas = require("../../services/quotas");
+const { quotaSection } = require("../views/quotas");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
@@ -70,7 +72,7 @@ function referralSection(r, lang) {
 </section>`;
 }
 
-function planPage({ a, limits = {}, payments, payTo, lang, manager, referral = null, notice = null, created = null }) {
+function planPage({ a, quotas = null, limits = {}, payments, payTo, lang, manager, referral = null, notice = null, created = null }) {
   const p = a.plan;
   return html`<h1>💳 ${L(lang, "الباقة", "Plan")}</h1>
 ${notice || ""}
@@ -84,6 +86,7 @@ ${created ? paymentCard(created, payTo, lang) : ""}
     ${meter([L(lang, "المستخدمين", "Users"), "seats"], a.seats.used, a.seats.limit)}
     ${meter([L(lang, "وحدات متاحة", "Available units"), "units"], a.units.used, a.units.limit)}
   </div>
+  ${quotas ? quotaSection(quotas.filter((q) => ["pages", "web"].includes(q.key)), lang) : ""}
   <p class="muted">${L(lang, "لو الرصيد خلص، البحث والعملاء والوحدات بيفضلوا شغالين يدوي؛ اللي بيقف هو قراءة الفويس والوصف بالذكاء الاصطناعي لحد أول الشهر. بياناتك مش بتتمسح أبداً.", "When an allowance runs out, search, clients and units keep working by hand; only AI reading of voice notes and descriptions stops until the month turns. Your data is never deleted.")}</p>
 </section>
 ${manager
@@ -114,10 +117,10 @@ function register(web, { pool, page }) {
   const render = async (req, res, extra = {}, status = 200) => {
     const lang = langOf(req);
     const broker = req.session.broker;
-    const [a, payTo, limits] = await Promise.all([Billing.allowance(pool, broker.agency_id), Billing.payTo(pool), Billing.planLimits(pool)]);
+    const [a, payTo, limits, quotas] = await Promise.all([Billing.allowance(pool, broker.agency_id), Billing.payTo(pool), Billing.planLimits(pool), Quotas.forAgency(pool, broker.agency_id)]);
     const payments = isManager(broker) ? await Billing.paymentsOf(pool, broker.agency_id) : [];
     const referral = isManager(broker) ? await Referrals.summary(pool, broker.agency_id) : null;
-    return page(req, res, { title: L(lang, "الباقة", "Plan"), nav: "settings", body: planPage({ a, limits, payments, payTo, lang, manager: isManager(broker), referral, ...extra }) }, status);
+    return page(req, res, { title: L(lang, "الباقة", "Plan"), nav: "settings", body: planPage({ a, quotas, limits, payments, payTo, lang, manager: isManager(broker), referral, ...extra }) }, status);
   };
 
   web.get("/plan", (req, res) => render(req, res));
