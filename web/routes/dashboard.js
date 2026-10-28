@@ -25,6 +25,7 @@ const Phone = require("../../domain/phone");
 const { html } = require("../html");
 const { icon } = require("../icons");
 const Privacy = require("../../services/unitPrivacy");
+const OwnerAgencies = require("../../services/ownerAgencies");
 const { isManager } = require("../../lib/authz");
 const { logOperation } = require("../../lib/db");
 
@@ -317,18 +318,83 @@ function limitsSection(limits, lang) {
 </form>`;
 }
 
-function ownerPage(d, lang, { billing = null, notice = null, reading = [], assistant = [], referrals = null, intakes = [], stuck = [], limits = null } = {}) {
-  const usd = (n) => `$${Number(n).toFixed(n < 1 ? 4 : 2)}`;
-  return html`<h1>🛠️ ${L(lang, "متابعة التطبيق", "App tracking")}</h1>
+/** Owner: every agency at a glance (plan in force, size, last seen), each linking to its own page. */
+function agenciesSection(agencies, lang) {
+  const src = { pilot: L(lang, "تجريبي مجاني", "Pilot"), paid: L(lang, "مدفوع", "Paid"), trial: L(lang, "تجربة", "Trial"), free: L(lang, "مجاني", "Free") };
+  const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "—");
+  return html`<section class="card list" id="agencies"><h2>${L(lang, `الوكالات (${agencies.length})`, `Agencies (${agencies.length})`)}</h2>
+  <ul class="rows">${agencies.map(
+    (a) => html`<li data-agency-row="${a.id}"><a class="listrow" href="/app/owner/agencies/${a.id}"><span><strong>${a.name}</strong><br><span class="muted small">${Plans.planName(a.effective.plan, lang)} · ${src[a.effective.source]}${a.effective.until ? ` ${L(lang, "لحد", "until")} ${day(a.effective.until)}` : ""} · ${L(lang, `${a.brokers} بروكر · ${a.units} وحدة · ${a.leads30} عميل/30 يوم`, `${a.brokers} brokers · ${a.units} units · ${a.leads30} leads/30d`)}</span></span>${a.suspended_at ? html`<b class="chip late">${L(lang, "موقوفة", "Suspended")}</b>` : a.approval === "pending" ? html`<b class="chip new">${L(lang, "مستنية", "Pending")}</b>` : html`<b class="muted small">${day(a.last_seen)}</b>`}</a></li>`
+  )}</ul></section>`;
+}
+
+/** Owner: one agency's page with its controls. */
+function agencyControlPage(a, lang, csrf, notice) {
+  const hidden = html`<input type="hidden" name="_csrf" value="${csrf}">`;
+  const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "");
+  return html`<h1>${a.name}</h1>
 ${notice || ""}
-${billing ? billingSections(billing, lang) : ""}
-${referrals ? referralsSection(referrals, lang) : ""}
-${limits ? limitsSection(limits, lang) : ""}
-${stuckSection(stuck, lang)}
-${intakeSection(intakes, lang)}
-${readingSection(reading, lang)}
-${assistantSection(assistant, lang)}
-<section class="card">
+<div class="kpis">
+  <div class="kpi"><span class="muted small">${L(lang, "الباقة الحالية", "Plan in force")}</span><strong>${Plans.planName(a.effective.plan, lang)}</strong></div>
+  <div class="kpi"><span class="muted small">${L(lang, "لحد", "Until")}</span><strong dir="ltr">${a.effective.until ? day(a.effective.until) : "—"}</strong></div>
+  <div class="kpi"><span class="muted small">${L(lang, "بروكرز نشطين", "Active brokers")}</span><strong>${a.brokers}</strong></div>
+  <div class="kpi"><span class="muted small">${L(lang, "وحدات متاحة", "Active units")}</span><strong>${a.units}</strong></div>
+</div>
+<section class="card stack" id="plan"><h2>${L(lang, "تغيير الباقة", "Change the plan")}</h2>
+  <form method="post" action="/app/owner/agencies/${a.id}/plan" class="stack">${hidden}
+    <div class="pills">${Plans.PLANS.map((p) => html`<label class="pill"><input type="radio" name="plan" value="${p.id}"${p.id === a.plan ? html` checked` : ""}><span>${Plans.planName(p, lang)}</span></label>`)}</div>
+    <div class="grid two">
+      <label>${L(lang, "مدفوعة لحد", "Paid until")}<input type="date" name="until" value="${day(a.paid_until)}"></label>
+      <label>${L(lang, "أو عدد شهور من النهارده", "Or months from today")}<input type="number" name="months" min="0" max="36" inputmode="numeric"></label>
+    </div>
+    <label class="check"><input type="checkbox" name="pilot" value="1"${a.pilot ? html` checked` : ""}> ${L(lang, "تجريبي مجاني (Pilot)", "Free pilot")}</label>
+    <button type="submit">${L(lang, "حفظ الباقة", "Save the plan")}</button>
+  </form>
+  <p class="muted small">${L(lang, "الأسعار في ملف الباقات؛ هنا بتغير باقة الوكالة ومدتها بس.", "Prices live in the plans file; this only changes this agency's plan and dates.")}</p>
+</section>
+<section class="card list" id="team"><h2>${L(lang, "الفريق", "Team")}</h2><ul class="rows">${a.team.map((b) => html`<li class="listrow">${b.name} <span class="muted small">${b.role}</span><b class="${b.is_active ? "muted small" : "chip late"}">${b.is_active ? L(lang, "نشط", "Active") : L(lang, "مقفول", "Off")}</b></li>`)}</ul></section>
+${a.payments.length ? html`<section class="card list"><h2>${L(lang, "المدفوعات", "Payments")}</h2><ul class="rows">${a.payments.map((p) => html`<li class="listrow"><span dir="ltr">${p.reference}</span> ${money(p.amount_egp, lang)}<b class="muted small">${p.status}</b></li>`)}</ul></section>` : ""}
+<section class="card stack" id="suspend"><h2>${a.suspended_at ? L(lang, "الوكالة موقوفة", "Suspended") : L(lang, "إيقاف الوكالة", "Suspend the agency")}</h2>
+  <p class="muted">${a.suspended_at ? L(lang, `اتوقفت ${day(a.suspended_at)}. الرجوع بيرجّع نفس البروكرز اللي كانوا شغالين.`, `Suspended ${day(a.suspended_at)}. Resuming brings back the same brokers.`) : L(lang, "كل البروكرز بيقفوا عن الشغل (البيانات بتفضل كما هي) لحد ما ترجعها.", "Every broker stops working (all data stays) until you resume it.")}</p>
+  <form method="post" action="/app/owner/agencies/${a.id}/${a.suspended_at ? "resume" : "suspend"}" data-confirm="${a.suspended_at ? L(lang, "ترجع الوكالة؟", "Resume this agency?") : L(lang, `توقف ${a.name}؟`, `Suspend ${a.name}?`)}">${hidden}<button type="submit" class="${a.suspended_at ? "" : "danger"}">${a.suspended_at ? L(lang, "رجّع الوكالة", "Resume") : L(lang, "أوقف الوكالة", "Suspend")}</button></form>
+</section>
+<p><a href="/app/owner/agencies/${a.id}/ai-log">${L(lang, "سجل الذكاء الاصطناعي", "AI log")}</a></p>`;
+}
+
+/** Owner: an announcement to every manager, and the owner's own action log. */
+function announceSection(log, lang, csrf) {
+  const label = { owner_plan: L(lang, "تغيير باقة", "Plan change"), owner_suspend: L(lang, "إيقاف", "Suspend"), owner_resume: L(lang, "رجوع", "Resume"), owner_announcement: L(lang, "إعلان", "Announcement") };
+  return html`<section class="card stack" id="announce"><h2>${L(lang, "إعلان لكل المديرين", "Announcement to every manager")}</h2>
+  <form method="post" action="/app/owner/announce" class="stack" data-confirm="${L(lang, "تبعت الإعلان لكل المديرين؟", "Send this to every manager?")}"><input type="hidden" name="_csrf" value="${csrf}">
+    <label>${L(lang, "العنوان", "Title")}<input name="title" required maxlength="120"></label>
+    <label>${L(lang, "التفاصيل (اختياري)", "Details (optional)")}<textarea name="body" rows="3" maxlength="600"></textarea></label>
+    <button type="submit">${L(lang, "ابعت", "Send")}</button>
+  </form></section>
+<section class="card list" id="owner-log"><h2>${L(lang, "سجل تصرفاتك", "Your actions log")}</h2>
+  ${log.length ? html`<ul class="rows">${log.map((r) => html`<li class="listrow"><span>${label[r.operation_type] || r.operation_type}${r.agency ? ` · ${r.agency}` : ""}${r.metadata?.plan ? ` · ${r.metadata.plan}` : ""}${r.metadata?.title ? ` · ${r.metadata.title}` : ""}</span><b class="muted small" dir="ltr">${new Date(r.created_at).toISOString().slice(0, 16).replace("T", " ")}</b></li>`)}</ul>` : html`<p class="muted">${L(lang, "مفيش لسه.", "Nothing yet.")}</p>`}
+</section>`;
+}
+
+const ownerTabs = (lang, panels) => html`<div class="tabs otabs">
+  ${panels.map((_, i) => html`<input type="radio" name="owner_tab" id="ot-${i + 1}" class="tab-radio t${i + 1}"${i === 0 ? html` checked` : ""}>`)}
+  <div class="tab-bar" role="tablist">${panels.map(([label], i) => html`<label for="ot-${i + 1}" role="tab" class="l${i + 1}">${label}</label>`)}</div>
+  ${panels.map(([, body], i) => html`<div class="tab-panel p${i + 1}" data-tab="ot-${i + 1}">${body}</div>`)}
+</div>`;
+
+function ownerPage(d, lang, { billing = null, notice = null, reading = [], assistant = [], referrals = null, intakes = [], stuck = [], limits = null, agencies = [], log = [], csrf = "" } = {}) {
+  const usd = (n) => `$${Number(n).toFixed(n < 1 ? 4 : 2)}`;
+  return html`<h1>${L(lang, "متابعة التطبيق", "App tracking")}</h1>
+${notice || ""}
+${ownerTabs(lang, [
+  [L(lang, "الوكالات", "Agencies"), html`${agenciesSection(agencies, lang)}${stuckSection(stuck, lang)}${announceSection(log, lang, csrf)}`],
+  [L(lang, "الفلوس", "Money"), html`${billing ? billingSections(billing, lang) : ""}${referrals ? referralsSection(referrals, lang) : ""}${limits ? limitsSection(limits, lang) : ""}`],
+  [L(lang, "الأدوات", "Tools"), html`${intakeSection(intakes, lang)}${readingSection(reading, lang)}${assistantSection(assistant, lang)}`],
+  [L(lang, "الصحة", "Health"), healthSections(d, lang, usd)]
+])}`;
+}
+
+function healthSections(d, lang, usd) {
+  return html`<section class="card">
   <h2>${L(lang, "كل أسبوع", "Weekly")}</h2>
   <div class="scroll"><table>
   <thead><tr><th>${L(lang, "الأسبوع", "Week")}</th><th>${L(lang, "وكالات نشطة", "Active agencies")}</th><th>${L(lang, "وسطاء نشطين", "Active brokers")}</th><th>${L(lang, "وحدات", "Units")}</th><th>${L(lang, "عملاء", "Leads")}</th><th>${L(lang, "صفقات", "Deals")}</th><th>${L(lang, "أخطاء", "Errors")}</th><th>${L(lang, "بلاغات", "Bug reports")}</th></tr></thead>
@@ -403,7 +469,8 @@ function register(web, { pool, page }) {
     const d = await Dash.ownerDashboard(pool, req.session.broker);
     if (!d) return notFound(req, res, page);
     const [open, signups, payments, payTo, trials, reading, assistant, referrals, intakes, stuck, limits] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Assistant.overview(pool), Referrals.overview(pool), Intake.overview(pool), Onboarding.stuckList(pool), Billing.planLimits(pool)]);
-    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials }, notice, reading, assistant, referrals, intakes, stuck, limits }) }, status);
+    const [agencies, log] = await Promise.all([OwnerAgencies.list(pool), OwnerAgencies.auditLog(pool)]);
+    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials }, notice, reading, assistant, referrals, intakes, stuck, limits, agencies, log, csrf: req.session.csrf }) }, status);
   };
   const ok = (text) => html`<p class="card notice ok" role="status">✅ ${text}</p>`;
   const bad = (text) => html`<p class="card notice bad" role="alert">❌ ${text}</p>`;
@@ -415,6 +482,37 @@ function register(web, { pool, page }) {
   const uuidParam = (req) => (/^[0-9a-f-]{36}$/i.test(req.params.id) ? req.params.id : null);
 
   web.get("/owner", (req, res) => ownerView(req, res));
+
+  // One agency's page and its controls (plan, suspend), and an announcement to every manager.
+  const agencyView = async (req, res, lang, notice = null, status = 200) => {
+    const a = uuidParam(req) ? await OwnerAgencies.get(pool, req.params.id) : null;
+    if (!a) return notFound(req, res, page);
+    return page(req, res, { title: a.name, nav: "owner", body: agencyControlPage(a, lang, req.session.csrf, notice) }, status);
+  };
+  web.get("/owner/agencies/:id", ownerOnly((req, res, lang) => agencyView(req, res, lang)));
+  web.post("/owner/agencies/:id/plan", ownerOnly(async (req, res, lang) => {
+    if (!uuidParam(req)) return notFound(req, res, page);
+    const r = await OwnerAgencies.setPlan(pool, req.session.broker, req.params.id, { plan: req.body.plan, until: req.body.until || null, months: req.body.until ? null : req.body.months ?? null, pilot: req.body.pilot === "1" });
+    if (r.error === "not_found") return notFound(req, res, page);
+    if (r.error) return agencyView(req, res, lang, bad(L(lang, "راجع الباقة والتاريخ.", "Check the plan and the date.")), 422);
+    return agencyView(req, res, lang, ok(L(lang, "الباقة اتحفظت.", "Plan saved.")));
+  }));
+  web.post("/owner/agencies/:id/suspend", ownerOnly(async (req, res, lang) => {
+    if (!uuidParam(req)) return notFound(req, res, page);
+    const r = await OwnerAgencies.suspend(pool, req.session.broker, req.params.id);
+    if (r.error === "not_found") return notFound(req, res, page);
+    return agencyView(req, res, lang, r.ok ? ok(L(lang, `اتوقفت (${r.brokers} بروكر).`, `Suspended (${r.brokers} brokers).`)) : bad(L(lang, "موقوفة بالفعل.", "Already suspended.")));
+  }));
+  web.post("/owner/agencies/:id/resume", ownerOnly(async (req, res, lang) => {
+    if (!uuidParam(req)) return notFound(req, res, page);
+    const r = await OwnerAgencies.resume(pool, req.session.broker, req.params.id);
+    if (r.error === "not_found") return notFound(req, res, page);
+    return agencyView(req, res, lang, r.ok ? ok(L(lang, `رجعت (${r.brokers} بروكر).`, `Resumed (${r.brokers} brokers).`)) : bad(L(lang, "مش موقوفة.", "Not suspended.")));
+  }));
+  web.post("/owner/announce", ownerOnly(async (req, res, lang) => {
+    const r = await OwnerAgencies.announce(pool, req.session.broker, { title: req.body.title, body: req.body.body });
+    return ownerView(req, res, r.ok ? ok(L(lang, `الإعلان اتبعت لـ ${r.sent} مدير.`, `Sent to ${r.sent} managers.`)) : bad(L(lang, "اكتب عنوان.", "Type a title.")), r.ok ? 200 : 422);
+  }));
 
   web.post("/owner/signup", ownerOnly(async (req, res, lang) => {
     await Signup.setOpen(pool, req.body.open === "1");
