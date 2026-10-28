@@ -25,6 +25,10 @@ module.exports = {
     objects.set(pathOf(storagePath), buffer);
     return BASE + pathOf(storagePath);
   },
+  uploadProjectFile: async (agencyId, storagePath, buffer) => {
+    objects.set(pathOf(storagePath), buffer);
+    return BASE + pathOf(storagePath);
+  },
   downloadListingImage: async (url) => {
     if (typeof url !== "string" || !url.startsWith(BASE)) return null;
     const buffer = objects.get(pathOf(url));

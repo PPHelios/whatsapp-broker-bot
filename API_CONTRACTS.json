@@ -164,6 +164,7 @@
       "uploadListingImage": ["agencyId", "storagePath", "buffer"],
       "uploadFlyerImage": ["agencyId", "storagePath", "buffer"],
       "uploadAgencyLogo": ["agencyId", "storagePath", "buffer"],
+      "uploadProjectFile": ["agencyId", "storagePath", "buffer", "contentType"],
       "deleteStorageFiles": ["paths"],
       "CHAT_ZIP_MAX_BYTES": "Number",
       "createChatUploadUrl": ["storagePath"],
@@ -591,7 +592,8 @@
       "readTable": ["buffer", "opts"],
       "parseCsv": ["text", "limitRows"],
       "decodeText": ["buffer"],
-      "mapTable": ["rows", "params"]
+      "mapTable": ["rows", "params"],
+      "xlsxRows": ["buffer"]
     },
     "services/imports.js": {
       "describeChanges": ["listing", "patch", "lang"],
@@ -1281,6 +1283,7 @@
     "services/catalogue.js": {
       "STATUSES": "Array",
       "KINDS": "Array",
+      "MAX_FILE_MB": "Number",
       "FREQUENCIES": "Array",
       "MAINTENANCE_DUE": "Array",
       "num": ["v"],
@@ -1303,6 +1306,7 @@
       "unlinkUnit": ["db", "actor", "projectId", "listingId"],
       "linkResale": ["db", "actor", "listing", "projectId"],
       "saveMaterial": ["db", "actor", "projectId", "input"],
+      "uploadMaterial": ["db", "actor", "projectId", "file", "input"],
       "setMaterialVisibility": ["db", "actor", "projectId", "materialId", "visible"],
       "deleteMaterial": ["db", "actor", "projectId", "materialId"],
       "clientMaterials": ["db", "listing"],
@@ -1508,6 +1512,20 @@
       "mergeFacts": ["pages"],
       "highlightsFor": ["h", "lang"]
     },
+    "domain/planReading.js": {
+      "MAX_PAGES": "Number",
+      "MAX_PLANS": "Number",
+      "VERSION": "String",
+      "PROMPT": "String",
+      "plansFromAnswer": ["text"],
+      "mergePlans": ["pages"],
+      "formInput": ["p"]
+    },
+    "services/planReading.js": {
+      "read": ["pool", "actor", "projectId", "params", "params"],
+      "apply": ["pool", "actor", "projectId", "body"],
+      "discard": ["pool", "actor", "projectId"]
+    },
     "services/brochure.js": {
       "read": ["pool", "actor", "projectId", "params", "params"],
       "saveHighlights": ["pool", "actor", "projectId", "input", "params"]
@@ -1670,7 +1688,13 @@
     "domain/commandWords.js": {
       "arabicKey": ["s"],
       "canonicalCommand": ["text"],
-      "WORDS": "Array"
+      "WORDS": "Array",
+      "COMMANDS": "Array",
+      "GROUPS": "Object",
+      "usage": ["c", "lang"],
+      "grouped": [],
+      "helpText": ["lang"],
+      "markdown": []
     },
     "services/leadIntake.js": {
       "PER_HOUR": "Object",

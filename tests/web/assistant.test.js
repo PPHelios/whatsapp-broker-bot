@@ -85,7 +85,7 @@ test("grounded answers with dates; not in our data; web only when switched on, l
   const broker = await row("broker");
   const found = await Assistant.ask(h.pool, broker, "When is Badya delivery?");
   expect(found).toMatchObject({ found: true, lang: "en", web: null });
-  expect(found.dates).toEqual([{ project: "Badya", prices: "2026-10-01", brochure: null }]);
+  expect(found.dates).toEqual([{ project: "Badya", prices: "2026-10-01", brochure: null, plans: null }]);
   expect(Assistant.datesLine(found.dates, "en")).toBe("📅 Data: Badya: prices 2026-10-01");
 
   // Not in our data, web off: no web call at all.

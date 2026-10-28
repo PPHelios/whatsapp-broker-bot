@@ -225,8 +225,8 @@ async function handleDeliverableCommand(broker, raw, ctx, { resolveTargetCode, s
       await reply(
         broker,
         lang === "en"
-          ? "⚠️ Please specify the unit code (e.g. `flyer NOLL-101` or `كتالوج NOLL-101`)."
-          : "⚠️ يرجى كتابة كود الوحدة (مثال: `كتالوج NOLL-101` أو `بروشور NOLL-101`)."
+          ? "⚠️ Please specify the unit code (e.g. `flyer NOLL-101` or `فلاير NOLL-101`)."
+          : "⚠️ يرجى كتابة كود الوحدة (مثال: `فلاير NOLL-101` أو `flyer NOLL-101`)."
       );
       return true;
     }

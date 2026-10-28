@@ -12,7 +12,75 @@ const { termsSection } = require("./commissions");
 const { pricesSection, pricesNotice } = require("./priceSheets");
 const PriceReading = require("../../services/priceReading");
 const { highlightsSection } = require("./brochure");
+const PlanReading = require("../../services/planReading");
+const PR = require("../../domain/planReading");
+const RateLimit = require("../../lib/rateLimit");
 const { html } = require("../html");
+const { uploads } = require("../uploads");
+const Session = require("../session");
+
+// F20: brochures, layouts and plan files kept in storage (PDF or photo).
+const FILE = { name: "file", maxCount: 1, accept: /^(application\/pdf|image\/(jpeg|png|webp))$/ };
+const uploadFile = uploads([FILE], { maxMb: Catalogue.MAX_FILE_MB });
+const PLANS_DOC = { name: "doc", maxCount: PR.MAX_PAGES, accept: /^(application\/pdf|image\/(jpeg|png|webp|heic|heif)|text\/(csv|plain|comma-separated-values)|application\/(vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet|vnd\.ms-excel|csv|octet-stream|zip))$/ };
+const uploadPlansDoc = uploads([PLANS_DOC], { maxMb: 25 });
+for (const re of [/^\/catalogue\/projects$/, /^\/catalogue\/projects\/[^/]+\/materials\/upload$/, /^\/catalogue\/projects\/[^/]+\/plans\/read$/]) Session.allowMultipart(re);
+
+// F21: reading a developer's payment plans file.
+const PLAN_READ_ERRORS = {
+  OFF: ["قراءة الملفات مش مفعّلة لوكالتك.", "Document reading isn't switched on for your agency."],
+  NO_FILE: ["اختار ملف.", "Choose a file."],
+  ONE_PDF: ["ملف واحد بس في المرة (أو صور).", "One file at a time (or photos)."],
+  NOT_PDF: ["الملف ده مش PDF مقروء.", "That file isn't a readable PDF."],
+  NOT_XLSX: ["الشيت لازم يكون .xlsx أو CSV.", "The sheet must be .xlsx or CSV."],
+  TOO_LARGE: ["الشيت أكبر من 5 ميجا.", "The sheet is larger than 5 MB."],
+  NOT_SUPPORTED: ["PDF أو صور أو إكسيل بس.", "A PDF, photos or an Excel sheet only."],
+  pages_required: ["اكتب أرقام الصفحات (مثلاً 1-3).", "Enter the page numbers (e.g. 1-3)."],
+  pages_invalid: ["أرقام الصفحات مش مظبوطة.", "The page numbers aren't valid."],
+  too_many_pages: [`${PR.MAX_PAGES} صفحات بالكتير.`, `At most ${PR.MAX_PAGES} pages.`],
+  ALLOWANCE: ["صفحات الشهر مش كفاية.", "This month's pages aren't enough."],
+  AI_FAILED: ["القراءة فشلت؛ جرب تاني.", "Reading failed; try again."],
+  NO_PLANS: ["ملقيناش أنظمة سداد في الملف.", "No payment plans found in the file."]
+};
+
+/** The plans file reader (managers, when document reading is on) and the preview to tick, edit and save. */
+function plansReadSection(lang, project, reading, query = {}) {
+  const base = `/app/catalogue/projects/${project.id}`;
+  const draft = project.plans_draft;
+  const err = query.plans_error ? PLAN_READ_ERRORS[query.plans_error] || PLAN_READ_ERRORS.AI_FAILED : null;
+  const notice = err
+    ? html`<p class="notice bad" role="alert">❌ ${err[lang === "en" ? 1 : 0]}${query.plans_error === "ALLOWANCE" ? L(lang, ` محتاج ${Number(query.needed) || 0} وفاضل ${Number(query.left) || 0}.`, ` Needs ${Number(query.needed) || 0}, ${Number(query.left) || 0} left.`) : ""}</p>`
+    : query.plans_saved
+      ? html`<p class="notice ok" role="status">✅ ${L(lang, `اتحفظ ${Number(query.plans_saved) || 0} نظام.`, `${Number(query.plans_saved) || 0} plan(s) saved.`)}${query.plans_failed ? html` ❌ ${L(lang, "مااتحفظش", "Not saved")}: ${String(query.plans_failed).slice(0, 200)}` : ""}</p>`
+      : "";
+  const preview = draft?.plans?.length
+    ? html`<form method="post" action="${base}/plans/draft/apply" class="stack" data-plans-draft>
+    <p>🤖 ${L(lang, `أنظمة اتقرت من ${draft.file_name}. علّم اللي عايزه، عدّل لو محتاج، واحفظ.`, `Plans read from ${draft.file_name}. Tick the ones you want, edit if needed, and save.`)}</p>
+    ${draft.plans.map((pl, i) => html`<fieldset data-draft-plan="${i}"><legend><label><input type="checkbox" name="pick" value="${i}" checked> ${pl.name}</label></legend>
+      <div class="row">
+        <label>${L(lang, "الاسم", "Name")} <input name="name_${i}" maxlength="80" value="${pl.name}"></label>
+        <label>${L(lang, "المقدم %", "Down %")} <input name="down_${i}" inputmode="decimal" dir="ltr" size="4" value="${val(pl.down_payment_pct)}"></label>
+        <label>${L(lang, "سنين", "Years")} <input name="years_${i}" inputmode="decimal" dir="ltr" size="3" value="${val(pl.years)}"></label>
+        <label>${L(lang, "القسط", "Installments")} <select name="frequency_${i}">${Catalogue.FREQUENCIES.map((f) => html`<option value="${f}"${sel(pl.frequency === f)}>${label2(FREQ, f, lang)}</option>`)}</select></label>
+        <label>${L(lang, "خصم %", "Discount %")} <input name="discount_${i}" inputmode="decimal" dir="ltr" size="4" value="${val(pl.discount_pct)}"></label>
+        <label>${L(lang, "الصيانة %", "Maintenance %")} <input name="maintenance_${i}" inputmode="decimal" dir="ltr" size="4" value="${val(pl.maintenance_pct)}"></label>
+      </div>
+      <p class="muted">${planLine(pl, lang)}</p></fieldset>`)}
+    <div class="row"><button type="submit">${L(lang, "احفظ المعلّم", "Save ticked plans")}</button>
+    <button type="submit" class="secondary" formaction="${base}/plans/draft/discard">${L(lang, "تجاهل", "Discard")}</button></div>
+  </form>`
+    : "";
+  const form = reading?.enabled
+    ? html`<form method="post" action="${base}/plans/read" enctype="multipart/form-data" class="stack" data-plans-read>
+    <label>🤖 ${L(lang, "ارفع ملف أنظمة السداد من المطور (PDF أو صور أو إكسيل)", "Upload the developer's payment plans file (PDF, photos or Excel)")} <input type="file" name="doc" accept="application/pdf,image/jpeg,image/png,image/webp,.xlsx,.csv" multiple required></label>
+    <label>${L(lang, "الصفحات (للـ PDF)", "Pages (for a PDF)")} <input name="pages" dir="ltr" placeholder="1-3" maxlength="40"></label>
+    <p class="muted">${L(lang, `${PR.MAX_PAGES} صفحات بالكتير (الشيت بصفحة)، من صفحات الشهر (فاضل ${reading.left}). مفيش حاجة بتتحفظ قبل ما تراجع. الملف بيتحفظ في الملفات (داخلي).`, `At most ${PR.MAX_PAGES} pages (a sheet counts as one), from this month's pages (${reading.left} left). Nothing is saved until you check it. The file is kept under Materials (internal).`)}</p>
+    <button type="submit" class="secondary">${L(lang, "اقرا الأنظمة", "Read the plans")}</button>
+  </form>`
+    : "";
+  return notice || preview || form ? html`<section class="card stack" id="plans-read">${notice}${preview}${form}</section>` : "";
+}
+
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
@@ -68,10 +136,12 @@ const FIELD = {
   kind: ["اختار نوع اللينك.", "Pick the link type."],
   url: ["اللينك لازم يبدأ بـ https://", "The link must start with https://"],
   codes: ["اكتب كود وحدة واحد على الأقل.", "Type at least one unit code."],
+  file: ["الملف لازم يكون PDF أو صورة (JPG/PNG) لحد 25 ميجا.", "The file must be a PDF or a photo (JPG/PNG) up to 25 MB."],
   duplicate_code: ["في وحدتين بنفس كود المطور في المشروع ده؛ كود المطور بيحدد الوحدة جوه المشروع.", "Two units would share a developer unit code in this project; inside a project the developer's code decides."]
 };
 const errorText = (r, lang) => {
   if (r.error === "duplicate") return L(lang, "الاسم ده موجود قبل كده.", "That name is already used.");
+  if (r.error === "upload_failed") return L(lang, "الملف مارفعش. جرب تاني.", "The file did not upload. Try again.");
   const f = FIELD[r.field];
   return f ? f[lang === "en" ? 1 : 0] : L(lang, "في حاجة مش مظبوطة.", "Something is not right.");
 };
@@ -86,7 +156,7 @@ function statusSelect(name, value, lang) {
 }
 
 function projectForm(lang, developers, p = {}, action = "/app/catalogue/projects") {
-  return html`<form method="post" action="${action}" class="card stack" data-project-form>
+  return html`<form method="post" action="${action}" class="card stack" data-project-form${p.id ? "" : html` enctype="multipart/form-data"`}>
   <label>${L(lang, "اسم المشروع *", "Project name *")} <input name="name" required maxlength="120" value="${p.name || ""}"></label>
   <label>${L(lang, "الاسم بالإنجليزي", "Name in English")} <input name="name_en" maxlength="120" dir="ltr" value="${p.name_en || ""}"></label>
   <label>${L(lang, "المطور", "Developer")} <select name="developer_id"><option value="">—</option>${developers.map((d) => html`<option value="${d.id}"${sel(p.developer_id === d.id)}>${d.name}</option>`)}</select></label>
@@ -102,6 +172,11 @@ function projectForm(lang, developers, p = {}, action = "/app/catalogue/projects
     <label>${L(lang, "الصيانة %", "Maintenance %")} <input name="maintenance_pct" inputmode="decimal" dir="ltr" size="4" value="${val(p.maintenance_pct)}"></label>
   </div>
   <label>${L(lang, "ملاحظات داخلية", "Internal notes")} <textarea name="notes" maxlength="1000" rows="2">${p.notes || ""}</textarea></label>
+  ${p.id ? "" : html`<fieldset data-new-materials><legend>📁 ${L(lang, "الملفات واللينكات (اختياري)", "Materials (optional)")}</legend>
+    <label>${L(lang, "بروشور أو ملف (PDF أو صورة، لحد 25 ميجا)", "Brochure or file (PDF or photo, up to 25 MB)")} <input type="file" name="file" accept="application/pdf,image/jpeg,image/png,image/webp"></label>
+    <label>${L(lang, "أو لينك (Drive، موقع المطور...)", "Or a link (Drive, developer site...)")} <input name="material_url" type="url" dir="ltr" placeholder="https://"></label>
+    <label><input type="checkbox" name="material_client_visible" value="1"> ${L(lang, "يظهر للعميل", "Show to clients")}</label>
+  </fieldset>`}
   <button type="submit">${p.id ? L(lang, "حفظ المشروع", "Save project") : L(lang, "إضافة المشروع", "Add project")}</button>
 </form>`;
 }
@@ -179,7 +254,7 @@ function planForm(lang, projectId, phases, pl = {}) {
 </form>`;
 }
 
-function projectPage(lang, manager, data, developers, { notice = null, prices = null, commissionTerms = null, highlights = null } = {}) {
+function projectPage(lang, manager, data, developers, { notice = null, prices = null, commissionTerms = null, highlights = null, plansRead = null } = {}) {
   const { project: p, developer: d, phases, plans, materials, units } = data;
   const base = `/app/catalogue/projects/${p.id}`;
   const phaseName = (id) => phases.find((x) => x.id === id)?.name;
@@ -215,13 +290,14 @@ ${manager ? html`<details class="card"><summary>✏️ ${L(lang, "تعديل ا�
   ${plans.length ? html`<ul>${plans.map((pl) => html`<li data-plan="${pl.id}"><strong>${pl.name}</strong>${pl.phase_id ? ` (${phaseName(pl.phase_id) || ""})` : ""}: ${planLine(pl, lang)}${manager ? html` · <a href="${base}/plans/${pl.id}">${L(lang, "تعديل", "Edit")}</a> <form method="post" action="${base}/plans/${pl.id}/delete" class="inline"><button type="submit" class="link">${L(lang, "حذف", "Delete")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "لسه مفيش أنظمة سداد.", "No payment plans yet.")}</p>`}
 </section>
 ${manager ? html`<details class="card"><summary>➕ ${L(lang, "نظام سداد جديد", "New payment plan")}</summary>${planForm(lang, p.id, phases)}</details>` : ""}
+${plansRead || ""}
 
 <section class="card" id="materials">
   <h2>📁 ${L(lang, "الملفات واللينكات", "Materials")}</h2>
   ${materials.length ? html`<ul>${materials.map((m) => html`<li data-material="${m.id}" data-client-visible="${m.client_visible ? "1" : "0"}">
-    <a href="${m.url}" target="_blank" rel="noopener noreferrer">${m.label}</a> · ${label2(KIND, m.kind, lang)}${m.unit_type ? ` · ${m.unit_type}` : ""} · ${m.client_visible ? L(lang, "👁️ بيظهر للعميل", "👁️ Client-visible") : L(lang, "🔒 داخلي", "🔒 Internal")}${m.check_status === "broken" ? html` · <strong data-broken>⚠️ ${L(lang, "مبقاش بيفتح", "Not opening")}</strong>` : ""}
+    <a href="${m.url}" target="_blank" rel="noopener noreferrer">${m.storage_path ? "📎 " : ""}${m.label}</a> · ${label2(KIND, m.kind, lang)}${m.unit_type ? ` · ${m.unit_type}` : ""} · ${m.client_visible ? L(lang, "👁️ بيظهر للعميل", "👁️ Client-visible") : L(lang, "🔒 داخلي", "🔒 Internal")}${m.check_status === "broken" ? html` · <strong data-broken>⚠️ ${L(lang, "مبقاش بيفتح", "Not opening")}</strong>` : ""}
     ${manager ? html`${m.kind === "price_sheet" ? "" : html`<form method="post" action="${base}/materials/${m.id}/visibility" class="inline"><input type="hidden" name="visible" value="${m.client_visible ? "0" : "1"}"><button type="submit" class="link">${m.client_visible ? L(lang, "خليه داخلي", "Make internal") : L(lang, "اعرضه للعميل", "Show to clients")}</button></form>`}
-    <form method="post" action="${base}/materials/${m.id}/delete" class="inline"><button type="submit" class="link">${L(lang, "حذف", "Delete")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "لسه مفيش لينكات.", "No links yet.")}</p>`}
+    <form method="post" action="${base}/materials/${m.id}/delete" class="inline"><button type="submit" class="link">${L(lang, "حذف", "Delete")}</button></form>` : ""}</li>`)}</ul>` : html`<p class="muted">${L(lang, "لسه مفيش ملفات أو لينكات.", "No files or links yet.")}</p>`}
   ${manager ? html`<form method="post" action="${base}/materials" class="stack" data-material-form>
     <div class="row">
       <input name="label" required maxlength="80" placeholder="${L(lang, "الاسم (مثلاً: بروشور المرحلة 2)", "Label (e.g. Phase 2 brochure)")}" aria-label="${L(lang, "الاسم", "Label")}">
@@ -232,6 +308,17 @@ ${manager ? html`<details class="card"><summary>➕ ${L(lang, "نظام سداد
     <label><input type="checkbox" name="client_visible" value="1"> ${L(lang, "يظهر للعميل", "Show to clients")}</label>
     <button type="submit" class="secondary">${L(lang, "إضافة لينك", "Add link")}</button>
     <p class="muted">${L(lang, "بنتأكد مرة في الأسبوع إن كل لينك لسه بيفتح ونبلغ المديرين لو واحد وقف.", "Once a week every link is checked and managers hear about broken ones.")}</p>
+  </form>` : ""}
+  ${manager ? html`<form method="post" action="${base}/materials/upload" enctype="multipart/form-data" class="stack" data-material-upload>
+    <h3>📎 ${L(lang, "ارفع ملف", "Upload a file")}</h3>
+    <input type="file" name="file" required accept="application/pdf,image/jpeg,image/png,image/webp" aria-label="${L(lang, "الملف", "File")}">
+    <div class="row">
+      <input name="label" maxlength="80" placeholder="${L(lang, "الاسم (اختياري، اسم الملف لو فاضي)", "Label (optional, file name when empty)")}" aria-label="${L(lang, "الاسم", "Label")}">
+      <select name="kind" aria-label="${L(lang, "النوع", "Type")}">${Catalogue.KINDS.filter((k) => k !== "price_sheet").map((k) => html`<option value="${k}"${sel(k === "brochure")}>${label2(KIND, k, lang)}</option>`)}</select>
+    </div>
+    <input name="unit_type" maxlength="60" placeholder="${L(lang, "نوع الوحدة (للمخطط، اختياري)", "Unit type (for a layout, optional)")}" aria-label="${L(lang, "نوع الوحدة", "Unit type")}">
+    <label><input type="checkbox" name="client_visible" value="1"> ${L(lang, "يظهر للعميل", "Show to clients")}</label>
+    <button type="submit" class="secondary">${L(lang, "رفع", "Upload")}</button>
   </form>` : ""}
 </section>
 
@@ -249,7 +336,7 @@ function register(web, { pool, page }) {
   const forbidden = (req, res) => res.status(403).type("text/plain").send(L(langOf(req), "للمديرين بس", "Managers only"));
   const notFound = (req, res) => res.status(404).type("text/plain").send(L(langOf(req), "مش موجود", "Not found"));
   const title = (lang) => L(lang, "كتالوج المطورين", "Developer catalogue");
-  const SAVED = { 1: ["اتحفظ.", "Saved."], linked: ["الوحدات اتربطت.", "Units linked."] };
+  const SAVED = { 1: ["اتحفظ.", "Saved."], linked: ["الوحدات اتربطت.", "Units linked."], material_bad: ["المشروع اتحفظ، بس الملف أو اللينك ماتضافش. ضيفه من الملفات تحت.", "The project was saved, but the file or link was not added. Add it under Materials below."] };
   const savedNotice = (req) => {
     const s = SAVED[req.query.saved];
     if (!s) return null;
@@ -283,7 +370,8 @@ function register(web, { pool, page }) {
     const commissionTerms = manager ? termsSection(lang, data.project.id, await Commissions.getTerms(pool, actor, data.project.id)) : null;
     // C6: highlights (everyone) with the brochure reader (managers).
     const highlights = highlightsSection(lang, manager, data.project, { reading, query: req.query });
-    return page(req, res, { title: data.project.name, nav: "catalogue", body: projectPage(lang, manager, data, developers, { notice: notice || pricesNotice(req.query, lang) || savedNotice(req), prices, commissionTerms, highlights }) }, status);
+    const plansRead = manager ? plansReadSection(lang, data.project, reading, req.query) : null;
+    return page(req, res, { title: data.project.name, nav: "catalogue", body: projectPage(lang, manager, data, developers, { notice: notice || pricesNotice(req.query, lang) || savedNotice(req), prices, commissionTerms, highlights, plansRead }) }, status);
   };
 
   /** Runs a service write and answers: 403, 404, the page again with the error (400), or a redirect. */
@@ -299,7 +387,19 @@ function register(web, { pool, page }) {
 
   web.get("/catalogue", (req, res) => showList(req, res));
   web.post("/catalogue/developers", write((req) => Catalogue.saveDeveloper(pool, actorOf(req), req.body), { show: showList, done: () => "/app/catalogue?saved=1" }));
-  web.post("/catalogue/projects", write((req) => Catalogue.saveProject(pool, actorOf(req), req.body), { show: showList, done: (_req, r) => `/app/catalogue/projects/${r.project.id}?saved=1` }));
+  // F20: a new project may come with a file and/or a link for its materials.
+  web.post("/catalogue/projects", uploadFile, write(async (req) => {
+    const actor = actorOf(req);
+    const r = await Catalogue.saveProject(pool, actor, req.body);
+    if (r.error) return r;
+    const visible = req.body.material_client_visible;
+    const file = req.files?.file?.[0];
+    const fileR = file ? await Catalogue.uploadMaterial(pool, actor, r.project.id, file, { client_visible: visible }) : { ok: true };
+    const linkR = String(req.body.material_url || "").trim()
+      ? await Catalogue.saveMaterial(pool, actor, r.project.id, { label: L(langOf(req), "لينك", "Link"), kind: "other", url: req.body.material_url, client_visible: visible })
+      : { ok: true };
+    return { ...r, materialFailed: Boolean(fileR.error || linkR.error) };
+  }, { show: showList, done: (_req, r) => `/app/catalogue/projects/${r.project.id}?saved=${r.materialFailed ? "material_bad" : "1"}` }));
 
   const showDeveloper = async (req, res, notice = null, status = 200) => {
     const lang = langOf(req);
@@ -324,6 +424,26 @@ ${developerForm(lang, d, `/app/catalogue/developers/${d.id}`)}
   web.post("/catalogue/projects/:id/phases", write((req) => Catalogue.savePhase(pool, actorOf(req), req.params.id, req.body), { show: showProject, done: (req) => `${projectUrl(req)}#phases` }));
   web.post("/catalogue/projects/:id/phases/:phaseId/delete", write((req) => Catalogue.deletePhase(pool, actorOf(req), req.params.id, req.params.phaseId), { show: showProject, done: (req) => `${projectUrl(req)}#phases` }));
   web.post("/catalogue/projects/:id/plans", write((req) => Catalogue.savePlan(pool, actorOf(req), req.params.id, req.body), { show: showProject, done: (req) => `${projectUrl(req)}#plans` }));
+  web.post("/catalogue/projects/:id/plans/read", uploadPlansDoc, async (req, res) => {
+    const lang = langOf(req);
+    const broker = actorOf(req);
+    if (!isManager(broker)) return forbidden(req, res);
+    const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
+    if (!gate.allowed) return res.status(429).type("text/plain").send(L(lang, "رفعت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment."));
+    const r = await PlanReading.read(pool, broker, req.params.id, { files: req.files?.doc || [], pages: req.body.pages });
+    if (r.error === "not_found") return notFound(req, res);
+    if (r.error) return res.redirect(303, `/app/catalogue/projects/${req.params.id}?plans_error=${encodeURIComponent(r.error)}${r.error === "ALLOWANCE" ? `&left=${r.left}&needed=${r.needed}` : ""}#plans-read`);
+    return res.redirect(303, `/app/catalogue/projects/${req.params.id}#plans-read`);
+  });
+  web.post("/catalogue/projects/:id/plans/draft/apply", async (req, res) => {
+    const r = await PlanReading.apply(pool, actorOf(req), req.params.id, req.body);
+    if (r.error === "forbidden") return forbidden(req, res);
+    if (r.error === "not_found") return notFound(req, res);
+    if (r.error) return res.redirect(303, `/app/catalogue/projects/${req.params.id}?plans_error=${r.error}#plans-read`);
+    const failed = r.failed.length ? `&plans_failed=${encodeURIComponent(r.failed.join(", "))}` : "";
+    return res.redirect(303, `/app/catalogue/projects/${req.params.id}?plans_saved=${r.saved}${failed}#plans`);
+  });
+  web.post("/catalogue/projects/:id/plans/draft/discard", write((req) => PlanReading.discard(pool, actorOf(req), req.params.id), { show: showProject, done: (req) => `/app/catalogue/projects/${req.params.id}#plans` }));
   web.post("/catalogue/projects/:id/plans/:planId/delete", write((req) => Catalogue.deletePlan(pool, actorOf(req), req.params.id, req.params.planId), { show: showProject, done: (req) => `${projectUrl(req)}#plans` }));
   web.get("/catalogue/projects/:id/plans/:planId", async (req, res) => {
     const lang = langOf(req);
@@ -338,6 +458,7 @@ ${developerForm(lang, d, `/app/catalogue/developers/${d.id}`)}
     });
   });
   web.post("/catalogue/projects/:id/materials", write((req) => Catalogue.saveMaterial(pool, actorOf(req), req.params.id, req.body), { show: showProject, done: (req) => `${projectUrl(req)}#materials` }));
+  web.post("/catalogue/projects/:id/materials/upload", uploadFile, write((req) => Catalogue.uploadMaterial(pool, actorOf(req), req.params.id, req.files?.file?.[0], req.body), { show: showProject, done: (req) => `${projectUrl(req)}#materials` }));
   web.post("/catalogue/projects/:id/materials/:mid/visibility", write((req) => Catalogue.setMaterialVisibility(pool, actorOf(req), req.params.id, req.params.mid, req.body.visible === "1"), { show: showProject, done: (req) => `${projectUrl(req)}#materials` }));
   web.post("/catalogue/projects/:id/materials/:mid/delete", write((req) => Catalogue.deleteMaterial(pool, actorOf(req), req.params.id, req.params.mid), { show: showProject, done: (req) => `${projectUrl(req)}#materials` }));
   web.post("/catalogue/projects/:id/units", write((req) => Catalogue.linkUnits(pool, actorOf(req), req.params.id, { codes: req.body.codes, phaseId: req.body.phase_id || null }), {
