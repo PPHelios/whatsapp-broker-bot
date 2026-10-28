@@ -188,7 +188,7 @@ describe("Only the staged review is committed (A2)", () => {
     const review = await h.text("broker", "تم");
     expect(textOf(review)).toMatch(/ناقص لإتمام الحفظ/);
     expect(textOf(review)).toMatch(/السعر/);
-    expect(buttonsOf(review)).not.toContain("draft_confirm");
+    expect(buttonsOf(review)).toEqual(["DRAFT_SAVE", "draft_cancel"]);
     await h.tap("broker", "draft_confirm");
     expect(await listings()).toHaveLength(0);
   });
