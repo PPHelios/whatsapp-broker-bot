@@ -31,6 +31,8 @@
       "transcribeAudio": ["audioBuffer", "mimeType", "ctx"]
     },
     "lib/vision.js": {
+      "VALID_ROLES": "Array",
+      "HIDDEN_ROLES": "Array",
       "createVisionThumbnail": ["buffer"],
       "analyzePhotosWithGemini": ["images", "ctx"],
       "ensureListingImagesCurated": ["listingId", "ctx"]
@@ -448,6 +450,7 @@
       "layout": ["params"],
       "withCsrf": ["pageHtml", "csrf"],
       "NAV": "Array",
+      "navFor": ["broker"],
       "HTMX_CONFIG": "Object"
     },
     "web/index.js": {
@@ -494,6 +497,7 @@
       "noStore": ["_req", "res", "next"],
       "requireBroker": ["req", "res", "next"],
       "verifyCsrf": ["req", "res", "next"],
+      "staleToken": ["req", "res"],
       "allowMultipart": ["re"],
       "csrfAfterParse": ["req"],
       "issuePreToken": ["req", "res"],
@@ -742,7 +746,8 @@
       "listLine": ["lead", "lang"],
       "requestSummary": ["f", "lang"],
       "card": ["lead", "params"],
-      "timelineLine": ["ev", "lang"]
+      "timelineLine": ["ev", "lang"],
+      "whoHint": ["lead", "lang", "now"]
     },
     "services/leads.js": {
       "MAX_PHONES": "Number",
@@ -827,6 +832,8 @@
       "COLUMNS": "Array",
       "KEYS": "Array",
       "columnFor": ["header"],
+      "platformSource": ["v"],
+      "canonicalSource": ["v"],
       "leadKind": ["v"],
       "stage": ["v"],
       "lawfulBasis": ["v"],
@@ -1654,6 +1661,11 @@
       "onPlanPayment": ["client", "agencyId", "params"],
       "summary": ["db", "agencyId"],
       "overview": ["db"]
+    },
+    "domain/commandWords.js": {
+      "arabicKey": ["s"],
+      "canonicalCommand": ["text"],
+      "WORDS": "Array"
     }
   },
   "invariant_variable_names": {

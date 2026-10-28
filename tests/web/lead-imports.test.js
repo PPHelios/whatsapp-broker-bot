@@ -105,7 +105,7 @@ describe("apply", () => {
     expect(done.text).toMatch(/اتحدّثوا: 1/);
 
     const sara = (await h.query("SELECT * FROM leads WHERE phone_e164 = '+201012345678'"))[0];
-    expect(sara).toMatchObject({ name: "سارة", kind: "buyer", source: "فيسبوك", stage: "interested", lawful_basis: "consent", assigned_broker_id: h.BROKERS.broker.id, notes: "عايزة تسليم قريب" });
+    expect(sara).toMatchObject({ name: "سارة", kind: "buyer", source: "Facebook", stage: "interested", lawful_basis: "consent", assigned_broker_id: h.BROKERS.broker.id, notes: "عايزة تسليم قريب" });
     const req = await h.query("SELECT data FROM lead_events WHERE lead_id = $1 AND kind = 'request_set'", [sara.id]);
     expect(req[0].data.filters).toMatchObject({ property_types: ["apartment"], price_min: 7000000, price_max: 9000000, bedrooms_min: 3 });
     expect((await h.query("SELECT kind FROM leads WHERE phone_e164 = '+201111111111'"))[0].kind).toBe("tenant");
