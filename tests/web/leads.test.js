@@ -117,7 +117,7 @@ describe("add a lead", () => {
     expect(r.status).toBe(200);
     expect(r.text).toContain('value="Typed Name"');
     expect(r.text).toContain('value="0101 234 5678"');
-    expect(r.text).toMatch(/<option value="tenant" selected>/);
+    expect(r.text).toMatch(/name="kind" value="tenant" checked>/);
     expect(r.text).toMatch(/<option value="Facebook" selected>/);
     expect(r.text).toContain("25 ألف");
     expect(h.AI.calls[0].operation).toBe("lead_extraction");

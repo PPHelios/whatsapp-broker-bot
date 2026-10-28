@@ -48,25 +48,32 @@ function leadForm({ values: v = {}, lang = "ar", csrf = "", brokers = null, noti
     </div>
     <p class="muted">${L(lang, "اللي الذكاء الاصطناعي يفهمه بيتملى في الخانات تحت؛ راجعه قبل الحفظ.", "What the AI understands fills the fields below; check it before saving.")}</p>
   </section>
-  <section class="card"><h2>👤 ${L(lang, "العميل", "Client")}</h2><div class="grid">
+  <section class="card"><h2>👤 ${L(lang, "العميل", "Client")}</h2>
+  <div class="pills" role="group" aria-label="${L(lang, "النوع", "Type")}">${Stages.KINDS.map((k) => html`<label class="pill"><input type="radio" name="kind" value="${k}"${chk((v.kind || "buyer") === k)}><span>${Stages.kindLabel(k, lang)}</span></label>`)}</div>
+  <div class="grid">
     <label>${L(lang, "الاسم", "Name")}<input name="name" value="${v.name || ""}" maxlength="120"></label>
     <label>${L(lang, "الموبايل *", "Phone *")}<input name="phone1" value="${v.phone1 || ""}" dir="ltr" inputmode="tel" required hx-post="/app/leads/check" hx-trigger="change" hx-target="#dup" hx-include="#lead-form"></label>
-    <label>${L(lang, "رقم تاني", "Second phone")}<input name="phone2" value="${v.phone2 || ""}" dir="ltr" inputmode="tel" hx-post="/app/leads/check" hx-trigger="change" hx-target="#dup" hx-include="#lead-form"></label>
-    <label>${L(lang, "رقم تالت", "Third phone")}<input name="phone3" value="${v.phone3 || ""}" dir="ltr" inputmode="tel"></label>
-    <label>${L(lang, "النوع", "Type")}<select name="kind">${Stages.KINDS.map((k) => html`<option value="${k}"${sel((v.kind || "buyer") === k)}>${Stages.kindLabel(k, lang)}</option>`)}</select></label>
+
     <label>${L(lang, "المصدر", "Source")}<select name="source"><option value="">—</option>${Stages.SOURCES.map(([en, ar]) => html`<option value="${en}"${sel(v.source === en)}>${lang === "en" ? en : ar}</option>`)}${extraSources.map((x) => html`<option value="${x}"${sel(v.source === x)}>${x}</option>`)}<option value="other"${sel(v.source && !known)}>${L(lang, "أخرى", "Other")}</option></select></label>
-    <label>${L(lang, "مصدر تاني (اكتبه)", "Other source (type it)")}<input name="source_other" value="${v.source && !known ? v.source : v.source_other || ""}" maxlength="60"></label>
     ${brokers
       ? html`<label>${L(lang, "يتسلم لـ", "Assign to")}<select name="assign_to"><option value="">${L(lang, "مش متسلم لحد", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${sel(v.assign_to === b.id)}>${b.name}</option>`)}</select></label>`
       : ""}
   </div>
   <div id="dup">${duplicate || ""}</div>
+  <details class="fgroup"${v.phone2 || v.phone3 || v.notes || (v.source && !known) || v.source_other ? raw(" open") : ""}><summary>${L(lang, "تفاصيل أكتر", "More details")}</summary><div class="fbody grid">
+    <label>${L(lang, "رقم تاني", "Second phone")}<input name="phone2" value="${v.phone2 || ""}" dir="ltr" inputmode="tel" hx-post="/app/leads/check" hx-trigger="change" hx-target="#dup" hx-include="#lead-form"></label>
+    <label>${L(lang, "رقم تالت", "Third phone")}<input name="phone3" value="${v.phone3 || ""}" dir="ltr" inputmode="tel"></label>
+    <label>${L(lang, "مصدر تاني (اكتبه)", "Other source (type it)")}<input name="source_other" value="${v.source && !known ? v.source : v.source_other || ""}" maxlength="60"></label>
+  </div>
   <label>${L(lang, "ملاحظات (داخلية)", "Notes (internal)")}<textarea name="notes" rows="2" maxlength="4000">${v.notes || ""}</textarea></label>
+  </details>
   </section>
-  <fieldset class="card stack"><legend>${L(lang, "الأساس القانوني *", "Lawful basis *")}</legend>
+  <details class="card fgroup lawful"${erased || (v.lawful_basis && v.lawful_basis !== "client_request") ? raw(" open") : ""}><summary>${L(lang, "الأساس القانوني", "Lawful basis")}: <b>${Stages.basisLabel(v.lawful_basis || "client_request", lang)}</b></summary>
+  <fieldset class="stack"><legend class="sr-only">${L(lang, "الأساس القانوني *", "Lawful basis *")}</legend>
     ${Stages.LAWFUL_BASES.map((b) => html`<label class="check"><input type="radio" name="lawful_basis" value="${b}"${chk((v.lawful_basis || "client_request") === b)} required> ${Stages.basisLabel(b, lang)}</label>`)}
     ${erased ? html`<label class="check"><input type="checkbox" name="allow_erased" value="1"> ${L(lang, "العميل طلب يتمسح قبل كده، وهو اللي كلمنا تاني", "The client asked to be deleted before, and contacted us again")}</label>` : ""}
   </fieldset>
+  </details>
   <button type="submit">💾 ${L(lang, "حفظ العميل", "Save the client")}</button>
 </form>`;
 }

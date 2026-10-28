@@ -7,6 +7,7 @@ const { MANAGER_ROLES } = require("../../lib/authz");
 const AiLog = require("../../services/aiUsageLog");
 const Dash = require("../../services/dashboards");
 const { html } = require("../html");
+const { tabs } = require("../views/tabs");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
@@ -92,22 +93,7 @@ function register(web, { pool, page }) {
     const codePrefix = own ? own.code_prefix || UnitCode.prefixFrom(own.name) : "";
     const aiPhotos = own?.crm_settings?.ai_photo_order !== false;
     const cls = state.level === "ok" ? "" : state.level === "warn" ? "warn" : "bad";
-    return page(req, res, {
-      title: L(lang, "استهلاكي", "My usage"),
-      nav: "settings",
-      body: html`<h1>📊 ${L(lang, "استهلاكي", "My usage")}</h1>
-${req.query.saved === "1" ? html`<p class="card notice ok" role="status">✅ ${L(lang, "اتحفظت.", "Saved.")}</p>` : ""}
-<section class="card" data-credits-used="${state.used}" data-credits-limit="${state.limit}" data-level="${state.level}">
-  <h2>${L(lang, "رصيد رسايل واتساب للوكالة (الشهر ده)", "Agency WhatsApp credits (this month)")}</h2>
-  <meter class="${cls}" min="0" max="${state.limit}" low="${Math.round(state.limit * 0.8)}" high="${state.limit}" value="${Math.min(state.used, state.limit)}">${state.pct}%</meter>
-  <p><strong>${state.used}</strong> / ${state.limit} · ${L(lang, `باقي ${state.remaining}`, `${state.remaining} left`)} (${state.pct}%)</p>
-  <p class="muted">${L(
-    lang,
-    "١ رصيد = ١ رسالة البوت يبعتها (ردود وتنبيهات). ببلاش: كل حاجة على الموقع، إشعارات الموقع، وعلامة «اتقرت». عند 100% التنبيهات بتوصل على الموقع والردود مستمرة؛ عند الحد الأقصى البوت بيبعت تنبيه واحد في اليوم وبعدها بيعلّم الرسايل مقروءة بس.",
-    "1 credit = 1 message the bot sends (replies and alerts). Free: everything on the website, website notifications and read ticks. At 100% alerts move to the website and replies continue; at the ceiling the bot sends one notice a day, then only marks messages as read."
-  )}</p>
-</section>
-<section class="card">
+    const mineCard = html`<section class="card">
   <h2>${L(lang, "رسايلي", "My messages")}</h2>
   <p>${L(lang, `النهارده: ${mine.today} · الشهر ده: ${mine.total}`, `Today: ${mine.today} · This month: ${mine.total}`)}</p>
   ${mine.actions.length
@@ -115,16 +101,32 @@ ${req.query.saved === "1" ? html`<p class="card notice ok" role="status">✅ ${L
   <tbody>${mine.actions.map((a) => html`<tr data-action="${a.action}"><td>${actionLabel(a.action, lang)}</td><td>${a.today}</td><td>${a.n}</td></tr>`)}</tbody></table>`
     : html`<p class="muted">${L(lang, "مفيش رسايل الشهر ده.", "No messages this month.")}</p>`}
   <p class="muted">${L(lang, "نصيحة: البحث الطويل والإضافة والاستيراد ببلاش على الموقع.", "Tip: long searches, adding units and imports are free on the website.")}</p>
+</section>`;
+    return page(req, res, {
+      title: L(lang, "الاستهلاك", "Usage"),
+      nav: "settings",
+      body: html`<h1>${L(lang, "الاستهلاك", "Usage")}</h1>
+${req.query.saved === "1" ? html`<p class="card notice ok" role="status">✅ ${L(lang, "اتحفظت.", "Saved.")}</p>` : ""}
+<section class="card usage-hero" data-credits-used="${state.used}" data-credits-limit="${state.limit}" data-level="${state.level}">
+  <h2>${L(lang, "رصيد رسايل واتساب للوكالة (الشهر ده)", "Agency WhatsApp credits (this month)")}</h2>
+  <meter class="${cls}" min="0" max="${state.limit}" low="${Math.round(state.limit * 0.8)}" high="${state.limit}" value="${Math.min(state.used, state.limit)}">${state.pct}%</meter>
+  <p class="big"><strong>${state.used}</strong> / ${state.limit} · ${L(lang, `باقي ${state.remaining}`, `${state.remaining} left`)} (${state.pct}%)</p>
+  <details class="how"><summary>${L(lang, "الرصيد بيتحسب إزاي؟", "How credits work")}</summary><p class="muted">${L(
+    lang,
+    "١ رصيد = ١ رسالة البوت يبعتها (ردود وتنبيهات). ببلاش: كل حاجة على الموقع، إشعارات الموقع، وعلامة «اتقرت». عند 100% التنبيهات بتوصل على الموقع والردود مستمرة؛ عند الحد الأقصى البوت بيبعت تنبيه واحد في اليوم وبعدها بيعلّم الرسايل مقروءة بس.",
+    "1 credit = 1 message the bot sends (replies and alerts). Free: everything on the website, website notifications and read ticks. At 100% alerts move to the website and replies continue; at the ceiling the bot sends one notice a day, then only marks messages as read."
+  )}</p></details>
 </section>
-${manager ? html`<p class="card"><a href="/app/usage/log" data-ai-log-link>🤖 ${L(lang, "سجل استهلاك الذكاء الاصطناعي (سطر بسطر، مع تصدير إكسيل)", "AI usage log (line by line, with Excel export)")}</a></p>` : ""}
 ${manager
-  ? html`<section class="card">
+  ? tabs("usage_tab", [
+      [L(lang, "أنا", "Me"), mineCard],
+      [L(lang, "الفريق", "Team"), html`<section class="card">
   <h2>${L(lang, "كل الوسطاء", "Every broker")}</h2>
   <table><thead><tr><th>${L(lang, "الوسيط", "Broker")}</th><th>${L(lang, "النهارده", "Today")}</th><th>${L(lang, "الشهر", "Month")}</th></tr></thead>
   <tbody>${agency.brokers.map((b) => html`<tr data-broker="${b.id}"><td>${b.name}</td><td>${b.today}</td><td>${b.n}</td></tr>`)}</tbody></table>
   <p class="muted">${L(lang, `روابط الدخول (مش محسوبة من الرصيد): ${agency.login}`, `Sign-in links (not counted in the credits): ${agency.login}`)}</p>
-</section>
-<form method="post" action="/app/usage/agency" class="card stack">
+</section>`],
+      [L(lang, "الإعدادات", "Settings"), html`<form method="post" action="/app/usage/agency" class="card stack">
   <h2>${L(lang, "رصيد الوكالة وحدود الوسطاء", "Agency credits and broker caps")}</h2>
   <label>${L(lang, "الرصيد الشهري (رسايل)", "Monthly credits (messages)")} <input type="number" name="monthly" min="0" max="100000" value="${state.limit}"></label>
   <label>${L(lang, "حد يومي لكل وسيط (فاضي = بدون حد)", "Daily cap per broker (empty = off)")} <input type="number" name="daily_cap" min="1" max="10000" value="${state.broker.dailyCap ?? ""}"></label>
@@ -134,8 +136,10 @@ ${manager
   <label class="row"><input type="checkbox" name="ai_photo_order" value="on"${aiPhotos ? html` checked` : ""} data-ai-photo-order> ${L(lang, "الذكاء الاصطناعي يرتب صور الوحدات ويخفي المستندات", "AI orders unit photos and hides documents")}</label>
   <p class="muted">${L(lang, "لو قفلته بتوفر رصيد: الصور بتفضل بالترتيب اللي اتبعتت بيه، وتقدر ترتبها بإيدك من تعديل الوحدة.", "Off saves credits: photos keep the order they were sent in, and you can order them by hand when editing a unit.")}</p>
   <button type="submit">${L(lang, "حفظ", "Save")}</button>
-</form>`
-  : ""}`
+</form>
+<p class="card"><a href="/app/usage/log" data-ai-log-link>🤖 ${L(lang, "سجل استهلاك الذكاء الاصطناعي (سطر بسطر، مع تصدير إكسيل)", "AI usage log (line by line, with Excel export)")}</a></p>`]
+    ], { open: req.query.saved === "1" ? 2 : 0 })
+  : mineCard}`
     });
   });
 

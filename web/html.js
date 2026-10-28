@@ -108,7 +108,6 @@ function footer(broker, lang) {
 // `who`: manager (Dashboard and other agency pages) or owner (App tracking, OWNER_BROKER_IDS only).
 const NAV = [
   { key: "deals", href: "/app/deals", ar: "الصفقات", en: "Deals", icon: "deal", group: "work" },
-  { key: "commissions", href: "/app/commissions", ar: "العمولات", en: "Commissions", icon: "money", group: "work" },
   { key: "catalogue", href: "/app/catalogue", ar: "كتالوج المطورين", en: "Developer catalogue", icon: "catalogue", group: "work" },
   { key: "ask", href: "/app/ask", ar: "اسأل المساعد", en: "Ask the assistant", icon: "chat", group: "work" },
   { key: "searches", href: "/app/searches", ar: "البحث المحفوظ", en: "Saved searches", icon: "star", group: "work" },
