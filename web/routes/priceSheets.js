@@ -13,6 +13,7 @@ const SheetSync = require("../../services/sheetSync");
 const Reading = require("../../domain/priceReading");
 const Catalogue = require("../../services/catalogue");
 const Commission = require("../../domain/commission");
+const Plans = require("../../domain/plans");
 const RateLimit = require("../../lib/rateLimit");
 const Session = require("../session");
 const { isManager } = require("../../lib/authz");
@@ -223,6 +224,7 @@ function register(web, { pool, page }) {
     const r = await PriceSheets.apply(pool, req.session.broker, req.params.id, req.params.sid, { markSold: [].concat(req.body.sold || []) });
     if (r.error === "forbidden") return forbidden(req, res);
     if (r.error === "not_found") return notFound(req, res);
+    if (r.error === "unit_limit") return res.status(403).type("text/plain").send(Plans.unitLimitText(r.limit, lang));
     if (r.error) return res.status(409).type("text/plain").send(L(lang, "الشيت ده اتطبق أو اتلغى قبل كده.", "This sheet was already applied or discarded."));
     return res.redirect(303, back(req, `applied=${r.created}.${r.updated}.${r.sold}`));
   });

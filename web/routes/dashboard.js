@@ -253,12 +253,23 @@ function stuckSection(stuck, lang) {
 </section>`;
 }
 
-function ownerPage(d, lang, { billing = null, notice = null, reading = [], assistant = [], referrals = null, intakes = [], stuck = [] } = {}) {
+/** The owner's unit cap per plan: empty = the default in domain/plans.js. */
+function limitsSection(limits, lang) {
+  return html`<form method="post" action="/app/owner/plan-limits" class="card stack" data-plan-limits>
+  <h2>🏠 ${L(lang, "حد الوحدات المتاحة لكل باقة", "Available-unit cap per plan")}</h2>
+  <p class="muted">${L(lang, "الوحدات المباعة والمؤرشفة مش بتتحسب. لما الوكالة توصل للحد، الوحدة الجديدة مبتتحفظش ويظهر لها رسالة ترقية الباقة.", "Sold and archived units don't count. At the cap a new unit isn't saved and the broker is told to upgrade.")}</p>
+  <div class="row">${Plans.ALL.map((p) => html`<label>${Plans.planName(p, lang)} <input name="${p.id}" type="number" min="1" max="1000000" value="${limits[p.id]}" data-limit="${p.id}"></label>`)}</div>
+  <button type="submit">${L(lang, "احفظ", "Save")}</button>
+</form>`;
+}
+
+function ownerPage(d, lang, { billing = null, notice = null, reading = [], assistant = [], referrals = null, intakes = [], stuck = [], limits = null } = {}) {
   const usd = (n) => `$${Number(n).toFixed(n < 1 ? 4 : 2)}`;
   return html`<h1>🛠️ ${L(lang, "متابعة التطبيق", "App tracking")}</h1>
 ${notice || ""}
 ${billing ? billingSections(billing, lang) : ""}
 ${referrals ? referralsSection(referrals, lang) : ""}
+${limits ? limitsSection(limits, lang) : ""}
 ${stuckSection(stuck, lang)}
 ${intakeSection(intakes, lang)}
 ${readingSection(reading, lang)}
@@ -316,8 +327,8 @@ function register(web, { pool, page }) {
   const ownerView = async (req, res, notice = null, status = 200) => {
     const d = await Dash.ownerDashboard(pool, req.session.broker);
     if (!d) return notFound(req, res, page);
-    const [open, signups, payments, payTo, trials, reading, assistant, referrals, intakes, stuck] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Assistant.overview(pool), Referrals.overview(pool), Intake.overview(pool), Onboarding.stuckList(pool)]);
-    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials }, notice, reading, assistant, referrals, intakes, stuck }) }, status);
+    const [open, signups, payments, payTo, trials, reading, assistant, referrals, intakes, stuck, limits] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Assistant.overview(pool), Referrals.overview(pool), Intake.overview(pool), Onboarding.stuckList(pool), Billing.planLimits(pool)]);
+    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials }, notice, reading, assistant, referrals, intakes, stuck, limits }) }, status);
   };
   const ok = (text) => html`<p class="card notice ok" role="status">✅ ${text}</p>`;
   const bad = (text) => html`<p class="card notice bad" role="alert">❌ ${text}</p>`;
@@ -402,6 +413,11 @@ ${wa ? html`<p><a class="btn" href="${wa}" target="_blank" rel="noopener norefer
     const r = id ? await Assistant.setWeb(pool, id, { enabled: req.body.enabled === "on", webMonth: req.body.web_month }) : { error: "not_found" };
     if (r.error) return ownerView(req, res, bad(L(lang, "الردود رقم من 0 لـ 1000.", "Answers must be 0 to 1000.")), 400);
     return ownerView(req, res, ok(r.web ? L(lang, `${r.agency.name}: البحث على الإنترنت مفعّل، ${r.web_month} رد في الشهر.`, `${r.agency.name}: web answers on, ${r.web_month} a month.`) : L(lang, `${r.agency.name}: البحث على الإنترنت مقفول.`, `${r.agency.name}: web answers off.`)));
+  }));
+
+  web.post("/owner/plan-limits", ownerOnly(async (req, res, lang) => {
+    await Billing.savePlanLimits(pool, req.body);
+    return ownerView(req, res, ok(L(lang, "حدود الوحدات اتحفظت.", "Unit caps saved.")));
   }));
 
   web.post("/owner/intake", ownerOnly(async (req, res, lang) => {

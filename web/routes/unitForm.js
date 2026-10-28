@@ -13,6 +13,7 @@ const RateLimit = require("../../lib/rateLimit");
 const { normalizeImageBuffer, MAX_PHOTOS } = require("../../lib/images");
 const { logOperation } = require("../../lib/db");
 const Rules = require("../../domain/fieldRules");
+const Plans = require("../../domain/plans");
 const Form = require("../forms/unitForm");
 const Session = require("../session");
 const { uploads, PHOTO, VOICE } = require("../uploads");
@@ -170,6 +171,10 @@ function register(web, { pool, page }) {
       throw err;
     } finally {
       client.release();
+    }
+    if (result.limit) {
+      Supabase.deleteStorageFiles(photos.urls).catch(() => {});
+      return again(403, Plans.unitLimitText(result.limit, lang));
     }
     if (result.conflict) {
       Supabase.deleteStorageFiles(photos.urls).catch(() => {});

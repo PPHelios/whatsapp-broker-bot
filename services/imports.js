@@ -237,7 +237,10 @@ async function applyExcel(pool, broker, id, { rows = [], archive = [], lang = "a
     if (item.kind === "new") {
       const res = await insertOne(pool, broker, item.fields, item.code, lang);
       if (res.listing) result.created.push(res.listing.code);
-      else result.conflicts.push(res.code);
+      else if (res.limit) {
+        result.limit = res.limit;
+        break;
+      } else result.conflicts.push(res.code);
     } else if (item.kind === "changed") {
       const res = await patchOne(pool, broker, item.code, item.patch, item.version);
       if (res.outcome === "updated") result.updated.push(item.code);
@@ -363,6 +366,7 @@ async function applyGroup(pool, broker, id, { rows = [], lang = "ar" } = {}) {
     const res = await insertOne(pool, broker, r.fields, null, lang);
     if (!res.listing) {
       result.failed.push(r.i);
+      if (res.limit) result.limit = res.limit;
       continue;
     }
     result.created.push(res.listing.code);

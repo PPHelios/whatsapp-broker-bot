@@ -67,6 +67,7 @@
   | `047_material_files.sql` | Uploaded project files (F20): `project_materials.storage_path`, `file_bytes` (PDF/photo/sheet in storage; not link-checked); payment plans file preview (F21): `projects.plans_draft` |
   | `048_project_images.sql` | Project photo gallery (F23): `project_images` (shared / layout / hidden, AI layout fields, `listing_ids` matched units, unsure ones for managers) |
   | `049_lead_routing.sql` | Lead routing (P2): `agencies.lead_routing` (round-robin switch, broker order, who got the last lead) |
+  | `050_onboarding.sql` | Onboarding: `brokers.onboarding` (welcome card closed, one-time bot hints, day 1/3/7 nudges sent); existing brokers marked as done |
   | `038_assistant.sql` | The assistant (C10 + N1): `project_contexts` (per project summary, facts, source key, built time), `assistant_questions` (question log: channel, found, web, scopes), `agencies.assistant` (owner's web switch and monthly web answers) |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
@@ -405,3 +406,5 @@ Target layering: **`routes` → `lib/registry.js` → `services` (return data) �
   - `npm run test:router` runs only the router behaviour tests.
   - `npm test` adds the live-schema audit and the live search pipeline, which need `.env`.
 * **CI:** `.github/workflows/test.yml` runs `npm run test:ci` on Node 22 for every push and pull request. Don't merge to `main` with a red build.
+
+* **Onboarding and unit caps (`domain/onboarding.js`, `services/onboarding.js`, `domain/plans.js` `units`, `services/billing.js` `unitCapacity`):** the welcome card on /app/ until closed, a "?" tip (3-4 Arabic steps) under each main screen, one-time bot hints after a broker's first unit, search and lead (`firstHint`), day 1/3/7 nudges (the `onboarding_nudges` job, first missing step, Telegram or inbox only), a "Talk to a person" footer link (`SUPPORT_WHATSAPP`/`SUPPORT_TELEGRAM`) and the owner's stuck list on /app/owner. Each plan caps available units (Free 25, Solo 300, Office 1,500, Agency 5,000; the owner edits them on /app/owner, stored in `app_settings.plan_limits`); sold and archived units don't count. `createListing` returns `{ limit }` at the cap and the web form, bot draft save, imports and price-sheet apply tell the broker to archive or upgrade.

@@ -44,7 +44,8 @@ async function monthUsage(db, agencyId, now = new Date()) {
          WHERE agency_id = $1 AND status = 'success' AND model_used IS NOT NULL AND created_at >= ${MONTH_START}) AS voice,
        (SELECT count(*)::int FROM payments
          WHERE agency_id = $1 AND kind = 'voice_pack' AND status = 'confirmed' AND confirmed_at >= ${MONTH_START}) AS packs,
-       (SELECT count(*)::int FROM brokers WHERE agency_id = $1 AND is_active) AS seats`,
+       (SELECT count(*)::int FROM brokers WHERE agency_id = $1 AND is_active) AS seats,
+       (SELECT count(*)::int FROM listings WHERE agency_id = $1 AND status = 'active') AS units`,
     [agencyId, now.toISOString()]
   );
   return rows[0];
@@ -65,8 +66,44 @@ async function allowance(db, agencyId, { now = new Date() } = {}) {
     until,
     text: { used: u.text, limit: plan.text },
     voice: { used: u.voice, limit: plan.voice + u.packs * Plans.VOICE_PACK.notes, packs: u.packs },
-    seats: { used: u.seats, limit: plan.seats }
+    seats: { used: u.seats, limit: plan.seats },
+    units: { used: u.units, limit: await unitLimit(db, plan) }
   };
+}
+
+/** The owner's unit caps per plan ({ free, solo, office, agency } → number), over the defaults in domain/plans.js. */
+async function planLimits(db) {
+  const saved = await getSetting(db, "plan_limits", {});
+  const out = {};
+  for (const p of Plans.ALL) out[p.id] = Number.isInteger(saved?.[p.id]?.units) && saved[p.id].units > 0 ? saved[p.id].units : p.units;
+  return out;
+}
+
+async function unitLimit(db, plan) {
+  return (await planLimits(db))[plan.id] ?? plan.units;
+}
+
+/** The owner's form: a unit cap per plan (empty or invalid = the default). */
+async function savePlanLimits(db, input = {}) {
+  const value = {};
+  for (const p of Plans.ALL) {
+    const n = parseInt(String(input[p.id] ?? "").replace(/[^0-9]/g, ""), 10);
+    if (Number.isInteger(n) && n >= 1 && n <= 1000000 && n !== p.units) value[p.id] = { units: n };
+  }
+  await setSetting(db, "plan_limits", value);
+  return planLimits(db);
+}
+
+/**
+ * Whether one more available unit fits the plan: { ok, used, limit, plan }. Sold and archived units don't count, so
+ * an agency is never punished for keeping its history; a unit marked available again is not checked.
+ */
+async function unitCapacity(db, agencyId, { adding = 1, now = new Date() } = {}) {
+  const agency = await agencyRow(db, agencyId);
+  const { plan } = effectivePlan(agency, now);
+  const { rows } = await db.query("SELECT count(*)::int AS n FROM listings WHERE agency_id = $1 AND status = 'active'", [agencyId]);
+  const limit = await unitLimit(db, plan);
+  return { ok: rows[0].n + adding <= limit, used: rows[0].n, limit, plan };
 }
 
 /** Throws PLAN_QUOTA_EXCEEDED (handled like the daily AI caps) when this month's text or voice allowance is used up. */
@@ -251,6 +288,9 @@ module.exports = {
   allowance,
   checkAllowance,
   seatAvailable,
+  planLimits,
+  savePlanLimits,
+  unitCapacity,
   getSetting,
   setSetting,
   payTo,

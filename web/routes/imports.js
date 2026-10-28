@@ -12,6 +12,7 @@ const RateLimit = require("../../lib/rateLimit");
 const Sheets = require("../../lib/sheets");
 const { logOperation } = require("../../lib/db");
 const Imports = require("../../services/imports");
+const Plans = require("../../domain/plans");
 const ChatPhotos = require("../../services/chatPhotos");
 const Bulk = require("../../services/bulk");
 const Chat = require("../../domain/chatExport");
@@ -92,6 +93,7 @@ function resultCard(r, lang) {
     ${line(L(lang, "اتغيرت من شخص تاني بعد المراجعة (متعدلتش)", "Changed by someone else since the review (not applied)"), r.conflicts)}
     ${line(L(lang, "متطبقتش", "Not applied"), r.failed)}
   </ul>
+  ${r.limit ? html`<p class="notice bad" data-unit-limit>${Plans.unitLimitText(r.limit, lang)}</p>` : ""}
 </div>`;
 }
 
