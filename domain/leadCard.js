@@ -128,4 +128,20 @@ function timelineLine(ev, lang) {
   return `${when(ev.created_at)} ${text}${who}${ev.undone_at ? L(lang, " (اتلغى)", " (undone)") : ""}`;
 }
 
-module.exports = { refLabel, parseRef, displayName, listLine, requestSummary, card, timelineLine };
+/**
+ * F16: what tells two clients with the same name apart: "…4567 · 3 days ago" (last contact; "not contacted yet"
+ * when none).
+ */
+function whoHint(lead, lang = "ar", now = new Date()) {
+  const digits = String((lead.phones || [])[0] || "").replace(/\D/g, "");
+  const parts = digits ? [`…${digits.slice(-4)}`] : [];
+  const at = lead.last_contact_at ? new Date(lead.last_contact_at) : null;
+  if (!at) parts.push(L(lang, "لسه ماتكلمتوش", "not contacted yet"));
+  else {
+    const days = Math.max(0, Math.floor((now - at) / 86400000));
+    parts.push(days === 0 ? L(lang, "النهارده", "today") : days === 1 ? L(lang, "امبارح", "yesterday") : L(lang, `من ${days} يوم`, `${days} days ago`));
+  }
+  return parts.join(" · ");
+}
+
+module.exports = { refLabel, parseRef, displayName, listLine, requestSummary, card, timelineLine, whoHint };
