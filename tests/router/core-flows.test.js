@@ -239,7 +239,7 @@ describe("Help menu accuracy (U1)", () => {
   test("U1: the advertised 'اكسل' command exports inventory", async () => {
     await h.insertListing({ code: "HP-201" });
     h.AI.respond(() => searchAnswer());
-    const replies = await h.text("broker", "اكسل");
+    const replies = await h.text("admin", "اكسل");
     expect(replies.some((r) => r.type === "document") || /إكسيل|الإكسيل/.test(textOf(replies))).toBe(true);
     expect(h.AI.calls).toHaveLength(0);
   });

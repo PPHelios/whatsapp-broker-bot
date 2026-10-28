@@ -453,6 +453,26 @@
   }
   openTabFor(location.hash);
   window.addEventListener("hashchange", function () { openTabFor(location.hash); });
+  // "Use where I am now" on the agency-only location box: fills the pin field with this phone's position.
+  var here = document.querySelectorAll("[data-my-location]");
+  for (var g = 0; g < here.length; g++) {
+    if (!navigator.geolocation) continue;
+    here[g].hidden = false;
+    here[g].addEventListener("click", function () {
+      var btn = this;
+      var form = btn.form || btn.closest("form");
+      var field = form && form.querySelector("input[name=pin], input[name=place]");
+      btn.classList.add("busy");
+      navigator.geolocation.getCurrentPosition(function (p) {
+        btn.classList.remove("busy");
+        var ll = p.coords.latitude.toFixed(6) + "," + p.coords.longitude.toFixed(6);
+        if (field) field.value = field.name === "place" ? "https://maps.google.com/?q=" + ll : ll;
+      }, function () {
+        btn.classList.remove("busy");
+        toast(btn.getAttribute("data-fail") || "", true);
+      }, { enableHighAccuracy: true, timeout: 15000 });
+    });
+  }
   // Voice search: the mic in a search box dictates into it and searches. Shown only where the browser can listen.
   var Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
   function listen(btn) {

@@ -1792,6 +1792,24 @@
       "icon": ["name", "size"],
       "MARK": "Object",
       "PATHS": "Object"
+    },
+    "services/unitPrivacy.js": {
+      "SCOPES": "Array",
+      "SECRET_DETAILS": "Array",
+      "GRANT_DAYS": "Number",
+      "scopeOf": ["pool", "agencyId"],
+      "setScope": ["pool", "manager", "scope"],
+      "canSee": ["pool", "broker", "listing", "params"],
+      "redact": ["listing"],
+      "forBroker": ["pool", "broker", "listing"],
+      "pinOf": ["pool", "listing"],
+      "mapsUrl": ["pin"],
+      "parsePin": ["text"],
+      "setPin": ["pool", "actor", "listing", "pin", "params"],
+      "requestAccess": ["pool", "broker", "listing"],
+      "pendingFor": ["pool", "actor", "listing"],
+      "hasPending": ["pool", "broker", "listing"],
+      "decide": ["pool", "actor", "listing", "requestId", "approve"]
     }
   },
   "invariant_variable_names": {

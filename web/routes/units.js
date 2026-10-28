@@ -16,6 +16,7 @@ const Leases = require("../../services/leases");
 const LeaseRules = require("../../domain/leases");
 const Commission = require("../../domain/commission");
 const { icon } = require("../icons");
+const Privacy = require("../../services/unitPrivacy");
 const { html } = require("../html");
 const { resultItem, factList } = require("../views/units");
 
@@ -240,6 +241,87 @@ ${rows.length
     return res.redirect(303, `/app/units/${encodeURIComponent(listing.code)}?lease=${out.error ? `bad_${out.error}` : req.body.remove === "1" ? "removed" : "saved"}#lease`);
   });
 
+  /** The agency-only box: pin, unit number and address, the ask-for-access button, and open asks to answer. */
+  async function privateSection(broker, listing, view, lang, csrf, notice) {
+    const path = `/app/units/${encodeURIComponent(listing.code)}`;
+    const hidden = html`<input type="hidden" name="_csrf" value="${csrf}">`;
+    const notes = { saved: L(lang, "✅ اتحفظ.", "✅ Saved."), bad_pin: L(lang, "اللوكيشن مش مفهوم. الصق لينك جوجل ماب كامل أو الإحداثيات (30.04, 31.23).", "That location isn't clear. Paste a full Google Maps link or the coordinates (30.04, 31.23)."), asked: L(lang, "✅ طلبك اتبعت لصاحب الوحدة والمديرين.", "✅ Your ask went to the unit's broker and the managers."), answered: L(lang, "✅ اتسجل الرد.", "✅ Answer saved.") };
+    if (!(await Privacy.canSee(pool, broker, listing))) {
+      const asked = await Privacy.hasPending(pool, broker, listing);
+      return html`<section class="card private" id="private">
+  <h2>${icon("lock", 20)} ${L(lang, "بيانات خاصة بالوكالة", "Agency-only details")}</h2>
+  ${notice && notes[notice] ? html`<p class="notice ok">${notes[notice]}</p>` : ""}
+  <p class="muted">${L(lang, "المالك والعمولة ورقم الوحدة والعنوان واللوكيشن بيشوفهم صاحب الوحدة والمديرين بس.", "The owner, commission, unit number, address and pin are for the unit's broker and the managers.")}</p>
+  ${asked
+    ? html`<p class="chip new">${L(lang, "طلبت تشوفها، مستني الرد", "You asked; waiting for an answer")}</p>`
+    : html`<form method="post" action="${path}/access">${hidden}<button type="submit" class="secondary">${icon("lock", 18)} ${L(lang, "اطلب تشوفها", "Ask to see them")}</button></form>`}
+</section>`;
+    }
+    const pin = await Privacy.pinOf(pool, listing);
+    const d = listing.details || {};
+    const editable = Authz.canEdit(broker, listing);
+    const asks = await Privacy.pendingFor(pool, broker, listing);
+    return html`<section class="card private stack" id="private">
+  <h2>${icon("lock", 20)} ${L(lang, "اللوكيشن والعنوان (للوكالة بس)", "Location and address (agency only)")}</h2>
+  ${notice && notes[notice] ? html`<p class="notice ${notice.startsWith("bad") ? "bad" : "ok"}">${notes[notice]}</p>` : ""}
+  <p class="muted small">${L(lang, "مش بيظهر في البحث ولا في روابط العملاء.", "Never shown in search or client links.")}</p>
+  ${pin ? html`<p><a class="btn secondary" href="${Privacy.mapsUrl(pin)}" target="_blank" rel="noopener" data-pin>${icon("pin", 18)} ${L(lang, "افتح على الخريطة", "Open the map")}</a>${pin.from === "project" ? html` <span class="muted small">${L(lang, "(لوكيشن المشروع)", "(the project's pin)")}</span>` : ""}</p>` : ""}
+  ${d.unit_no || d.address ? html`<p>${d.unit_no ? html`${L(lang, "رقم الوحدة", "Unit no.")}: <strong>${d.unit_no}</strong>` : ""}${d.unit_no && d.address ? " · " : ""}${d.address || ""}</p>` : ""}
+  ${editable
+    ? html`<details${pin || d.unit_no || d.address ? "" : html` open`}><summary>${pin || d.unit_no || d.address ? L(lang, "تعديل", "Edit") : L(lang, "ضيف اللوكيشن", "Add the location")}</summary>
+  <form method="post" action="${path}/private" class="stack" data-pin-form>${hidden}
+    <label>${L(lang, "لينك جوجل ماب أو الإحداثيات", "Google Maps link or coordinates")}<input name="pin" dir="ltr" autocomplete="off" value="${listing.lat != null ? `${listing.lat}, ${listing.lng}` : ""}" placeholder="https://maps.google.com/…"></label>
+    <button type="button" class="secondary" data-my-location data-fail="${L(lang, "مقدرناش نجيب مكانك. الصق اللينك.", "Couldn't get your location. Paste the link.")}" hidden>${icon("pin", 18)} ${L(lang, "استخدم مكاني دلوقتي", "Use where I am now")}</button>
+    <div class="grid two">
+      <label>${L(lang, "رقم الوحدة", "Unit no.")}<input name="unit_no" maxlength="40" value="${d.unit_no || ""}"></label>
+      <label>${L(lang, "العنوان", "Address")}<input name="address" maxlength="200" value="${d.address || ""}"></label>
+    </div>
+    <p class="muted small">${L(lang, "تقدر كمان تبعت لوكيشن للبوت وتختار الوحدة.", "You can also send a location pin to the bot and pick the unit.")}</p>
+    <button type="submit">${L(lang, "حفظ", "Save")}</button>
+  </form></details>`
+    : ""}
+  ${asks.length
+    ? html`<div id="access" class="stack"><h3>${L(lang, "طلبات تشوف البيانات دي", "Asks to see these details")}</h3>${asks.map(
+        (a) => html`<form method="post" action="${path}/access/${a.id}" class="row between">${hidden}<span>${a.name}</span><span class="row"><button type="submit" name="approve" value="1" class="small">${L(lang, "موافق", "Allow")}</button><button type="submit" name="approve" value="0" class="secondary small">${L(lang, "لأ", "Decline")}</button></span></form>`
+      )}<p class="muted small">${L(lang, `الموافقة لمدة ${Privacy.GRANT_DAYS} يوم.`, `Access lasts ${Privacy.GRANT_DAYS} days.`)}</p></div>`
+    : ""}
+</section>`;
+  }
+
+  web.post("/units/:code/private", async (req, res, next) => {
+    const { broker } = req.session;
+    const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!listing || !Authz.canEdit(broker, listing)) return next();
+    const raw = String(req.body.pin || "").trim();
+    const pin = raw ? Privacy.parsePin(raw) : null;
+    const back = (n) => res.redirect(303, `/app/units/${encodeURIComponent(listing.code)}?private=${n}#private`);
+    if (raw && !pin) return back("bad_pin");
+    await Privacy.setPin(pool, broker, listing, pin);
+    const clean = (v, n) => String(v || "").trim().slice(0, n) || null;
+    await pool.query(
+      `UPDATE listings SET details = (details - 'unit_no' - 'address') || jsonb_strip_nulls(jsonb_build_object('unit_no', $3::text, 'address', $4::text)), updated_at = now() WHERE id = $1 AND agency_id = $2`,
+      [listing.id, broker.agency_id, clean(req.body.unit_no, 40), clean(req.body.address, 200)]
+    );
+    return back("saved");
+  });
+
+  web.post("/units/:code/access", async (req, res, next) => {
+    const { broker } = req.session;
+    const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!listing || !Authz.canView(broker, listing)) return next();
+    await Privacy.requestAccess(pool, broker, listing);
+    return res.redirect(303, `/app/units/${encodeURIComponent(listing.code)}?private=asked#private`);
+  });
+
+  web.post("/units/:code/access/:id", async (req, res, next) => {
+    const { broker } = req.session;
+    const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!listing || !/^\d{1,12}$/.test(req.params.id)) return next();
+    const out = await Privacy.decide(pool, broker, listing, Number(req.params.id), req.body.approve === "1");
+    if (!out.ok) return res.status(out.reason === "not_allowed" ? 403 : 404).send(L(langOf(req), "مش مسموح.", "Not allowed."));
+    return res.redirect(303, `/app/units/${encodeURIComponent(listing.code)}?private=answered#private`);
+  });
+
   web.get("/units/:code", async (req, res, next) => {
     const lang = langOf(req);
     const { broker } = req.session;
@@ -251,13 +333,15 @@ ${rows.length
     const status = { active: L(lang, "🟢 متاحة", "🟢 Available"), sold: L(lang, "🔴 مباعة", "🔴 Sold"), archived: L(lang, "📁 مؤرشفة", "📁 Archived") }[listing.status] || listing.status;
     const linkable = !listing.details?.catalogue && listing.market === "resale" && listing.status === "active" && Authz.canEdit(broker, listing);
     const conf = Describe.compactLine({ code: "", confirmed_at: listing.confirmed_at }, lang).match(/✅ \S+/);
+    const view = await Privacy.forBroker(pool, broker, listing);
+    const priv = await privateSection(broker, listing, view, lang, req.session.csrf, req.query.private);
     return page(req, res, {
       title: listing.code,
       nav: "units",
       body: html`<article class="card" data-code="${listing.code}">
   ${req.query.saved ? html`<p class="notice card ok">✅ ${L(lang, "تم الحفظ", "Saved")}</p>` : ""}
   <h1>${listing.code} · ${status}${conf ? html` <span class="muted">${conf[0]}</span>` : ""}</h1>
-  ${factList(listing, lang)}
+  ${factList(view.listing, lang)}
   ${project ? projectLine(project, lang, { catalogue: Boolean(listing.details?.catalogue) }) : ""}
   ${listing.details?.owner_lead && Authz.canEdit(broker, listing) ? html`<p class="muted" data-owner-lead>🔗 ${L(lang, "المالك عميل عندك", "The owner is your client")}: <a href="/app/leads/${encodeURIComponent(listing.details.owner_lead)}">${listing.details.owner_lead}</a></p>` : ""}
   ${linkable ? resaleLinkForm(listing, project, await Catalogue.listProjects(pool, broker), lang, req.session.csrf) : ""}
@@ -270,6 +354,7 @@ ${rows.length
     ${images.length && listing.status === "active" ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(listing.code)}/share-media">📤 ${L(lang, "ابعت الصور للعميل", "Send photos to a client")}</a>` : ""}
   </div>
 </article>
+${priv}
 ${listing.listing_type === "rent" && Authz.canEdit(broker, listing) ? leaseSection(listing, await Leases.forListing(pool, listing), lang, req.session.csrf, req.query.lease, await Leases.tenantChoices(pool, broker)) : ""}
 ${listing.status === "active" ? await wantedSection(pool, broker, listing, lang, req.session.csrf) : ""}
 ${await shareSection(broker, listing, lang)}`

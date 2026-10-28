@@ -170,9 +170,18 @@ async function saveProject(db, actor, input = {}) {
   if (!isManager(actor)) return { error: "forbidden" };
   const v = projectFields(input);
   if (v.error) return v;
+  // The project's agency-only map pin (its units inherit it); empty clears, a field left out keeps it.
+  const pinGiven = input.pin !== undefined;
+  const pin = pinGiven && String(input.pin).trim() ? require("./unitPrivacy").parsePin(input.pin) : null;
+  if (pinGiven && String(input.pin).trim() && !pin) return { error: "invalid", field: "pin" };
   const dev = await resolveDeveloper(db, actor, input);
   if (dev.error) return dev;
   const f = v.fields;
+  const savePin = async (row) => {
+    if (!pinGiven) return row;
+    const { rows } = await db.query("UPDATE projects SET lat = $3, lng = $4 WHERE id = $1 AND agency_id = $2 RETURNING *", [row.id, actor.agency_id, pin?.lat ?? null, pin?.lng ?? null]);
+    return rows[0] || row;
+  };
   const devName = dev.developer ? dev.developer.name : null;
   const params = [f.name, f.name_en, f.status, f.district, f.city, f.delivery_year, f.delivery_quarter, f.maintenance_pct, f.notes, dev.developer?.id || null, devName];
   try {
@@ -186,14 +195,14 @@ async function saveProject(db, actor, input = {}) {
       );
       if (!rows[0]) return { error: "not_found" };
       await syncUnits(db, rows[0].id);
-      return { ok: true, project: rows[0] };
+      return { ok: true, project: await savePin(rows[0]) };
     }
     const { rows } = await db.query(
       `INSERT INTO projects (agency_id, name, name_en, status, district, city, delivery_year, delivery_quarter, maintenance_pct, notes, developer_id, developer_name)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
       [actor.agency_id, ...params]
     );
-    return { ok: true, project: rows[0] };
+    return { ok: true, project: await savePin(rows[0]) };
   } catch (e) {
     if (e.code === "23505") return { error: "duplicate", field: "name" };
     throw e;

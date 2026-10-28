@@ -37,7 +37,7 @@ function securityHeaders(_req, res, next) {
     "Content-Security-Policy": CSP,
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "same-origin",
-    "Permissions-Policy": "microphone=(self), camera=(), geolocation=(), payment=()",
+    "Permissions-Policy": "microphone=(self), camera=(), geolocation=(self), payment=()",
     "Cross-Origin-Opener-Policy": "same-origin"
   });
   next();

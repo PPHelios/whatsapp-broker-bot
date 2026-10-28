@@ -23,6 +23,10 @@ const Intake = require("../../services/leadIntake");
 const Plans = require("../../domain/plans");
 const Phone = require("../../domain/phone");
 const { html } = require("../html");
+const { icon } = require("../icons");
+const Privacy = require("../../services/unitPrivacy");
+const { isManager } = require("../../lib/authz");
+const { logOperation } = require("../../lib/db");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
@@ -111,7 +115,7 @@ ${d.sources && d.sources.length
   ${d.board.length
     ? html`<ol class="board">${d.board.map(
         (b, i) => html`<li data-broker="${b.id}"><details><summary><span class="medal">${medal(i)}</span><strong>${b.name}</strong><span class="muted small">${L(lang, `${b.deals} صفقة`, `${b.deals} deal(s)`)} · ${money(b.commission, lang)}</span></summary>
-  <dl class="facts">
+  <dl class="bfacts">
     <div><dt>${L(lang, "عملاء جداد", "New leads")}</dt><dd>${b.leads}</dd></div>
     <div><dt>${L(lang, "مكالمات", "Contacted")}</dt><dd>${b.contacted}</dd></div>
     <div><dt>${L(lang, "تحريك للأمام", "Moved forward")}</dt><dd>${b.forward}</dd></div>
@@ -123,6 +127,22 @@ ${d.sources && d.sources.length
       )}</ol>
   <p class="muted small">${L(lang, "الترتيب: الصفقات، بعدين العمولة، بعدين التحريك للأمام. وقت الرد = الوسيط من وصول العميل لأول مكالمة.", "Ranked by deals, then commission, then moves forward. Response time = median from a lead arriving to its first contact.")}</p>`
     : html`<p class="muted">${L(lang, "مفيش نشاط في الفترة دي.", "No activity in this period.")}</p>`}
+</section>`;
+}
+
+/** Data security for managers: who sees private unit details, and the Excel export of every unit. */
+function privacySection(scope, lang, csrf, notice) {
+  const opt = (v, label) => html`<label class="pill"><input type="radio" name="scope" value="${v}"${scope === v ? html` checked` : ""}><span>${label}</span></label>`;
+  return html`<section class="card stack" id="data-security">
+  <h2>${L(lang, "أمان البيانات", "Data security")}</h2>
+  ${notice === "saved" ? html`<p class="notice ok">${L(lang, "✅ اتحفظ.", "✅ Saved.")}</p>` : ""}
+  <form method="post" action="/app/dashboard/secret-details" class="stack"><input type="hidden" name="_csrf" value="${csrf}">
+    <p>${L(lang, "مين يشوف المالك والعمولة ورقم الوحدة والعنوان واللوكيشن؟", "Who sees the owner, commission, unit number, address and pin?")}</p>
+    <div class="pills">${opt("restricted", L(lang, "صاحب الوحدة والمديرين", "The unit's broker and managers"))}${opt("all", L(lang, "كل البروكرز في الوكالة", "Every broker in the agency"))}</div>
+    <p class="muted small">${L(lang, "لو مقفولة، أي بروكر تاني يقدر يطلب يشوفها، وصاحب الوحدة أو مدير يوافق. كل طلب ورد بيتسجل.", "When closed, another broker can ask; the unit's broker or a manager answers. Every ask and answer is logged.")}</p>
+    <button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>
+  </form>
+  <p><a class="btn secondary" href="/app/units-export.xlsx" download>${icon("import", 18)} ${L(lang, "نزّل كل الوحدات (إكسيل)", "Download all units (Excel)")}</a> <span class="muted small">${L(lang, "للمديرين بس، وكل تنزيل بيتسجل.", "Managers only; every download is logged.")}</span></p>
 </section>`;
 }
 
@@ -354,8 +374,29 @@ function register(web, { pool, page }) {
     const lang = langOf(req);
     const d = await Dash.agencyDashboard(pool, req.session.broker, { days: req.query.days, brokerId: String(req.query.broker || "") || null });
     if (!d) return res.status(403).type("text/plain").send(L(lang, "للمديرين بس", "Managers only"));
-    const [leases, targets, quotas] = await Promise.all([Leases.upcoming(pool, req.session.broker), Targets.progress(pool, req.session.broker.agency_id), Quotas.forAgency(pool, req.session.broker.agency_id)]);
-    return page(req, res, { title: L(lang, "لوحة الوكالة", "Agency dashboard"), nav: "dashboard", body: html`${agencyPage(d, lang)}${quotaSection(quotas, lang)}${targetsSection([...targets.values()], lang)}${leaseEnds(leases || [], lang)}` });
+    const [leases, targets, quotas, scope] = await Promise.all([Leases.upcoming(pool, req.session.broker), Targets.progress(pool, req.session.broker.agency_id), Quotas.forAgency(pool, req.session.broker.agency_id), Privacy.scopeOf(pool, req.session.broker.agency_id)]);
+    return page(req, res, { title: L(lang, "لوحة الوكالة", "Agency dashboard"), nav: "dashboard", body: html`${agencyPage(d, lang)}${privacySection(scope, lang, req.session.csrf, req.query.privacy)}${quotaSection(quotas, lang)}${targetsSection([...targets.values()], lang)}${leaseEnds(leases || [], lang)}` });
+  });
+
+  // Who sees a unit's private details (services/unitPrivacy.js); managers only.
+  web.post("/dashboard/secret-details", async (req, res) => {
+    const out = await Privacy.setScope(pool, req.session.broker, String(req.body.scope || ""));
+    if (!out.ok) return res.status(403).type("text/plain").send(L(langOf(req), "للمديرين بس", "Managers only"));
+    return res.redirect(303, "/app/dashboard?privacy=saved#data-security");
+  });
+
+  // The whole inventory as Excel: managers only, and every download is logged.
+  web.get("/units-export.xlsx", async (req, res) => {
+    const { broker } = req.session;
+    if (!isManager(broker)) return res.status(403).type("text/plain").send(L(langOf(req), "للمديرين بس", "Managers only"));
+    const t0 = Date.now();
+    const { rows: listings } = await pool.query("SELECT * FROM listings WHERE agency_id = $1 AND status = 'active' ORDER BY created_at DESC", [broker.agency_id]);
+    const { rows: agencies } = await pool.query("SELECT * FROM agencies WHERE id = $1", [broker.agency_id]);
+    const buf = await require("../../lib/excel").buildAgencyInventoryWorkbook({ listings, agency: agencies[0], broker, lang: langOf(req) });
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "command_inventory_export", status: "success", total_duration_ms: Date.now() - t0, metadata: { channel: "web", rowsCount: listings.length } });
+    return res
+      .set({ "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": `attachment; filename="Inventory_${new Date().toISOString().slice(0, 10)}.xlsx"` })
+      .send(buf);
   });
 
   const ownerView = async (req, res, notice = null, status = 200) => {

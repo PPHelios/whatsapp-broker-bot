@@ -204,6 +204,8 @@ async function dispatchMessage(broker, message, ctx) {
     }
 
     case "location":
+      // A pin becomes a unit's agency-only location (routes/unitPin.js).
+      if (await require("./unitPin").offerPin(broker, message, ctx)) return "done";
       logServerOp(poolInstance, {
         agency_id: broker.agency_id,
         broker_id: broker.id,
