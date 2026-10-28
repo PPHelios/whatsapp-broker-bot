@@ -72,30 +72,35 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     ${select("delivery_quarter", L(lang, "الربع", "Quarter"), v.delivery_quarter, [["", "—"], ["1", "Q1"], ["2", "Q2"], ["3", "Q3"], ["4", "Q4"]])}
   </div></section>
 
-  <section class="card"><h2>💳 ${L(lang, "الدفع", "Payment")}</h2>
-    <h3>${L(lang, "ريسيل بالتقسيط", "Resale with installments")}</h3>
-    <div class="grid">
+  <section class="card tabs" data-tabs="pay"><h2>💳 ${L(lang, "الدفع", "Payment")}</h2>
+    <input type="radio" name="pay_tab" id="pay-tab-resale" class="tab-radio" value="resale"${chk(v.market !== "primary")}>
+    <input type="radio" name="pay_tab" id="pay-tab-primary" class="tab-radio" value="primary"${chk(v.market === "primary")}>
+    <div class="tab-bar" role="tablist"><label for="pay-tab-resale" role="tab">${L(lang, "ريسيل بالتقسيط", "Resale with installments")}</label><label for="pay-tab-primary" role="tab">${L(lang, "برايمري", "Primary")}</label></div>
+    <div class="tab-panel panel-resale" role="tabpanel">
+      <div class="grid">
       ${input("down_payment_value", L(lang, "المدفوع (الكاش المطلوب)", "Paid (cash required)"), v.down_payment_value, { extra: ' inputmode="decimal"' })}
       ${input("remaining_amount", L(lang, "المتبقي أقساط", "Remaining installments"), v.remaining_amount, { extra: ' inputmode="decimal"' })}
       ${input("installment_value", L(lang, "قيمة القسط", "Installment amount"), v.installment_value, { extra: ' inputmode="decimal"' })}
       ${select("payment_frequency", L(lang, "دورية القسط", "Frequency"), v.payment_frequency, freqOptions(lang))}
       ${input("installments_end", L(lang, "آخر قسط", "Last installment"), v.installments_end, { type: "month" })}
+      </div>
     </div>
-    <h3>${L(lang, "برايمري", "Primary")}</h3>
-    <div class="grid">
+    <div class="tab-panel panel-primary" role="tabpanel">
+      <div class="grid">
       ${input("cash_price", L(lang, "سعر الكاش", "Cash price"), v.cash_price, { extra: ' inputmode="decimal"' })}
       ${input("maintenance_pct", L(lang, "الصيانة %", "Maintenance %"), v.maintenance_pct, { type: "number", extra: ' min="0" step="any"' })}
       ${input("maintenance_terms", L(lang, "شروط الصيانة", "Maintenance terms"), v.maintenance_terms)}
       ${input("project", L(lang, "المشروع", "Project"), v.project)}
       ${input("developer", L(lang, "المطور", "Developer"), v.developer)}
-    </div>
-    ${Array.from({ length: PLAN_ROWS }, (_, k) => k + 1).map(
-      (i) => html`<div class="grid">
+      </div>
+      ${Array.from({ length: PLAN_ROWS }, (_, k) => k + 1).map(
+        (i) => html`<div class="grid">
       ${input(`plan_down_${i}`, L(lang, `نظام ${i}: مقدم %`, `Plan ${i}: down %`), v[`plan_down_${i}`], { type: "number", extra: ' min="0" max="100" step="any"' })}
       ${input(`plan_years_${i}`, L(lang, "سنين", "Years"), v[`plan_years_${i}`], { type: "number", extra: ' min="0" step="any"' })}
       ${select(`plan_freq_${i}`, L(lang, "الدورية", "Frequency"), v[`plan_freq_${i}`], freqOptions(lang))}
     </div>`
-    )}
+      )}
+    </div>
   </section>
 
   <section class="card"><h2>✨ ${L(lang, "المميزات", "Features")}</h2>
@@ -111,6 +116,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
   <section class="card"><h2>🔒 ${L(lang, "بيانات داخلية (مش بتظهر للعميل)", "Internal (never shown to clients)")}</h2><div class="grid">
     ${input("owner_name", L(lang, "المالك", "Owner"), v.owner_name)}
     ${input("owner_phone", L(lang, "تليفون المالك", "Owner phone"), v.owner_phone, { type: "tel", dir: "ltr" })}
+    ${input("owner_lead", L(lang, "كود العميل لو المالك عميل عندك (L-0042)", "Lead code if the owner is your client (L-0042)"), v.owner_lead, { dir: "ltr", extra: ' placeholder="L-0042" list="lead-codes"' })}
     ${input("commission", L(lang, "العمولة", "Commission"), v.commission)}
     ${input("co_broker", L(lang, "وسيط مشارك", "Co-broker"), v.co_broker)}
   </div>
@@ -118,14 +124,17 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
 
   <section class="card"><h2>📷 ${L(lang, "الصور (حتى 15)", "Photos (up to 15)")}</h2>
     ${images.length
-      ? html`<p class="muted">${L(lang, "اسحب الصور (أو استخدم الأسهم) لترتيبها؛ الأولى هي الغلاف. الترتيب اليدوي مش بيتغير بالذكاء الاصطناعي.", "Drag the photos (or use the arrows) to order them; the first is the cover. A hand-set order is never changed by AI.")}</p>
+      ? html`<p class="muted">${L(lang, "اسحب الصور (أو استخدم الأسهم) لترتيبها؛ الأولى هي الغلاف. لو رتّبتها بنفسك مش بنستخدم الذكاء الاصطناعي للترتيب، وده بيوفر رصيدك.", "Drag the photos (or use the arrows) to order them; the first is the cover. A hand-set order skips AI ordering, which saves your AI credits.")}</p>
     <ol data-sortable class="photo-order">${images.map(
           (i) => html`<li draggable="true" data-photo="${i.id}"><input type="hidden" name="photo_order" value="${i.id}"><img src="${i.url}" alt="" loading="lazy">
       <label class="check grow"><input type="checkbox" name="remove_photo" value="${i.id}">${L(lang, "حذف", "Remove")}</label>
       <button type="button" class="secondary" data-move="up" aria-label="${L(lang, "لفوق", "Up")}">↑</button><button type="button" class="secondary" data-move="down" aria-label="${L(lang, "لتحت", "Down")}">↓</button></li>`
         )}</ol>`
       : ""}
-    <input type="file" name="photos" accept="image/*" multiple>
+    <input type="file" name="photos" accept="image/*" multiple data-photo-sort>
+    <ol data-sortable data-photo-preview class="photo-order" hidden></ol>
+    <p class="muted" data-photo-preview-hint hidden>${L(lang, "اسحب الصور (أو الأسهم) لترتيبها قبل الحفظ؛ الأولى هي الغلاف.", "Drag the photos (or arrows) to order them before saving; the first is the cover.")}</p>
+    <label class="check" data-photo-manual-box><input type="checkbox" name="photo_manual" value="on" data-photo-manual> ${L(lang, "رتّبتها بنفسي: من غير ترتيب بالذكاء الاصطناعي (بيوفر رصيد الذكاء الاصطناعي)", "I ordered them myself: no AI ordering (saves AI credits)")}</label>
   </section>
 
   <div id="review">${review || ""}</div>

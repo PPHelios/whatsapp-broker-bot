@@ -276,6 +276,7 @@ function internalLines(l, lang = "ar") {
   return [
     d.owner_name && `👤 ${en ? "Owner" : "المالك"}: ${d.owner_name}`,
     d.owner_phone && `📞 ${en ? "Owner phone" : "تليفون المالك"}: ${d.owner_phone}`,
+    d.owner_lead && `🔗 ${en ? "Owner is client" : "المالك عميل"} ${d.owner_lead}`,
     d.commission && `💼 ${en ? "Commission" : "العمولة"}: ${d.commission}`,
     d.co_broker && `🤝 ${en ? "Co-broker" : "وسيط مشارك"}: ${d.co_broker}`,
     d.notes && `📝 ${en ? "Notes" : "ملاحظات"}: ${d.notes}`

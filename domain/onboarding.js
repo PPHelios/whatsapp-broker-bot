@@ -12,6 +12,7 @@ function welcome({ manager = false, telegram = false } = {}, lang = "ar") {
     { text: pick(["ضيف أول وحدة: اكتب التفاصيل أو ابعت فويس، والصور.", "Add your first unit: type the details or send a voice note, plus photos."], lang), href: "/app/units/new" },
     { text: pick(["دوّر زي ما بتتكلم: «شقة 3 غرف في زايد تحت 5 مليون».", "Search the way you talk: \"3-bed apartment in Zayed under 5M\"."], lang), href: "/app/search" },
     { text: pick(["سجّل عميل برقمه، والبرنامج يفكرك تتابعه ويقولك لما تنزل وحدة تناسبه.", "Save a client by phone; you get follow-up reminders and units that fit them."], lang), href: "/app/leads" },
+    { text: pick(["اعرف حدود باقتك: رسايل الذكاء الاصطناعي والفويس وقراية قوايم الأسعار والوحدات.", "Know your plan's limits: AI messages, voice notes, price-list reading and units."], lang), href: manager ? "/app/dashboard#limits" : "/app/plan" },
     manager && { text: pick(["ضيف فريقك من «الفريق والقواعد».", "Invite your team from \"Team and rules\"."], lang), href: "/app/team" }
   ].filter(Boolean);
   return { title: pick(["👋 أهلاً بيك في WehdatHub", "👋 Welcome to WehdatHub"], lang), steps };
@@ -28,7 +29,8 @@ const TIPS = {
   ask: [
     ["اسأل عن مشروع أو عملائك أو وحداتك.", "Ask about a project, your clients or your units."],
     ["الإجابة من بيانات وكالتك بس، ومعاها تاريخ البيانات.", "Answers come from your agency's data only, with the data's date."],
-    ["لو الإجابة مش عندنا هتقولك كده بوضوح.", "If we don't have it, it says so plainly."]
+    ["لو الإجابة مش عندنا هتقولك كده بوضوح، والمدير يضيف المعلومة من نفس الصفحة.", "If we don't have it, it says so plainly, and a manager can add the information on this page."],
+    ["الرد من الإنترنت اختياري وليه حد شهري ومكتوب عليه غير مؤكد.", "A web answer is optional, has a monthly limit and is labelled unverified."]
   ],
   units: [
     ["كل وحدات وكالتك المتاحة، ودوّر بالكود أو المكان.", "All your agency's available units; search by code or place."],
@@ -38,7 +40,7 @@ const TIPS = {
   add: [
     ["اكتب التفاصيل أو سجّل فويس، والبرنامج يملا الخانات.", "Type the details or record a voice note; the form fills itself."],
     ["راجع الخانات وكمّل الناقص.", "Check the fields and fill in what's missing."],
-    ["ضيف الصور، وتقدر ترتبها بعدين من التعديل.", "Add photos; you can order them later when editing."],
+    ["ضيف الصور ورتّبها بالسحب: لو رتّبتها بنفسك مش بنستخدم الذكاء الاصطناعي وده بيوفر رصيدك.", "Add photos and drag them into order: a hand-set order skips AI ordering and saves your AI credits."],
     ["بعد الحفظ هتشوف سعر المتر مقارنة بوحدات شبهها.", "After saving you see the price per m² against similar units."]
   ],
   leads: [
@@ -60,6 +62,7 @@ const TIPS = {
   catalogue: [
     ["مشاريع المطورين بأسعارها وأنظمة السداد.", "Developers' projects with prices and payment plans."],
     ["المديرين بيرفعوا شيت الأسعار والبروشور والصور.", "Managers upload price sheets, brochures and photos."],
+    ["قراية قوايم الأسعار (PDF وصور) بالذكاء الاصطناعي ليها حد صفحات شهري ومقفولة لحد ما صاحب التطبيق يفتحها؛ شيت إكسيل بيتقرا ببلاش.", "AI reading of price lists (PDF and photos) has a monthly page limit and is off until the app owner switches it on; an Excel sheet is read free."],
     ["ابعت للعميل رابط المشروع أو الوحدة.", "Send the client the project or unit link."]
   ],
   commissions: [

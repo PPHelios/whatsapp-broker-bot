@@ -69,6 +69,8 @@ function build({ project: p, developer = null, phases = [], plans = [], units = 
     plans: plans.map(planLine),
     prices: { as_of: day(p.prices_updated_at), ranges },
     materials: materials.filter((m) => m.client_visible && m.check_status !== "broken").map((m) => ({ label: m.label, kind: m.kind, url: m.url })),
+    // Information managers added to answer questions the data could not (services/assistant.js addInfo).
+    agency_notes: p.notes ? String(p.notes).slice(0, 1500) : null,
     highlights: Array.isArray(p.highlights?.en) && p.highlights.en.length ? p.highlights.en : Array.isArray(p.highlights?.ar) ? p.highlights.ar : [],
     brochure: { as_of: day(p.brochure?.read_at), facts: (p.brochure?.facts || []).slice(0, MAX_FACTS).map((f) => f.text) },
     // F22: what came from uploaded files, each with its date.
@@ -93,6 +95,7 @@ function build({ project: p, developer = null, phases = [], plans = [], units = 
           .join("; ")}.`
       : "No prices recorded.",
     facts.highlights.length ? `Highlights: ${facts.highlights.join("; ")}.` : null,
+    facts.agency_notes ? `Agency notes: ${facts.agency_notes}` : null,
     facts.materials.length ? `Client materials: ${facts.materials.map((m) => m.label).join(", ")}.` : null,
     src.prices ? `Prices come from ${src.prices.file ? `the file ${src.prices.file}` : "a price sheet"}${src.prices.read_by_ai ? " (read by AI)" : ""}, applied ${src.prices.as_of}.` : null,
     src.plans ? `Payment plans were read from ${src.plans.file ? `the file ${src.plans.file}` : "a developer file"} on ${src.plans.as_of}.` : null,

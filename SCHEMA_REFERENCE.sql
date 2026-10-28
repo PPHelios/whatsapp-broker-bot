@@ -1066,7 +1066,8 @@ CREATE TABLE IF NOT EXISTS public.assistant_questions (
   found boolean DEFAULT false NOT NULL,
   web boolean DEFAULT false NOT NULL,
   scopes text[] DEFAULT '{}'::text[] NOT NULL,
-  created_at timestamp with time zone DEFAULT now() NOT NULL
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  resolved_at timestamp with time zone
 );
 
 CREATE TABLE IF NOT EXISTS public.broker_passkeys (

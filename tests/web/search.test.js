@@ -63,6 +63,20 @@ describe("same filters, same units, same order as WhatsApp", () => {
     expect(logged.map((r) => r.channel)).toEqual(["text", "web"]);
   });
 
+  test("a typed search points its address at the ?f= link, which Back/reload serves without the AI", async () => {
+    await seedInventory();
+    h.AI.respond((c) => (c.operation === "search_parse" ? MV3 : null));
+    const { agent } = await signIn(h, "broker");
+    const first = await agent.get("/app/search").query({ q: "Mountain View 3 bedrooms" });
+    const url = first.text.match(/data-search-url="([^"]+)"/)[1].replace(/&amp;/g, "&");
+    expect(url).toMatch(/^\/app\/search\?f=.+&q=/);
+    const calls = h.AI.calls.length;
+    const again = await agent.get(url);
+    expect(webCodes(again.text)).toEqual(webCodes(first.text));
+    expect(h.AI.calls.length).toBe(calls);
+    expect(first.text).toContain("data-back");
+  });
+
   test("the AI down: the local parser gives the same result on both channels", async () => {
     await seedInventory();
     h.AI.respond(() => new Error("503 UNAVAILABLE"));

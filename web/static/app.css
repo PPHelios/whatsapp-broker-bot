@@ -118,3 +118,13 @@ details.tip { padding: 8px 12px; margin-bottom: 12px; }
 details.tip summary { cursor: pointer; font-weight: 600; }
 details.tip ol { margin: 8px 0 0; }
 .welcome ol li { margin-bottom: 6px; }
+
+.tabs .tab-radio { position: absolute; opacity: 0; pointer-events: none; }
+.tabs .tab-bar { display: flex; gap: 4px; border-bottom: 1px solid var(--line, #ddd); margin-bottom: 12px; }
+.tabs .tab-bar label { padding: 10px 14px; cursor: pointer; border-bottom: 3px solid transparent; font-weight: 600; color: var(--muted, #5b6575); }
+.tabs .tab-panel { display: none; }
+.tabs #pay-tab-resale:checked ~ .panel-resale, .tabs #pay-tab-primary:checked ~ .panel-primary { display: block; }
+.tabs #pay-tab-resale:checked ~ .tab-bar label[for="pay-tab-resale"], .tabs #pay-tab-primary:checked ~ .tab-bar label[for="pay-tab-primary"] { color: var(--brand, #1D70B8); border-bottom-color: var(--brand, #1D70B8); }
+.tabs .tab-radio:focus-visible ~ .tab-bar { outline: 2px solid var(--brand, #1D70B8); }
+
+.backlink { display: inline-block; margin-bottom: 8px; padding: 6px 0; font-weight: 600; text-decoration: none; }
