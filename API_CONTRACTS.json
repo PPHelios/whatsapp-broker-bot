@@ -321,6 +321,15 @@
       "pageByIds": ["pool", "agencyId", "ids", "offset", "pageSize"],
       "search": ["params"]
     },
+    "domain/onboarding.js": {
+      "welcome": ["params", "lang"],
+      "TIPS": "Object",
+      "tip": ["nav", "lang"],
+      "HINTS": "Object",
+      "hint": ["kind", "lang"],
+      "nudge": ["day", "progress", "lang"],
+      "NUDGE_DAYS": "Array"
+    },
     "domain/describe.js": {
       "clientCopy": ["l", "broker", "params"],
       "paymentHint": ["l", "lang"],
@@ -1095,6 +1104,8 @@
       "cssTokens": ["brand"]
     },
     "domain/plans.js": {
+      "unitLimitText": ["limit", "lang"],
+      "ALL": "Array",
       "PLANS": "Array",
       "FREE": "Object",
       "VOICE_PACK": "Object",
@@ -1121,6 +1132,9 @@
       "allowance": ["db", "agencyId", "params"],
       "checkAllowance": ["db", "agencyId", "params"],
       "seatAvailable": ["db", "agencyId", "params"],
+      "planLimits": ["db"],
+      "savePlanLimits": ["db", "input"],
+      "unitCapacity": ["db", "agencyId", "params"],
       "getSetting": ["db", "key", "fallback"],
       "setSetting": ["db", "key", "value"],
       "payTo": ["db"],
@@ -1563,6 +1577,17 @@
     "web/routes/gallery.js": {
       "register": ["web", "params"],
       "gallerySection": ["lang", "manager", "data", "params"]
+    },
+    "services/onboarding.js": {
+      "welcomeFor": ["db", "broker"],
+      "closeWelcome": ["pool", "broker", "now"],
+      "firstHint": ["db", "broker", "kind", "now"],
+      "telegramLink": ["pool", "broker"],
+      "supportUrl": ["broker", "lang"],
+      "progressOf": ["db", "broker"],
+      "nudgeDue": ["pool", "params"],
+      "nudgeJob": [],
+      "stuckList": ["db", "params"]
     },
     "services/brochure.js": {
       "read": ["pool", "actor", "projectId", "params", "params"],

@@ -70,7 +70,7 @@ function referralSection(r, lang) {
 </section>`;
 }
 
-function planPage({ a, payments, payTo, lang, manager, referral = null, notice = null, created = null }) {
+function planPage({ a, limits = {}, payments, payTo, lang, manager, referral = null, notice = null, created = null }) {
   const p = a.plan;
   return html`<h1>💳 ${L(lang, "الباقة", "Plan")}</h1>
 ${notice || ""}
@@ -82,6 +82,7 @@ ${created ? paymentCard(created, payTo, lang) : ""}
     ${meter([L(lang, "طلبات نصية الشهر ده", "Text requests this month"), "text"], a.text.used, a.text.limit)}
     ${meter([L(lang, "فويس الشهر ده", "Voice notes this month"), "voice"], a.voice.used, a.voice.limit)}
     ${meter([L(lang, "المستخدمين", "Users"), "seats"], a.seats.used, a.seats.limit)}
+    ${meter([L(lang, "وحدات متاحة", "Available units"), "units"], a.units.used, a.units.limit)}
   </div>
   <p class="muted">${L(lang, "لو الرصيد خلص، البحث والعملاء والوحدات بيفضلوا شغالين يدوي؛ اللي بيقف هو قراءة الفويس والوصف بالذكاء الاصطناعي لحد أول الشهر. بياناتك مش بتتمسح أبداً.", "When an allowance runs out, search, clients and units keep working by hand; only AI reading of voice notes and descriptions stops until the month turns. Your data is never deleted.")}</p>
 </section>
@@ -89,7 +90,7 @@ ${manager
   ? html`<form method="post" action="/app/plan/pay" class="card stack">
   <h2>${L(lang, "اختار باقة", "Choose a plan")}</h2>
   <div class="grid">${Plans.PLANS.map(
-    (x) => html`<label class="card tile check"><input type="radio" name="plan" value="${x.id}" ${x.id === (a.source === "paid" ? p.id : "office") ? "checked" : ""}> <span><strong>${Plans.planName(x, lang)}</strong> · ${num(x.priceEgp)} ${L(lang, "ج.م/شهر", "EGP/month")}<br><span class="muted">${x.seats} ${L(lang, "مستخدم", "users")} · ${num(x.text)} ${L(lang, "نصي", "text")} · ${num(x.voice)} ${L(lang, "فويس", "voice")}</span></span></label>`
+    (x) => html`<label class="card tile check"><input type="radio" name="plan" value="${x.id}" ${x.id === (a.source === "paid" ? p.id : "office") ? "checked" : ""}> <span><strong>${Plans.planName(x, lang)}</strong> · ${num(x.priceEgp)} ${L(lang, "ج.م/شهر", "EGP/month")}<br><span class="muted">${x.seats} ${L(lang, "مستخدم", "users")} · ${num(x.text)} ${L(lang, "نصي", "text")} · ${num(x.voice)} ${L(lang, "فويس", "voice")} · ${num(limits[x.id] ?? x.units)} ${L(lang, "وحدة", "units")}</span></span></label>`
   )}</div>
   <label>${L(lang, "المدة", "Period")} <select name="months">${Billing.MONTHS.map((m) => html`<option value="${m}">${m === 1 ? L(lang, "شهر", "1 month") : L(lang, `${m} شهور`, `${m} months`)}</option>`)}</select></label>
   <input type="hidden" name="kind" value="plan">
@@ -113,10 +114,10 @@ function register(web, { pool, page }) {
   const render = async (req, res, extra = {}, status = 200) => {
     const lang = langOf(req);
     const broker = req.session.broker;
-    const [a, payTo] = await Promise.all([Billing.allowance(pool, broker.agency_id), Billing.payTo(pool)]);
+    const [a, payTo, limits] = await Promise.all([Billing.allowance(pool, broker.agency_id), Billing.payTo(pool), Billing.planLimits(pool)]);
     const payments = isManager(broker) ? await Billing.paymentsOf(pool, broker.agency_id) : [];
     const referral = isManager(broker) ? await Referrals.summary(pool, broker.agency_id) : null;
-    return page(req, res, { title: L(lang, "الباقة", "Plan"), nav: "settings", body: planPage({ a, payments, payTo, lang, manager: isManager(broker), referral, ...extra }) }, status);
+    return page(req, res, { title: L(lang, "الباقة", "Plan"), nav: "settings", body: planPage({ a, limits, payments, payTo, lang, manager: isManager(broker), referral, ...extra }) }, status);
   };
 
   web.get("/plan", (req, res) => render(req, res));

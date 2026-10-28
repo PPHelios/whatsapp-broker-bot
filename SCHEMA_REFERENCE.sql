@@ -319,7 +319,8 @@ CREATE TABLE IF NOT EXISTS public.brokers (
   draft_style text,
   quiet_line boolean DEFAULT true NOT NULL,
   target_deals smallint,
-  target_commission bigint
+  target_commission bigint,
+  onboarding jsonb DEFAULT '{}'::jsonb NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.listings (

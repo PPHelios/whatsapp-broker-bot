@@ -68,10 +68,23 @@ ${scripts ? html`<script src="${assets("htmx.min.js")}" defer></script>
 </head>
 <body>
 ${broker || nav || langSwitch ? topBar({ broker, nav, lang, unread }) : ""}
-<main id="main">${body}</main>
-${broker ? html`<footer class="foot muted"><a href="/app/report">${en ? "🐞 Report a problem" : "🐞 بلّغ عن مشكلة"}</a></footer>` : ""}
+<main id="main">${broker && nav ? screenTip(nav, lang) : ""}${body}</main>
+${broker ? footer(broker, lang) : ""}
 </body>
 </html>`;
+}
+
+/** Onboarding: the "?" tip of a main screen (3-4 steps, domain/onboarding.js). */
+function screenTip(nav, lang) {
+  const steps = require("../domain/onboarding").tip(nav, lang);
+  if (!steps) return "";
+  return html`<details class="tip card" data-tip="${nav}"><summary aria-label="${lang === "en" ? "How this page works" : "إزاي الصفحة دي بتشتغل"}">❓ ${lang === "en" ? "How it works" : "إزاي تستخدمها"}</summary><ol>${steps.map((s) => html`<li>${s}</li>`)}</ol></details>`;
+}
+
+function footer(broker, lang) {
+  const en = lang === "en";
+  const support = require("../services/onboarding").supportUrl(broker, lang);
+  return html`<footer class="foot muted"><a href="/app/report">${en ? "🐞 Report a problem" : "🐞 بلّغ عن مشكلة"}</a>${support ? html` · <a href="${support}" target="_blank" rel="noopener" data-support>${en ? "🙋 Talk to a person" : "🙋 كلّم حد من فريقنا"}</a>` : ""}</footer>`;
 }
 
 const NAV = [
