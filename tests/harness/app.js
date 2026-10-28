@@ -195,6 +195,7 @@ async function createHarness() {
     AI,
     Storage,
     Push,
+    pool,
     BROKERS,
     AGENCY_A,
     AGENCY_B,

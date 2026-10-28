@@ -95,8 +95,10 @@ test("two clients with the name → a list; picking one asks to confirm", async 
   expect(list.text).toMatch(/أنهي عميل/);
   const rows = list.sections[0].rows;
   expect(rows).toHaveLength(2);
+  // F16: phone last 4 and last contact tell them apart, on the list and on the confirm card.
+  expect(rows.find((r) => r.title.includes("أحمد علي")).description).toBe("…5678 · لسه ماتكلمتوش");
   const ask = one("broker", await h.pick("broker", rows.find((r) => r.title.includes("أحمد علي")).id));
-  expect(ask.text).toContain("أحمد علي · L-0002");
+  expect(ask.text).toContain("أحمد علي · L-0002 · …5678");
   await h.tap("broker", ids(ask)[0]);
   expect(await events(second.id)).toEqual(["contacted"]);
 });

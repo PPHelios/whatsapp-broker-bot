@@ -17,8 +17,11 @@ const COLUMNS = [
   ["property_type", /^(property type|unit type|property|نوع العقار|نوع الوحده|العقار)$/],
   ["kind", /^(type|lead type|client type|kind|type of lead|category|النوع|نوع|نوع العميل|تصنيف العميل)$/],
   ["listing_type", /^(sale or rent|sale rent|purpose|for|buy or rent|بيع او ايجار|بيع ايجار|شراء او ايجار|الغرض)$/],
-  // A Meta Leads Center export names the campaign ("campaign_name"); it is the closest thing to a source there.
-  ["source", /^(source|lead source|channel|campaign|campaign name|المصدر|مصدر|مصدر العميل|جه منين|الحمله)$/],
+  ["source", /^(source|lead source|channel|المصدر|مصدر|مصدر العميل|جه منين)$/],
+  // F3: a Meta Leads Center export has "platform" (fb / ig) and "campaign_name": the platform is the source and the
+  // campaign goes to the notes.
+  ["platform", /^(platform|المنصه)$/],
+  ["campaign", /^(campaign|campaign name|الحمله|اسم الحمله)$/],
   ["budget", /^(budget|price|max price|budget egp|الميزانيه|ميزانيه|السعر|الميزانيه بالجنيه)$/],
   ["location", /^(area|location|compound|project|area or compound|district|city|المنطقه|منطقه|المكان|الكمبوند|كمبوند|المشروع|المنطقه او الكمبوند)$/],
   ["bedrooms", /^(bedrooms|beds|rooms|غرف|الغرف|عدد الغرف|اوض|عدد الاوض)$/],
@@ -28,6 +31,23 @@ const COLUMNS = [
   ["lawful_basis", /^(lawful basis|basis|consent|legal basis|الاساس القانوني|الموافقه)$/]
 ];
 const KEYS = COLUMNS.map(([k]) => k);
+
+/** "fb" / "ig" (Meta's platform column) → Facebook / Instagram. */
+function platformSource(v) {
+  const t = normalizeSearch(v);
+  if (!t) return null;
+  if (/^(ig|instagram|انستجرام|انستا)$/.test(t)) return "Instagram";
+  if (/^(fb|facebook|فيسبوك|فيس بوك|messenger|an|audience network)$/.test(t)) return "Facebook";
+  return null;
+}
+
+/** A source cell written like one of the common sources (any case, Arabic or English) takes that source's name. */
+function canonicalSource(v) {
+  const t = normalizeSearch(v);
+  if (!t) return null;
+  const hit = Stages.SOURCES.find(([en, ar]) => normalizeSearch(en) === t || normalizeSearch(ar) === t);
+  return hit ? hit[0] : platformSource(v) || text(v, 60);
+}
 
 /** Header text → column key (or null). */
 function columnFor(header) {
@@ -175,8 +195,8 @@ function rowToLead(cells = {}) {
     phones: phones.slice(0, 3),
     name: text(cells.name, 120),
     kind,
-    source: text(cells.source, 60),
-    notes: text(cells.notes, 4000),
+    source: (isEmpty(cells.source) ? null : canonicalSource(cells.source)) || platformSource(cells.platform),
+    notes: text([cells.notes, isEmpty(cells.campaign) ? null : `Campaign: ${text(cells.campaign, 200)}`].filter((v) => !isEmpty(v)).join(" · "), 4000),
     stage: st,
     lawfulBasis: basis,
     assigned: text(cells.assigned, 120),
@@ -217,4 +237,4 @@ const label = (labels, key, lang) => (labels[key] ? labels[key][lang === "en" ? 
 const warningLabel = (key, lang) => label(WARNING_LABELS, key, lang);
 const errorLabel = (key, lang) => label(ERROR_LABELS, key, lang);
 
-module.exports = { COLUMNS, KEYS, columnFor, leadKind, stage, lawfulBasis, budget, phonesIn, rowToLead, matchBroker, warningLabel, errorLabel };
+module.exports = { COLUMNS, KEYS, columnFor, platformSource, canonicalSource, leadKind, stage, lawfulBasis, budget, phonesIn, rowToLead, matchBroker, warningLabel, errorLabel };

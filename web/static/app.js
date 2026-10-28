@@ -5,6 +5,30 @@
   document.addEventListener("htmx:configRequest", function (e) {
     if (meta) e.detail.headers["X-CSRF-Token"] = meta.content;
   });
+  // A page left open: when it comes back into view, take the session's current token (a sign-in elsewhere in this
+  // browser replaces it) or go to sign-in and back here once the session has ended.
+  var lastCheck = Date.now();
+  function refreshToken() {
+    if (!meta || document.visibilityState === "hidden" || Date.now() - lastCheck < 60000) return;
+    lastCheck = Date.now();
+    fetch("/app/csrf", { credentials: "same-origin", headers: { Accept: "application/json" }, redirect: "manual" })
+      .then(function (r) {
+        if (r.status === 200) return r.json();
+        if (r.type === "opaqueredirect" || r.status === 401 || r.status === 303) location.href = "/app/login?next=" + encodeURIComponent(location.pathname + location.search);
+        return null;
+      })
+      .then(function (d) {
+        if (!d || !d.csrf || d.csrf === meta.content) return;
+        meta.content = d.csrf;
+        var inputs = document.querySelectorAll('input[name="_csrf"]');
+        for (var i = 0; i < inputs.length; i++) inputs[i].value = d.csrf;
+        var boxes = document.querySelectorAll("[data-csrf]");
+        for (var j = 0; j < boxes.length; j++) boxes[j].setAttribute("data-csrf", d.csrf);
+      })
+      .catch(function () {});
+  }
+  document.addEventListener("visibilitychange", refreshToken);
+  window.addEventListener("focus", refreshToken);
   // <form data-confirm="…">: ask before a step that can't be undone from the page (deactivating a broker).
   document.addEventListener("submit", function (e) {
     var msg = e.target && e.target.getAttribute && e.target.getAttribute("data-confirm");

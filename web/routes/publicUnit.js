@@ -1,7 +1,7 @@
 // web/routes/publicUnit.js — Public unit pages for clients: /<agency-slug>/<unit-code>?s=<share-token>.
 // Rendered only from domain/publicUnit.js (the allowlist serializer); noindex; OG tags for link previews;
 // a real client's open alerts the broker who shared the link. Phase 2 step 2: an "I'm interested" form (name, phone,
-// consent; honeypot and rate limits) makes a lead for the broker who shared the link (source "Unit link") and alerts them.
+// a contact notice under Send (F19); honeypot and rate limits) makes a lead for the broker who shared the link (source "Unit link") and alerts them.
 "use strict";
 
 const express = require("express");
@@ -36,7 +36,6 @@ const money = (n, lang) => `${num(n)} ${L(lang, "ج.م", "EGP")}`;
 const INTEREST_ERRORS = {
   name: ["اكتب اسمك.", "Enter your name."],
   phone: ["اكتب رقم موبايل صحيح.", "Enter a valid mobile number."],
-  consent: ["لازم توافق إننا نتواصل معاك.", "Please agree to be contacted."],
   rate: ["طلبات كتير؛ جرب بعد شوية.", "Too many requests; try again later."]
 };
 
@@ -53,8 +52,8 @@ function interestForm(u, { action, error, values = {}, sent }) {
   <label>${L(lang, "الموبايل", "Mobile")} <input name="phone" required inputmode="tel" autocomplete="tel" dir="ltr" maxlength="20" value="${values.phone || ""}"></label>
   <label>${L(lang, "رسالة (اختياري)", "Message (optional)")} <textarea name="message" maxlength="500" rows="2">${values.message || ""}</textarea></label>
   <label class="hp" aria-hidden="true">Website <input name="website" tabindex="-1" autocomplete="off"></label>
-  <label class="check"><input type="checkbox" name="consent" value="1" required> ${L(lang, "موافق إن الوكالة تتواصل معايا بخصوص الوحدة دي وتحتفظ بالاسم والرقم لده.", "I agree that the agency may contact me about this unit and keep my name and number for that.")}</label>
   <button type="submit">${L(lang, "ابعت", "Send")}</button>
+  <p class="muted small">${L(lang, "لما تبعت، بتوافق إن الوكالة تتواصل معاك بخصوص الوحدة دي وتحتفظ بالاسم والرقم لده.", "By sending, you agree the agency may contact you about this unit and keep your name and number for that.")}</p>
 </form>`;
 }
 
@@ -235,7 +234,7 @@ function mountPublic(app, { pool, assets }) {
     const otherLangUrl = `${base}&lang=${lang === "en" ? "ar" : "en"}`;
     let unit;
     if (listing.status === "active") {
-      const { rows: images } = await pool.query("SELECT url FROM listing_images WHERE listing_id = $1 AND agency_id = $2 ORDER BY position LIMIT 15", [listing.id, listing.agency_id]);
+      const { rows: images } = await pool.query("SELECT url FROM listing_images WHERE listing_id = $1 AND agency_id = $2 AND (role IS NULL OR role NOT IN ('document', 'unrelated')) ORDER BY position LIMIT 15", [listing.id, listing.agency_id]);
       unit = PublicUnit.toPublicUnit(listing, { agency, broker: broker?.is_active ? broker : null, images, lang, ...(await projectOf(listing)) });
     } else {
       unit = PublicUnit.unavailable(listing, { agency, lang });
@@ -284,7 +283,7 @@ function mountPublic(app, { pool, assets }) {
         units.push({ ...PublicUnit.unavailable(listing, { agency: resolved.agency, lang }), per_m2: null });
         continue;
       }
-      const { rows: images } = await pool.query("SELECT url FROM listing_images WHERE listing_id = $1 AND agency_id = $2 ORDER BY position LIMIT 1", [listing.id, listing.agency_id]);
+      const { rows: images } = await pool.query("SELECT url FROM listing_images WHERE listing_id = $1 AND agency_id = $2 AND (role IS NULL OR role NOT IN ('document', 'unrelated', 'layout')) ORDER BY position LIMIT 1", [listing.id, listing.agency_id]);
       const u = PublicUnit.toPublicUnit(listing, { agency: resolved.agency, broker, images, lang, ...(await projectOf(listing)) });
       const perM2 = listing.listing_type !== "rent" && Number(listing.area_value) > 0 && Number(listing.price_value) > 0 ? Math.round(Number(listing.price_value) / Number(listing.area_value)) : null;
       units.push({ ...u, per_m2: perM2 });
@@ -359,7 +358,6 @@ function mountPublic(app, { pool, assets }) {
     // A bot filled the hidden field: look successful, keep nothing.
     if (body.website) return done();
     if (!values.name) return render(req, res, ctx, { error: "name", values }, 400);
-    if (body.consent !== "1") return render(req, res, ctx, { error: "consent", values }, 400);
     const byIp = await RateLimit.hit(pool, `interest:ip:${req.ip}`, INTEREST_IP);
     const byLink = byIp.allowed ? await RateLimit.hit(pool, `interest:link:${resolved.link.token_hash}`, INTEREST_LINK) : byIp;
     if (!byLink.allowed) return render(req, res, ctx, { error: "rate", values }, 429);
@@ -370,7 +368,8 @@ function mountPublic(app, { pool, assets }) {
       lang,
       source: "Unit link",
       lawfulBasis: "consent",
-      consentNote: `Interest form on the unit page ${listing.code}`,
+      // F19: no tick box; the notice under the Send button says sending is agreeing to be contacted.
+      consentNote: `Interest form on the unit page ${listing.code} (sent under the contact notice)`,
       notes: [`${L(lang, "سأل عن", "Asked about")} ${listing.code}`, values.message].filter(Boolean).join("\n"),
       // They contacted us themselves, with consent: an earlier erasure doesn't block a fresh request.
       allowErased: true

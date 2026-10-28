@@ -262,7 +262,7 @@ function register(web, { pool, page }) {
     const actor = req.session.broker;
     const archived = req.query.archived === "1";
     const [projects, developers] = await Promise.all([Catalogue.listProjects(pool, actor, { archived }), Catalogue.listDevelopers(pool, actor)]);
-    return page(req, res, { title: title(lang), body: listPage(lang, isManager(actor), { projects, developers, archived, notice: notice || savedNotice(req) }) }, status);
+    return page(req, res, { title: title(lang), nav: "catalogue", body: listPage(lang, isManager(actor), { projects, developers, archived, notice: notice || savedNotice(req) }) }, status);
   };
 
   const showProject = async (req, res, notice = null, status = 200) => {
@@ -282,7 +282,7 @@ function register(web, { pool, page }) {
     const commissionTerms = manager ? termsSection(lang, data.project.id, await Commissions.getTerms(pool, actor, data.project.id)) : null;
     // C6: highlights (everyone) with the brochure reader (managers).
     const highlights = highlightsSection(lang, manager, data.project, { reading, query: req.query });
-    return page(req, res, { title: data.project.name, body: projectPage(lang, manager, data, developers, { notice: notice || pricesNotice(req.query, lang) || savedNotice(req), prices, commissionTerms, highlights }) }, status);
+    return page(req, res, { title: data.project.name, nav: "catalogue", body: projectPage(lang, manager, data, developers, { notice: notice || pricesNotice(req.query, lang) || savedNotice(req), prices, commissionTerms, highlights }) }, status);
   };
 
   /** Runs a service write and answers: 403, 404, the page again with the error (400), or a redirect. */

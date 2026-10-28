@@ -10,6 +10,7 @@ const LeadIntake = require("../lib/leadIntake");
 const DealsWA = require("../lib/deals");
 const { reply, replyButtons, setTurnNote } = require("../lib/dispatcher");
 const { handleCommand } = require("./commands");
+const { canonicalCommand } = require("../domain/commandWords");
 const { handleImage, handleAudio, waitForPhotos } = require("./media");
 const { handleDocument } = require("./documents");
 const { handleInteractive } = require("./interactive");
@@ -110,7 +111,8 @@ async function dispatchMessage(broker, message, ctx) {
     }
 
     case "text": {
-      const text = message.text?.body?.trim() || "";
+      // F4: command words in any common spelling ("اضافه", "الغاء", "اسال …").
+      const text = canonicalCommand(message.text?.body?.trim() || "");
 
       // -1. A bug report: *bug …* / *بلاغ …*, or the description after a bare *bug* (lib/bugReports.js).
       if (await BugReports.handle(broker, text, ctx)) return "done";
