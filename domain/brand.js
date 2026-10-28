@@ -5,7 +5,8 @@
 
 const BRAND = Object.freeze({
   name: "WehdatHub",
-  colors: Object.freeze({ brand: "#0b132b", accent: "#d4af37", ink: "#0b132b", bg: "#f6f7f9" }),
+  // WehdatHub brand v2 (owner, 2026-10-27): azure main, copper for highlights, charcoal text on a light ground.
+  colors: Object.freeze({ brand: "#1d70b8", accent: "#c45a30", ink: "#0e1521", bg: "#f4f6f9" }),
   // Under web/static/ (served at /app/static/).
   logo: "icons/icon.svg"
 });

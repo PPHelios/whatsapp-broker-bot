@@ -1,7 +1,7 @@
 /* WehdatHub web app — mobile first; logical properties so RTL and LTR share one sheet */
 :root {
   /* --brand, --accent, --ink and --bg come from brand.css (domain/brand.js). */
-  --muted: #5b6475; --line: #e3e6ec; --card: #fff;
+  --muted: #4a5568; --line: #e3e6ec; --card: #fff;
   --ok: #137a3b; --warn: #9a5b00; --bad: #b42318;
   --radius: 12px; --gap: 12px;
   font-family: "Cairo", "Segoe UI", Tahoma, system-ui, sans-serif;
@@ -15,7 +15,7 @@ h1 { font-size: 1.35rem; margin: 8px 0 12px; }
 h2 { font-size: 1.1rem; margin: 16px 0 8px; }
 .top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 10px 16px; background: var(--brand); color: #fff; }
 .top a { color: #fff; text-decoration: none; }
-.brand { font-weight: 700; color: var(--accent) !important; }
+.brand { font-weight: 800; color: #fff !important; }
 .nav { display: flex; gap: 12px; flex-wrap: wrap; }
 .nav a[aria-current="page"] { border-block-end: 2px solid var(--accent); }
 .logout { margin-inline-start: auto; }
