@@ -12,6 +12,8 @@ const { termsSection } = require("./commissions");
 const { pricesSection, pricesNotice } = require("./priceSheets");
 const PriceReading = require("../../services/priceReading");
 const { highlightsSection } = require("./brochure");
+const { gallerySection } = require("./gallery");
+const Gallery = require("../../services/projectGallery");
 const PlanReading = require("../../services/planReading");
 const PR = require("../../domain/planReading");
 const RateLimit = require("../../lib/rateLimit");
@@ -254,7 +256,7 @@ function planForm(lang, projectId, phases, pl = {}) {
 </form>`;
 }
 
-function projectPage(lang, manager, data, developers, { notice = null, prices = null, commissionTerms = null, highlights = null, plansRead = null } = {}) {
+function projectPage(lang, manager, data, developers, { notice = null, prices = null, commissionTerms = null, highlights = null, plansRead = null, gallery = null } = {}) {
   const { project: p, developer: d, phases, plans, materials, units } = data;
   const base = `/app/catalogue/projects/${p.id}`;
   const phaseName = (id) => phases.find((x) => x.id === id)?.name;
@@ -268,6 +270,7 @@ ${notice || ""}
   ${manager && p.notes ? html`<p class="muted">🔒 ${p.notes}</p>` : ""}
 </section>
 ${highlights || ""}
+${gallery || ""}
 ${prices || ""}
 ${commissionTerms || ""}
 ${manager ? html`<details class="card"><summary>✏️ ${L(lang, "تعديل المشروع", "Edit project")}</summary>${projectForm(lang, developers, p, base)}
@@ -371,7 +374,9 @@ function register(web, { pool, page }) {
     // C6: highlights (everyone) with the brochure reader (managers).
     const highlights = highlightsSection(lang, manager, data.project, { reading, query: req.query });
     const plansRead = manager ? plansReadSection(lang, data.project, reading, req.query) : null;
-    return page(req, res, { title: data.project.name, nav: "catalogue", body: projectPage(lang, manager, data, developers, { notice: notice || pricesNotice(req.query, lang) || savedNotice(req), prices, commissionTerms, highlights, plansRead }) }, status);
+    // F23: the project's photo gallery.
+    const gallery = gallerySection(lang, manager, await Gallery.list(pool, actor, data.project.id), { reading, query: req.query });
+    return page(req, res, { title: data.project.name, nav: "catalogue", body: projectPage(lang, manager, data, developers, { notice: notice || pricesNotice(req.query, lang) || savedNotice(req), prices, commissionTerms, highlights, plansRead, gallery }) }, status);
   };
 
   /** Runs a service write and answers: 403, 404, the page again with the error (400), or a redirect. */

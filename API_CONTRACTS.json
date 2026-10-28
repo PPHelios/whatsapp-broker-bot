@@ -1535,6 +1535,28 @@
       "cairoTime": ["d"],
       "workbook": ["log", "lang"]
     },
+    "domain/gallery.js": {
+      "VERSION": "String",
+      "MAX_FILES": "Number",
+      "KINDS": "Array",
+      "TYPES": "Array",
+      "PROMPT": "String",
+      "classify": ["text"],
+      "roleOf": ["kind"],
+      "matchUnits": ["layout", "units"]
+    },
+    "services/projectGallery.js": {
+      "upload": ["pool", "actor", "projectId", "params", "params"],
+      "list": ["db", "actor", "projectId"],
+      "update": ["db", "actor", "projectId", "imageId", "params"],
+      "remove": ["db", "actor", "projectId", "imageId"],
+      "sharedFor": ["db", "listing", "params"],
+      "layoutsFor": ["db", "listing"]
+    },
+    "web/routes/gallery.js": {
+      "register": ["web", "params"],
+      "gallerySection": ["lang", "manager", "data", "params"]
+    },
     "services/brochure.js": {
       "read": ["pool", "actor", "projectId", "params", "params"],
       "saveHighlights": ["pool", "actor", "projectId", "input", "params"]

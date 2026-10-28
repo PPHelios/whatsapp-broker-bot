@@ -1130,6 +1130,22 @@ CREATE TABLE IF NOT EXISTS public.lead_intake_log (
   detail text
 );
 
+CREATE TABLE IF NOT EXISTS public.project_images (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid NOT NULL,
+  project_id uuid NOT NULL,
+  url text NOT NULL,
+  storage_path text,
+  mime text DEFAULT 'image/jpeg'::text NOT NULL,
+  role text DEFAULT 'shared'::text NOT NULL,
+  kind text DEFAULT 'other'::text NOT NULL,
+  layout jsonb DEFAULT '{}'::jsonb NOT NULL,
+  match_status text,
+  listing_ids uuid[] DEFAULT '{}'::uuid[] NOT NULL,
+  position integer DEFAULT 0 NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE app_settings ADD CONSTRAINT app_settings_pkey PRIMARY KEY (key);
@@ -1174,6 +1190,7 @@ ALTER TABLE price_sheets ADD CONSTRAINT price_sheets_pkey PRIMARY KEY (id);
 ALTER TABLE processed_batches ADD CONSTRAINT processed_batches_pkey PRIMARY KEY (batch_key);
 ALTER TABLE processed_messages ADD CONSTRAINT processed_messages_pkey PRIMARY KEY (message_id);
 ALTER TABLE project_contexts ADD CONSTRAINT project_contexts_pkey PRIMARY KEY (project_id);
+ALTER TABLE project_images ADD CONSTRAINT project_images_pkey PRIMARY KEY (id);
 ALTER TABLE project_materials ADD CONSTRAINT project_materials_pkey PRIMARY KEY (id);
 ALTER TABLE project_phases ADD CONSTRAINT project_phases_pkey PRIMARY KEY (id);
 ALTER TABLE project_plans ADD CONSTRAINT project_plans_pkey PRIMARY KEY (id);
@@ -1322,6 +1339,8 @@ ALTER TABLE price_page_reads ADD CONSTRAINT price_page_reads_fingerprint_check C
 ALTER TABLE price_sheets ADD CONSTRAINT price_sheets_file_name_check CHECK (((file_name IS NULL) OR (length(file_name) <= 200)));
 ALTER TABLE price_sheets ADD CONSTRAINT price_sheets_source_check CHECK ((source = ANY (ARRAY['file'::text, 'ai'::text])));
 ALTER TABLE price_sheets ADD CONSTRAINT price_sheets_status_check CHECK ((status = ANY (ARRAY['preview'::text, 'applied'::text, 'discarded'::text])));
+ALTER TABLE project_images ADD CONSTRAINT project_images_match_status_check CHECK ((match_status = ANY (ARRAY['matched'::text, 'unsure'::text, 'manual'::text])));
+ALTER TABLE project_images ADD CONSTRAINT project_images_role_check CHECK ((role = ANY (ARRAY['shared'::text, 'layout'::text, 'hidden'::text])));
 ALTER TABLE project_materials ADD CONSTRAINT project_materials_check_status_check CHECK (((check_status IS NULL) OR (check_status = ANY (ARRAY['ok'::text, 'broken'::text]))));
 ALTER TABLE project_materials ADD CONSTRAINT project_materials_kind_check CHECK ((kind = ANY (ARRAY['master_plan'::text, 'brochure'::text, 'layout'::text, 'video'::text, 'location'::text, 'website'::text, 'price_sheet'::text, 'other'::text])));
 ALTER TABLE project_materials ADD CONSTRAINT project_materials_label_check CHECK (((length(btrim(label)) >= 1) AND (length(btrim(label)) <= 80)));
@@ -1437,6 +1456,8 @@ ALTER TABLE price_sheets ADD CONSTRAINT price_sheets_project_id_fkey FOREIGN KEY
 ALTER TABLE price_sheets ADD CONSTRAINT price_sheets_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE project_contexts ADD CONSTRAINT project_contexts_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE project_contexts ADD CONSTRAINT project_contexts_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
+ALTER TABLE project_images ADD CONSTRAINT project_images_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE project_images ADD CONSTRAINT project_images_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 ALTER TABLE project_materials ADD CONSTRAINT project_materials_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE project_materials ADD CONSTRAINT project_materials_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 ALTER TABLE project_phases ADD CONSTRAINT project_phases_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
@@ -1550,6 +1571,8 @@ CREATE INDEX idx_price_increases_due ON public.price_increases USING btree (effe
 CREATE INDEX idx_price_read_log_agency ON public.price_read_log USING btree (agency_id, created_at);
 CREATE INDEX idx_price_sheets_project ON public.price_sheets USING btree (project_id, created_at DESC);
 CREATE INDEX idx_processed_messages_created ON public.processed_messages USING btree (created_at);
+CREATE INDEX project_images_listings_idx ON public.project_images USING gin (listing_ids);
+CREATE INDEX project_images_project_idx ON public.project_images USING btree (project_id, "position");
 CREATE INDEX idx_project_materials_check ON public.project_materials USING btree (checked_at NULLS FIRST);
 CREATE INDEX idx_project_materials_project ON public.project_materials USING btree (project_id, created_at);
 CREATE UNIQUE INDEX uq_project_phases_name ON public.project_phases USING btree (project_id, lower(btrim(name)));
