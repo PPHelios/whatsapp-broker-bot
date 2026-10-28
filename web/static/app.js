@@ -29,6 +29,17 @@
   }
   document.addEventListener("visibilitychange", refreshToken);
   window.addEventListener("focus", refreshToken);
+  // [data-copy="#id"]: copies that field's value (intake and invite links).
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest ? e.target.closest("[data-copy]") : null;
+    if (!btn) return;
+    var field = document.querySelector(btn.getAttribute("data-copy"));
+    if (!field) return;
+    var text = field.value || field.textContent || "";
+    var done = function () { var t = btn.textContent; btn.textContent = "✅"; setTimeout(function () { btn.textContent = t; }, 1500); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () { field.select && field.select(); });
+    else if (field.select) { field.select(); try { document.execCommand("copy"); done(); } catch (err) {} }
+  });
   // <form data-confirm="…">: ask before a step that can't be undone from the page (deactivating a broker).
   document.addEventListener("submit", function (e) {
     var msg = e.target && e.target.getAttribute && e.target.getAttribute("data-confirm");

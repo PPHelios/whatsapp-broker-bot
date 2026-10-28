@@ -1666,6 +1666,23 @@
       "arabicKey": ["s"],
       "canonicalCommand": ["text"],
       "WORDS": "Array"
+    },
+    "services/leadIntake.js": {
+      "PER_HOUR": "Object",
+      "SAMPLE": "Object",
+      "hashToken": ["token"],
+      "intakeUrl": ["token"],
+      "create": ["pool", "agencyId", "params"],
+      "revoke": ["pool", "intakeId", "params"],
+      "readBody": ["body"],
+      "receive": ["pool", "token", "body", "params"],
+      "testIntake": ["pool", "intakeId", "params"],
+      "listForAgency": ["pool", "agencyId"],
+      "overview": ["pool"],
+      "log": ["pool", "agencyId", "params"],
+      "sourcesFor": ["pool", "agencyId"],
+      "quietCheck": ["pool", "params"],
+      "quietJob": []
     }
   },
   "invariant_variable_names": {

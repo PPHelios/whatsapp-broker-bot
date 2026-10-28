@@ -6,6 +6,7 @@
 "use strict";
 
 const Leads = require("../../services/leads");
+const IntakeUrls = require("../../services/leadIntake");
 const FollowUpDrafts = require("../../services/followUpDrafts");
 const LeadMerge = require("../../services/leadMerge");
 const LeadRequests = require("../../services/leadRequests");
@@ -135,6 +136,7 @@ function register(web, { pool, page }) {
     const { rows, more } = await Leads.listLeads(pool, broker, f);
     const pipe = manager ? await Leads.pipeline(pool, broker) : null;
     const brokers = manager ? await activeBrokers(pool, broker.agency_id) : [];
+    const extraSources = await IntakeUrls.sourcesFor(pool, broker.agency_id);
     const qs = (over) => {
       const p = new URLSearchParams();
       const all = { tab, q: f.q, kind: req.query.kind || "", source: f.source || "", broker: manager ? req.query.broker || "" : "", ...over };
@@ -165,7 +167,7 @@ ${pipe
   <input type="hidden" name="tab" value="${tab}">
   <input name="q" value="${f.q}" placeholder="${L(lang, "اسم، رقم أو L-0042", "Name, phone or L-0042")}">
   <select name="kind"><option value="">${L(lang, "كل الأنواع", "All types")}</option>${Stages.KINDS.map((k) => html`<option value="${k}"${req.query.kind === k ? html` selected` : ""}>${Stages.kindLabel(k, lang)}</option>`)}</select>
-  <select name="source"><option value="">${L(lang, "كل المصادر", "All sources")}</option>${Stages.SOURCES.map(([en, ar]) => html`<option value="${en}"${f.source === en ? html` selected` : ""}>${lang === "en" ? en : ar}</option>`)}</select>
+  <select name="source"><option value="">${L(lang, "كل المصادر", "All sources")}</option>${Stages.SOURCES.map(([en, ar]) => html`<option value="${en}"${f.source === en ? html` selected` : ""}>${lang === "en" ? en : ar}</option>`)}${extraSources.map((x) => html`<option value="${x}"${f.source === x ? html` selected` : ""}>${x}</option>`)}</select>
   ${manager
     ? html`<select name="broker"><option value="">${L(lang, "كل الوسطاء", "All brokers")}</option><option value="none"${req.query.broker === "none" ? html` selected` : ""}>${L(lang, "مش متسلم", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${req.query.broker === b.id ? html` selected` : ""}>${b.name}</option>`)}</select>`
     : ""}
@@ -188,7 +190,8 @@ ${rows.length
     const lang = langOf(req);
     const { broker } = req.session;
     const brokers = isManager(broker) ? await activeBrokers(pool, broker.agency_id) : null;
-    return page(req, res, { title: L(lang, "عميل جديد", "New lead"), nav: "leads", body: html`<h1>➕ ${L(lang, "عميل جديد", "New lead")}</h1>${V.leadForm({ lang, csrf: req.session.csrf, brokers, ...opts })}` }, status);
+    const extraSources = await IntakeUrls.sourcesFor(pool, broker.agency_id);
+    return page(req, res, { title: L(lang, "عميل جديد", "New lead"), nav: "leads", body: html`<h1>➕ ${L(lang, "عميل جديد", "New lead")}</h1>${V.leadForm({ lang, csrf: req.session.csrf, brokers, extraSources, ...opts })}` }, status);
   };
 
   /** Prefill from shared or pasted text: the numbers written in it, no AI. */

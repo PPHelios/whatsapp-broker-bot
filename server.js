@@ -151,6 +151,16 @@ function createApp({ pool, config = getConfig(), jobs, tapGuard = TapGuard.creat
     }
   });
 
+  // L1: per-agency lead intake (Make.com lead ads, forms): POST JSON or form fields to the agency's secret URL.
+  app.post("/intake/:token", express.urlencoded({ extended: false, limit: "64kb" }), async (req, res, next) => {
+    try {
+      const r = await require("./services/leadIntake").receive(pool, req.params.token, req.body || {});
+      res.status(r.status).json(r.json);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // Release 2: the broker web app (/app/) and the public pages, after /webhook and /health.
   mountWeb(app, { pool, config });
 

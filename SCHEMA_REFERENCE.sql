@@ -11,6 +11,7 @@ CREATE SEQUENCE IF NOT EXISTS public.broker_passkeys_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.demo_requests_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.error_events_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.lead_events_id_seq;
+CREATE SEQUENCE IF NOT EXISTS public.lead_intake_log_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.lead_matches_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.leases_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.listing_code_seq;
@@ -1099,6 +1100,32 @@ CREATE TABLE IF NOT EXISTS public.leases (
   updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.lead_intakes (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid NOT NULL,
+  name text NOT NULL,
+  source text NOT NULL,
+  token_hash text NOT NULL,
+  token_hint text NOT NULL,
+  quiet_days smallint DEFAULT 3 NOT NULL,
+  last_lead_at timestamp with time zone,
+  quiet_alerted_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  revoked_at timestamp with time zone
+);
+
+CREATE TABLE IF NOT EXISTS public.lead_intake_log (
+  id bigint DEFAULT nextval('lead_intake_log_id_seq'::regclass) NOT NULL,
+  intake_id uuid NOT NULL,
+  agency_id uuid NOT NULL,
+  received_at timestamp with time zone DEFAULT now() NOT NULL,
+  outcome text NOT NULL,
+  external_id text,
+  lead_id uuid,
+  phone_tail text,
+  detail text
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE app_settings ADD CONSTRAINT app_settings_pkey PRIMARY KEY (key);
@@ -1122,6 +1149,8 @@ ALTER TABLE error_events ADD CONSTRAINT error_events_pkey PRIMARY KEY (id);
 ALTER TABLE inbound_messages ADD CONSTRAINT inbound_messages_pkey PRIMARY KEY (msg_id);
 ALTER TABLE lead_erasures ADD CONSTRAINT lead_erasures_pkey PRIMARY KEY (agency_id, phone_hash);
 ALTER TABLE lead_events ADD CONSTRAINT lead_events_pkey PRIMARY KEY (id);
+ALTER TABLE lead_intake_log ADD CONSTRAINT lead_intake_log_pkey PRIMARY KEY (id);
+ALTER TABLE lead_intakes ADD CONSTRAINT lead_intakes_pkey PRIMARY KEY (id);
 ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_pkey PRIMARY KEY (id);
 ALTER TABLE leads ADD CONSTRAINT leads_pkey PRIMARY KEY (id);
 ALTER TABLE leases ADD CONSTRAINT leases_pkey PRIMARY KEY (id);
@@ -1163,6 +1192,7 @@ ALTER TABLE brokers ADD CONSTRAINT uq_broker_phone UNIQUE (agency_id, phone_numb
 ALTER TABLE commissions ADD CONSTRAINT commissions_deal_id_key UNIQUE (deal_id);
 ALTER TABLE deals ADD CONSTRAINT deals_agency_id_idem_key_key UNIQUE (agency_id, idem_key);
 ALTER TABLE deals ADD CONSTRAINT deals_agency_id_ref_key UNIQUE (agency_id, ref);
+ALTER TABLE lead_intakes ADD CONSTRAINT lead_intakes_token_hash_key UNIQUE (token_hash);
 ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_search_id_listing_id_key UNIQUE (search_id, listing_id);
 ALTER TABLE leads ADD CONSTRAINT leads_agency_id_phone_e164_key UNIQUE (agency_id, phone_e164);
 ALTER TABLE leads ADD CONSTRAINT leads_agency_id_ref_key UNIQUE (agency_id, ref);
@@ -1240,6 +1270,10 @@ ALTER TABLE developers ADD CONSTRAINT developers_name_en_check CHECK (((name_en 
 ALTER TABLE developers ADD CONSTRAINT developers_notes_check CHECK (((notes IS NULL) OR (length(notes) <= 1000)));
 ALTER TABLE error_events ADD CONSTRAINT error_events_kind_check CHECK ((kind = ANY (ARRAY['error'::text, 'report'::text])));
 ALTER TABLE lead_events ADD CONSTRAINT lead_events_kind_check CHECK ((kind = ANY (ARRAY['created'::text, 'inquiry'::text, 'assigned'::text, 'stage'::text, 'note'::text, 'contacted'::text, 'follow_up_set'::text, 'follow_up_done'::text, 'request_set'::text, 'match_sent'::text, 'share_opened'::text, 'deal'::text, 'exported'::text, 'merged'::text, 'undo'::text])));
+ALTER TABLE lead_intake_log ADD CONSTRAINT lead_intake_log_outcome_check CHECK ((outcome = ANY (ARRAY['created'::text, 'merged'::text, 'colleague'::text, 'repeat'::text, 'erased_before'::text, 'invalid'::text, 'test'::text, 'error'::text])));
+ALTER TABLE lead_intakes ADD CONSTRAINT lead_intakes_name_check CHECK (((length(name) >= 1) AND (length(name) <= 60)));
+ALTER TABLE lead_intakes ADD CONSTRAINT lead_intakes_quiet_days_check CHECK (((quiet_days >= 1) AND (quiet_days <= 60)));
+ALTER TABLE lead_intakes ADD CONSTRAINT lead_intakes_source_check CHECK (((length(source) >= 1) AND (length(source) <= 60)));
 ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_status_check CHECK ((status = ANY (ARRAY['new'::text, 'alerted'::text, 'sent_to_client'::text, 'dismissed'::text])));
 ALTER TABLE leads ADD CONSTRAINT leads_check CHECK (((stage <> 'lost'::text) OR (lost_reason IS NOT NULL)));
 ALTER TABLE leads ADD CONSTRAINT leads_check1 CHECK ((phone_e164 = phones[1]));
@@ -1352,6 +1386,10 @@ ALTER TABLE lead_erasures ADD CONSTRAINT lead_erasures_erased_by_broker_id_fkey 
 ALTER TABLE lead_events ADD CONSTRAINT lead_events_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE lead_events ADD CONSTRAINT lead_events_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE lead_events ADD CONSTRAINT lead_events_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE;
+ALTER TABLE lead_intake_log ADD CONSTRAINT lead_intake_log_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE lead_intake_log ADD CONSTRAINT lead_intake_log_intake_id_fkey FOREIGN KEY (intake_id) REFERENCES lead_intakes(id) ON DELETE CASCADE;
+ALTER TABLE lead_intake_log ADD CONSTRAINT lead_intake_log_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL;
+ALTER TABLE lead_intakes ADD CONSTRAINT lead_intakes_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE;
 ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
@@ -1448,6 +1486,10 @@ CREATE INDEX error_events_recent ON public.error_events USING btree (created_at 
 CREATE INDEX inbound_messages_phone_idx ON public.inbound_messages USING btree (phone_key, received_at DESC);
 CREATE INDEX inbound_messages_status_idx ON public.inbound_messages USING btree (status, received_at);
 CREATE INDEX idx_lead_events_lead ON public.lead_events USING btree (lead_id, created_at DESC, id DESC);
+CREATE INDEX lead_intake_log_agency_idx ON public.lead_intake_log USING btree (agency_id, received_at DESC);
+CREATE UNIQUE INDEX lead_intake_log_external_idx ON public.lead_intake_log USING btree (intake_id, external_id) WHERE ((external_id IS NOT NULL) AND (outcome = ANY (ARRAY['created'::text, 'merged'::text, 'colleague'::text])));
+CREATE INDEX lead_intake_log_intake_idx ON public.lead_intake_log USING btree (intake_id, received_at DESC);
+CREATE INDEX lead_intakes_agency_idx ON public.lead_intakes USING btree (agency_id);
 CREATE INDEX idx_lead_matches_lead ON public.lead_matches USING btree (lead_id, created_at DESC);
 CREATE INDEX idx_lead_matches_listing ON public.lead_matches USING btree (agency_id, listing_id);
 CREATE INDEX idx_leads_assigned ON public.leads USING btree (agency_id, assigned_broker_id, last_activity_at DESC);
