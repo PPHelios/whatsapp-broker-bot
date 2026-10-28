@@ -66,7 +66,43 @@ function requireBroker(req, res, next) {
     return res.sendStatus(401);
   }
   if (req.method === "GET") return res.redirect(303, `/app/login${back}`);
+  // A form left open after the session ended: sign in, then back to the page the form was on.
+  const from = sameSiteReferer(req);
+  if (from) return res.redirect(303, `/app/login?next=${encodeURIComponent(from)}`);
   return res.status(401).send("Sign in first");
+}
+
+/** The /app/ path of a same-site Referer (or null). */
+function sameSiteReferer(req) {
+  try {
+    const u = new URL(req.get("Referer") || "");
+    if (u.origin !== Links.siteOrigin() && u.hostname !== String(req.get("host") || "").replace(/:\d+$/, "")) return null;
+    const p = u.pathname + u.search;
+    return safeNext(p) === p ? p : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A write with an old token (the page was open before a new sign-in): htmx reloads the page so it gets the current
+ * token; a plain form gets a short page with a link back instead of a bare error.
+ */
+function staleToken(req, res) {
+  if (req.get("HX-Request")) {
+    res.set("HX-Refresh", "true");
+    return res.status(403).send("Invalid or missing CSRF token");
+  }
+  const en = req.lang === "en";
+  const back = sameSiteReferer(req) || "/app/";
+  const t = en
+    ? ["Page out of date", "This page was open from an earlier sign-in, so nothing was saved.", "Open the page again and retry"]
+    : ["الصفحة قديمة", "الصفحة دي كانت مفتوحة من دخول قديم، فما اتحفظش حاجة.", "افتح الصفحة تاني وجرّب"];
+  const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  return res
+    .status(403)
+    .type("html")
+    .send(`<!doctype html><html lang="${en ? "en" : "ar"}" dir="${en ? "ltr" : "rtl"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${t[0]}</title></head><body style="font-family:system-ui,sans-serif;max-width:32rem;margin:2rem auto;padding:0 1rem"><h1>⌛ ${t[0]}</h1><p>${t[1]}</p><p><a href="${esc(back)}">${t[2]}</a></p><!-- Invalid or missing CSRF token --></body></html>`);
 }
 
 // Routes that parse multipart bodies with web/uploads.js; only there may the form field be checked
@@ -86,7 +122,7 @@ function verifyCsrf(req, res, next) {
   }
   const sent = header || req.body?._csrf;
   if (req.session && WebAuth.safeEqual(sent, req.session.csrf)) return next();
-  return res.status(403).send("Invalid or missing CSRF token");
+  return staleToken(req, res);
 }
 
 /** The deferred multipart check (form field _csrf). */
@@ -123,6 +159,7 @@ module.exports = {
   noStore,
   requireBroker,
   verifyCsrf,
+  staleToken,
   allowMultipart,
   csrfAfterParse,
   issuePreToken,

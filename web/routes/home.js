@@ -5,6 +5,8 @@ const { html } = require("../html");
 const Dash = require("../../services/dashboards");
 
 function register(web, { page }) {
+  // Open pages refresh their CSRF token from here (web/static/app.js) so a form left open still saves.
+  web.get("/csrf", (req, res) => res.json({ csrf: req.session.csrf }));
   web.get("/", (req, res) => {
     const { broker, agency } = req.session;
     const en = broker.preferred_lang === "en";

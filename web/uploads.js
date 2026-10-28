@@ -2,7 +2,7 @@
 "use strict";
 
 const multer = require("multer");
-const { csrfAfterParse } = require("./session");
+const { csrfAfterParse, staleToken } = require("./session");
 
 const MB = 1024 * 1024;
 
@@ -23,7 +23,7 @@ function uploads(fields, { maxMb = 10, fieldSizeKb = 256 } = {}) {
   }).fields(fields.map(({ name, maxCount }) => ({ name, maxCount })));
   return (req, res, next) =>
     mw(req, res, (err) => {
-      if (!err) return csrfAfterParse(req) ? next() : res.status(403).send("Invalid or missing CSRF token");
+      if (!err) return csrfAfterParse(req) ? next() : staleToken(req, res);
       const status = err.code === "UNSUPPORTED_TYPE" ? 415 : err.code === "LIMIT_FILE_SIZE" || err.code === "LIMIT_FILE_COUNT" ? 413 : 400;
       return res.status(status).send(err.code === "UNSUPPORTED_TYPE" ? err.message : `Upload refused (${err.code || err.message})`);
     });
