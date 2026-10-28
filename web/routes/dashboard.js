@@ -10,6 +10,7 @@ const Leases = require("../../services/leases");
 const Targets = require("../../services/targets");
 const Reading = require("../../domain/priceReading");
 const Dash = require("../../services/dashboards");
+const Onboarding = require("../../services/onboarding");
 const Stages = require("../../domain/leadStages");
 const Commission = require("../../domain/commission");
 const Billing = require("../../services/billing");
@@ -229,12 +230,36 @@ function referralsSection(r, lang) {
 </section>`;
 }
 
-function ownerPage(d, lang, { billing = null, notice = null, reading = [], assistant = [], referrals = null, intakes = [] } = {}) {
+const STUCK = {
+  nothing_added: ["مضافش وحدة ولا عميل", "no unit or lead yet"],
+  no_telegram: ["مربطش تيليجرام", "Telegram not linked"],
+  quiet: ["مختفي من 7 أيام+", "quiet 7+ days"]
+};
+
+/** Onboarding: brokers who joined 2+ days ago and are stuck, with a WhatsApp link to reach them. */
+function stuckSection(stuck, lang) {
+  const day = (t) => (t ? new Date(t).toISOString().slice(0, 10) : "—");
+  return html`<section class="card" id="stuck">
+  <h2>🧭 ${L(lang, `وسطاء محتاجين مساعدة (${stuck.length})`, `Brokers who need a hand (${stuck.length})`)}</h2>
+  ${stuck.length
+    ? html`<div class="scroll"><table>
+  <thead><tr><th>${L(lang, "الوسيط", "Broker")}</th><th>${L(lang, "الوكالة", "Agency")}</th><th>${L(lang, "انضم", "Joined")}</th><th>${L(lang, "آخر نشاط", "Last active")}</th><th>${L(lang, "واقف عند", "Stuck at")}</th><th></th></tr></thead>
+  <tbody>${stuck.map(
+    (b) => html`<tr data-stuck="${b.id}"><td>${b.name} <span class="muted">(${b.role})</span></td><td>${b.agency_name}</td><td dir="ltr">${day(b.created_at)}</td><td dir="ltr">${day(b.last_active_at)}</td>
+    <td>${b.reasons.map((r) => (STUCK[r] || [r, r])[lang === "en" ? 1 : 0]).join(" · ")}</td>
+    <td><a class="btn secondary" target="_blank" rel="noopener" href="https://wa.me/${String(b.phone_number).replace(/[^0-9]/g, "")}">💬 ${L(lang, "كلّمه", "Message")}</a></td></tr>`
+  )}</tbody></table></div>`
+    : html`<p class="muted">${L(lang, "مفيش حد واقف دلوقتي.", "Nobody is stuck right now.")}</p>`}
+</section>`;
+}
+
+function ownerPage(d, lang, { billing = null, notice = null, reading = [], assistant = [], referrals = null, intakes = [], stuck = [] } = {}) {
   const usd = (n) => `$${Number(n).toFixed(n < 1 ? 4 : 2)}`;
   return html`<h1>🛠️ ${L(lang, "متابعة التطبيق", "App tracking")}</h1>
 ${notice || ""}
 ${billing ? billingSections(billing, lang) : ""}
 ${referrals ? referralsSection(referrals, lang) : ""}
+${stuckSection(stuck, lang)}
 ${intakeSection(intakes, lang)}
 ${readingSection(reading, lang)}
 ${assistantSection(assistant, lang)}
@@ -291,8 +316,8 @@ function register(web, { pool, page }) {
   const ownerView = async (req, res, notice = null, status = 200) => {
     const d = await Dash.ownerDashboard(pool, req.session.broker);
     if (!d) return notFound(req, res, page);
-    const [open, signups, payments, payTo, trials, reading, assistant, referrals, intakes] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Assistant.overview(pool), Referrals.overview(pool), Intake.overview(pool)]);
-    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials }, notice, reading, assistant, referrals, intakes }) }, status);
+    const [open, signups, payments, payTo, trials, reading, assistant, referrals, intakes, stuck] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Assistant.overview(pool), Referrals.overview(pool), Intake.overview(pool), Onboarding.stuckList(pool)]);
+    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials }, notice, reading, assistant, referrals, intakes, stuck }) }, status);
   };
   const ok = (text) => html`<p class="card notice ok" role="status">✅ ${text}</p>`;
   const bad = (text) => html`<p class="card notice bad" role="alert">❌ ${text}</p>`;

@@ -113,3 +113,8 @@ ol[data-sortable] { padding-inline-start: 1.5em; }
 ol[data-sortable] > li { display: flex; gap: 8px; align-items: center; padding: 6px 4px; border-bottom: 1px solid var(--line, #ddd); cursor: grab; }
 ol[data-sortable] > li .grow { flex: 1; }
 ol.photo-order img { width: 72px; height: 54px; object-fit: cover; border-radius: 4px; }
+
+details.tip { padding: 8px 12px; margin-bottom: 12px; }
+details.tip summary { cursor: pointer; font-weight: 600; }
+details.tip ol { margin: 8px 0 0; }
+.welcome ol li { margin-bottom: 6px; }
