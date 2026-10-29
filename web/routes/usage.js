@@ -4,6 +4,7 @@
 const Credits = require("../../lib/credits");
 const UnitCode = require("../../domain/unitCode");
 const { MANAGER_ROLES } = require("../../lib/authz");
+const Billing = require("../../services/billing");
 const AiLog = require("../../services/aiUsageLog");
 const Dash = require("../../services/dashboards");
 const { html } = require("../html");
@@ -31,7 +32,7 @@ const optInt = (v) => {
 };
 
 /** F24: the AI use log with its filters and the Excel link. base = the page's path. */
-function aiLogPage(lang, log, filters, base, title) {
+function aiLogPage(lang, log, filters, base, title, balance = null) {
   const q = (extra = {}) => {
     const p = new URLSearchParams(Object.entries({ month: log.month, broker: filters.brokerId || "", feature: filters.feature || "", ...extra }).filter(([, v]) => v));
     return p.toString();
@@ -47,32 +48,37 @@ function aiLogPage(lang, log, filters, base, title) {
 </form>
 <section class="card">
   <p data-ai-log-totals>${L(lang, `نص: ${log.totals.text} · فويس: ${log.totals.voice} · صفحات: ${log.totals.page} · صفحات ببلاش: ${log.totals.free}`, `Text: ${log.totals.text} · Voice: ${log.totals.voice} · Pages: ${log.totals.page} · Free pages: ${log.totals.free}`)}</p>
-  <p class="muted">${L(lang, "النص والفويس من رصيد الباقة الشهري؛ الصفحات من صفحات قراءة الملفات. الصفحة اللي اتقرت قبل كده (لأي وكالة) ببلاش.", "Text and voice count against the plan's monthly allowance; pages against the document pages. A page read before (by any agency) is free.")}</p>
+  <p data-ai-log-credits><strong>${L(lang, `الرصيد المستخدم: ${log.totals.credits}`, `Credits used: ${log.totals.credits}`)}</strong>${balance ? L(lang, ` من ${balance.limit} · المتبقي ${Math.max(0, balance.limit - balance.used)}`, ` of ${balance.limit} · ${Math.max(0, balance.limit - balance.used)} left`) : ""}</p>
+  <p class="muted">${L(lang, "كل إجراء بالذكاء الاصطناعي بياخد رصيد من رصيد الوكالة الشهري. الصفحة اللي اتقرت قبل كده (لأي وكالة) ببلاش.", "Every AI action uses credits from the agency's monthly pool. A page read before (by any agency) is free.")}</p>
   ${log.rows.length
-    ? html`<div class="scroll"><table><thead><tr><th>${L(lang, "الوقت", "Time")}</th><th>${L(lang, "المستخدم", "User")}</th><th>${L(lang, "الخاصية", "Feature")}</th><th>${L(lang, "اتحسب من", "Counted as")}</th></tr></thead>
-  <tbody>${log.rows.map((r) => html`<tr data-ai-row="${r.feature}"><td dir="ltr">${AiLog.cairoTime(r.at)}</td><td>${r.broker}</td><td>${AiLog.featureLabel(r.feature, lang)}</td><td>${KIND[r.kind][lang === "en" ? 1 : 0]}${r.free ? L(lang, " (ببلاش)", " (free)") : ""}</td></tr>`)}</tbody></table></div>`
+    ? html`<div class="scroll"><table><thead><tr><th>${L(lang, "الوقت", "Time")}</th><th>${L(lang, "المستخدم", "User")}</th><th>${L(lang, "الخاصية", "Feature")}</th><th>${L(lang, "اتحسب من", "Counted as")}</th><th>${L(lang, "الرصيد", "Credits")}</th></tr></thead>
+  <tbody>${log.rows.map((r) => html`<tr data-ai-row="${r.feature}"><td dir="ltr">${AiLog.cairoTime(r.at)}</td><td>${r.broker}</td><td>${AiLog.featureLabel(r.feature, lang)}</td><td>${KIND[r.kind][lang === "en" ? 1 : 0]}${r.free ? L(lang, " (ببلاش)", " (free)") : ""}</td><td>${r.credits}</td></tr>`)}</tbody></table></div>`
     : html`<p class="muted">${L(lang, "مفيش استهلاك في الفترة دي.", "No use in this period.")}</p>`}
 </section>`;
 }
 
 function register(web, { pool, page }) {
   // F24: managers see their agency's AI log; the app owner any agency's (/app/owner links here).
-  const logFor = async (req, res, agencyId, base, title, xlsx) => {
+  const logFor = async (req, res, agencyId, base, title, xlsx, { onlyBroker = null } = {}) => {
     const lang = langOf(req);
     const filters = AiLog.filtersOf(req.query);
+    if (onlyBroker) filters.brokerId = onlyBroker;
     const log = await AiLog.list(pool, agencyId, filters);
+    if (onlyBroker) {
+      log.brokers = log.brokers.filter((b) => b.id === onlyBroker);
+      log.features = [...new Set(log.rows.map((r) => r.feature))].sort();
+    }
     if (xlsx) {
       return res
         .set({ "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": `attachment; filename="ai-usage-${log.month}.xlsx"` })
         .send(await AiLog.workbook(log, lang));
     }
-    return page(req, res, { title, nav: "settings", body: aiLogPage(lang, log, filters, base, title) });
+    return page(req, res, { title, nav: "settings", body: aiLogPage(lang, log, filters, base, title, (await Billing.allowance(pool, agencyId)).credits) });
   };
   for (const xlsx of [false, true]) {
     web.get(`/usage/log${xlsx ? ".xlsx" : ""}`, (req, res) => {
       const { broker } = req.session;
-      if (!isManager(broker)) return res.status(403).type("text/plain").send(L(langOf(req), "للمديرين بس", "Managers only"));
-      return logFor(req, res, broker.agency_id, "/app/usage/log", L(langOf(req), "سجل استهلاك الذكاء الاصطناعي", "AI usage log"), xlsx);
+      return logFor(req, res, broker.agency_id, "/app/usage/log", L(langOf(req), "سجل استهلاك الذكاء الاصطناعي", "AI usage log"), xlsx, { onlyBroker: isManager(broker) ? null : broker.id });
     });
     web.get(`/owner/agencies/:id/ai-log${xlsx ? ".xlsx" : ""}`, async (req, res) => {
       if (!Dash.isOwner(req.session.broker) || !/^[0-9a-f-]{36}$/i.test(req.params.id)) return res.status(404).type("text/plain").send("Not found");
