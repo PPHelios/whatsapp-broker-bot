@@ -15,6 +15,7 @@ const { resetConfig } = require("../../config");
 const FakeAI = require("../harness/fake-ai");
 const Catalogue = require("../../services/catalogue");
 const PriceReading = require("../../services/priceReading");
+const Credits = require("../../services/credits");
 const R = require("../../domain/priceReading");
 
 jest.setTimeout(60000);
@@ -83,12 +84,15 @@ describe("reading a PDF", () => {
 
     expect((await PriceReading.read(h.pool, admin, project.id, { files, pages: "2-3" })).error).toBe("OFF");
     expect((await PriceReading.read(h.pool, await row("broker"), project.id, { files, pages: "2" })).error).toBe("forbidden");
-    await PriceReading.setForAgency(h.pool, admin.agency_id, { enabled: "on", pages_month: "1" });
+    await PriceReading.setForAgency(h.pool, admin.agency_id, { enabled: "on" });
+    // A Free-plan pool (80 credits) with 7 pages already paid (70 credits) leaves room for one page of 10 credits.
+    await h.query("UPDATE agencies SET pilot = false WHERE id = $1", [admin.agency_id]);
+    await h.query("INSERT INTO price_read_log (agency_id, fingerprint, reused) SELECT $1, 'old' || g, false FROM generate_series(1, 7) g", [admin.agency_id]);
     expect(await PriceReading.read(h.pool, admin, project.id, { files, pages: "2-3" })).toEqual({ error: "ALLOWANCE", left: 1, needed: 2 });
     expect(FakeAI.calls).toHaveLength(0);
     expect((await PriceReading.read(h.pool, admin, project.id, { files, pages: "" })).error).toBe("pages_required");
 
-    await PriceReading.setForAgency(h.pool, admin.agency_id, { enabled: "on", pages_month: "5" });
+    await Credits.grant(h.pool, admin.agency_id, 40);
     const r = await PriceReading.read(h.pool, admin, project.id, { files, pages: "2-3" });
     expect(r).toMatchObject({ ok: true, read: 2, reused: 0 });
     expect(FakeAI.calls.map((c) => c.operation)).toEqual(["price_list_read", "price_list_read"]);
@@ -124,7 +128,7 @@ describe("reading a PDF", () => {
     expect(sw.status).toBe(200);
     pageHtml = (await agent.get(`/app/catalogue/projects/${project.id}`)).text;
     expect(pageHtml).toContain("data-ai-read");
-    expect(pageHtml).toContain('data-pages-left="10"');
+    expect(pageHtml).toContain('data-pages-left="200"');
 
     const photo = Buffer.from("fake-jpeg-bytes");
     const up = await agent.post(`/app/catalogue/projects/${project.id}/sheets/read`).field("_csrf", csrf).attach("doc", photo, { filename: "p1.jpg", contentType: "image/jpeg" });

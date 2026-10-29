@@ -2,6 +2,10 @@
 // so the owner page can change them without a deploy. Nothing here hard-codes a price or a credit count.
 "use strict";
 
+const Plans = require("../domain/plans");
+const { MANAGER_ROLES } = require("../lib/authz");
+const ErrorReports = require("../lib/errorReports");
+
 const FX_KEY = "planning_fx_egp_per_usd";
 const FX_DEFAULT = 60;
 
@@ -94,9 +98,85 @@ async function poolFor(db, agencyId, planId, { now = new Date() } = {}) {
   return { plan: base, bundles: rows[0].bundles, grants: rows[0].grants, total: base + rows[0].bundles + rows[0].grants };
 }
 
+const monthKey = (now = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit" }).format(now).slice(0, 7);
+
+/** A manager asks the app owner for more credits: { ok, request } | { error }. The owner is told on Telegram. */
+async function requestMore(db, manager, { credits, note = "" } = {}) {
+  if (!MANAGER_ROLES.includes(String(manager.role || "").toLowerCase())) return { error: "forbidden" };
+  const n = Math.round(Number(credits));
+  if (!Number.isFinite(n) || n < 1 || n > 100000) return { error: "credits" };
+  const { rows: open } = await db.query("SELECT count(*)::int AS n FROM credit_requests WHERE agency_id = $1 AND status = 'pending'", [manager.agency_id]);
+  if (open[0].n >= 3) return { error: "too_many" };
+  const { rows } = await db.query(
+    "INSERT INTO credit_requests (agency_id, broker_id, credits, note) VALUES ($1, $2, $3, $4) RETURNING *",
+    [manager.agency_id, manager.id, n, String(note || "").slice(0, 300) || null]
+  );
+  const { rows: ag } = await db.query("SELECT name FROM agencies WHERE id = $1", [manager.agency_id]);
+  ErrorReports.alertOwner([`🔔 Credit request: ${ag[0]?.name || ""}`, `${manager.name || ""} asks for ${n} credits`, note ? String(note).slice(0, 300) : "", "Answer on /app/owner"].filter(Boolean).join("\n")).catch(() => {});
+  return { ok: true, request: rows[0] };
+}
+
+/** The agency's own requests, newest first (the manager sees pending, approved or declined). */
+async function requestsOf(db, agencyId, { limit = 10 } = {}) {
+  const { rows } = await db.query("SELECT id, credits, note, status, created_at, decided_at FROM credit_requests WHERE agency_id = $1 ORDER BY created_at DESC LIMIT $2", [agencyId, limit]);
+  return rows;
+}
+
+/** Open requests with agency names (the owner page). */
+async function pendingRequests(db) {
+  const { rows } = await db.query(
+    `SELECT r.id, r.credits, r.note, r.created_at, a.id AS agency_id, a.name AS agency_name, b.name AS broker_name
+       FROM credit_requests r JOIN agencies a ON a.id = r.agency_id LEFT JOIN brokers b ON b.id = r.broker_id
+      WHERE r.status = 'pending' ORDER BY r.created_at`
+  );
+  return rows;
+}
+
+/** The owner gives an agency extra credits for this Cairo month. */
+async function grant(db, agencyId, credits, { note = null, now = new Date() } = {}) {
+  const n = Math.round(Number(credits));
+  if (!Number.isFinite(n) || n < 1 || n > 1000000) return { error: "credits" };
+  await db.query("INSERT INTO credit_grants (agency_id, month, credits, note) VALUES ($1, $2, $3, $4)", [agencyId, monthKey(now), n, note]);
+  return { ok: true };
+}
+
+/** The owner answers a request: approve (optionally a different amount) grants the credits for this month. */
+async function decideRequest(db, id, { approve, credits = null, now = new Date() } = {}) {
+  const { rows } = await db.query("SELECT * FROM credit_requests WHERE id = $1 AND status = 'pending'", [id]);
+  const r = rows[0];
+  if (!r) return { error: "not_pending" };
+  if (approve) {
+    const g = await grant(db, r.agency_id, credits || r.credits, { note: `request #${id}`, now });
+    if (g.error) return g;
+  }
+  await db.query("UPDATE credit_requests SET status = $2, decided_at = $3 WHERE id = $1", [id, approve ? "approved" : "declined", now.toISOString()]);
+  return { ok: true, request: { ...r, status: approve ? "approved" : "declined" } };
+}
+
+let loadedAt = 0;
+const TTL_MS = 60 * 1000;
+
+/** Loads plans and bundles from the database into domain/plans.js. A database that cannot be read keeps the last values. */
+async function refresh(db) {
+  const [p, b] = await Promise.all([plans(db), db.query("SELECT id, name_ar, name_en, price_egp, credits, sort FROM credit_bundles WHERE active ORDER BY sort, price_egp")]);
+  Plans.hydrate({ plans: p, bundles: b.rows });
+  loadedAt = Date.now();
+}
+
+/** refresh, at most once a minute (the owner page forces one after each save); never throws. */
+async function ensureFresh(db) {
+  if (Date.now() - loadedAt < TTL_MS) return;
+  loadedAt = Date.now();
+  try {
+    await refresh(db);
+  } catch (err) {
+    console.warn("Plans refresh failed, keeping the last values:", err.message);
+  }
+}
+
 /** Margin in whole percent: the share of the price left after AI cost (cost in EGP at the planning rate). */
 function marginOf({ priceEgp, cost }) {
   return priceEgp > 0 ? Math.round((1 - cost / priceEgp) * 100) : null;
 }
 
-module.exports = { FX_DEFAULT, FX_KEY, planningRate, plans, planById, bundles, actions, actionMap, creditsFor, usedThisMonth, poolFor, marginOf };
+module.exports = { requestMore, requestsOf, pendingRequests, grant, decideRequest, monthKey, refresh, ensureFresh, FX_DEFAULT, FX_KEY, planningRate, plans, planById, bundles, actions, actionMap, creditsFor, usedThisMonth, poolFor, marginOf };

@@ -11,6 +11,8 @@ const AI = require("../lib/ai");
 const Pdf = require("../lib/pdfPages");
 const R = require("../domain/priceReading");
 const PriceSheets = require("./priceSheets");
+const Billing = require("./billing");
+const Credits = require("./credits");
 const { isManager } = require("../lib/authz");
 
 const PARALLEL = 3;
@@ -29,11 +31,20 @@ async function setForAgency(db, agencyId, input) {
   return rows[0] ? { ok: true, agency: rows[0], setting: f.fields } : { error: "not_found" };
 }
 
-/** Pages the agency used this Cairo month (reused pages are free) and what is left. */
+/**
+ * Pages the agency used this Cairo month (reused pages are free) and how many more its credits pay for: a fresh page
+ * costs the "page" credits (credit_actions), taken from the same monthly pool as every other AI action.
+ */
 async function usage(db, agencyId, { now = new Date() } = {}) {
   const setting = await settingOf(db, agencyId);
-  const { rows } = await db.query("SELECT count(*)::int AS n FROM price_read_log WHERE agency_id = $1 AND NOT reused AND created_at >= $2", [agencyId, R.monthStart(now).toISOString()]);
-  return { ...setting, used: rows[0].n, left: Math.max(0, setting.pages_month - rows[0].n) };
+  const [{ rows }, a, per] = await Promise.all([
+    db.query("SELECT count(*)::int AS n FROM price_read_log WHERE agency_id = $1 AND NOT reused AND created_at >= $2", [agencyId, R.monthStart(now).toISOString()]),
+    Billing.allowance(db, agencyId, { now }),
+    Credits.creditsFor(db, "page")
+  ]);
+  const remaining = Math.max(0, a.credits.limit - a.credits.used);
+  const left = per > 0 ? Math.floor(remaining / per) : R.MAX_PAGES_MONTH;
+  return { ...setting, used: rows[0].n, left, pages_month: rows[0].n + left, credits_per_page: per, credits_left: remaining };
 }
 
 /** Every agency with its setting and this month's pages (the owner's page). */

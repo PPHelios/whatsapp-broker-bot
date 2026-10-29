@@ -4,6 +4,7 @@
 "use strict";
 
 const express = require("express");
+const Credits = require("./services/credits");
 const crypto = require("crypto");
 
 const { getConfig } = require("./config");
@@ -35,6 +36,11 @@ function createApp({ pool, config = getConfig(), jobs, tapGuard = TapGuard.creat
   // tapGuard drops repeated button taps (double taps, re-taps while a slow review runs): lib/tapGuard.js.
 
   const app = express();
+
+  // Plans, bundles and credits per action come from the database (owner page); keep the in-memory copy fresh.
+  app.use((_req, _res, next) => {
+    Credits.ensureFresh(pool).finally(next);
+  });
 
   // Capture raw body for cryptographic HMAC verification
   app.use(
@@ -224,6 +230,7 @@ async function start() {
     if (applied.length) console.log(`[MIGRATE] ${applied.length} migration(s) applied`);
   }
 
+  await Credits.refresh(pool).catch((err) => console.warn("Plans load failed, using the starting copy:", err.message));
   const { app, state, scheduler, bootRecovery, preWarmAssets } = createApp({ pool, config });
 
   // Start Server & Bind Port Immediately for Render Health Probes

@@ -4,6 +4,8 @@
 "use strict";
 
 const express = require("express");
+const Credits = require("../../services/credits");
+const { creditTable } = require("../views/credits");
 const RateLimit = require("../../lib/rateLimit");
 const ErrorReports = require("../../lib/errorReports");
 const Phone = require("../../domain/phone");
@@ -50,7 +52,7 @@ function tryForm(lang, { error, values = {}, sent }) {
 </form>`;
 }
 
-function landingBody(lang, { telegramUrl, form, logo, signupOpen }) {
+function landingBody(lang, { telegramUrl, form, logo, signupOpen, actions = [] }) {
   const trial = Plans.TRIAL.plan || "office";
   return html`<section class="hero lp-hero">
   <img class="hero-logo" src="${logo}" alt="" width="64" height="64">
@@ -74,15 +76,15 @@ function landingBody(lang, { telegramUrl, form, logo, signupOpen }) {
     (p) => html`<div class="lp-plan${p.id === trial ? " on" : ""}" data-plan="${p.id}">${p.id === trial ? html`<span class="chip">${T(lang, "التجربة عليها", "Trial plan")}</span>` : ""}<strong>${Plans.planName(p, lang)}</strong>
     <div class="price">${num(p.priceEgp, lang)} ${T(lang, "ج.م", "EGP")}</div>
     <ul><li>${p.seats === 1 ? T(lang, "مستخدم واحد", "1 user") : T(lang, `${num(p.seats, lang)} مستخدمين`, `${p.seats} users`)}</li>
-    <li>${T(lang, `${num(p.text, lang)} طلب نصي`, `${num(p.text, "en")} text requests`)}</li>
-    <li>${T(lang, `${num(p.voice, lang)} فويس`, `${num(p.voice, "en")} voice notes`)}</li></ul></div>`
+    <li>${T(lang, `${num(p.credits, lang)} رصيد ذكاء اصطناعي في الشهر`, `${num(p.credits, "en")} AI credits a month`)}</li></ul></div>`
   )}</div>
   <p class="muted small">${T(
     lang,
-    `أول ${num(Plans.TRIAL.days, lang)} يوم مجاناً على باقة المكتب. باقة فويس إضافية: ${num(Plans.VOICE_PACK.notes, lang)} فويس بـ ${num(Plans.VOICE_PACK.priceEgp, lang)} ج.م. الدفع بإنستاباي أو تحويل بنكي. بياناتك مش بتتمسح أبداً.`,
-    `The first ${Plans.TRIAL.days} days are free on the Office plan. Extra voice pack: ${Plans.VOICE_PACK.notes} voice notes for ${Plans.VOICE_PACK.priceEgp} EGP. Pay by InstaPay or bank transfer. Your data is never deleted.`
+    `أول ${num(Plans.TRIAL.days, lang)} يوم مجاناً على باقة المكتب. رصيد زيادة: ${Plans.BUNDLES.map((b) => `${num(b.credits, lang)} بـ ${num(b.priceEgp, lang)} ج.م`).join("، ")}. الدفع بإنستاباي أو تحويل بنكي. بياناتك مش بتتمسح أبداً.`,
+    `The first ${Plans.TRIAL.days} days are free on the Office plan. Extra credits: ${Plans.BUNDLES.map((b) => `${b.credits} for ${b.priceEgp} EGP`).join(", ")}. Pay by InstaPay or bank transfer. Your data is never deleted.`
   )}</p>
 </section>
+${creditTable(actions, lang)}
 ${form}
 <footer class="lp-foot"><span>${BRAND.name}</span><a href="/app/guide?lang=${lang}">${T(lang, "الدليل", "Guide")}</a><a href="/app/">${T(lang, "دخول", "Sign in")}</a></footer>`;
 }
@@ -90,6 +92,7 @@ ${form}
 function mountLanding(app, { pool, assets }) {
   const render = async (req, res, lang, form = {}, status = 200) => {
     const signupOpen = await Signup.isOpen(pool);
+    const actions = await Credits.actions(pool);
     const username = getConfig().telegram.botUsername;
     const telegramUrl = /^[A-Za-z0-9_]{5,32}$/.test(username || "") ? `https://t.me/${username}` : null;
     const other = lang === "en" ? "ar" : "en";
@@ -109,7 +112,7 @@ function mountLanding(app, { pool, assets }) {
 <meta property="og:title" content="${BRAND.name}">
 <link rel="alternate" hreflang="${other}" href="/?lang=${other}">`,
             body: html`<nav class="top lp-top"><span class="brand"><img src="${assets.url(BRAND.logo)}" alt="" width="28" height="28">${BRAND.name}</span><a class="logout" href="/?lang=${other}" data-lang-switch hreflang="${other}">${other === "en" ? "English" : "العربية"}</a><a class="btn small" href="/app/">${T(lang, "دخول", "Sign in")}</a></nav>
-${landingBody(lang, { telegramUrl, form: tryForm(lang, form), logo: assets.url(BRAND.logo), signupOpen })}`
+${landingBody(lang, { telegramUrl, form: tryForm(lang, form), logo: assets.url(BRAND.logo), signupOpen, actions })}`
           })
         )
       );
