@@ -153,6 +153,121 @@ async function decideRequest(db, id, { approve, credits = null, now = new Date()
   return { ok: true, request: { ...r, status: approve ? "approved" : "declined" } };
 }
 
+
+// --- the owner's page ---------------------------------------------------------------------------------------------
+
+const COST_KEY = "credit_cost_usd";
+const COST_DEFAULT = 0.0026;
+const ID_RE = /^[a-z][a-z0-9_]{1,19}$/;
+const intIn = (v, min, max) => {
+  const n = parseInt(String(v ?? "").replace(/[^0-9]/g, ""), 10);
+  return Number.isInteger(n) && n >= min && n <= max ? n : null;
+};
+const text = (v, max = 40) => String(v ?? "").trim().slice(0, max);
+
+async function setting(db, key, fallback) {
+  const { rows } = await db.query("SELECT value FROM app_settings WHERE key = $1", [key]);
+  const n = Number(rows[0]?.value);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+async function putSetting(db, key, value) {
+  await db.query("INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2::jsonb, NOW()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()", [key, JSON.stringify(value)]);
+}
+
+/** What the owner's Plans and credits section shows: every plan with its margin at full use, bundles, actions, rates. */
+async function ownerOverview(db) {
+  const [pl, bundleRows, acts, fx, costUsd, requests, agencies] = await Promise.all([
+    plans(db),
+    db.query("SELECT id, name_ar, name_en, price_egp, credits, sort, active FROM credit_bundles ORDER BY sort, price_egp").then((r) => r.rows),
+    actions(db),
+    planningRate(db),
+    setting(db, COST_KEY, COST_DEFAULT),
+    pendingRequests(db),
+    db.query("SELECT id, name FROM agencies ORDER BY name").then((r) => r.rows)
+  ]);
+  const costOf = (credits) => credits * costUsd * fx;
+  const withMargin = (x) => ({ ...x, cost_egp: Math.round(costOf(x.credits)), margin: marginOf({ priceEgp: x.price_egp, cost: costOf(x.credits) }) });
+  return { plans: pl.map(withMargin), bundles: bundleRows.map(withMargin), actions: acts, fx, costUsd, requests, agencies };
+}
+
+/** Saves the plans form (p_<id>_<field>) and an optional new plan (new_*): { ok } | { error }. */
+async function savePlans(db, body = {}) {
+  for (const p of await plans(db)) {
+    const k = (f) => body[`p_${p.id}_${f}`];
+    const price = intIn(k("price"), 0, 1000000);
+    const seats = intIn(k("seats"), 1, 1000);
+    const units = intIn(k("units"), 1, 1000000);
+    const credits = intIn(k("credits"), 0, 10000000);
+    const name_ar = text(k("name_ar"));
+    const name_en = text(k("name_en"));
+    if ([price, seats, units, credits].includes(null) || !name_ar || !name_en) return { error: "plan", id: p.id };
+    await db.query(
+      "UPDATE credit_plans SET name_ar = $2, name_en = $3, price_egp = $4, seats = $5, units = $6, credits = $7, active = $8, updated_at = NOW() WHERE id = $1",
+      [p.id, name_ar, name_en, price, seats, units, credits, p.id === "free" ? true : k("active") === "on"]
+    );
+  }
+  if (text(body.new_id)) {
+    const id = text(body.new_id, 20).toLowerCase();
+    const price = intIn(body.new_price, 0, 1000000);
+    const seats = intIn(body.new_seats, 1, 1000);
+    const units = intIn(body.new_units, 1, 1000000);
+    const credits = intIn(body.new_credits, 0, 10000000);
+    const name_ar = text(body.new_name_ar);
+    const name_en = text(body.new_name_en);
+    if (!ID_RE.test(id) || [price, seats, units, credits].includes(null) || !name_ar || !name_en) return { error: "new_plan" };
+    const { rows: taken } = await db.query("SELECT 1 FROM credit_plans WHERE id = $1", [id]);
+    if (taken.length) return { error: "new_plan" };
+    await db.query(
+      "INSERT INTO credit_plans (id, name_ar, name_en, price_egp, seats, units, credits, sort) VALUES ($1, $2, $3, $4, $5, $6, $7, (SELECT COALESCE(max(sort), 0) + 1 FROM credit_plans))",
+      [id, name_ar, name_en, price, seats, units, credits]
+    );
+  }
+  await refresh(db);
+  return { ok: true };
+}
+
+/** Saves the bundles form (b_<id>_<field>) and an optional new bundle. */
+async function saveBundles(db, body = {}) {
+  const { rows } = await db.query("SELECT id FROM credit_bundles");
+  for (const { id } of rows) {
+    const k = (f) => body[`b_${id}_${f}`];
+    const price = intIn(k("price"), 1, 1000000);
+    const credits = intIn(k("credits"), 1, 10000000);
+    const name_ar = text(k("name_ar"));
+    const name_en = text(k("name_en"));
+    if ([price, credits].includes(null) || !name_ar || !name_en) return { error: "bundle", id };
+    await db.query("UPDATE credit_bundles SET name_ar = $2, name_en = $3, price_egp = $4, credits = $5, active = $6, updated_at = NOW() WHERE id = $1", [id, name_ar, name_en, price, credits, k("active") === "on"]);
+  }
+  if (text(body.new_bundle_id)) {
+    const id = text(body.new_bundle_id, 20).toLowerCase();
+    const price = intIn(body.new_bundle_price, 1, 1000000);
+    const credits = intIn(body.new_bundle_credits, 1, 10000000);
+    const name_ar = text(body.new_bundle_name_ar);
+    const name_en = text(body.new_bundle_name_en);
+    if (!ID_RE.test(id) || [price, credits].includes(null) || !name_ar || !name_en) return { error: "new_bundle" };
+    const { rows: taken } = await db.query("SELECT 1 FROM credit_bundles WHERE id = $1", [id]);
+    if (taken.length) return { error: "new_bundle" };
+    await db.query("INSERT INTO credit_bundles (id, name_ar, name_en, price_egp, credits, sort) VALUES ($1, $2, $3, $4, $5, (SELECT COALESCE(max(sort), 0) + 1 FROM credit_bundles))", [id, name_ar, name_en, price, credits]);
+  }
+  await refresh(db);
+  return { ok: true };
+}
+
+/** Saves the credits each action uses (a_<action>) and the planning rates (fx, cost_usd). */
+async function saveActionsAndRates(db, body = {}) {
+  for (const a of await actions(db)) {
+    const n = intIn(body[`a_${a.action}`], 0, 1000);
+    if (n === null) return { error: "action", id: a.action };
+    await db.query("UPDATE credit_actions SET credits = $2, updated_at = NOW() WHERE action = $1", [a.action, n]);
+  }
+  const fx = Number(body.fx);
+  const cost = Number(body.cost_usd);
+  if (!(fx >= 1 && fx <= 1000) || !(cost > 0 && cost <= 1)) return { error: "rates" };
+  await putSetting(db, FX_KEY, fx);
+  await putSetting(db, COST_KEY, cost);
+  return { ok: true };
+}
+
 let loadedAt = 0;
 const TTL_MS = 60 * 1000;
 
@@ -179,4 +294,4 @@ function marginOf({ priceEgp, cost }) {
   return priceEgp > 0 ? Math.round((1 - cost / priceEgp) * 100) : null;
 }
 
-module.exports = { requestMore, requestsOf, pendingRequests, grant, decideRequest, monthKey, refresh, ensureFresh, FX_DEFAULT, FX_KEY, planningRate, plans, planById, bundles, actions, actionMap, creditsFor, usedThisMonth, poolFor, marginOf };
+module.exports = { ownerOverview, savePlans, saveBundles, saveActionsAndRates, COST_KEY, COST_DEFAULT, requestMore, requestsOf, pendingRequests, grant, decideRequest, monthKey, refresh, ensureFresh, FX_DEFAULT, FX_KEY, planningRate, plans, planById, bundles, actions, actionMap, creditsFor, usedThisMonth, poolFor, marginOf };

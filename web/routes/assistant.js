@@ -30,15 +30,7 @@ function answerCard(out, question, lang) {
   <p style="white-space:pre-line" data-answer-text>${out.answer}</p>
   ${dates ? html`<p class="muted" data-answer-dates>${dates}</p>` : ""}
   ${forClient ? html`<p><a class="btn" href="https://wa.me/?text=${encodeURIComponent(out.answer)}" target="_blank" rel="noopener noreferrer" data-send-whatsapp>📤 ${L(lang, "ابعته على واتساب", "Send on WhatsApp")}</a></p>` : ""}
-</section>
-${out.web
-  ? html`<section class="card notice warn" data-web-answer>
-  <h2>${A.WEB_LABEL[al]}</h2>
-  <p style="white-space:pre-line">${out.web.answer}</p>
-  <ul>${out.web.sources.map((s) => html`<li><a href="${s.url}" target="_blank" rel="noopener noreferrer nofollow" data-web-source>${s.title}</a></li>`)}</ul>
-</section>`
-  : ""}
-${!out.found && out.webLimit ? html`<p class="muted card" data-web-limit>🌐 ${L(lang, "البحث على الإنترنت خلص للشهر ده.", "This month's web answers are used up.")}</p>` : ""}`;
+</section>`;
 }
 
 function register(web, { pool, page }) {
@@ -65,7 +57,7 @@ ${missed
   <p class="muted">${L(lang, "ضيف المعلومة دي للمشروع أو الوحدة عشان المساعد يرد عليها المرة الجاية.", "Add this information to the project or unit so the assistant can answer next time.")}</p>
   ${missed.length
     ? html`<ul>${missed.map(
-        (m) => html`<li data-question="${m.id}">${day(m.created_at)} · ${m.broker_name || "—"}: ${m.question}${m.web ? " 🌐" : ""}
+        (m) => html`<li data-question="${m.id}">${day(m.created_at)} · ${m.broker_name || "—"}: ${m.question}
     <details><summary>➕ ${L(lang, "ضيف الإجابة", "Add the answer")}</summary>
       <form method="post" action="/app/ask/info" class="stack">
         <input type="hidden" name="question" value="${m.id}">

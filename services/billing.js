@@ -65,27 +65,15 @@ async function allowance(db, agencyId, { now = new Date() } = {}) {
   };
 }
 
-/** The owner's unit caps per plan ({ free, solo, office, agency } → number), over the defaults in domain/plans.js. */
-async function planLimits(db) {
-  const saved = await getSetting(db, "plan_limits", {});
+/** The unit cap per plan ({ free, solo, office, agency, ... } → number): set on the owner's Plans and credits section. */
+async function planLimits() {
   const out = {};
-  for (const p of Plans.ALL) out[p.id] = Number.isInteger(saved?.[p.id]?.units) && saved[p.id].units > 0 ? saved[p.id].units : p.units;
+  for (const p of Plans.ALL) out[p.id] = p.units;
   return out;
 }
 
 async function unitLimit(db, plan) {
-  return (await planLimits(db))[plan.id] ?? plan.units;
-}
-
-/** The owner's form: a unit cap per plan (empty or invalid = the default). */
-async function savePlanLimits(db, input = {}) {
-  const value = {};
-  for (const p of Plans.ALL) {
-    const n = parseInt(String(input[p.id] ?? "").replace(/[^0-9]/g, ""), 10);
-    if (Number.isInteger(n) && n >= 1 && n <= 1000000 && n !== p.units) value[p.id] = { units: n };
-  }
-  await setSetting(db, "plan_limits", value);
-  return planLimits(db);
+  return plan.units;
 }
 
 /**
@@ -289,7 +277,6 @@ module.exports = {
   checkAllowance,
   seatAvailable,
   planLimits,
-  savePlanLimits,
   unitCapacity,
   getSetting,
   setSetting,

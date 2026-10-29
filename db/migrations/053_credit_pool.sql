@@ -85,3 +85,7 @@ ON CONFLICT (action) DO NOTHING;
 ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_kind_check;
 ALTER TABLE payments ADD CONSTRAINT payments_kind_check CHECK (kind IN ('plan', 'voice_pack', 'credit_bundle'));
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS bundle_id text REFERENCES credit_bundles(id);
+
+-- The owner can add plans from the dashboard, so the plan ids are no longer a fixed list.
+ALTER TABLE agencies DROP CONSTRAINT IF EXISTS agencies_plan_check;
+ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_plan_check;

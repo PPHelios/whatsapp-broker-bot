@@ -20,7 +20,6 @@ const FEATURES = {
   brochure_highlights: ["مميزات المشروع", "Project highlights"],
   plans_read: ["قراءة أنظمة سداد", "Payment plans reading"],
   assistant: ["المساعد", "Assistant"],
-  assistant_web: ["المساعد (ويب)", "Assistant (web)"],
   page_read: ["صفحة ملف", "Document page"]
 };
 const featureLabel = (f, lang) => (FEATURES[f] || [f, f])[lang === "en" ? 1 : 0];
