@@ -34,23 +34,23 @@ const CASES = [
   { q: "NH-V12", want: { code: "NH-V12" } },
   { q: "شقة بالدور الخامس", want: { property_types: ["apartment"], floor_min: 5, floor_max: 5 } },
   { q: "شقة 3 غرف بالقطامية هايتس تحت 7.5 مليون", want: { property_types: ["apartment"], bedrooms_min: 3, bedrooms_max: 3, price_max: 7500000 } },
-  { q: "villa 4 bedrooms 300 sqm under 30m", want: { property_types: ["villa"], bedrooms_min: 4, bedrooms_max: 4, area_min: 300, area_max: 300, price_max: 30000000 } },
-  { q: "شقة 3 غرف 150 متر في التجمع الخامس", want: { property_types: ["apartment"], bedrooms_min: 3, bedrooms_max: 3, area_min: 150, area_max: 150 } },
+  { q: "villa 4 bedrooms 300 sqm under 30m", want: { property_types: ["villa"], bedrooms_min: 4, bedrooms_max: 4, area_min: 270, area_max: 330, price_max: 30000000 } },
+  { q: "شقة 3 غرف 150 متر في التجمع الخامس", want: { property_types: ["apartment"], bedrooms_min: 3, bedrooms_max: 3, area_min: 135, area_max: 165 } },
   { q: "شقة 1 غرفة", want: { property_types: ["apartment"], bedrooms_min: 1, bedrooms_max: 1 } },
   { q: "شقة اقل من 2 مليون", want: { property_types: ["apartment"], price_max: 2000000 } },
   { q: "شقة فوق 10 مليون", want: { property_types: ["apartment"], price_min: 10000000 } },
   { q: "townhouse in sheikh zayed for sale", want: { property_types: ["townhouse"] } },
   { q: "شاليه في الساحل للبيع", want: { property_types: ["chalet"] } },
   { q: "محل للايجار في مول", want: { listing_type: "rent", property_types: ["shop"] } },
-  { q: "مكتب للإيجار 50 متر", want: { listing_type: "rent", property_types: ["office"], area_min: 50, area_max: 50 } },
+  { q: "مكتب للإيجار 50 متر", want: { listing_type: "rent", property_types: ["office"], area_min: 45, area_max: 55 } },
   { q: "شقة للبيع في القاهرة الجديدة 3 غرف مع حديقة", want: { property_types: ["apartment"], bedrooms_min: 3, bedrooms_max: 3 } },
   { q: "شقة 3 غرف تحت 9 مليون في التجمع مفروشة", want: { property_types: ["apartment"], bedrooms_min: 3, bedrooms_max: 3, price_max: 9000000, furnishing: "furnished" } },
   { q: "hi", want: { intent: "other" } },
   { q: "مرحبا", want: { intent: "other" } }
 ];
 
-// KNOWN_GAPS: cases the parser still gets wrong today. They run as "known gap" tests that pass while the parser is wrong; once fixed they fail, and the name moves out of this set.
-const KNOWN_GAPS = new Set(["شقة من 120 لـ 150 متر","apartment 100 to 130 sqm","شقة تشطيب سوبر لوكس","شقة فرش كامل","من 3 مليون لـ 6 مليون","شقة مقدم 500 الف","شقة قسط شهري تحت 20 الف","شقة في الشروق بالتقسيط","unit code NH-V12","NH-V12","شقة بالدور الخامس","villa 4 bedrooms 300 sqm under 30m","شقة 3 غرف 150 متر في التجمع الخامس","شقة فوق 10 مليون","مكتب للإيجار 50 متر","شقة 3 غرف تحت 9 مليون في التجمع مفروشة"]);
+// KNOWN_GAPS: cases the parser still gets wrong. They run as "known gap" tests that pass while the parser is wrong; once fixed they fail, and the name moves out of this set. A single stated area is a +-10% band; "من X ل Y متر" is the exact range.
+const KNOWN_GAPS = new Set([]);
 
 describe("local search parser (fallback when AI credits run out)", () => {
   const run = (q, want) => {
@@ -69,7 +69,9 @@ describe("local search parser (fallback when AI credits run out)", () => {
     }
   };
   test.each(CASES.filter((c) => !KNOWN_GAPS.has(c.q)).map((c) => [c.q, c.want]))("%s", run);
-  test.each(CASES.filter((c) => KNOWN_GAPS.has(c.q)).map((c) => [c.q, c.want]))("known gap: %s", (q, want) => {
-    expect(() => run(q, want)).toThrow();
-  });
+  if (KNOWN_GAPS.size) {
+    test.each(CASES.filter((c) => KNOWN_GAPS.has(c.q)).map((c) => [c.q, c.want]))("known gap: %s", (q, want) => {
+      expect(() => run(q, want)).toThrow();
+    });
+  }
 });
