@@ -205,12 +205,18 @@ const TYPE_MATCHERS = Object.entries(TYPE_TERMS)
 
 const AR_NUMBER_WORDS = {
   واحد: 1, واحده: 1, اتنين: 2, اثنين: 2, تلات: 3, تلت: 3, تلاته: 3, ثلاث: 3, ثلاثه: 3, اربع: 4, اربعه: 4, خمس: 5, خمسه: 5,
-  ست: 6, سته: 6, ستة: 6, سبع: 7, سبعه: 7, سبعة: 7, تمن: 8, تمنيه: 8, تمانيه: 8, تمانية: 8, تسع: 9, تسعه: 9, تسعة: 9, عشر: 10, عشره: 10, عشرة: 10
+  ست: 6, سته: 6, ستة: 6, سبع: 7, سبعه: 7, سبعة: 7, تمن: 8, تمنيه: 8, تمنية: 8, خمسة: 5, اربعة: 4, تلتة: 3, تمانيه: 8, تمانية: 8, تسع: 9, تسعه: 9, تسعة: 9, عشر: 10, عشره: 10, عشرة: 10
 };
 
 function consume(hay, re) {
   const m = hay.match(re);
   return m ? { m, hay: hay.replace(re, " ") } : { m: null, hay };
+}
+
+/** A number written as digits or as an Egyptian word ("خمسة", "تمنية"): the number, or null when it is neither. */
+function spokenAmount(word) {
+  if (/^\d+(\.\d+)?$/.test(word)) return Number(word);
+  return Object.prototype.hasOwnProperty.call(AR_NUMBER_WORDS, word) ? AR_NUMBER_WORDS[word] : null;
 }
 
 function parseMoneyWords(n, unit) {
@@ -344,10 +350,17 @@ function fallbackParse(text) {
     f.max_down_payment = money(c.m[1], c.m[2]);
     hay = c.hay;
   }
-  c = consume(hay, new RegExp(` (?:قسط شهري|قسط|monthly installment|installment) (?:حدود |تحت |اقل من |under |max )?${MONEY} `));
+  c = consume(hay, new RegExp(` و?(?:قسط شهري|قسط|monthly installment|installment) (?:حدود |تحت |اقل من |under |max )?${MONEY} `));
   if (c.m) {
     f.max_installment = money(c.m[1], c.m[2]);
     f.payment_installments = true;
+    hay = c.hay;
+  }
+  // "مش عايز أكتر من 9 مليون" is a ceiling, not a floor.
+  c = consume(hay, new RegExp(` مش (?:عايز )?(?:اكتر|اكثر) من ${MONEY} `));
+  if (c.m) {
+    const v = money(c.m[1], c.m[2]);
+    if (v) f.price_max = v;
     hay = c.hay;
   }
   c = consume(hay, new RegExp(` (?:فوق|اكتر من|اكثر من|above|over|more than|min) ${MONEY} `));
@@ -358,9 +371,10 @@ function fallbackParse(text) {
   }
 
   // A budget with the short "م" ("تحت 9م"): read before the area rule, so it is not square metres.
-  c = consume(hay, / (تحت|اقل من|حدود|بحدود|لحد|under|below|max|up to) (\d+(?:\.\d+)?) م /);
+  c = consume(hay, / (?:تحت|اقل من|حدود|بحدود|لحد|مش (?:عايز )?(?:اكتر|اكثر) من|under|below|max|up to) (\d+(?:\.\d+)?|[ء-ي]+) (م|m) /);
   if (c.m) {
-    f.price_max = parseMoneyWords(c.m[2], "م");
+    const v = spokenAmount(c.m[1]);
+    if (v !== null) f.price_max = parseMoneyWords(String(v), "م");
     hay = c.hay;
   }
 
@@ -381,11 +395,13 @@ function fallbackParse(text) {
   }
 
   // Budget: "تحت 8 مليون" / "under 8 million" / "8 مليون" (a ceiling).
-  c = consume(hay, / (?:تحت|اقل من|حدود|بحدود|لحد|under|below|max|up to|budget)? ?(\d+(?:\.\d+)?|\d+ \d+) (مليون|million|m|الف|k|thousand) /);
+  c = consume(hay, / (?:تحت|اقل من|حدود|بحدود|لحد|مش (?:عايز )?(?:اكتر|اكثر) من|under|below|max|up to|budget)? ?(\d+(?:\.\d+)?|\d+ \d+|[ء-ي]+) (مليون|million|m|الف|k|thousand)( ونص)? /);
   if (c.m) {
-    const v = parseMoneyWords(c.m[1].replace(" ", "."), c.m[2]);
-    if (v && f.price_max === null) f.price_max = v;
-    hay = c.hay;
+    const n = spokenAmount(c.m[1].replace(" ", "."));
+    const v = n === null ? null : parseMoneyWords(String(n), c.m[2]);
+    const half = c.m[3] && v ? parseMoneyWords("0.5", c.m[2]) : 0;
+    if (v && f.price_max === null) f.price_max = v + half;
+    if (n !== null) hay = c.hay;
   }
 
   // Finishing, furnishing and floor.
