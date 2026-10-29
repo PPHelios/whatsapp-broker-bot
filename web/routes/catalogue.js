@@ -40,7 +40,7 @@ const PLAN_READ_ERRORS = {
   pages_required: ["اكتب أرقام الصفحات (مثلاً 1-3).", "Enter the page numbers (e.g. 1-3)."],
   pages_invalid: ["أرقام الصفحات مش مظبوطة.", "The page numbers aren't valid."],
   too_many_pages: [`${PR.MAX_PAGES} صفحات بالكتير.`, `At most ${PR.MAX_PAGES} pages.`],
-  ALLOWANCE: ["صفحات الشهر مش كفاية.", "This month's pages aren't enough."],
+  ALLOWANCE: ["رصيد الشهر مش كفاية.", "This month's credits aren't enough."],
   AI_FAILED: ["القراءة فشلت؛ جرب تاني.", "Reading failed; try again."],
   NO_PLANS: ["ملقيناش أنظمة سداد في الملف.", "No payment plans found in the file."]
 };

@@ -7,7 +7,7 @@ const { normalizeSearch } = require("./searchText");
 
 // Words that name a property type, both languages (normalized when used).
 const TYPE_TERMS = {
-  apartment: ["شقة", "شقق", "apartment", "apartments", "flat"],
+  apartment: ["شقة", "شقق", "apartment", "apartments", "flat", "apt", "apts"],
   duplex: ["دوبلكس", "duplex"],
   penthouse: ["بنتهاوس", "penthouse"],
   chalet: ["شاليه", "شاليهات", "chalet"],

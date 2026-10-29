@@ -5,7 +5,7 @@
 "use strict";
 
 const PriceReading = require("../../services/priceReading");
-const Assistant = require("../../services/assistant");
+const Credits = require("../../services/credits");
 const Leases = require("../../services/leases");
 const Targets = require("../../services/targets");
 const Reading = require("../../domain/priceReading");
@@ -179,7 +179,7 @@ function billingSections(b, lang) {
   <h2>💳 ${L(lang, "مدفوعات مستنية التأكيد", "Payments to confirm")}</h2>
   ${b.payments.length
     ? html`<div class="scroll"><table><tbody>${b.payments.map(
-        (p) => html`<tr data-payment="${p.reference}"><td dir="ltr">${p.reference}</td><td>${p.agency_name}</td><td>${p.kind === "voice_pack" ? L(lang, "باقة فويس", "Voice pack") : `${Plans.planName(Plans.planById(p.plan), lang)} × ${p.months}`}</td><td>${p.amount_egp} ${L(lang, "ج.م", "EGP")}</td><td dir="ltr">${day(p.created_at)}</td>
+        (p) => html`<tr data-payment="${p.reference}"><td dir="ltr">${p.reference}</td><td>${p.agency_name}</td><td>${p.kind === "credit_bundle" ? L(lang, `رصيد زيادة ${Plans.bundleById(p.bundle_id)?.credits ?? ""}`, `Extra credits ${Plans.bundleById(p.bundle_id)?.credits ?? ""}`) : p.kind === "voice_pack" ? L(lang, "باقة فويس", "Voice pack") : `${Plans.planName(Plans.planById(p.plan), lang)} × ${p.months}`}</td><td>${p.amount_egp} ${L(lang, "ج.م", "EGP")}</td><td dir="ltr">${day(p.created_at)}</td>
   <td class="row"><form method="post" action="/app/owner/payments/${p.id}/confirm" data-confirm="${L(lang, `وصلك ${p.amount_egp} ج.م بالمرجع ${p.reference}؟`, `Did ${p.amount_egp} EGP with reference ${p.reference} arrive?`)}"><button type="submit">✅ ${L(lang, "وصل", "Received")}</button></form>
   <form method="post" action="/app/owner/payments/${p.id}/cancel"><button type="submit" class="secondary">✖ ${L(lang, "الغِ", "Cancel")}</button></form></td></tr>`
       )}</tbody></table></div>`
@@ -197,14 +197,13 @@ function billingSections(b, lang) {
 function readingSection(rows, lang) {
   return html`<section class="card" id="price-reading">
   <h2>🤖 ${L(lang, "قراية قوايم الأسعار PDF والصور", "Reading PDF and photo price lists")}</h2>
-  <p class="muted">${L(lang, "مقفولة لكل وكالة لحد ما تفتحها هنا. الصفحة اللي اتقرت قبل كده (من أي وكالة) بتتعاد من غير تكلفة ومش بتتحسب.", "Off for every agency until you switch it on here. A page read before (by any agency) is reused at no cost and not counted.")}</p>
+  <p class="muted">${L(lang, "مقفولة لكل وكالة لحد ما تفتحها هنا. الصفحة اللي اتقرت قبل كده (من أي وكالة) بتتعاد من غير ما نقراها تاني، والوكالة بتدفع رصيدها عادي. الوكالات مش شايفة ده.", "Off for every agency until you switch it on here. A page read before (by any agency) is reused without a new AI call, and the agency is charged as usual. Agencies don't see this.")}</p>
   <div class="scroll"><table>
-  <thead><tr><th>${L(lang, "الوكالة", "Agency")}</th><th>${L(lang, "الشهر ده", "This month")}</th><th></th></tr></thead>
+  <thead><tr><th>${L(lang, "الوكالة", "Agency")}</th><th>${L(lang, "الشهر الحالي", "This month")}</th><th></th></tr></thead>
   <tbody>${rows.map(
-    (a) => html`<tr data-reading="${a.id}"><td>${a.name}</td><td>${a.used} / ${a.pages_month}${a.reused ? html` <span class="muted">(+${a.reused} ${L(lang, "متعادة", "reused")})</span>` : ""}</td>
+    (a) => html`<tr data-reading="${a.id}"><td>${a.name}</td><td>${a.used} ${L(lang, "صفحة", "pages")}${a.reused ? html` <span class="muted">(+${a.reused} ${L(lang, "متعادة", "reused")})</span>` : ""}</td>
     <td><form method="post" action="/app/owner/price-reading/${a.id}" class="row">
       <label><input type="checkbox" name="enabled" value="on"${a.enabled ? html` checked` : ""}> ${L(lang, "مفعّلة", "On")}</label>
-      <label>${L(lang, "صفحات/شهر", "Pages/month")} <input name="pages_month" type="number" min="0" max="${Reading.MAX_PAGES_MONTH}" value="${a.pages_month}" size="5"></label>
       <button type="submit" class="secondary">${L(lang, "احفظ", "Save")}</button>
     </form></td></tr>`
   )}</tbody></table></div>
@@ -244,24 +243,6 @@ function intakeSection(rows, lang) {
     <label>${L(lang, "تنبيه لو مفيش عملاء (أيام)", "Alert after quiet days")} <input name="quiet_days" type="number" min="1" max="60" value="3" size="3"></label>
     <button type="submit">➕ ${L(lang, "لينك جديد", "New URL")}</button>
   </form>
-</section>`;
-}
-
-/** C10/N1: the assistant's web answers, off per agency until switched on here, with a monthly count. */
-function assistantSection(rows, lang) {
-  return html`<section class="card" id="assistant-web">
-  <h2>🌐 ${L(lang, "المساعد: البحث على الإنترنت", "Assistant: web answers")}</h2>
-  <p class="muted">${L(lang, "المساعد بيرد من بيانات الوكالة بس. لو مفعّل هنا وملقاش الرد عندنا، بيدور على الإنترنت ويقول إن الرد «من الإنترنت، غير مؤكد» ومعاه المصادر.", "The assistant answers from the agency's data only. When switched on here and our data has no answer, it searches the web and labels the answer \"from the web, unverified\" with its sources.")}</p>
-  <div class="scroll"><table>
-  <thead><tr><th>${L(lang, "الوكالة", "Agency")}</th><th>${L(lang, "أسئلة الشهر", "Questions this month")}</th><th>${L(lang, "ردود الإنترنت", "Web answers")}</th><th></th></tr></thead>
-  <tbody>${rows.map(
-    (a) => html`<tr data-assistant-web="${a.id}"><td>${a.name}</td><td>${a.asked}</td><td>${a.web_used} / ${a.web_month}</td>
-    <td><form method="post" action="/app/owner/assistant/${a.id}" class="row">
-      <label><input type="checkbox" name="enabled" value="on"${a.web ? html` checked` : ""}> ${L(lang, "مفعّل", "On")}</label>
-      <label>${L(lang, "ردود/شهر", "Answers/month")} <input name="web_month" type="number" min="0" max="1000" value="${a.web_month}" size="5"></label>
-      <button type="submit" class="secondary">${L(lang, "احفظ", "Save")}</button>
-    </form></td></tr>`
-  )}</tbody></table></div>
 </section>`;
 }
 
@@ -309,12 +290,79 @@ function stuckSection(stuck, lang) {
 </section>`;
 }
 
-/** The owner's unit cap per plan: empty = the default in domain/plans.js. */
-function limitsSection(limits, lang) {
-  return html`<form method="post" action="/app/owner/plan-limits" class="card stack" data-plan-limits>
-  <h2>🏠 ${L(lang, "حد الوحدات المتاحة لكل باقة", "Available-unit cap per plan")}</h2>
-  <p class="muted">${L(lang, "الوحدات المباعة والمؤرشفة مش بتتحسب. لما الوكالة توصل للحد، الوحدة الجديدة مبتتحفظش ويظهر لها رسالة ترقية الباقة.", "Sold and archived units don't count. At the cap a new unit isn't saved and the broker is told to upgrade.")}</p>
-  <div class="row">${Plans.ALL.map((p) => html`<label>${Plans.planName(p, lang)} <input name="${p.id}" type="number" min="1" max="1000000" value="${limits[p.id]}" data-limit="${p.id}"></label>`)}</div>
+/** Owner: plans, bundles, credits per action, rates, margins, credit requests and per-agency grants (all stored in the database). */
+function creditsSection(o, lang) {
+  const pct = (m) => (m === null || m === undefined ? "—" : `${Math.round(m * 100)}%`);
+  const num = (name, v, extra = "") => html`<input name="${name}" type="number" min="0" value="${v}" size="6"${extra ? html` ${extra}` : ""}>`;
+  const day = (d) => new Date(d).toISOString().slice(0, 10);
+  return html`<section class="card stack" id="credit-requests" data-credit-requests>
+  <h2>🙋 ${L(lang, "طلبات زيادة الرصيد", "Credit requests")}</h2>
+  ${o.requests.length
+    ? html`<div class="scroll"><table><thead><tr><th>${L(lang, "الوكالة", "Agency")}</th><th>${L(lang, "المدير", "Manager")}</th><th>${L(lang, "الطلب", "Asked")}</th><th></th></tr></thead>
+  <tbody>${o.requests.map(
+    (r) => html`<tr data-credit-request="${r.id}"><td>${r.agency_name}</td><td>${r.broker_name || "—"}</td><td>${r.credits}${r.note ? html` <span class="muted">${r.note}</span>` : ""} <span class="muted" dir="ltr">${day(r.created_at)}</span></td>
+    <td><form method="post" action="/app/owner/credit-requests/${r.id}" class="row"><input name="credits" type="number" min="1" value="${r.credits}" size="6" aria-label="${L(lang, "الرصيد", "Credits")}">
+      <button type="submit" name="decision" value="approve">${L(lang, "وافق", "Approve")}</button>
+      <button type="submit" name="decision" value="decline" class="secondary">${L(lang, "ارفض", "Decline")}</button></form></td></tr>`
+  )}</tbody></table></div>`
+    : html`<p class="muted">${L(lang, "مفيش طلبات.", "No requests.")}</p>`}
+  <form method="post" action="/app/owner/credit-grant" class="row" data-credit-grant>
+    <label>${L(lang, "الوكالة", "Agency")} <select name="agency" required>${o.agencies.map((a) => html`<option value="${a.id}">${a.name}</option>`)}</select></label>
+    <label>${L(lang, "رصيد إضافي (للشهر الحالي)", "Extra credits (this month)")} <input name="credits" type="number" min="1" required size="6"></label>
+    <label>${L(lang, "ملاحظة", "Note")} <input name="note" maxlength="100"></label>
+    <button type="submit">${L(lang, "ادّي رصيد", "Give credits")}</button>
+  </form>
+</section>
+<form method="post" action="/app/owner/credit-plans" class="card stack" id="credit-plans" data-credit-plans>
+  <h2>💳 ${L(lang, "الباقات والرصيد", "Plans and credits")}</h2>
+  <p class="muted">${L(lang, "كل الأرقام هنا من قاعدة البيانات وبتتطبق على الموقع والبوت فورًا. الهامش = السعر مقابل تكلفة الرصيد كله لو اتستخدم بالكامل.", "Every number here is stored in the database and applies to the site and the bot at once. Margin = price against the cost of the whole pool if fully used.")}</p>
+  <div class="scroll"><table>
+  <thead><tr><th>ID</th><th>${L(lang, "الاسم (ع)", "Name (ar)")}</th><th>${L(lang, "الاسم (إنجليزي)", "Name (en)")}</th><th>${L(lang, "السعر (ج.م/شهر)", "Price (EGP/month)")}</th><th>${L(lang, "مقاعد", "Seats")}</th><th>${L(lang, "وحدات", "Units")}</th><th>${L(lang, "رصيد/شهر", "Credits/month")}</th><th>${L(lang, "التكلفة", "Cost")}</th><th>${L(lang, "الهامش", "Margin")}</th><th>${L(lang, "مفعّلة", "On")}</th></tr></thead>
+  <tbody>${o.plans.map(
+    (p) => html`<tr data-credit-plan="${p.id}"><td dir="ltr">${p.id}</td>
+    <td><input name="p_${p.id}_name_ar" value="${p.name_ar}" maxlength="40" required></td><td><input name="p_${p.id}_name_en" value="${p.name_en}" maxlength="40" required></td>
+    <td>${num(`p_${p.id}_price`, p.price_egp)}</td><td>${num(`p_${p.id}_seats`, p.seats)}</td><td>${num(`p_${p.id}_units`, p.units)}</td><td>${num(`p_${p.id}_credits`, p.credits)}</td>
+    <td>${p.cost_egp}</td><td>${p.price_egp ? pct(p.margin) : "—"}</td>
+    <td>${p.id === "free" ? "✔" : html`<input type="checkbox" name="p_${p.id}_active" value="on"${p.active ? html` checked` : ""}>`}</td></tr>`
+  )}</tbody></table></div>
+  <details><summary>➕ ${L(lang, "باقة جديدة", "Add a plan")}</summary><div class="row">
+    <label>ID <input name="new_id" maxlength="20" pattern="[a-z0-9_]+" placeholder="team"></label>
+    <label>${L(lang, "الاسم (ع)", "Name (ar)")} <input name="new_name_ar" maxlength="40"></label>
+    <label>${L(lang, "الاسم (إنجليزي)", "Name (en)")} <input name="new_name_en" maxlength="40"></label>
+    <label>${L(lang, "السعر", "Price")} <input name="new_price" type="number" min="0" size="6"></label>
+    <label>${L(lang, "مقاعد", "Seats")} <input name="new_seats" type="number" min="1" size="4"></label>
+    <label>${L(lang, "وحدات", "Units")} <input name="new_units" type="number" min="1" size="6"></label>
+    <label>${L(lang, "رصيد/شهر", "Credits/month")} <input name="new_credits" type="number" min="0" size="6"></label>
+  </div></details>
+  <button type="submit">${L(lang, "احفظ الباقات", "Save plans")}</button>
+</form>
+<form method="post" action="/app/owner/credit-bundles" class="card stack" id="credit-bundles" data-credit-bundles>
+  <h2>🧾 ${L(lang, "حزم الرصيد الإضافي", "Extra credit bundles")}</h2>
+  <p class="muted">${L(lang, "الحزمة صالحة ٣٠ يوم من تاريخ التأكيد، وبتتحول للشهر اللي بعده.", "A bundle is valid for 30 days from confirmation and carries into the next month.")}</p>
+  <div class="scroll"><table>
+  <thead><tr><th>ID</th><th>${L(lang, "الاسم (ع)", "Name (ar)")}</th><th>${L(lang, "الاسم (إنجليزي)", "Name (en)")}</th><th>${L(lang, "السعر", "Price")}</th><th>${L(lang, "رصيد", "Credits")}</th><th>${L(lang, "التكلفة", "Cost")}</th><th>${L(lang, "الهامش", "Margin")}</th><th>${L(lang, "مفعّلة", "On")}</th></tr></thead>
+  <tbody>${o.bundles.map(
+    (b) => html`<tr data-credit-bundle="${b.id}"><td dir="ltr">${b.id}</td>
+    <td><input name="b_${b.id}_name_ar" value="${b.name_ar}" maxlength="40" required></td><td><input name="b_${b.id}_name_en" value="${b.name_en}" maxlength="40" required></td>
+    <td>${num(`b_${b.id}_price`, b.price_egp)}</td><td>${num(`b_${b.id}_credits`, b.credits)}</td><td>${b.cost_egp}</td><td>${pct(b.margin)}</td>
+    <td><input type="checkbox" name="b_${b.id}_active" value="on"${b.active ? html` checked` : ""}></td></tr>`
+  )}</tbody></table></div>
+  <details><summary>➕ ${L(lang, "حزمة جديدة", "Add a bundle")}</summary><div class="row">
+    <label>ID <input name="new_bundle_id" maxlength="20" pattern="[a-z0-9_]+" placeholder="b2000"></label>
+    <label>${L(lang, "الاسم (ع)", "Name (ar)")} <input name="new_bundle_name_ar" maxlength="40"></label>
+    <label>${L(lang, "الاسم (إنجليزي)", "Name (en)")} <input name="new_bundle_name_en" maxlength="40"></label>
+    <label>${L(lang, "السعر", "Price")} <input name="new_bundle_price" type="number" min="1" size="6"></label>
+    <label>${L(lang, "رصيد", "Credits")} <input name="new_bundle_credits" type="number" min="1" size="6"></label>
+  </div></details>
+  <button type="submit">${L(lang, "احفظ الحزم", "Save bundles")}</button>
+</form>
+<form method="post" action="/app/owner/credit-actions" class="card stack" id="credit-actions" data-credit-actions>
+  <h2>⚙️ ${L(lang, "الرصيد لكل إجراء", "Credits per action")}</h2>
+  <div class="row">${o.actions.map((a) => html`<label>${a[lang === "en" ? "label_en" : "label_ar"] || a.action} ${num(`a_${a.action}`, a.credits, `data-action="${a.action}"`)}</label>`)}</div>
+  <div class="row">
+    <label>${L(lang, "سعر الدولار للتخطيط (ج.م)", "Planning rate (EGP per USD)")} <input name="fx" type="number" min="1" step="0.5" value="${o.fx}" size="6"></label>
+    <label>${L(lang, "تكلفة الرصيد الواحد ($)", "Cost per credit ($)")} <input name="cost_usd" type="number" min="0.0001" max="1" step="0.0001" value="${o.costUsd}" size="8"></label>
+  </div>
   <button type="submit">${L(lang, "احفظ", "Save")}</button>
 </form>`;
 }
@@ -376,14 +424,14 @@ function announceSection(log, lang, csrf) {
 </section>`;
 }
 
-function ownerPage(d, lang, { billing = null, notice = null, reading = [], assistant = [], referrals = null, intakes = [], stuck = [], limits = null, agencies = [], log = [], csrf = "" } = {}) {
+function ownerPage(d, lang, { billing = null, notice = null, reading = [], credits = null, referrals = null, intakes = [], stuck = [], agencies = [], log = [], csrf = "" } = {}) {
   const usd = (n) => `$${Number(n).toFixed(n < 1 ? 4 : 2)}`;
   return html`<h1>${L(lang, "متابعة التطبيق", "App tracking")}</h1>
 ${notice || ""}
 ${tabs("owner_tab", [
   [L(lang, "الوكالات", "Agencies"), html`${agenciesSection(agencies, lang)}${stuckSection(stuck, lang)}${announceSection(log, lang, csrf)}`],
-  [L(lang, "الفلوس", "Money"), html`${billing ? billingSections(billing, lang) : ""}${referrals ? referralsSection(referrals, lang) : ""}${limits ? limitsSection(limits, lang) : ""}`],
-  [L(lang, "الأدوات", "Tools"), html`${intakeSection(intakes, lang)}${readingSection(reading, lang)}${assistantSection(assistant, lang)}`],
+  [L(lang, "الفلوس", "Money"), html`${billing ? billingSections(billing, lang) : ""}${referrals ? referralsSection(referrals, lang) : ""}${credits ? creditsSection(credits, lang) : ""}`],
+  [L(lang, "الأدوات", "Tools"), html`${intakeSection(intakes, lang)}${readingSection(reading, lang)}`],
   [L(lang, "الصحة", "Health"), healthSections(d, lang, usd)]
 ])}`;
 }
@@ -396,7 +444,7 @@ function healthSections(d, lang, usd) {
   <tbody>${d.weeks.map(
     (w) => html`<tr data-week="${w.week}"><td dir="ltr">${w.week}</td><td>${w.agencies}</td><td>${w.brokers}</td><td>${w.units}</td><td>${w.leads}</td><td>${w.deals}</td><td>${w.errors}</td><td>${w.reports}</td></tr>`
   )}</tbody></table></div>
-  <p class="muted">${L(lang, "نشط = استخدم البوت أو الموقع في الأسبوع ده (الأسبوع بيبدأ الاتنين).", "Active = used the bot or the website that week (weeks start on Monday).")}</p>
+  <p class="muted">${L(lang, "نشط = استخدم البوت أو الموقع في الأسبوع الحالي (الأسبوع بيبدأ الاتنين).", "Active = used the bot or the website that week (weeks start on Monday).")}</p>
 </section>
 <section class="card">
   <h2>${L(lang, "الذكاء الاصطناعي لكل وكالة (آخر 30 يوم)", "AI per agency (last 30 days)")}</h2>
@@ -463,9 +511,9 @@ function register(web, { pool, page }) {
   const ownerView = async (req, res, notice = null, status = 200) => {
     const d = await Dash.ownerDashboard(pool, req.session.broker);
     if (!d) return notFound(req, res, page);
-    const [open, signups, payments, payTo, trials, reading, assistant, referrals, intakes, stuck, limits] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Assistant.overview(pool), Referrals.overview(pool), Intake.overview(pool), Onboarding.stuckList(pool), Billing.planLimits(pool)]);
+    const [open, signups, payments, payTo, trials, reading, referrals, intakes, stuck, credits] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Referrals.overview(pool), Intake.overview(pool), Onboarding.stuckList(pool), Credits.ownerOverview(pool)]);
     const [agencies, log] = await Promise.all([OwnerAgencies.list(pool), OwnerAgencies.auditLog(pool)]);
-    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials }, notice, reading, assistant, referrals, intakes, stuck, limits, agencies, log, csrf: req.session.csrf }) }, status);
+    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials }, notice, reading, credits, referrals, intakes, stuck, agencies, log, csrf: req.session.csrf }) }, status);
   };
   const ok = (text) => html`<p class="card notice ok" role="status">✅ ${text}</p>`;
   const bad = (text) => html`<p class="card notice bad" role="alert">❌ ${text}</p>`;
@@ -573,19 +621,39 @@ ${wa ? html`<p><a class="btn" href="${wa}" target="_blank" rel="noopener norefer
     const id = uuidParam(req);
     const r = id ? await PriceReading.setForAgency(pool, id, req.body) : { error: "not_found" };
     if (r.error) return ownerView(req, res, bad(L(lang, `الصفحات رقم من 0 لـ ${Reading.MAX_PAGES_MONTH}.`, `Pages must be 0 to ${Reading.MAX_PAGES_MONTH}.`)), 400);
-    return ownerView(req, res, ok(r.setting.enabled ? L(lang, `${r.agency.name}: القراية مفعّلة، ${r.setting.pages_month} صفحة في الشهر.`, `${r.agency.name}: reading on, ${r.setting.pages_month} pages a month.`) : L(lang, `${r.agency.name}: القراية مقفولة.`, `${r.agency.name}: reading off.`)));
+    return ownerView(req, res, ok(r.setting.enabled ? L(lang, `${r.agency.name}: القراية مفعّلة، من الرصيد.`, `${r.agency.name}: reading on (uses credits).`) : L(lang, `${r.agency.name}: القراية مقفولة.`, `${r.agency.name}: reading off.`)));
   }));
 
-  web.post("/owner/assistant/:id", ownerOnly(async (req, res, lang) => {
-    const id = uuidParam(req);
-    const r = id ? await Assistant.setWeb(pool, id, { enabled: req.body.enabled === "on", webMonth: req.body.web_month }) : { error: "not_found" };
-    if (r.error) return ownerView(req, res, bad(L(lang, "الردود رقم من 0 لـ 1000.", "Answers must be 0 to 1000.")), 400);
-    return ownerView(req, res, ok(r.web ? L(lang, `${r.agency.name}: البحث على الإنترنت مفعّل، ${r.web_month} رد في الشهر.`, `${r.agency.name}: web answers on, ${r.web_month} a month.`) : L(lang, `${r.agency.name}: البحث على الإنترنت مقفول.`, `${r.agency.name}: web answers off.`)));
+  const creditsDone = async (req, res, lang, r, done, fail) => {
+    if (r.error) return ownerView(req, res, bad(fail), 400);
+    return ownerView(req, res, ok(done));
+  };
+
+  web.post("/owner/credit-plans", ownerOnly(async (req, res, lang) =>
+    creditsDone(req, res, lang, await Credits.savePlans(pool, req.body), L(lang, "الباقات اتحفظت.", "Plans saved."), L(lang, "راجع أرقام الباقات: الاسم والسعر والمقاعد والوحدات والرصيد (ID الجديد حروف إنجليزي صغيرة وأرقام ومش مكرر).", "Check the plan numbers: names, price, seats, units, credits (a new ID is lowercase letters and digits and not already used)."))
+  ));
+
+  web.post("/owner/credit-bundles", ownerOnly(async (req, res, lang) =>
+    creditsDone(req, res, lang, await Credits.saveBundles(pool, req.body), L(lang, "الحزم اتحفظت.", "Bundles saved."), L(lang, "راجع أرقام الحزم: الاسم والسعر والرصيد.", "Check the bundle numbers: name, price, credits."))
+  ));
+
+  web.post("/owner/credit-actions", ownerOnly(async (req, res, lang) => {
+    const r = await Credits.saveActionsAndRates(pool, req.body);
+    if (!r.error) await Credits.refresh(pool);
+    return creditsDone(req, res, lang, r, L(lang, "الرصيد لكل إجراء اتحفظ.", "Credits per action saved."), L(lang, "الأرقام غلط: الرصيد من 0 لـ 1000، وسعر الدولار والتكلفة أرقام موجبة.", "Invalid numbers: credits 0 to 1000; the rate and cost must be positive."));
   }));
 
-  web.post("/owner/plan-limits", ownerOnly(async (req, res, lang) => {
-    await Billing.savePlanLimits(pool, req.body);
-    return ownerView(req, res, ok(L(lang, "حدود الوحدات اتحفظت.", "Unit caps saved.")));
+  web.post("/owner/credit-requests/:id", ownerOnly(async (req, res, lang) => {
+    const id = parseInt(req.params.id, 10);
+    const approve = req.body.decision === "approve";
+    const r = Number.isInteger(id) ? await Credits.decideRequest(pool, id, { approve, credits: parseInt(req.body.credits, 10) || null }) : { error: "not_pending" };
+    return creditsDone(req, res, lang, r, approve ? L(lang, "اتوافق، والرصيد اتضاف.", "Approved, credits added.") : L(lang, "اترفض.", "Declined."), L(lang, "الطلب مش موجود أو اتقرر فيه قبل كده.", "That request is gone or already decided."));
+  }));
+
+  web.post("/owner/credit-grant", ownerOnly(async (req, res, lang) => {
+    const id = /^[0-9a-f-]{36}$/i.test(String(req.body.agency || "")) ? req.body.agency : null;
+    const r = id ? await Credits.grant(pool, id, req.body.credits, { note: String(req.body.note || "").slice(0, 100) || null }) : { error: "credits" };
+    return creditsDone(req, res, lang, r, L(lang, "الرصيد اتضاف للوكالة.", "Credits added to the agency."), L(lang, "اختار وكالة ورصيد من 1 لـ 1,000,000.", "Pick an agency and credits from 1 to 1,000,000."));
   }));
 
   web.post("/owner/intake", ownerOnly(async (req, res, lang) => {

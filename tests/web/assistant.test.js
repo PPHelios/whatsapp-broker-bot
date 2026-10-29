@@ -1,7 +1,6 @@
 // tests/web/assistant.test.js — Release B C10 + N1: the assistant answers only from the agency's data (the project's
 // stored context, rebuilt when its prices change; the broker's own clients; follow-ups; units) with the data dates,
-// says "not in our data" otherwise, logs the question for managers, and only with the owner's switch adds a web
-// answer, always labelled unverified with its sources (never shown without one).
+// says "not in our data" otherwise and logs the question for managers. It never searches the web.
 "use strict";
 
 jest.mock("../../lib/whatsapp", () => require("../harness/fake-whatsapp"));
@@ -28,7 +27,6 @@ beforeEach(async () => {
 afterAll(closeHarness);
 
 const row = async (who) => (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS[who].id]))[0];
-const GROUNDING = { groundingChunks: [{ web: { uri: "https://news.example/badya", title: "Badya news" } }, { web: { uri: "http://insecure.example" } }] };
 
 async function seed() {
   const admin = await row("admin");
@@ -41,7 +39,7 @@ async function seed() {
 }
 
 // The model: answers from the DATA when the fact is there; otherwise "not found".
-function fakeModel({ web = null } = {}) {
+function fakeModel() {
   FakeAI.respond((call) => {
     if (call.operation === "assistant") {
       const prompt = String(call.contents);
@@ -49,7 +47,6 @@ function fakeModel({ web = null } = {}) {
       if (/QUESTION: .*clients/i.test(prompt)) return { answer: prompt.includes("Karim") ? "Mona and Karim" : "Mona", found: true };
       return { answer: "That's not in our data.", found: false };
     }
-    if (call.operation === "assistant_web") return web || { __text: "", __grounding: null };
     throw new Error(`unexpected ${call.operation}`);
   });
 }
@@ -60,7 +57,6 @@ test("rules: the ask command, project and client matching, answers that can't be
   expect(A.matchAsk("شقة في زايد")).toBeNull();
   expect(A.matchProjects("when is Badya delivery", [{ name: "Badya" }, { name: "Mivida" }]).map((p) => p.name)).toEqual(["Badya"]);
   expect(A.parseAnswer("not json", "en")).toEqual({ answer: A.NOT_FOUND.en, found: false });
-  expect(A.webSources(GROUNDING)).toEqual([{ title: "Badya news", url: "https://news.example/badya" }]);
 });
 
 test("stored context: built once, reused, rebuilt when prices change", async () => {
@@ -79,30 +75,19 @@ test("stored context: built once, reused, rebuilt when prices change", async () 
   expect(await ProjectContext.contextFor(h.pool, h.BROKERS.rival.agency_id, project.id)).toBeNull();
 });
 
-test("grounded answers with dates; not in our data; web only when switched on, labelled, with sources", async () => {
+test("grounded answers with dates; not in our data; never a web call", async () => {
   const { admin } = await seed();
   fakeModel();
   const broker = await row("broker");
   const found = await Assistant.ask(h.pool, broker, "When is Badya delivery?");
-  expect(found).toMatchObject({ found: true, lang: "en", web: null });
+  expect(found).toMatchObject({ found: true, lang: "en" });
   expect(found.dates).toEqual([{ project: "Badya", prices: "2026-10-01", brochure: null, plans: null }]);
   expect(Assistant.datesLine(found.dates, "en")).toBe("📅 Data: Badya: prices 2026-10-01");
 
-  // Not in our data, web off: no web call at all.
+  // Not in our data: said plainly, and no web search is ever made.
   const missing = await Assistant.ask(h.pool, broker, "What is the club membership fee at Badya?");
-  expect(missing).toMatchObject({ found: false, webOff: true, web: null });
+  expect(missing).toMatchObject({ found: false });
   expect(FakeAI.calls.filter((c) => c.operation === "assistant_web")).toHaveLength(0);
-
-  // The owner switches web on: an answer without a source is not shown; with one it is, labelled.
-  await Assistant.setWeb(h.pool, admin.agency_id, { enabled: true, webMonth: "2" });
-  expect((await Assistant.ask(h.pool, broker, "What is the club fee at Badya?")).web).toBeNull();
-  fakeModel({ web: { __text: "Reports say about 300,000 EGP.", __grounding: GROUNDING } });
-  const web = await Assistant.ask(h.pool, broker, "What is the club fee at Badya?");
-  expect(web.web).toEqual({ answer: "Reports say about 300,000 EGP.", sources: [{ title: "Badya news", url: "https://news.example/badya" }] });
-  expect(FakeAI.calls.find((c) => c.operation === "assistant_web").config.tools).toEqual([{ googleSearch: {} }]);
-  // Two web answers a month: the next is refused, said plainly.
-  await Assistant.ask(h.pool, broker, "Club fee at Badya again?");
-  expect((await Assistant.ask(h.pool, broker, "Club fee at Badya once more?")).webLimit).toBe(true);
 
   // Managers see the questions our data could not answer.
   const missed = await Assistant.unanswered(h.pool, admin);
@@ -117,7 +102,7 @@ test("own data: a broker sees only their clients, a manager sees the agency's", 
   expect((await Assistant.ask(h.pool, await row("admin"), "Which clients are new?")).answer).toBe("Mona and Karim");
 });
 
-test("website: ask, Send on WhatsApp, unanswered list; owner switch", async () => {
+test("website: ask, Send on WhatsApp, unanswered list", async () => {
   const { admin } = await seed();
   fakeModel();
   process.env.OWNER_BROKER_IDS = h.BROKERS.admin.id;
@@ -135,18 +120,13 @@ test("website: ask, Send on WhatsApp, unanswered list; owner switch", async () =
     expect(miss.text).toContain("data-unanswered");
     expect(miss.text).toContain("Badya club fee?");
 
-    const owner = await agent.get("/app/owner");
-    expect(owner.text).toContain(`data-assistant-web="${admin.agency_id}"`);
-    const on = await agent.post(`/app/owner/assistant/${admin.agency_id}`).type("form").send({ _csrf: csrf, enabled: "on", web_month: "20" });
-    expect(on.status).toBe(200);
-    expect(await Assistant.webSetting(h.pool, admin.agency_id)).toEqual({ web: true, web_month: 20 });
   } finally {
     delete process.env.OWNER_BROKER_IDS;
     require("../../config").resetConfig();
   }
 });
 
-test("Telegram: «اسأل …» answers with the dates and a Send on WhatsApp button; the web answer is labelled", async () => {
+test("Telegram: «اسأل …» answers with the dates and a Send on WhatsApp button", async () => {
   const { admin } = await seed();
   await h.tgLink("broker");
   fakeModel();
@@ -154,11 +134,6 @@ test("Telegram: «اسأل …» answers with the dates and a Send on WhatsApp b
   expect(textOf(out)).toContain("2028");
   expect(textOf(out)).toContain("الأسعار 2026-10-01");
   expect(out.some((m) => m.keyboard)).toBe(true);
-  await Assistant.setWeb(h.pool, admin.agency_id, { enabled: true });
-  fakeModel({ web: { __text: "حوالي 300 ألف.", __grounding: GROUNDING } });
-  const web = await h.tgText("broker", "اسأل رسوم النادي في Badya كام؟");
-  expect(textOf(web)).toContain("غير مؤكد");
-  expect(textOf(web)).toContain("https://news.example/badya");
 });
 
 test("a manager adds the missing information to a project or unit; the assistant uses it and the question leaves the list", async () => {

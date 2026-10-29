@@ -16,10 +16,6 @@ const NOT_FOUND = {
   ar: "مش موجود في بياناتنا.",
   en: "That's not in our data."
 };
-const WEB_LABEL = {
-  ar: "🌐 من الإنترنت، غير مؤكد:",
-  en: "🌐 From the web, unverified:"
-};
 
 /** "اسأل امتى استلام بادية؟" → the question | null. */
 function matchAsk(text) {
@@ -83,24 +79,4 @@ function parseAnswer(text, lang = "ar") {
   }
 }
 
-/** The web prompt: only used when the agency's data had no answer and the owner switched web search on. */
-function webPrompt(question, { lang }) {
-  return `Answer this question from an Egyptian real-estate broker using web search. Be brief (at most 4 sentences), state only what the sources say, and say so if the sources disagree or are old. Reply in ${lang === "en" ? "English" : "Egyptian Arabic"}.
-QUESTION: ${question}`;
-}
-
-/** Source links from Gemini's grounding metadata: [{ title, url }] (https only, unique, up to 5). */
-function webSources(grounding) {
-  const out = [];
-  const seen = new Set();
-  for (const c of grounding?.groundingChunks || []) {
-    const url = c?.web?.uri;
-    if (!url || !/^https:\/\//i.test(url) || seen.has(url)) continue;
-    seen.add(url);
-    out.push({ title: String(c.web.title || url).slice(0, 120), url });
-    if (out.length >= 5) break;
-  }
-  return out;
-}
-
-module.exports = { MAX_QUESTION, NOT_FOUND, WEB_LABEL, matchAsk, langOf, matchProjects, matchLeads, scopesOf, prompt, parseAnswer, webPrompt, webSources };
+module.exports = { MAX_QUESTION, NOT_FOUND, matchAsk, langOf, matchProjects, matchLeads, scopesOf, prompt, parseAnswer };

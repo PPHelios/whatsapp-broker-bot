@@ -44,7 +44,7 @@ function loginForm({ pre, next, message = null, lang = "ar" }) {
   </form>
   <div id="passkey-login" class="stack" data-csrf="${pre}" data-next="${next}" hidden>
     <p class="or"><span>${L(lang, "أو", "or")}</span></p>
-    <button type="button" class="secondary" data-passkey-login>🔑 ${L(lang, "ادخل بالبصمة أو الوش", "Sign in with a passkey")}</button>
+    <button type="button" class="secondary" data-passkey-login>🔑 ${L(lang, "ادخل ببصمة الإصبع أو الوجه", "Sign in with a passkey")}</button>
     <p class="muted" data-passkey-status></p>
   </div>
   <div class="auth-tip">

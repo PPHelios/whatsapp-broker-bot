@@ -177,6 +177,8 @@ async function ingestImage(broker, message, ctx) {
   return "done";
 }
 
+const MAX_VOICE_SECONDS = 60;
+
 /**
  * Handles incoming WhatsApp audio / voice notes (ING-02).
  */
@@ -191,6 +193,12 @@ async function handleAudio(broker, message, ctx) {
         ? "⚠️ Voice note could not be retrieved."
         : "⚠️ تعذر استلام الرسالة الصوتية."
     );
+    return "done";
+  }
+
+  // A voice note is read in full, so its cost grows with its length: over a minute is refused before any download or AI call.
+  if (Number(audioObj.duration) > MAX_VOICE_SECONDS) {
+    await reply(broker, lang === "en" ? "Please send a voice note shorter than a minute so the unit is recorded accurately." : "يرجى إرسال فويس نوت أقل من دقيقة لتسجيل الوحدة بدقة.");
     return "done";
   }
 

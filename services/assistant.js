@@ -18,7 +18,6 @@ const MAX_PROJECTS = 3;
 const MAX_LEADS = 60;
 const MAX_UNITS = 60;
 const MAX_FOLLOW_UPS = 30;
-const DEFAULT_WEB_MONTH = 30;
 
 const cairoDay = (d = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
 const monthStart = (now) => {
@@ -26,38 +25,6 @@ const monthStart = (now) => {
   return new Date(Date.UTC(y, m - 1, 1) - 3 * 3600 * 1000); // a few hours early is fine for a monthly count
 };
 const typeLabel = (t) => (Describe.TYPE_LABELS?.[t] ? Describe.TYPE_LABELS[t][1] : t || "unit");
-
-/** The agency's web setting: { web, web_month }. */
-async function webSetting(db, agencyId) {
-  const { rows } = await db.query("SELECT assistant FROM agencies WHERE id = $1", [agencyId]);
-  const a = rows[0]?.assistant || {};
-  return { web: a.web === true, web_month: Number.isInteger(a.web_month) && a.web_month >= 0 && a.web_month <= 1000 ? a.web_month : DEFAULT_WEB_MONTH };
-}
-
-/** The owner switches web answers on or off for an agency. */
-async function setWeb(db, agencyId, { enabled, webMonth }) {
-  const n = Number(String(webMonth ?? DEFAULT_WEB_MONTH).trim() || DEFAULT_WEB_MONTH);
-  if (!Number.isInteger(n) || n < 0 || n > 1000) return { error: "web_month" };
-  const { rows } = await db.query("UPDATE agencies SET assistant = $2::jsonb WHERE id = $1 RETURNING id, name", [agencyId, JSON.stringify({ web: Boolean(enabled), web_month: n })]);
-  return rows[0] ? { ok: true, agency: rows[0], web: Boolean(enabled), web_month: n } : { error: "not_found" };
-}
-
-async function webUsed(db, agencyId, now) {
-  const { rows } = await db.query("SELECT count(*)::int AS n FROM assistant_questions WHERE agency_id = $1 AND web AND created_at >= $2", [agencyId, monthStart(now).toISOString()]);
-  return rows[0].n;
-}
-
-/** Every agency with its web setting and this month's web answers (the owner's page). */
-async function overview(db, { now = new Date() } = {}) {
-  const { rows } = await db.query(
-    `SELECT a.id, a.name, a.assistant,
-            (SELECT count(*)::int FROM assistant_questions q WHERE q.agency_id = a.id AND q.created_at >= $1) AS asked,
-            (SELECT count(*)::int FROM assistant_questions q WHERE q.agency_id = a.id AND q.web AND q.created_at >= $1) AS web_used
-       FROM agencies a ORDER BY a.name`,
-    [monthStart(now).toISOString()]
-  );
-  return rows.map((r) => ({ id: r.id, name: r.name, web: r.assistant?.web === true, web_month: Number.isInteger(r.assistant?.web_month) ? r.assistant.web_month : DEFAULT_WEB_MONTH, asked: r.asked, web_used: r.web_used }));
-}
 
 /* ---------------------------------------------------------------------- */
 /* The data blocks                                                         */
@@ -174,7 +141,7 @@ async function unitBlock(pool, broker, projectIds) {
 /* ---------------------------------------------------------------------- */
 
 /**
- * @returns {Promise<{ answer, found, lang, dates, web: { answer, sources } | null, webOff, webLimit } | { error }>}
+ * @returns {Promise<{ answer, found, lang, dates } | { error }>}
  *   dates: [{ project, prices, brochure, plans }] for the projects the answer could use (shown under the answer).
  */
 async function ask(pool, broker, question, { channel = "web", now = new Date() } = {}) {
@@ -201,41 +168,17 @@ async function ask(pool, broker, question, { channel = "web", now = new Date() }
     return { error: /QUOTA/.test(String(err.code || err.message)) ? "quota" : "ai" };
   }
 
-  let web = null;
-  let webOff = false;
-  let webLimit = false;
-  if (!res.found) {
-    const setting = await webSetting(pool, broker.agency_id);
-    if (!setting.web) webOff = true;
-    else if ((await webUsed(pool, broker.agency_id, now)) >= setting.web_month) webLimit = true;
-    else {
-      try {
-        const r = await AI.generateWithCascade({
-          contents: A.webPrompt(q, { lang }),
-          config: { tools: [{ googleSearch: {} }], temperature: 0 },
-          operationType: "assistant_web",
-          ctx: { pool, broker }
-        });
-        const sources = A.webSources(r.grounding);
-        const text = String(r.text || "").trim().slice(0, 1500);
-        // An answer with no source is not shown: it could not be checked.
-        if (text && sources.length) web = { answer: text, sources };
-      } catch (err) {
-        console.warn("Assistant web answer failed:", err.message);
-      }
-    }
-  }
   await pool.query("INSERT INTO assistant_questions (agency_id, broker_id, question, channel, found, web, scopes, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)", [
     broker.agency_id,
     broker.id,
     q,
     channel,
     res.found,
-    Boolean(web),
+    false,
     [named.length ? "projects" : null, leads ? "clients" : null, scopes.followups ? "followups" : null, scopes.units || named.length ? "units" : null].filter(Boolean),
     now.toISOString()
   ]);
-  return { answer: res.answer, found: res.found, lang, dates, web, webOff, webLimit };
+  return { answer: res.answer, found: res.found, lang, dates };
 }
 
 /** The data dates under an answer, one line. */
@@ -294,4 +237,4 @@ async function addInfo(pool, manager, { questionId = null, project = null, unit 
   return { ok: true, target };
 }
 
-module.exports = { webUsed, addInfo, ask, datesLine, unanswered, webSetting, setWeb, overview };
+module.exports = { addInfo, ask, datesLine, unanswered };

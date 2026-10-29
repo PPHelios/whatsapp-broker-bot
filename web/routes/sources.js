@@ -72,7 +72,7 @@ ${notice || ""}
   <label>${L(lang, "مصدر تاني (اسم حملة مثلاً)", "Another source (a campaign name, say)")} <input name="new_source" maxlength="60"></label>
   <label>${L(lang, "مصروفه", "Its spend")} <input name="new_amount" inputmode="numeric" dir="ltr"></label>
   <button type="submit">${L(lang, "حفظ المصروف", "Save spend")}</button>
-  <p class="muted">${L(lang, "العملاء: اللي اتسجلوا في الشهر ده. الصفقات: اللي اتقفلت في الشهر ده مع عميل من المصدر ده (غير الملغية). اسم المصدر لازم يطابق اللي على العميل (عملاء ملف Meta بياخدوا فيسبوك أو إنستجرام، واسم الحملة بيتكتب في الملاحظات).", "Leads: added this month. Deals: closed this month with a lead from that source (not cancelled). The source name must match the lead's (leads from a Meta file get Facebook or Instagram; the campaign goes to their notes).")}</p>
+  <p class="muted">${L(lang, "العملاء: اللي اتسجلوا في الشهر الحالي. الصفقات: اللي اتقفلت في الشهر الحالي مع عميل من المصدر ده (غير الملغية). اسم المصدر لازم يطابق اللي على العميل (عملاء ملف Meta بياخدوا فيسبوك أو إنستجرام، واسم الحملة بيتكتب في الملاحظات).", "Leads: added this month. Deals: closed this month with a lead from that source (not cancelled). The source name must match the lead's (leads from a Meta file get Facebook or Instagram; the campaign goes to their notes).")}</p>
 </form>
 ${intakeSection(intakes, log, lang)}`;
 }

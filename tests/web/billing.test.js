@@ -1,6 +1,6 @@
 // tests/web/billing.test.js — Phase 2 step 4: plans, allowances, manual payments and self sign-up.
 // effectivePlan (pilot → Office free, paid, trial, Free); monthly text/voice allowance counted from operation_logs and
-// enforced before an AI call (PLAN_QUOTA_EXCEEDED, voice packs add 100); seats cap invites; a manager announces a
+// enforced before an AI call (PLAN_QUOTA_EXCEEDED, credit bundles add their credits); seats cap invites; a manager announces a
 // payment (amount + reference + where to pay), the owner confirms and the period is extended; sign-up switch, waiting
 // request, approve (trial + start link) and reject; reminders 3 days before the end, once.
 "use strict";
@@ -17,6 +17,7 @@ const Billing = require("../../services/billing");
 const BillingNotices = require("../../services/billingNotices");
 const Signup = require("../../services/signup");
 const Plans = require("../../domain/plans");
+const Credits = require("../../services/credits");
 
 jest.setTimeout(90000);
 
@@ -59,19 +60,25 @@ test("effectivePlan: pilot is Office for free, then paid, trial, and Free when n
   expect(Billing.effectivePlan({ plan: "agency", paid_until: past, trial_ends_at: past }, NOW)).toMatchObject({ source: "free", plan: { id: "free" } });
 });
 
-test("existing agencies are pilots; the monthly allowance counts text and voice apart and blocks at the limit", async () => {
+test("existing agencies are pilots; the monthly credits count a text request as 1 and a voice note as 3 and block at the pool", async () => {
   expect((await h.query("SELECT pilot FROM agencies WHERE id = $1", [h.AGENCY_A]))[0].pilot).toBe(true);
   await notPilot();
-  await useAi(Plans.FREE.text - 1);
-  await useAi(Plans.FREE.voice, { audio: true });
-  const a = await Billing.allowance(h.pool, h.AGENCY_A);
-  expect(a).toMatchObject({ source: "free", text: { used: Plans.FREE.text - 1, limit: Plans.FREE.text }, voice: { used: Plans.FREE.voice, limit: Plans.FREE.voice } });
-  await expect(Billing.checkAllowance(h.pool, h.AGENCY_A, { audio: false })).resolves.toBeTruthy();
-  await expect(Billing.checkAllowance(h.pool, h.AGENCY_A, { audio: true })).rejects.toMatchObject({ code: "PLAN_QUOTA_EXCEEDED", kind: "voice" });
+  await useAi(76);
+  await useAi(1, { audio: true });
+  expect(await Credits.usedThisMonth(h.pool, h.AGENCY_A)).toBe(79);
+  expect(await Credits.poolFor(h.pool, h.AGENCY_A, "free")).toMatchObject({ total: 80 });
+  await expect(Billing.checkAllowance(h.pool, h.AGENCY_A)).resolves.toMatchObject({ used: 79, limit: 80 });
   await useAi(1);
-  await expect(Billing.checkAllowance(h.pool, h.AGENCY_A, { audio: false })).rejects.toMatchObject({ code: "PLAN_QUOTA_EXCEEDED", kind: "text" });
+  await expect(Billing.checkAllowance(h.pool, h.AGENCY_A)).rejects.toMatchObject({ code: "PLAN_QUOTA_EXCEEDED", kind: "credits", limit: 80, used: 80 });
   // Another agency's use never counts here.
-  expect((await Billing.allowance(h.pool, h.AGENCY_B)).text.used).toBe(0);
+  expect(await Credits.usedThisMonth(h.pool, h.AGENCY_B)).toBe(0);
+});
+
+test("credits are charged once per action: a search's second row is free, a page read charges the page credits, reused or not", async () => {
+  await h.query("INSERT INTO operation_logs (agency_id, broker_id, operation_type, status, model_used, gemini_ms) VALUES ($1, $2, 'search_parse', 'success', 'gemini-x', 10), ($1, $2, 'search_query', 'success', 'gemini-x', 10), ($1, $2, 'price_list_read', 'success', 'gemini-x', 10)", [h.AGENCY_A, h.BROKERS.broker.id]);
+  expect(await Credits.usedThisMonth(h.pool, h.AGENCY_A)).toBe(1);
+  await h.query("INSERT INTO price_read_log (agency_id, fingerprint, reused) VALUES ($1, 'f1', false), ($1, 'f2', true)", [h.AGENCY_A]);
+  expect(await Credits.usedThisMonth(h.pool, h.AGENCY_A)).toBe(21);
 });
 
 test("the AI gateway checks the plan before calling and records voice notes as audio", async () => {
@@ -85,7 +92,7 @@ test("the AI gateway checks the plan before calling and records voice notes as a
     const [row] = await h.query("SELECT metadata->>'media' AS media FROM operation_logs WHERE operation_type = 'listing_extraction'");
     expect(row.media).toBe("audio");
     await notPilot();
-    await useAi(Plans.FREE.text);
+    await useAi(80);
     await expect(AI.generateWithCascade({ contents: "hello", operationType: "listing_extraction", ctx: { pool: h.pool, broker } })).rejects.toMatchObject({ code: "PLAN_QUOTA_EXCEEDED" });
   } finally {
     AI._setClientForTests(null);
@@ -131,11 +138,18 @@ test("a manager announces a payment, the owner confirms it and the paid period s
   expect(days).toBeLessThan(93);
   expect((await a.agent.post(`/app/owner/payments/${p.id}/confirm`).type("form").send({ _csrf: a.csrf })).status).toBe(400);
   expect(await h.query("SELECT 1 FROM notifications WHERE kind = 'manager_alert' AND title LIKE $1", [`%${ref}%`])).not.toEqual([]);
-  // A voice pack adds 100 voice notes this month.
-  await a.agent.post("/app/plan/pay").type("form").send({ _csrf: a.csrf, kind: "voice_pack" });
-  const [vp] = await h.query("SELECT id FROM payments WHERE kind = 'voice_pack'");
+  // A credit bundle adds its credits this month.
+  await a.agent.post("/app/plan/pay").type("form").send({ _csrf: a.csrf, kind: "credit_bundle", bundle: "medium" });
+  const [vp] = await h.query("SELECT id, amount_egp FROM payments WHERE kind = 'credit_bundle'");
+  expect(Number(vp.amount_egp)).toBe(175);
   await Billing.confirmPayment(h.pool, vp.id);
-  expect((await Billing.allowance(h.pool, h.AGENCY_A)).voice.limit).toBe(Plans.planById("agency").voice + Plans.VOICE_PACK.notes);
+  expect((await Billing.allowance(h.pool, h.AGENCY_A)).credits).toMatchObject({ plan: 6000, bundles: 500, limit: 6500 });
+  // A manager asks for more credits; the owner approves and the grant joins this month's pool.
+  expect((await a.agent.post("/app/plan/credit-request").type("form").send({ _csrf: a.csrf, credits: "300", note: "busy month" })).status).toBe(200);
+  const [rq] = await h.query("SELECT id, status FROM credit_requests");
+  expect(rq.status).toBe("pending");
+  expect(await Credits.decideRequest(h.pool, rq.id, { approve: true })).toMatchObject({ ok: true });
+  expect((await Billing.allowance(h.pool, h.AGENCY_A)).credits).toMatchObject({ grants: 300, limit: 6800 });
   // Owner controls are 404 for everyone else.
   expect((await b.agent.post(`/app/owner/payments/${p.id}/cancel`).type("form").send({ _csrf: b.csrf })).status).toBe(404);
 });

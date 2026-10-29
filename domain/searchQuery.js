@@ -203,19 +203,72 @@ const TYPE_MATCHERS = Object.entries(TYPE_TERMS)
   .flatMap(([type, words]) => words.map((w) => ({ type, term: normalizeSearch(w) })))
   .sort((a, b) => b.term.length - a.term.length);
 
-const AR_NUMBER_WORDS = { واحد: 1, واحده: 1, اتنين: 2, اثنين: 2, تلات: 3, تلاته: 3, ثلاث: 3, ثلاثه: 3, اربع: 4, اربعه: 4, خمس: 5, خمسه: 5, ست: 6, سته: 6 };
+const AR_NUMBER_WORDS = {
+  واحد: 1, واحده: 1, اتنين: 2, اثنين: 2, تلات: 3, تلت: 3, تلاته: 3, ثلاث: 3, ثلاثه: 3, اربع: 4, اربعه: 4, خمس: 5, خمسه: 5,
+  ست: 6, سته: 6, ستة: 6, سبع: 7, سبعه: 7, سبعة: 7, تمن: 8, تمنيه: 8, تمنية: 8, خمسة: 5, اربعة: 4, تلتة: 3, تمانيه: 8, تمانية: 8, تسع: 9, تسعه: 9, تسعة: 9, عشر: 10, عشره: 10, عشرة: 10
+};
 
 function consume(hay, re) {
   const m = hay.match(re);
   return m ? { m, hay: hay.replace(re, " ") } : { m: null, hay };
 }
 
+/** A number written as digits or as an Egyptian word ("خمسة", "تمنية"): the number, or null when it is neither. */
+function spokenAmount(word) {
+  if (/^\d+(\.\d+)?$/.test(word)) return Number(word);
+  return Object.prototype.hasOwnProperty.call(AR_NUMBER_WORDS, word) ? AR_NUMBER_WORDS[word] : null;
+}
+
 function parseMoneyWords(n, unit) {
   const v = Number(n);
   if (!Number.isFinite(v)) return null;
-  if (/مليون|million|^m$/i.test(unit)) return Math.round(v * 1e6);
+  if (/مليون|million|^(m|م)$/i.test(unit)) return Math.round(v * 1e6);
   if (/الف|ألف|k|thousand/i.test(unit)) return Math.round(v * 1e3);
   return v >= 1000 ? Math.round(v) : null;
+}
+
+/** Optimal string alignment distance: insert, delete, replace, or swap two neighbouring letters (one edit each). */
+function editDistance(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => Array.from({ length: b.length + 1 }, (__, j) => (i === 0 ? j : j === 0 ? i : 0)));
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+  }
+  return d[a.length][b.length];
+}
+
+const SINGLE_TYPE_TERMS = TYPE_MATCHERS.filter((m) => !m.term.includes(" "));
+
+/**
+ * Typos in a property word ("vilal", "appartment", "شقه" with a stray letter): one edit for a short word, two for a word
+ * of five letters or more, and only when a single type fits. Words with digits, stop words and words under 4 letters are
+ * left alone so ordinary words do not turn into a type.
+ */
+function fuzzyTypes(hay, found) {
+  let out = hay;
+  for (const w of hay.trim().split(/\s+/)) {
+    if (!w || /\d/.test(w) || w.length < 4 || STOP.has(w)) continue;
+    const limit = w.length >= 5 ? 2 : 1;
+    let best = null;
+    let tie = false;
+    for (const m of SINGLE_TYPE_TERMS) {
+      if (Math.abs(m.term.length - w.length) > limit) continue;
+      const dist = editDistance(w, m.term);
+      if (dist > limit) continue;
+      if (!best || dist < best.dist) {
+        best = { dist, type: m.type };
+        tie = false;
+      } else if (dist === best.dist && m.type !== best.type) tie = true;
+    }
+    if (best && !tie) {
+      found.push(best.type);
+      out = out.split(` ${w} `).join(" ");
+    }
+  }
+  return out;
 }
 
 /** Local parser used when the AI is unavailable. Deterministic and bilingual. */
@@ -227,6 +280,15 @@ function fallbackParse(text) {
   if (SMALL_TALK.includes(hay.trim())) {
     return { intent: "other", transcript: raw.slice(0, 500), language: /[a-z]/i.test(raw) && !/[؀-ۿ]/.test(raw) ? "en" : "ar", filters: canonical(f) };
   }
+
+  // A unit code written like NH-V12 (initials, a hyphen, an optional letter, a number).
+  let c = consume(hay, / ([a-z]{1,6}-[a-z]{0,2}\d{1,5}) /);
+  if (c.m) {
+    f.code = normalizeCode(c.m[1]);
+    hay = c.hay;
+  }
+
+  hay = hay.replace(/(\d)([a-zء-ي])/g, "$1 $2");
 
   // Places first (they can contain type-like words, e.g. "town").
   const placeScan = Places.findPlaces(hay);
@@ -241,7 +303,7 @@ function fallbackParse(text) {
   }
 
   // Listing type.
-  let c = consume(hay, / (للايجار|ايجار|rent|for rent|lease) /);
+  c = consume(hay, / (للايجار|ايجار|rent|for rent|lease) /);
   if (c.m) f.listing_type = "rent";
   hay = c.hay;
   c = consume(hay, / (للبيع|بيع|for sale|sale) /);
@@ -253,10 +315,10 @@ function fallbackParse(text) {
 
   // Bedrooms / bathrooms (digits or Egyptian number words).
   const n = (s) => (/^\d+$/.test(s) ? Number(s) : AR_NUMBER_WORDS[s] ?? null);
-  c = consume(hay, / (غرفتين|اوضتين) /);
+  c = consume(hay, / و?(غرفتين|اوضتين) /);
   if (c.m) f.bedrooms_min = f.bedrooms_max = 2;
   hay = c.hay;
-  c = consume(hay, / (\d+|[ء-ي]+) (غرف|غرفه|اوض|اوضه|نوم|bed|beds|bedroom|bedrooms|br) /);
+  c = consume(hay, / (\d+|[ء-ي]+) (غرف|غرفه|اوض|اوضه|نوم|bed|beds|bedroom|bedrooms|room|rooms|br) /);
   if (c.m && n(c.m[1]) !== null) {
     f.bedrooms_min = f.bedrooms_max = n(c.m[1]);
     hay = c.hay;
@@ -270,20 +332,118 @@ function fallbackParse(text) {
     hay = c.hay;
   }
 
-  // Area: "150 متر" / "150 m2" / "150 sqm".
-  c = consume(hay, / (\d{2,4}) (متر|م|m2|m|sqm|meter|meters) /);
+  // Money: ranges, "above", down payment and monthly installment come before the plain budget ceiling.
+  const MONEY = "(\\d+(?:\\.\\d+)?) (مليون|million|m|الف|k|thousand)";
+  const money = (num, unit) => parseMoneyWords(String(num), unit);
+  c = consume(hay, new RegExp(` (?:من |from )?(\\d+(?:\\.\\d+)?)(?: (مليون|million|m|الف|k|thousand))? (?:ل|الي|to|-) ${MONEY} `));
   if (c.m) {
-    const a = Number(c.m[1]);
-    f.area_min = Math.round(a * 0.9);
-    f.area_max = Math.round(a * 1.1);
+    const hi = money(c.m[3], c.m[4]);
+    const lo = money(c.m[1], c.m[2] || c.m[4]);
+    if (lo && hi && lo <= hi) {
+      f.price_min = lo;
+      f.price_max = hi;
+      hay = c.hay;
+    }
+  }
+  c = consume(hay, new RegExp(` (?:مقدم|دفعه اولي|دفعه مقدمه|down payment|downpayment) (?:حدود |تحت |اقل من |under |max )?${MONEY} `));
+  if (c.m) {
+    f.max_down_payment = money(c.m[1], c.m[2]);
+    hay = c.hay;
+  }
+  c = consume(hay, new RegExp(` و?(?:قسط شهري|قسط|monthly installment|installment) (?:حدود |تحت |اقل من |under |max )?${MONEY} `));
+  if (c.m) {
+    f.max_installment = money(c.m[1], c.m[2]);
+    f.payment_installments = true;
+    hay = c.hay;
+  }
+  // "مش عايز أكتر من 9 مليون" is a ceiling, not a floor.
+  c = consume(hay, new RegExp(` مش (?:عايز )?(?:اكتر|اكثر) من ${MONEY} `));
+  if (c.m) {
+    const v = money(c.m[1], c.m[2]);
+    if (v) f.price_max = v;
+    hay = c.hay;
+  }
+  c = consume(hay, new RegExp(` (?:فوق|اكتر من|اكثر من|above|over|more than|min) ${MONEY} `));
+  if (c.m) {
+    const v = money(c.m[1], c.m[2]);
+    if (v) f.price_min = v;
     hay = c.hay;
   }
 
-  // Budget: "تحت 8 مليون" / "under 8 million" / "8 مليون" (a ceiling).
-  c = consume(hay, / (?:تحت|اقل من|حدود|بحدود|لحد|under|below|max|up to|budget)? ?(\d+(?:\.\d+)?|\d+ \d+) (مليون|million|m|الف|k|thousand) /);
+  // A budget with the short "م" ("تحت 9م"): read before the area rule, so it is not square metres.
+  c = consume(hay, / (?:تحت|اقل من|حدود|بحدود|لحد|مش (?:عايز )?(?:اكتر|اكثر) من|under|below|max|up to) (\d+(?:\.\d+)?|[ء-ي]+) (م|m) /);
   if (c.m) {
-    const v = parseMoneyWords(c.m[1].replace(" ", "."), c.m[2]);
-    if (v) f.price_max = v;
+    const v = spokenAmount(c.m[1]);
+    if (v !== null) f.price_max = parseMoneyWords(String(v), "م");
+    hay = c.hay;
+  }
+
+  // Area: "150 متر" / "150 m2" / "150 sqm" is a band of +-10%; "من 120 ل 150 متر" is the exact range.
+  c = consume(hay, / (?:من |from )?(\d{2,4}) (?:ل|الي|to|-) (\d{2,4}) (متر|م|m2|m|sqm|meter|meters) /);
+  if (c.m) {
+    f.area_min = Number(c.m[1]);
+    f.area_max = Number(c.m[2]);
+    hay = c.hay;
+  } else {
+    c = consume(hay, / (\d{2,4}) (متر|م|m2|m|sqm|meter|meters) /);
+    if (c.m) {
+      const a = Number(c.m[1]);
+      f.area_min = Math.round(a * 0.9);
+      f.area_max = Math.round(a * 1.1);
+      hay = c.hay;
+    }
+  }
+
+  // Budget: "تحت 8 مليون" / "under 8 million" / "8 مليون" (a ceiling).
+  c = consume(hay, / (?:تحت|اقل من|حدود|بحدود|لحد|مش (?:عايز )?(?:اكتر|اكثر) من|under|below|max|up to|budget)? ?(\d+(?:\.\d+)?|\d+ \d+|[ء-ي]+) (مليون|million|m|الف|k|thousand)( ونص)? /);
+  if (c.m) {
+    const n = spokenAmount(c.m[1].replace(" ", "."));
+    const v = n === null ? null : parseMoneyWords(String(n), c.m[2]);
+    const half = c.m[3] && v ? parseMoneyWords("0.5", c.m[2]) : 0;
+    if (v && f.price_max === null) f.price_max = v + half;
+    if (n !== null) hay = c.hay;
+  }
+
+  // Finishing, furnishing and floor.
+  const FIN = [
+    [/ (?:الترا سوبر لوكس|ultra super lux|الترا لوكس|ultra lux) /, "ultra_super_lux"],
+    [/ (?:سوبر لوكس|super lux) /, "super_lux"],
+    [/ (?:نص تشطيب|نصف تشطيب|semi finished|semi-finished) /, "semi_finished"],
+    [/ (?:علي الطوب|على الطوب|محاره|بدون تشطيب|core and shell|core & shell|shell) /, "core_and_shell"],
+    [/ (?:تشطيب كامل|متشطبه|فينيش|fully finished|finished) /, "fully_finished"]
+  ];
+  for (const [re, key] of FIN) {
+    c = consume(hay, re);
+    if (c.m) {
+      f.finishing.push(key);
+      hay = c.hay.replace(/ تشطيب /g, " ");
+      break;
+    }
+  }
+  c = consume(hay, / (?:غير مفروشه|فاضيه|unfurnished) /);
+  if (c.m) f.furnishing = "unfurnished";
+  else {
+    c = consume(hay, / (?:نص فرش|نصف فرش|semi furnished|semi-furnished) /);
+    if (c.m) f.furnishing = "semi_furnished";
+    else {
+      c = consume(hay, / (?:مفروشه|مفروش|فرش كامل|fully furnished|furnished) /);
+      if (c.m) f.furnishing = "furnished";
+    }
+  }
+  hay = c.hay;
+  if (!f.furnishing && f.features.includes("furnished")) f.furnishing = "furnished";
+  const ORD = { الاول: 1, الاولي: 1, التاني: 2, الثاني: 2, التالت: 3, الثالث: 3, الرابع: 4, الخامس: 5, السادس: 6, السابع: 7, الثامن: 8, التاسع: 9, العاشر: 10 };
+  c = consume(hay, / (?:ب|بال)?(?:الدور|دور|floor) (\d{1,2}|[ء-ي]+) /);
+  if (c.m) {
+    const fl = /^\d+$/.test(c.m[1]) ? Number(c.m[1]) : ORD[c.m[1]] ?? null;
+    if (fl !== null) {
+      f.floor_min = f.floor_max = fl;
+      hay = c.hay;
+    }
+  }
+  c = consume(hay, / (?:ب|بال)?(?:الدور الارضي|دور ارضي|ground floor) /);
+  if (c.m) {
+    f.floor_min = f.floor_max = 0;
     hay = c.hay;
   }
 
@@ -301,7 +461,7 @@ function fallbackParse(text) {
   c = consume(hay, / (كاش|cash) /);
   if (c.m) f.payment_cash = true;
   hay = c.hay;
-  c = consume(hay, / (تقسيط|اقساط|قسط|installments|installment) /);
+  c = consume(hay, / (?:ب|بال)?(تقسيط|اقساط|قسط|installments|installment) /);
   if (c.m) f.payment_installments = true;
   hay = c.hay;
 
@@ -312,6 +472,7 @@ function fallbackParse(text) {
       hay = hay.split(` ${m.term} `).join(" ");
     }
   }
+  hay = fuzzyTypes(hay, f.property_types);
 
   // Leftover words: unresolved places (≥3 letters, not stop words, not numbers).
   const leftovers = hay
