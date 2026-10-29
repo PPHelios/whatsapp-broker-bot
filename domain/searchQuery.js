@@ -203,7 +203,10 @@ const TYPE_MATCHERS = Object.entries(TYPE_TERMS)
   .flatMap(([type, words]) => words.map((w) => ({ type, term: normalizeSearch(w) })))
   .sort((a, b) => b.term.length - a.term.length);
 
-const AR_NUMBER_WORDS = { واحد: 1, واحده: 1, اتنين: 2, اثنين: 2, تلات: 3, تلاته: 3, ثلاث: 3, ثلاثه: 3, اربع: 4, اربعه: 4, خمس: 5, خمسه: 5, ست: 6, سته: 6 };
+const AR_NUMBER_WORDS = {
+  واحد: 1, واحده: 1, اتنين: 2, اثنين: 2, تلات: 3, تلت: 3, تلاته: 3, ثلاث: 3, ثلاثه: 3, اربع: 4, اربعه: 4, خمس: 5, خمسه: 5,
+  ست: 6, سته: 6, ستة: 6, سبع: 7, سبعه: 7, سبعة: 7, تمن: 8, تمنيه: 8, تمانيه: 8, تمانية: 8, تسع: 9, تسعه: 9, تسعة: 9, عشر: 10, عشره: 10, عشرة: 10
+};
 
 function consume(hay, re) {
   const m = hay.match(re);
@@ -213,9 +216,53 @@ function consume(hay, re) {
 function parseMoneyWords(n, unit) {
   const v = Number(n);
   if (!Number.isFinite(v)) return null;
-  if (/مليون|million|^m$/i.test(unit)) return Math.round(v * 1e6);
+  if (/مليون|million|^(m|م)$/i.test(unit)) return Math.round(v * 1e6);
   if (/الف|ألف|k|thousand/i.test(unit)) return Math.round(v * 1e3);
   return v >= 1000 ? Math.round(v) : null;
+}
+
+/** Optimal string alignment distance: insert, delete, replace, or swap two neighbouring letters (one edit each). */
+function editDistance(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => Array.from({ length: b.length + 1 }, (__, j) => (i === 0 ? j : j === 0 ? i : 0)));
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+  }
+  return d[a.length][b.length];
+}
+
+const SINGLE_TYPE_TERMS = TYPE_MATCHERS.filter((m) => !m.term.includes(" "));
+
+/**
+ * Typos in a property word ("vilal", "appartment", "شقه" with a stray letter): one edit for a short word, two for a word
+ * of five letters or more, and only when a single type fits. Words with digits, stop words and words under 4 letters are
+ * left alone so ordinary words do not turn into a type.
+ */
+function fuzzyTypes(hay, found) {
+  let out = hay;
+  for (const w of hay.trim().split(/\s+/)) {
+    if (!w || /\d/.test(w) || w.length < 4 || STOP.has(w)) continue;
+    const limit = w.length >= 5 ? 2 : 1;
+    let best = null;
+    let tie = false;
+    for (const m of SINGLE_TYPE_TERMS) {
+      if (Math.abs(m.term.length - w.length) > limit) continue;
+      const dist = editDistance(w, m.term);
+      if (dist > limit) continue;
+      if (!best || dist < best.dist) {
+        best = { dist, type: m.type };
+        tie = false;
+      } else if (dist === best.dist && m.type !== best.type) tie = true;
+    }
+    if (best && !tie) {
+      found.push(best.type);
+      out = out.split(` ${w} `).join(" ");
+    }
+  }
+  return out;
 }
 
 /** Local parser used when the AI is unavailable. Deterministic and bilingual. */
@@ -262,10 +309,10 @@ function fallbackParse(text) {
 
   // Bedrooms / bathrooms (digits or Egyptian number words).
   const n = (s) => (/^\d+$/.test(s) ? Number(s) : AR_NUMBER_WORDS[s] ?? null);
-  c = consume(hay, / (غرفتين|اوضتين) /);
+  c = consume(hay, / و?(غرفتين|اوضتين) /);
   if (c.m) f.bedrooms_min = f.bedrooms_max = 2;
   hay = c.hay;
-  c = consume(hay, / (\d+|[ء-ي]+) (غرف|غرفه|اوض|اوضه|نوم|bed|beds|bedroom|bedrooms|br) /);
+  c = consume(hay, / (\d+|[ء-ي]+) (غرف|غرفه|اوض|اوضه|نوم|bed|beds|bedroom|bedrooms|room|rooms|br) /);
   if (c.m && n(c.m[1]) !== null) {
     f.bedrooms_min = f.bedrooms_max = n(c.m[1]);
     hay = c.hay;
@@ -307,6 +354,13 @@ function fallbackParse(text) {
   if (c.m) {
     const v = money(c.m[1], c.m[2]);
     if (v) f.price_min = v;
+    hay = c.hay;
+  }
+
+  // A budget with the short "م" ("تحت 9م"): read before the area rule, so it is not square metres.
+  c = consume(hay, / (تحت|اقل من|حدود|بحدود|لحد|under|below|max|up to) (\d+(?:\.\d+)?) م /);
+  if (c.m) {
+    f.price_max = parseMoneyWords(c.m[2], "م");
     hay = c.hay;
   }
 
@@ -402,6 +456,7 @@ function fallbackParse(text) {
       hay = hay.split(` ${m.term} `).join(" ");
     }
   }
+  hay = fuzzyTypes(hay, f.property_types);
 
   // Leftover words: unresolved places (≥3 letters, not stop words, not numbers).
   const leftovers = hay

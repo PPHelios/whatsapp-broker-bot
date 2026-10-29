@@ -45,6 +45,14 @@ const CASES = [
   { q: "مكتب للإيجار 50 متر", want: { listing_type: "rent", property_types: ["office"], area_min: 45, area_max: 55 } },
   { q: "شقة للبيع في القاهرة الجديدة 3 غرف مع حديقة", want: { property_types: ["apartment"], bedrooms_min: 3, bedrooms_max: 3 } },
   { q: "شقة 3 غرف تحت 9 مليون في التجمع مفروشة", want: { property_types: ["apartment"], bedrooms_min: 3, bedrooms_max: 3, price_max: 9000000, furnishing: "furnished" } },
+  // Typos, "م" for million, and "rooms" (typed and mixed-language).
+  { q: "شقه 3 غرف فى التجمع تحت 9 مليون", want: { property_types: ["apartment"], bedrooms_min: 3, bedrooms_max: 3, price_max: 9000000 } },
+  { q: "vilal for sale in new cairo", want: { property_types: ["villa"] } },
+  { q: "appartment 2 rooms madinaty", want: { property_types: ["apartment"], bedrooms_min: 2, bedrooms_max: 2 } },
+  { q: "شقة بالتجمع تحت 9م", want: { property_types: ["apartment"], price_max: 9000000 } },
+  { q: "2 rooms apartment", want: { property_types: ["apartment"], bedrooms_min: 2, bedrooms_max: 2 } },
+  { q: "2 bathrooms apartment", want: { property_types: ["apartment"], bathrooms_min: 2 } },
+  { q: "شقة واوضتين", want: { property_types: ["apartment"], bedrooms_min: 2, bedrooms_max: 2 } },
   { q: "hi", want: { intent: "other" } },
   { q: "مرحبا", want: { intent: "other" } }
 ];
