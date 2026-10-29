@@ -247,6 +247,13 @@ ol.photo-order img { width: 72px; height: 54px; object-fit: cover; border-radius
 .searchbox input { flex: 1; min-width: 0; min-height: 48px; border: 0; padding: 0; background: transparent; }
 .searchbox input:focus-visible { outline: 0; }
 .searchbox .mic, .searchbox button.mic { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; min-height: 0; padding: 0; border-radius: 10px; background: var(--brand); color: #fff; }
+.searchbox .mic[hidden] { display: none; }
+.searchbox .mic .ico-stop, .searchbox .mic.recording .ico-mic { display: none; }
+.searchbox .mic.recording .ico-stop { display: inline-flex; }
+.searchbox .mic.recording { background: var(--bad); animation: mic-pulse 1.2s ease-out infinite; }
+.searchbox .mic.busy .ico-mic, .searchbox .mic.busy .ico-stop { visibility: hidden; }
+@keyframes mic-pulse { 0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.45); } 100% { box-shadow: 0 0 0 12px rgba(220, 38, 38, 0); } }
+@media (prefers-reduced-motion: reduce) { .searchbox .mic.recording { animation: none; } }
 .counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: -40px; }
 .count { display: flex; flex-direction: column; padding: 12px; border-radius: 16px; background: var(--card); box-shadow: var(--shadow); color: var(--ink); text-decoration: none; }
 .count strong { font-size: 1.6rem; font-weight: 800; line-height: 1.2; }
