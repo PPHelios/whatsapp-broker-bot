@@ -227,4 +227,25 @@ describe("sharing from the web app", () => {
     const [link] = await h.query("SELECT channel, lang FROM share_links");
     expect(link).toEqual({ channel: "web", lang: "en" });
   });
+
+  test("the broker opening their own link while signed in is told it isn't counted; a client's open counts and alerts", async () => {
+    await seedUnit();
+    const { agent, csrf } = await signIn(h, "broker");
+    const r = await agent.post("/app/units/PUB-1/share").set("X-CSRF-Token", csrf).type("form").send({ lang: "en" });
+    const path = r.text.match(/data-share-url>([^<]+)</)[1].replace("http://localhost:3000", "");
+    h.WA.outbox.length = 0;
+
+    const own = await agent.get(path).set("User-Agent", BROWSER);
+    expect(own.status).toBe(200);
+    expect(own.text).toMatch(/data-team-view/);
+    expect(own.text).toMatch(/is not counted/);
+    expect((await h.query("SELECT open_count FROM share_links"))[0].open_count).toBe(0);
+    expect(await h.query("SELECT count(*)::int AS n FROM notifications WHERE kind = 'share_opened'")).toEqual([{ n: 0 }]);
+
+    const client = await open(path);
+    expect(client.text).not.toMatch(/data-team-view/);
+    expect((await h.query("SELECT open_count FROM share_links"))[0].open_count).toBe(1);
+    expect(await h.query("SELECT count(*)::int AS n FROM notifications WHERE kind = 'share_opened'")).toEqual([{ n: 1 }]);
+    expect((await agent.get("/app/units/PUB-1")).text).toMatch(/data-link-opens="1"/);
+  });
 });

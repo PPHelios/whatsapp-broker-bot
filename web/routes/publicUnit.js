@@ -228,7 +228,7 @@ function mountPublic(app, { pool, assets }) {
     return project ? { project, materials: await Catalogue.clientMaterials(pool, listing) } : { project: null, materials: [] };
   }
 
-  async function render(req, res, { resolved, token, lang }, interest = {}, status = null) {
+  async function render(req, res, { resolved, token, lang }, interest = {}, status = null, { team = false } = {}) {
     const { listing, agency, broker } = resolved;
     const pageUrl = Links.unitPageUrl(agency.slug, listing.code, token);
     const base = `/${agency.slug}/${encodeURIComponent(listing.code)}?s=${encodeURIComponent(token)}`;
@@ -257,10 +257,18 @@ function mountPublic(app, { pool, assets }) {
             scripts: false,
             manifest: false,
             head: unit.status === "active" ? ogTags(unit, pageUrl) : null,
-            body: unitBody(unit, { otherLangUrl, interest: { action: `${base}&lang=${lang}#interest`, ...interest }, plans: plansView(unit, listing, `${base}&lang=${lang}`, req.query.plan, lang) })
+            body: html`${team ? teamNotice(lang) : ""}${unitBody(unit, { otherLangUrl, interest: { action: `${base}&lang=${lang}#interest`, ...interest }, plans: plansView(unit, listing, `${base}&lang=${lang}`, req.query.plan, lang) })}`
           })
         )
       );
+  }
+
+  function teamNotice(lang) {
+    return html`<p class="notice warn" data-team-view>${L(
+      lang,
+      "👁 إنت داخل على حساب المكتب، فالفتحة دي مش بتتحسب ومفيش تنبيه. التنبيه بيوصل لما العميل يفتحها. عشان تجرب، افتح الرابط في نافذة خاصة (Incognito) أو من موبايل تاني.",
+      "👁 You are signed in to this agency, so this visit is not counted and no alert is sent. You get the alert when a client opens it. To test, open the link in a private (incognito) window or on another phone."
+    )}</p>`;
   }
 
   function plansView(unit, listing, base, planParam, lang) {
@@ -341,12 +349,14 @@ function mountPublic(app, { pool, assets }) {
     const ctx = await load(req, res);
     if (!ctx) return undefined;
     const sent = req.query.sent === "1";
+    let open = null;
     if (!sent) {
-      await Share.recordOpen(pool, ctx.resolved, { userAgent: req.get("user-agent"), viewerAgencyId: req.session?.agency?.id || null }).catch((e) =>
+      open = await Share.recordOpen(pool, ctx.resolved, { userAgent: req.get("user-agent"), viewerAgencyId: req.session?.agency?.id || null }).catch((e) =>
         console.warn("Share open record failed:", e.message)
       );
     }
-    return render(req, res, ctx, { sent });
+    // The agency's own signed-in brokers are not counted; say so, or a broker testing the link sees nothing happen.
+    return render(req, res, ctx, { sent }, null, { team: open?.skipped === "team" });
   });
 
   app.post("/:slug/:code", securityHeaders, sameOrigin(), express.urlencoded({ extended: false, limit: "8kb", parameterLimit: 20 }), async (req, res, next) => {
