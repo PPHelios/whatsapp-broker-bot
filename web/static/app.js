@@ -758,10 +758,9 @@
       mics[m].hidden = false;
       mics[m].addEventListener("click", function () { listen(this); });
     }
-    var auto = document.querySelector("[data-voice-start]");
-    if (auto && mics[0]) listen(mics[0]);
-  } else {
-    var start = document.querySelector("[data-voice-start]");
-    if (start) start.focus();
   }
+  // The home page's mic opens search with ?voice=1. Listening never starts on page load: browsers ask for the
+  // microphone then, on every visit and back-navigation. Focus the box and let the user tap the mic.
+  var start = document.querySelector("[data-voice-start]");
+  if (start) start.focus();
 })();
