@@ -743,6 +743,15 @@
       toast(EN ? VOICE_ERRORS["no-speech"][0] : VOICE_ERRORS["no-speech"][1], true);
     }
   }
+  // Enter (or the iPhone's blue Go key) searches the typed text. It never starts the mic. Arabic input composes with
+  // isComposing, so Enter there only picks the word.
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" || e.isComposing) return;
+    var input = e.target.closest && e.target.closest("form[role=search] input[name=q]");
+    if (!input) return;
+    e.preventDefault();
+    if (input.value.trim()) input.form.submit();
+  });
   if (Speech) {
     var mics = document.querySelectorAll("[data-mic]");
     for (var m = 0; m < mics.length; m++) {
