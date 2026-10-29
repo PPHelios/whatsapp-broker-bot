@@ -97,7 +97,7 @@ function readForm(lang, base, reading) {
   return html`<form method="post" action="${base}/sheets/read" enctype="multipart/form-data" class="stack" data-ai-read>
     <label>🤖 ${L(lang, "أو ارفع قايمة الأسعار PDF أو صورها", "Or upload the price list as a PDF or photos")} <input type="file" name="doc" accept="application/pdf,image/jpeg,image/png,image/webp" multiple required></label>
     <label>${L(lang, "صفحات الأسعار في الـ PDF", "Price pages in the PDF")} <input name="pages" dir="ltr" placeholder="2-4, 7" maxlength="40"></label>
-    <p class="muted" data-pages-left="${reading.left}">${L(lang, `افتح الملف واكتب أرقام صفحات جداول الأسعار بس (${Reading.MAX_PAGES} بالكتير). فاضل ${reading.left} من ${reading.pages_month} صفحة الشهر ده. الذكاء الاصطناعي بينقل اللي مكتوب بس، وهتراجع كل حاجة قبل الحفظ.`, `Open the file and enter only the pages with price tables (at most ${Reading.MAX_PAGES}). ${reading.left} of ${reading.pages_month} pages left this month. The AI copies only what the page shows, and you check everything before it is saved.`)}</p>
+    <p class="muted" data-pages-left="${reading.left}">${L(lang, `افتح الملف واكتب أرقام صفحات جداول الأسعار بس (${Reading.MAX_PAGES} بالكتير). فاضل ${reading.left} من ${reading.pages_month} صفحة الشهر الحالي. الذكاء الاصطناعي بينقل اللي مكتوب بس، وهتراجع كل حاجة قبل الحفظ.`, `Open the file and enter only the pages with price tables (at most ${Reading.MAX_PAGES}). ${reading.left} of ${reading.pages_month} pages left this month. The AI copies only what the page shows, and you check everything before it is saved.`)}</p>
     <button type="submit" class="secondary">${L(lang, "اقرا ومعاينة", "Read and preview")}</button>
   </form>`;
 }

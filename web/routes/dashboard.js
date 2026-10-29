@@ -199,7 +199,7 @@ function readingSection(rows, lang) {
   <h2>🤖 ${L(lang, "قراية قوايم الأسعار PDF والصور", "Reading PDF and photo price lists")}</h2>
   <p class="muted">${L(lang, "مقفولة لكل وكالة لحد ما تفتحها هنا. الصفحة اللي اتقرت قبل كده (من أي وكالة) بتتعاد من غير تكلفة ومش بتتحسب.", "Off for every agency until you switch it on here. A page read before (by any agency) is reused at no cost and not counted.")}</p>
   <div class="scroll"><table>
-  <thead><tr><th>${L(lang, "الوكالة", "Agency")}</th><th>${L(lang, "الشهر ده", "This month")}</th><th></th></tr></thead>
+  <thead><tr><th>${L(lang, "الوكالة", "Agency")}</th><th>${L(lang, "الشهر الحالي", "This month")}</th><th></th></tr></thead>
   <tbody>${rows.map(
     (a) => html`<tr data-reading="${a.id}"><td>${a.name}</td><td>${a.used} / ${a.pages_month}${a.reused ? html` <span class="muted">(+${a.reused} ${L(lang, "متعادة", "reused")})</span>` : ""}</td>
     <td><form method="post" action="/app/owner/price-reading/${a.id}" class="row">
@@ -396,7 +396,7 @@ function healthSections(d, lang, usd) {
   <tbody>${d.weeks.map(
     (w) => html`<tr data-week="${w.week}"><td dir="ltr">${w.week}</td><td>${w.agencies}</td><td>${w.brokers}</td><td>${w.units}</td><td>${w.leads}</td><td>${w.deals}</td><td>${w.errors}</td><td>${w.reports}</td></tr>`
   )}</tbody></table></div>
-  <p class="muted">${L(lang, "نشط = استخدم البوت أو الموقع في الأسبوع ده (الأسبوع بيبدأ الاتنين).", "Active = used the bot or the website that week (weeks start on Monday).")}</p>
+  <p class="muted">${L(lang, "نشط = استخدم البوت أو الموقع في الأسبوع الحالي (الأسبوع بيبدأ الاتنين).", "Active = used the bot or the website that week (weeks start on Monday).")}</p>
 </section>
 <section class="card">
   <h2>${L(lang, "الذكاء الاصطناعي لكل وكالة (آخر 30 يوم)", "AI per agency (last 30 days)")}</h2>

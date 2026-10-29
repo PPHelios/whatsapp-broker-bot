@@ -51,7 +51,7 @@ async function paymentConfirmed(pool, { payment, agency, referral = null }, { no
     dedupeKey: `payment_ok:${payment.id}`,
     title: (m) =>
       payment.kind === "voice_pack"
-        ? L(m, `✅ وصل الدفع ${payment.reference}: ${Plans.VOICE_PACK.notes} فويس زيادة الشهر ده`, `✅ Payment ${payment.reference} received: ${Plans.VOICE_PACK.notes} extra voice notes this month`)
+        ? L(m, `✅ وصل الدفع ${payment.reference}: ${Plans.VOICE_PACK.notes} فويس زيادة الشهر الحالي`, `✅ Payment ${payment.reference} received: ${Plans.VOICE_PACK.notes} extra voice notes this month`)
         : L(m, `✅ وصل الدفع ${payment.reference}: الباقة شغالة لحد ${until}`, `✅ Payment ${payment.reference} received: your plan runs until ${until}`) +
           (bonus ? L(m, ` (منهم ${bonus} شهر مجاني من الدعوات 🎁)`, ` (including ${bonus} free month(s) from invites 🎁)`) : ""),
     now
