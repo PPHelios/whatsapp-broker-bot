@@ -248,6 +248,8 @@ ol.photo-order img { width: 72px; height: 54px; object-fit: cover; border-radius
 .searchbox input:focus-visible { outline: 0; }
 .searchbox .mic, .searchbox button.mic { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; min-height: 0; padding: 0; border-radius: 10px; background: var(--brand); color: #fff; }
 .searchbox .mic[hidden] { display: none; }
+.searchbox.busy { opacity: 0.85; }
+.searchbox.busy::after { content: ""; flex: none; width: 18px; height: 18px; margin-inline-start: 4px; border: 2px solid var(--brand); border-inline-end-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
 .searchbox .mic .ico-stop, .searchbox .mic.recording .ico-mic { display: none; }
 .searchbox .mic.recording .ico-stop { display: inline-flex; }
 .searchbox .mic.recording { background: var(--bad); animation: mic-pulse 1.2s ease-out infinite; }
