@@ -640,24 +640,63 @@
     if ((e.key === "Enter" || e.key === " ") && e.target.classList && e.target.classList.contains("foldhead")) { e.preventDefault(); toggleFold(e.target); }
   });
   // Voice search: the mic in a search box dictates into it and searches. Shown only where the browser can listen.
+  // Tap once to start (mic turns red with a stop square), tap again to stop. The browser also ends a listen after a
+  // pause; either way the text heard is searched once the browser has finished (onend), and the mic shows a spinner
+  // only while that last result is being delivered.
   var Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var VOICE_ERRORS = {
+    "not-allowed": [ "Allow the microphone for this site, then try again.", "اسمح للمايك للموقع ده، وجرب تاني." ],
+    "service-not-allowed": [ "Allow the microphone for this site, then try again.", "اسمح للمايك للموقع ده، وجرب تاني." ],
+    "audio-capture": [ "No microphone found. Connect one or type.", "مفيش مايك متوصل. وصّل مايك أو اكتب." ],
+    "network": [ "Speech service is unreachable. Type your search instead.", "خدمة الصوت مش متاحة دلوقتي. اكتب بحثك." ],
+    "no-speech": [ "Couldn't hear you. Try again or type.", "مسمعناش كويس. جرب تاني أو اكتب." ]
+  };
+  function setMic(btn, state) {
+    btn.classList.toggle("recording", state === "recording");
+    btn.classList.toggle("busy", state === "busy");
+    btn.setAttribute("aria-pressed", state === "recording" ? "true" : "false");
+  }
   function listen(btn) {
+    if (btn._rec) {
+      setMic(btn, "busy");
+      btn._rec.stop();
+      return;
+    }
     var form = btn.form || btn.closest("form");
     var input = form && form.querySelector("input[name=q]");
     if (!input) return;
     var rec = new Speech();
+    var heard = "";
+    var failed = false;
     rec.lang = EN ? "en-US" : "ar-EG";
     rec.interimResults = true;
-    btn.classList.add("busy");
+    rec.continuous = false;
+    btn._rec = rec;
     rec.onresult = function (ev) {
       var text = "";
       for (var i = 0; i < ev.results.length; i++) text += ev.results[i][0].transcript;
+      heard = text.trim();
       input.value = text;
-      if (ev.results[ev.results.length - 1].isFinal && text.trim()) form.submit();
     };
-    rec.onerror = function () { toast(EN ? "Couldn't hear you. Try again or type." : "مسمعناش كويس. جرب تاني أو اكتب.", true); };
-    rec.onend = function () { btn.classList.remove("busy"); };
-    try { rec.start(); } catch (_) { btn.classList.remove("busy"); }
+    rec.onerror = function (ev) {
+      failed = true;
+      var msg = VOICE_ERRORS[ev.error];
+      if (msg) toast(EN ? msg[0] : msg[1], true);
+    };
+    rec.onend = function () {
+      btn._rec = null;
+      setMic(btn, "idle");
+      if (failed) return;
+      if (heard) form.submit();
+      else toast(EN ? VOICE_ERRORS["no-speech"][0] : VOICE_ERRORS["no-speech"][1], true);
+    };
+    try {
+      rec.start();
+      setMic(btn, "recording");
+    } catch (_) {
+      btn._rec = null;
+      toast(EN ? VOICE_ERRORS["no-speech"][0] : VOICE_ERRORS["no-speech"][1], true);
+    }
   }
   if (Speech) {
     var mics = document.querySelectorAll("[data-mic]");
