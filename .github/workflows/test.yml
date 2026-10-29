@@ -1,4 +1,6 @@
 # Runs the offline test suite (no live DB, WhatsApp or Gemini) on every push and pull request.
+# The browser pass (phone-size clicks through every search box, form and voice button) runs in its own job
+# so the main run stays fast. Both use fake data and fake AI: no credits are spent.
 name: tests
 
 on:
@@ -18,3 +20,16 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:ci
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
