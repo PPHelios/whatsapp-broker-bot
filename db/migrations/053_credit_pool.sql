@@ -79,3 +79,9 @@ INSERT INTO credit_actions (action, label_ar, label_en, credits, sort) VALUES
   ('chat_post', 'بوست من تصدير المحادثة', 'Chat-export post the AI reads', 1, 5),
   ('assistant', 'سؤال للمساعد عن بياناتك', 'Assistant question about your data', 2, 6)
 ON CONFLICT (action) DO NOTHING;
+
+-- Extra bundles are bought like plans and voice packs: announced by a manager, confirmed by the owner. The voice pack
+-- stays valid for old rows only.
+ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_kind_check;
+ALTER TABLE payments ADD CONSTRAINT payments_kind_check CHECK (kind IN ('plan', 'voice_pack', 'credit_bundle'));
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS bundle_id text REFERENCES credit_bundles(id);

@@ -9,6 +9,7 @@
 
 const crypto = require("crypto");
 const Plans = require("../domain/plans");
+const Credits = require("./credits");
 const { withTransaction } = require("../lib/db");
 const { MANAGER_ROLES } = require("../lib/authz");
 const Referrals = require("./referrals");
@@ -106,19 +107,24 @@ async function unitCapacity(db, agencyId, { adding = 1, now = new Date() } = {})
   return { ok: rows[0].n + adding <= limit, used: rows[0].n, limit, plan };
 }
 
-/** Throws PLAN_QUOTA_EXCEEDED (handled like the daily AI caps) when this month's text or voice allowance is used up. */
-async function checkAllowance(db, agencyId, { audio = false, now = new Date() } = {}) {
-  const a = await allowance(db, agencyId, { now });
-  const bucket = audio ? a.voice : a.text;
-  if (bucket.used >= bucket.limit) {
-    const err = new Error(`Plan ${audio ? "voice" : "text"} allowance used up for the month`);
+/**
+ * Throws PLAN_QUOTA_EXCEEDED (handled like the daily AI caps) when the agency has used this month's credits (the plan's
+ * pool plus bundles and grants; services/credits.js). Only AI calls are checked, so searches fall back to the local
+ * parser and the website forms keep working with no AI when the credits are gone.
+ */
+async function checkAllowance(db, agencyId, { now = new Date() } = {}) {
+  const agency = await agencyRow(db, agencyId);
+  const { plan } = effectivePlan(agency, now);
+  const [used, pool] = await Promise.all([Credits.usedThisMonth(db, agencyId, { now }), Credits.poolFor(db, agencyId, plan.id, { now })]);
+  if (used >= pool.total) {
+    const err = new Error("AI credits used up for the month");
     err.code = "PLAN_QUOTA_EXCEEDED";
-    err.kind = audio ? "voice" : "text";
-    err.limit = bucket.limit;
-    err.used = bucket.used;
+    err.kind = "credits";
+    err.limit = pool.total;
+    err.used = used;
     throw err;
   }
-  return a;
+  return { used, limit: pool.total };
 }
 
 /** Whether one more active broker fits the plan. */
