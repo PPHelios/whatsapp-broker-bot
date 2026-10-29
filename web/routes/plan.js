@@ -81,8 +81,8 @@ ${created ? paymentCard(created, payTo, lang) : ""}
   <h2>${Plans.planName(p, lang)} · ${SOURCE[a.source][lang === "en" ? 1 : 0]}</h2>
   ${a.until ? html`<p>${L(lang, "لحد", "Until")} <span dir="ltr">${day(a.until)}</span></p>` : ""}
   <div class="grid">
-    ${meter([L(lang, "طلبات نصية الشهر ده", "Text requests this month"), "text"], a.text.used, a.text.limit)}
-    ${meter([L(lang, "فويس الشهر ده", "Voice notes this month"), "voice"], a.voice.used, a.voice.limit)}
+    ${meter([L(lang, "طلبات نصية الشهر الحالي", "Text requests this month"), "text"], a.text.used, a.text.limit)}
+    ${meter([L(lang, "فويس الشهر الحالي", "Voice notes this month"), "voice"], a.voice.used, a.voice.limit)}
     ${meter([L(lang, "المستخدمين", "Users"), "seats"], a.seats.used, a.seats.limit)}
     ${meter([L(lang, "وحدات متاحة", "Available units"), "units"], a.units.used, a.units.limit)}
   </div>
@@ -102,7 +102,7 @@ ${manager
 </form>
 <form method="post" action="/app/plan/pay" class="card row">
   <input type="hidden" name="kind" value="voice_pack">
-  <span>🎙️ ${L(lang, `باقة فويس: ${Plans.VOICE_PACK.notes} فويس زيادة الشهر ده بـ ${Plans.VOICE_PACK.priceEgp} ج.م`, `Voice pack: ${Plans.VOICE_PACK.notes} extra voice notes this month for ${Plans.VOICE_PACK.priceEgp} EGP`)}</span>
+  <span>🎙️ ${L(lang, `باقة فويس: ${Plans.VOICE_PACK.notes} فويس زيادة الشهر الحالي بـ ${Plans.VOICE_PACK.priceEgp} ج.م`, `Voice pack: ${Plans.VOICE_PACK.notes} extra voice notes this month for ${Plans.VOICE_PACK.priceEgp} EGP`)}</span>
   <button type="submit" class="secondary">${L(lang, "اشتري", "Buy")}</button>
 </form>`
   : html`<p class="muted">${L(lang, "المدير بس يقدر يغيّر الباقة.", "Only a manager can change the plan.")}</p>`}

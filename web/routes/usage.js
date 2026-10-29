@@ -95,11 +95,11 @@ function register(web, { pool, page }) {
     const cls = state.level === "ok" ? "" : state.level === "warn" ? "warn" : "bad";
     const mineCard = html`<section class="card">
   <h2>${L(lang, "رسايلي", "My messages")}</h2>
-  <p>${L(lang, `النهارده: ${mine.today} · الشهر ده: ${mine.total}`, `Today: ${mine.today} · This month: ${mine.total}`)}</p>
+  <p>${L(lang, `النهارده: ${mine.today} · الشهر الحالي: ${mine.total}`, `Today: ${mine.today} · This month: ${mine.total}`)}</p>
   ${mine.actions.length
     ? html`<table><thead><tr><th>${L(lang, "العملية", "Action")}</th><th>${L(lang, "النهارده", "Today")}</th><th>${L(lang, "الشهر", "Month")}</th></tr></thead>
   <tbody>${mine.actions.map((a) => html`<tr data-action="${a.action}"><td>${actionLabel(a.action, lang)}</td><td>${a.today}</td><td>${a.n}</td></tr>`)}</tbody></table>`
-    : html`<p class="muted">${L(lang, "مفيش رسايل الشهر ده.", "No messages this month.")}</p>`}
+    : html`<p class="muted">${L(lang, "مفيش رسايل الشهر الحالي.", "No messages this month.")}</p>`}
   <p class="muted">${L(lang, "نصيحة: البحث الطويل والإضافة والاستيراد ببلاش على الموقع.", "Tip: long searches, adding units and imports are free on the website.")}</p>
 </section>`;
     return page(req, res, {
@@ -108,7 +108,7 @@ function register(web, { pool, page }) {
       body: html`<h1>${L(lang, "الاستهلاك", "Usage")}</h1>
 ${req.query.saved === "1" ? html`<p class="card notice ok" role="status">✅ ${L(lang, "اتحفظت.", "Saved.")}</p>` : ""}
 <section class="card usage-hero" data-credits-used="${state.used}" data-credits-limit="${state.limit}" data-level="${state.level}">
-  <h2>${L(lang, "رصيد رسايل واتساب للوكالة (الشهر ده)", "Agency WhatsApp credits (this month)")}</h2>
+  <h2>${L(lang, "رصيد رسايل واتساب للوكالة (الشهر الحالي)", "Agency WhatsApp credits (this month)")}</h2>
   <meter class="${cls}" min="0" max="${state.limit}" low="${Math.round(state.limit * 0.8)}" high="${state.limit}" value="${Math.min(state.used, state.limit)}">${state.pct}%</meter>
   <p class="big"><strong>${state.used}</strong> / ${state.limit} · ${L(lang, `باقي ${state.remaining}`, `${state.remaining} left`)} (${state.pct}%)</p>
   <details class="how"><summary>${L(lang, "الرصيد بيتحسب إزاي؟", "How credits work")}</summary><p class="muted">${L(
