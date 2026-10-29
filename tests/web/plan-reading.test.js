@@ -72,9 +72,9 @@ test("a CSV plans file: preview, edit, save ticked plans; the file is kept inter
   expect(ctx.summary).toMatch(/Uploaded files: 💳 plans\.csv \(other, \d{4}-\d{2}-\d{2}\)\./);
   expect(ctx.summary).toContain("Payment plans: Ten over eight");
 
-  // The same sheet again is read from the cache (not counted); discard clears it.
+  // The same sheet again is read from the cache (no AI call) and charged as usual; discard clears it.
   expect((await PlanReading.read(h.pool, admin, project.id, { files: [file] })).reused).toBe(1);
-  expect((await PriceReading.usage(h.pool, admin.agency_id)).used).toBe(1);
+  expect((await PriceReading.usage(h.pool, admin.agency_id)).used).toBe(2);
   expect((await agent.get(url)).text).toContain("data-plans-draft");
   await agent.post(`${url}/plans/draft/discard`).set("X-CSRF-Token", csrf).type("form").send("");
   expect((await agent.get(url)).text).not.toContain("data-plans-draft");
