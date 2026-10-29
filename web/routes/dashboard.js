@@ -338,7 +338,7 @@ function creditsSection(o, lang) {
 </form>
 <form method="post" action="/app/owner/credit-bundles" class="card stack" id="credit-bundles" data-credit-bundles>
   <h2>🧾 ${L(lang, "حزم الرصيد الإضافي", "Extra credit bundles")}</h2>
-  <p class="muted">${L(lang, "الحزمة صالحة لشهر الشراء.", "A bundle is valid for the month it is bought.")}</p>
+  <p class="muted">${L(lang, "الحزمة صالحة ٣٠ يوم من تاريخ التأكيد، وبتتحول للشهر اللي بعده.", "A bundle is valid for 30 days from confirmation and carries into the next month.")}</p>
   <div class="scroll"><table>
   <thead><tr><th>ID</th><th>${L(lang, "الاسم (ع)", "Name (ar)")}</th><th>${L(lang, "الاسم (إنجليزي)", "Name (en)")}</th><th>${L(lang, "السعر", "Price")}</th><th>${L(lang, "رصيد", "Credits")}</th><th>${L(lang, "التكلفة", "Cost")}</th><th>${L(lang, "الهامش", "Margin")}</th><th>${L(lang, "مفعّلة", "On")}</th></tr></thead>
   <tbody>${o.bundles.map(

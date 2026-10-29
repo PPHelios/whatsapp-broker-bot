@@ -107,7 +107,7 @@ ${manager
   <button type="submit">${L(lang, "هدفع", "I'll pay")}</button>
 </form>
 <section class="card stack" data-bundles>
-  <h2>${L(lang, "رصيد زيادة للشهر الحالي", "Extra credits for this month")}</h2>
+  <h2>${L(lang, "رصيد زيادة (صالح ٣٠ يوم)", "Extra credits (valid 30 days)")}</h2>
   ${Plans.BUNDLES.map(
     (x) => html`<form method="post" action="/app/plan/pay" class="row" data-bundle="${x.id}">
     <input type="hidden" name="kind" value="credit_bundle"><input type="hidden" name="bundle" value="${x.id}">

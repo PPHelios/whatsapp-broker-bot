@@ -56,6 +56,10 @@
         .then(function (d) {
           if (note && d.text) note.textContent = d.text;
           if (cost) cost.textContent = d.ok ? "(" + d.credits + ")" : "";
+          // A large read asks for a yes with the page count and cost.
+          var flag = form.querySelector("[data-confirmed]");
+          if (d.ok && d.confirm) { form.setAttribute("data-confirm", d.text); if (flag) flag.value = "1"; }
+          else { form.removeAttribute("data-confirm"); if (flag) flag.value = "0"; }
         })
         .catch(function () {});
     };

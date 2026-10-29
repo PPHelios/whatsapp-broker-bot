@@ -84,18 +84,31 @@ async function usedThisMonth(db, agencyId, { now = new Date() } = {}) {
   return rows[0].ai + rows[0].pages * (c.page ?? 0);
 }
 
-/** The month's pool for an agency: its plan's credits, bundles bought and confirmed this month, and owner grants. */
+/**
+ * The month's pool for an agency: its plan's credits, the credits left in bundles bought and confirmed within the last
+ * 30 days, and owner grants. A bundle lasts 30 days from its confirmation, so one bought late in a month carries into the
+ * next, less what the agency used above its plan's credits in the month it was bought.
+ */
 async function poolFor(db, agencyId, planId, { now = new Date() } = {}) {
   const plan = (await planById(db, planId)) || (await planById(db, "free"));
-  const { rows } = await db.query(
-    `SELECT
-       (SELECT COALESCE(sum(b.credits), 0)::int FROM payments p JOIN credit_bundles b ON b.id = p.bundle_id
-         WHERE p.agency_id = $1 AND p.kind = 'credit_bundle' AND p.status = 'confirmed' AND p.confirmed_at >= ${MONTH_START}) AS bundles,
-       (SELECT COALESCE(sum(credits), 0)::int FROM credit_grants WHERE agency_id = $1 AND month = to_char($2::timestamptz AT TIME ZONE 'Africa/Cairo', 'YYYY-MM')) AS grants`,
-    [agencyId, now.toISOString()]
-  );
   const base = plan ? plan.credits : 0;
-  return { plan: base, bundles: rows[0].bundles, grants: rows[0].grants, total: base + rows[0].bundles + rows[0].grants };
+  const since = new Date(now.getTime() - 30 * 86400000).toISOString();
+  const { rows } = await db.query(
+    `SELECT COALESCE(sum(b.credits), 0)::int AS credits, min(p.confirmed_at) AS first
+       FROM payments p JOIN credit_bundles b ON b.id = p.bundle_id
+      WHERE p.agency_id = $1 AND p.kind = 'credit_bundle' AND p.status = 'confirmed' AND p.confirmed_at >= $2 AND p.confirmed_at <= $3`,
+    [agencyId, since, now.toISOString()]
+  );
+  const { rows: g } = await db.query("SELECT COALESCE(sum(credits), 0)::int AS n FROM credit_grants WHERE agency_id = $1 AND month = $2", [agencyId, monthKey(now)]);
+  const grants = g[0].n;
+  let bundles = rows[0].credits;
+  // This month's use is counted against the pool as usual; only an earlier month's use above its pool eats into the bundle.
+  if (bundles > 0 && monthKey(new Date(rows[0].first)) !== monthKey(now)) {
+    const first = new Date(rows[0].first);
+    const [used, past] = await Promise.all([usedThisMonth(db, agencyId, { now: first }), db.query("SELECT COALESCE(sum(credits), 0)::int AS n FROM credit_grants WHERE agency_id = $1 AND month = $2", [agencyId, monthKey(first)])]);
+    bundles = Math.max(0, bundles - Math.max(0, used - base - past.rows[0].n));
+  }
+  return { plan: base, bundles, grants, total: base + bundles + grants };
 }
 
 const monthKey = (now = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit" }).format(now).slice(0, 7);

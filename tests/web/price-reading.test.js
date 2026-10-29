@@ -131,6 +131,25 @@ describe("reading a PDF", () => {
     expect((await PriceReading.estimate(h.pool, admin, project.id, { files, pages: "" })).error).toBe("pages_required");
   });
 
+  test("a large read (5+ new pages) needs a confirmed yes with its cost", async () => {
+    const admin = await row("admin");
+    const project = (await Catalogue.saveProject(h.pool, admin, { name: "Big" })).project;
+    await PriceReading.setForAgency(h.pool, admin.agency_id, { enabled: "on" });
+    await h.query("UPDATE agencies SET pilot = false WHERE id = $1", [admin.agency_id]);
+    const file = await pdf(["a", "b", "c", "d", "e", "f"]);
+    const { agent, csrf } = await signIn(h, "admin");
+    answerByPage();
+    const send = (extra) => agent.post(`/app/catalogue/projects/${project.id}/sheets/read`).field("_csrf", csrf).field("pages", "1-6").field(extra).attach("doc", file, { filename: "big.pdf", contentType: "application/pdf" });
+    const est = await agent.post(`/app/catalogue/projects/${project.id}/sheets/estimate`).field("_csrf", csrf).field("pages", "1-6").attach("doc", file, { filename: "big.pdf", contentType: "application/pdf" });
+    expect(est.body).toMatchObject({ ok: true, pages: 6, credits: 60, confirm: true });
+    const refused = await send({ confirmed: "0" });
+    expect(refused.headers.location).toContain("sheet_error=CONFIRM");
+    expect(FakeAI.calls).toHaveLength(0);
+    const ok = await send({ confirmed: "1" });
+    expect(ok.headers.location).not.toContain("sheet_error");
+    expect(FakeAI.calls.length).toBe(6);
+  });
+
   test("photos; a failed page is reported; the web form and the owner's switch", async () => {
     const admin = await row("admin");
     const project = (await Catalogue.saveProject(h.pool, admin, { name: "Mivida" })).project;

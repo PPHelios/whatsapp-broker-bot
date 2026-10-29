@@ -46,6 +46,7 @@ const READ_ERRORS = {
   pages_required: ["اكتب أرقام الصفحات اللي فيها الأسعار (مثلاً 2-4).", "Enter the pages that hold the prices (e.g. 2-4)."],
   pages_invalid: ["أرقام الصفحات مش مظبوطة.", "The page numbers aren't valid."],
   too_many_pages: [`${Reading.MAX_PAGES} صفحات بالكتير في المرة.`, `At most ${Reading.MAX_PAGES} pages at a time.`],
+  CONFIRM: ["القراية دي كبيرة. اتأكد من عدد الصفحات والتكلفة وادوس اقرا تاني (هتظهر رسالة تأكيد).", "This is a large read. Check the page count and cost, then press Read again and confirm."],
   ALLOWANCE: ["رصيد الشهر مش كفاية للملف ده.", "This month's credits aren't enough for this file."],
   AI_FAILED: ["القراءة فشلت؛ جرب تاني أو ارفع شيت إكسيل.", "Reading failed; try again or upload an Excel sheet."],
   NO_ROWS: ["ملقيناش جدول أسعار في الصفحات دي.", "No price table found on those pages."]
@@ -97,6 +98,7 @@ function readForm(lang, base, reading) {
   return html`<form method="post" action="${base}/sheets/read" enctype="multipart/form-data" class="stack" data-ai-read>
     <label>🤖 ${L(lang, "أو ارفع قايمة الأسعار PDF أو صورها", "Or upload the price list as a PDF or photos")} <input type="file" name="doc" accept="application/pdf,image/jpeg,image/png,image/webp" multiple required></label>
     <label>${L(lang, "صفحات الأسعار في الـ PDF", "Price pages in the PDF")} <input name="pages" dir="ltr" placeholder="2-4, 7" maxlength="40"></label>
+    <input type="hidden" name="confirmed" value="0" data-confirmed>
     <p class="muted" data-ai-estimate aria-live="polite">${L(lang, `كل صفحة جديدة = ${reading.credits_per_page} رصيد (المتبقي ${reading.credits_left}). اختار الملف والصفحات وهيظهر التكلفة بالظبط قبل ما تدوس.`, `Each new page = ${reading.credits_per_page} credits (${reading.credits_left} left). Pick the file and pages and the exact cost shows before you press.`)}</p>
     <p class="muted" data-pages-left="${reading.left}">${L(lang, `افتح الملف واكتب أرقام صفحات جداول الأسعار بس (${Reading.MAX_PAGES} بالكتير). الرصيد يكفي لـ ${reading.left} صفحة جديدة الشهر الحالي. الذكاء الاصطناعي بينقل اللي مكتوب بس، وهتراجع كل حاجة قبل الحفظ.`, `Open the file and enter only the pages with price tables (at most ${Reading.MAX_PAGES}). your credits cover ${reading.left} new pages this month. The AI copies only what the page shows, and you check everything before it is saved.`)}</p>
     <button type="submit" class="secondary">${L(lang, "اقرا ومعاينة", "Read and preview")} <span class="muted" data-estimate-cost></span></button>
@@ -185,6 +187,11 @@ function register(web, { pool, page }) {
     if (!isManager(broker)) return forbidden(req, res);
     const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
     if (!gate.allowed) return res.status(429).type("text/plain").send(L(lang, "رفعت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment."));
+    // A large read needs the manager's yes to the page count and cost (the form asks; this keeps a form without it honest).
+    if (req.body.confirmed !== "1") {
+      const e = await PriceReading.estimate(pool, broker, req.params.id, { files: req.files?.doc || [], pages: req.body.pages });
+      if (e.ok && e.confirm) return res.redirect(303, back(req, `sheet_error=CONFIRM&needed=${e.credits}&left=${e.left}`));
+    }
     const r = await PriceReading.read(pool, broker, req.params.id, { files: req.files?.doc || [], pages: req.body.pages });
     if (r.error === "forbidden") return forbidden(req, res);
     if (r.error === "not_found") return notFound(req, res);

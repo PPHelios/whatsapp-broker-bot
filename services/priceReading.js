@@ -185,6 +185,9 @@ async function read(pool, actor, projectId, { files = [], pages = "" } = {}, { n
  * already read (free) and the credits for the rest against what is left. Makes no AI call and records nothing.
  * @returns {Promise<{ ok, pages, cached, fresh, credits, left, enough } | { error, total? }>}
  */
+// A read this expensive (5 new pages at 10 credits) is confirmed with its page count and cost before it runs.
+const CONFIRM_CREDITS = 50;
+
 async function estimate(pool, actor, projectId, { files = [], pages = "" } = {}, { now = new Date() } = {}) {
   if (!isManager(actor)) return { error: "forbidden" };
   const project = await PriceSheets.projectOf(pool, actor, projectId);
@@ -198,7 +201,7 @@ async function estimate(pool, actor, projectId, { files = [], pages = "" } = {},
   const fresh = got.list.filter((p) => !have.has(p.fingerprint)).length;
   const use = await usage(pool, actor.agency_id, { now });
   const credits = fresh * use.credits_per_page;
-  return { ok: true, pages: got.list.length, cached: got.list.length - fresh, fresh, credits, left: use.credits_left, enough: credits <= use.credits_left };
+  return { ok: true, pages: got.list.length, cached: got.list.length - fresh, fresh, credits, left: use.credits_left, enough: credits <= use.credits_left, confirm: credits >= CONFIRM_CREDITS };
 }
 
-module.exports = { estimate, settingOf, setForAgency, usage, overview, read, pagesOf, readPages };
+module.exports = { CONFIRM_CREDITS, estimate, settingOf, setForAgency, usage, overview, read, pagesOf, readPages };

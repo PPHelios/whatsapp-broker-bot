@@ -22,7 +22,7 @@ function creditTable(actions, lang) {
   ${actions.map((x) => html`<tr data-action="${x.action}"><td>${en ? x.label_en : x.label_ar}</td><td>${x.credits}</td></tr>`)}
   ${FREE_ACTIONS.map((x) => html`<tr data-free><td>${en ? x[1] : x[0]}</td><td>0</td></tr>`)}
   </tbody></table></div>
-  <p class="muted">${L(lang, "لو الرصيد خلص: الإضافة والبحث بيفضلوا شغالين من الموقع؛ اللي بيقف هو الذكاء الاصطناعي لحد أول الشهر أو لحد ما تشتري رصيد زيادة.", "When credits run out, adding and searching still work on the website; only AI stops until next month or until you buy extra credits.")}</p>
+  <p class="muted">${L(lang, "لو الرصيد خلص: الإضافة والبحث بيفضلوا شغالين من الموقع؛ اللي بيقف هو الذكاء الاصطناعي لحد أول الشهر أو لحد ما تشتري رصيد زيادة (صالح ٣٠ يوم من الشراء).", "When credits run out, adding and searching still work on the website; only AI stops until next month or until you buy extra credits (valid 30 days from purchase).")}</p>
 </details>`;
 }
 

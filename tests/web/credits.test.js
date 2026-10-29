@@ -109,3 +109,19 @@ describe("owner page: plans and credits", () => {
     expect((await agent.post("/app/owner/credit-grant").type("form").send({ _csrf: csrf, agency: admin.agency_id, credits: "0" })).status).toBe(400);
   });
 });
+
+describe("bundle validity and big reads", () => {
+  test("a bundle lasts 30 days: bought late in a month it carries into the next, less what was used above the plan", async () => {
+    const agency = h.AGENCY_A;
+    await h.query("UPDATE agencies SET pilot = false, plan = 'solo', paid_until = '2027-12-31' WHERE id = $1", [agency]);
+    const at = new Date("2026-10-26T10:00:00Z");
+    await h.query("INSERT INTO payments (agency_id, kind, plan, months, amount_egp, reference, status, bundle_id, confirmed_at) VALUES ($1, 'credit_bundle', NULL, 1, 349, 'WH-T1', 'confirmed', 'large', $2)", [agency, at.toISOString()]);
+    const bundleCredits = (await Credits.bundles(h.pool)).find((b) => b.id === "large").credits;
+    // 100 text requests above the plan's 400 in the purchase month.
+    for (let i = 0; i < 500; i++) await h.query("INSERT INTO operation_logs (agency_id, operation_type, status, model_used, created_at) VALUES ($1, 'listing_extraction', 'success', 'm', $2)", [agency, new Date("2026-10-27T10:00:00Z").toISOString()]);
+    const nov = await Credits.poolFor(h.pool, agency, "solo", { now: new Date("2026-11-05T10:00:00Z") });
+    expect(nov).toMatchObject({ plan: 400, bundles: bundleCredits - 100 });
+    const dec = await Credits.poolFor(h.pool, agency, "solo", { now: new Date("2026-11-30T10:00:00Z") });
+    expect(dec.bundles).toBe(0);
+  });
+});
