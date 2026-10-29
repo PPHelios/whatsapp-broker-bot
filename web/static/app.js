@@ -794,9 +794,11 @@
   }
   function listen(btn) {
     if (btn._rec) {
+      // Keep the recorder in a local: its end handler may clear btn._rec before stop() returns.
+      var active = btn._rec;
       setMic(btn, "busy");
-      btn._rec.stop();
-      if (btn._rec.guard) btn._rec.guard(4000);
+      active.stop();
+      if (active.guard) active.guard(4000);
       return;
     }
     var form = btn.form || btn.closest("form");

@@ -16,6 +16,7 @@
     "test:safeguards": "jest tests/safeguards.test.js --runInBand",
     "test:router": "node --experimental-vm-modules node_modules/jest/bin/jest.js tests/router --runInBand",
     "test:jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
+    "test:browser": "node tests/browser/search-voice.browser.js",
     "test:ci": "npm run test:unit && npm run test:jest",
     "test": "npm run audit:schema && npm run test:pipeline && npm run test:ci",
     "migrate": "node --env-file=.env scripts/migrate.js",
