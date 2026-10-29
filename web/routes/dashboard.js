@@ -197,7 +197,7 @@ function billingSections(b, lang) {
 function readingSection(rows, lang) {
   return html`<section class="card" id="price-reading">
   <h2>🤖 ${L(lang, "قراية قوايم الأسعار PDF والصور", "Reading PDF and photo price lists")}</h2>
-  <p class="muted">${L(lang, "مقفولة لكل وكالة لحد ما تفتحها هنا. الصفحة اللي اتقرت قبل كده (من أي وكالة) بتتعاد من غير تكلفة ومش بتتحسب.", "Off for every agency until you switch it on here. A page read before (by any agency) is reused at no cost and not counted.")}</p>
+  <p class="muted">${L(lang, "مقفولة لكل وكالة لحد ما تفتحها هنا. الصفحة اللي اتقرت قبل كده (من أي وكالة) بتتعاد من غير ما نقراها تاني، والوكالة بتدفع رصيدها عادي. الوكالات مش شايفة ده.", "Off for every agency until you switch it on here. A page read before (by any agency) is reused without a new AI call, and the agency is charged as usual. Agencies don't see this.")}</p>
   <div class="scroll"><table>
   <thead><tr><th>${L(lang, "الوكالة", "Agency")}</th><th>${L(lang, "الشهر الحالي", "This month")}</th><th></th></tr></thead>
   <tbody>${rows.map(

@@ -74,11 +74,11 @@ test("existing agencies are pilots; the monthly credits count a text request as 
   expect(await Credits.usedThisMonth(h.pool, h.AGENCY_B)).toBe(0);
 });
 
-test("credits are charged once per action: a search's second row is free, a page read charges the page credits only", async () => {
+test("credits are charged once per action: a search's second row is free, a page read charges the page credits, reused or not", async () => {
   await h.query("INSERT INTO operation_logs (agency_id, broker_id, operation_type, status, model_used, gemini_ms) VALUES ($1, $2, 'search_parse', 'success', 'gemini-x', 10), ($1, $2, 'search_query', 'success', 'gemini-x', 10), ($1, $2, 'price_list_read', 'success', 'gemini-x', 10)", [h.AGENCY_A, h.BROKERS.broker.id]);
   expect(await Credits.usedThisMonth(h.pool, h.AGENCY_A)).toBe(1);
   await h.query("INSERT INTO price_read_log (agency_id, fingerprint, reused) VALUES ($1, 'f1', false), ($1, 'f2', true)", [h.AGENCY_A]);
-  expect(await Credits.usedThisMonth(h.pool, h.AGENCY_A)).toBe(11);
+  expect(await Credits.usedThisMonth(h.pool, h.AGENCY_A)).toBe(21);
 });
 
 test("the AI gateway checks the plan before calling and records voice notes as audio", async () => {

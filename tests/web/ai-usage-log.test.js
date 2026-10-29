@@ -1,5 +1,5 @@
-// tests/web/ai-usage-log.test.js — F24: the agency's AI use line by line (text, voice, document pages; reused pages
-// free), filtered by month, user and feature, exported to Excel; managers see their agency, the owner any agency.
+// tests/web/ai-usage-log.test.js — F24: the agency's AI use line by line (text, voice, document pages; reused
+// pages charged the same), filtered by month, user and feature, exported to Excel; managers see their agency, the owner any agency.
 "use strict";
 
 jest.mock("../../lib/whatsapp", () => require("../harness/fake-whatsapp"));
@@ -37,11 +37,11 @@ async function seed() {
 test("the log: month in Cairo time, filters, totals", async () => {
   await seed();
   const log = await AiLog.list(h.pool, h.AGENCY_A, { month: "2026-10" });
-  expect(log.totals).toEqual({ text: 2, voice: 1, page: 1, free: 1, credits: 15 });
+  expect(log.totals).toEqual({ text: 2, voice: 1, page: 2, credits: 25 });
   expect(log.rows).toHaveLength(5);
   const mine = await AiLog.list(h.pool, h.AGENCY_A, { month: "2026-10", brokerId: h.BROKERS.broker.id });
   expect(mine.rows.map((r) => r.feature).sort()).toEqual(["audio_transcription", "search_parse"]);
-  expect((await AiLog.list(h.pool, h.AGENCY_A, { month: "2026-10", feature: "page_read" })).totals).toEqual({ text: 0, voice: 0, page: 1, free: 1, credits: 10 });
+  expect((await AiLog.list(h.pool, h.AGENCY_A, { month: "2026-10", feature: "page_read" })).totals).toEqual({ text: 0, voice: 0, page: 2, credits: 20 });
   expect((await AiLog.list(h.pool, h.AGENCY_A, { month: "2026-09" })).rows).toHaveLength(1);
 });
 
@@ -50,9 +50,9 @@ test("managers see and export; brokers can't; the owner sees any agency", async 
   const { agent } = await signIn(h, "admin");
   const page = await agent.get("/app/usage/log?month=2026-10&lang=en");
   expect(page.status).toBe(200);
-  expect(page.text).toContain("Text: 2 · Voice: 1 · Pages: 1 · Free pages: 1");
+  expect(page.text).toContain("Text: 2 · Voice: 1 · Pages: 2");
   expect(page.text).toContain("Document page");
-  expect(page.text).toContain("Credits used: 15");
+  expect(page.text).toContain("Credits used: 25");
   expect((await agent.get("/app/usage")).text).toContain("data-ai-log-link");
 
   const xlsx = await agent.get("/app/usage/log.xlsx?month=2026-10&lang=en").buffer(true).parse((res, cb) => {

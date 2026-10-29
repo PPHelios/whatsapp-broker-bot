@@ -99,8 +99,8 @@ function readForm(lang, base, reading) {
     <label>🤖 ${L(lang, "أو ارفع قايمة الأسعار PDF أو صورها", "Or upload the price list as a PDF or photos")} <input type="file" name="doc" accept="application/pdf,image/jpeg,image/png,image/webp" multiple required></label>
     <label>${L(lang, "صفحات الأسعار في الـ PDF", "Price pages in the PDF")} <input name="pages" dir="ltr" placeholder="2-4, 7" maxlength="40"></label>
     <input type="hidden" name="confirmed" value="0" data-confirmed>
-    <p class="muted" data-ai-estimate aria-live="polite">${L(lang, `كل صفحة جديدة = ${reading.credits_per_page} رصيد (المتبقي ${reading.credits_left}). اختار الملف والصفحات وهيظهر التكلفة بالظبط قبل ما تدوس.`, `Each new page = ${reading.credits_per_page} credits (${reading.credits_left} left). Pick the file and pages and the exact cost shows before you press.`)}</p>
-    <p class="muted" data-pages-left="${reading.left}">${L(lang, `افتح الملف واكتب أرقام صفحات جداول الأسعار بس (${Reading.MAX_PAGES} بالكتير). الرصيد يكفي لـ ${reading.left} صفحة جديدة الشهر الحالي. الذكاء الاصطناعي بينقل اللي مكتوب بس، وهتراجع كل حاجة قبل الحفظ.`, `Open the file and enter only the pages with price tables (at most ${Reading.MAX_PAGES}). your credits cover ${reading.left} new pages this month. The AI copies only what the page shows, and you check everything before it is saved.`)}</p>
+    <p class="muted" data-ai-estimate aria-live="polite">${L(lang, `كل صفحة = ${reading.credits_per_page} رصيد (المتبقي ${reading.credits_left}). اختار الملف والصفحات وهيظهر التكلفة بالظبط قبل ما تدوس.`, `Each page = ${reading.credits_per_page} credits (${reading.credits_left} left). Pick the file and pages and the exact cost shows before you press.`)}</p>
+    <p class="muted" data-pages-left="${reading.left}">${L(lang, `افتح الملف واكتب أرقام صفحات جداول الأسعار بس (${Reading.MAX_PAGES} بالكتير). الرصيد يكفي لـ ${reading.left} صفحة الشهر الحالي. الذكاء الاصطناعي بينقل اللي مكتوب بس، وهتراجع كل حاجة قبل الحفظ.`, `Open the file and enter only the pages with price tables (at most ${Reading.MAX_PAGES}). Your credits cover ${reading.left} pages this month. The AI copies only what the page shows, and you check everything before it is saved.`)}</p>
     <button type="submit" class="secondary">${L(lang, "اقرا ومعاينة", "Read and preview")} <span class="muted" data-estimate-cost></span></button>
   </form>`;
 }
@@ -199,7 +199,7 @@ function register(web, { pool, page }) {
     return res.redirect(303, `/app/catalogue/projects/${req.params.id}/sheets/${r.sheet.id}`);
   });
 
-  // The cost of a read before the button: exact pages, cached ones free, credits against what is left (no AI call).
+  // The cost of a read before the button: the pages, their credits against what is left, and a warning when this agency read them before (no AI call).
   web.post("/catalogue/projects/:id/sheets/estimate", uploadDoc, async (req, res) => {
     const lang = langOf(req);
     const broker = req.session.broker;
@@ -208,8 +208,8 @@ function register(web, { pool, page }) {
     if (r.error) return res.json({ error: r.error, text: (READ_ERRORS[r.error] || ["", ""])[lang === "en" ? 1 : 0] });
     const text = L(
       lang,
-      `${r.pages} صفحة: ${r.cached ? `${r.cached} اتقرت قبل كده (ببلاش) و` : ""}${r.fresh} جديدة = ${r.credits} رصيد. المتبقي ${r.left}${r.enough ? "" : " — مش كفاية، اطلب رصيد زيادة من صفحة الباقة"}.`,
-      `${r.pages} page(s): ${r.cached ? `${r.cached} already read (free) and ` : ""}${r.fresh} new = ${r.credits} credits. ${r.left} left${r.enough ? "" : " — not enough, ask for more on the Plan page"}.`
+      `${r.pages} صفحة = ${r.credits} رصيد. المتبقي ${r.left}${r.enough ? "" : " — مش كفاية، اطلب رصيد زيادة من صفحة الباقة"}.${r.repeat ? " الوكالة قرت الملف ده قبل كده، والرصيد بيتحسب تاني." : ""}`,
+      `${r.pages} page(s) = ${r.credits} credits. ${r.left} left${r.enough ? "" : " — not enough, ask for more on the Plan page"}.${r.repeat ? " Your agency already read this document; it is charged again." : ""}`
     );
     return res.json({ ...r, text });
   });

@@ -78,7 +78,7 @@ async function usedThisMonth(db, agencyId, { now = new Date() } = {}) {
           FROM operation_logs
          WHERE agency_id = $1 AND status = 'success' AND model_used IS NOT NULL AND created_at >= ${MONTH_START}) AS ai,
        (SELECT count(*)::int FROM price_read_log
-         WHERE agency_id = $1 AND NOT reused AND created_at >= ${MONTH_START}) AS pages`,
+         WHERE agency_id = $1 AND created_at >= ${MONTH_START}) AS pages`,
     [agencyId, now.toISOString(), c.voice ?? 0, c.text ?? 0, c.flyer ?? 0, c.assistant ?? 0, PAGE_OPS]
   );
   return rows[0].ai + rows[0].pages * (c.page ?? 0);

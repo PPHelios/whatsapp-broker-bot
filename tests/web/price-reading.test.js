@@ -1,6 +1,6 @@
 // tests/web/price-reading.test.js — Release B C5: a PDF or photographed price list read by AI into the usual
 // price-sheet preview: off until the owner switches it on, the manager picks pages, a monthly page allowance checked
-// before any call, pages read once reused silently across agencies (no AI call, not counted), and the rows never
+// before any call, pages another agency read are reused with no AI call but charged as usual, and the rows never
 // invented (only what the model copied).
 "use strict";
 
@@ -111,10 +111,10 @@ describe("reading a PDF", () => {
     const again = await PriceReading.read(h.pool, rivalAdmin, theirs.id, { files, pages: "3, 2" });
     expect(again).toMatchObject({ ok: true, read: 0, reused: 2 });
     expect(FakeAI.calls).toHaveLength(2);
-    expect((await PriceReading.usage(h.pool, rivalAdmin.agency_id)).used).toBe(0);
+    expect((await PriceReading.usage(h.pool, rivalAdmin.agency_id)).used).toBe(2);
   });
 
-  test("the cost is shown before the button: exact pages, cached ones free, no AI call", async () => {
+  test("the cost is shown before the button: every page is charged; a repeat by the same agency warns; no AI call", async () => {
     const admin = await row("admin");
     const project = (await Catalogue.saveProject(h.pool, admin, { name: "Badya" })).project;
     const file = await pdf(["Cover", "Units one", "Units two"]);
@@ -123,10 +123,10 @@ describe("reading a PDF", () => {
     await PriceReading.setForAgency(h.pool, admin.agency_id, { enabled: "on" });
     await h.query("UPDATE agencies SET pilot = false WHERE id = $1", [admin.agency_id]);
     const before = await PriceReading.estimate(h.pool, admin, project.id, { files, pages: "2-3" });
-    expect(before).toMatchObject({ ok: true, pages: 2, cached: 0, fresh: 2, credits: 20, left: 80, enough: true });
+    expect(before).toMatchObject({ ok: true, pages: 2, credits: 20, left: 80, enough: true, repeat: false });
     await PriceReading.read(h.pool, admin, project.id, { files, pages: "2" });
     const after = await PriceReading.estimate(h.pool, admin, project.id, { files, pages: "2-3" });
-    expect(after).toMatchObject({ pages: 2, cached: 1, fresh: 1, credits: 10, left: 70 });
+    expect(after).toMatchObject({ pages: 2, credits: 20, left: 70, repeat: true, confirm: true });
     expect(FakeAI.calls).toHaveLength(1);
     expect((await PriceReading.estimate(h.pool, admin, project.id, { files, pages: "" })).error).toBe("pages_required");
   });

@@ -49,12 +49,12 @@ function aiLogPage(lang, log, filters, base, title, balance = null) {
   <a class="btn secondary" href="${base}.xlsx?${q()}" data-ai-log-export>⬇️ ${L(lang, "إكسيل", "Excel")}</a>
 </form>
 <section class="card">
-  <p data-ai-log-totals>${L(lang, `نص: ${log.totals.text} · فويس: ${log.totals.voice} · صفحات: ${log.totals.page} · صفحات ببلاش: ${log.totals.free}`, `Text: ${log.totals.text} · Voice: ${log.totals.voice} · Pages: ${log.totals.page} · Free pages: ${log.totals.free}`)}</p>
+  <p data-ai-log-totals>${L(lang, `نص: ${log.totals.text} · فويس: ${log.totals.voice} · صفحات: ${log.totals.page}`, `Text: ${log.totals.text} · Voice: ${log.totals.voice} · Pages: ${log.totals.page}`)}</p>
   <p data-ai-log-credits><strong>${L(lang, `الرصيد المستخدم: ${log.totals.credits}`, `Credits used: ${log.totals.credits}`)}</strong>${balance ? L(lang, ` من ${balance.limit} · المتبقي ${Math.max(0, balance.limit - balance.used)}`, ` of ${balance.limit} · ${Math.max(0, balance.limit - balance.used)} left`) : ""}</p>
-  <p class="muted">${L(lang, "كل إجراء بالذكاء الاصطناعي بياخد رصيد من رصيد الوكالة الشهري. الصفحة اللي اتقرت قبل كده (لأي وكالة) ببلاش.", "Every AI action uses credits from the agency's monthly pool. A page read before (by any agency) is free.")}</p>
+  <p class="muted">${L(lang, "كل عملية بالذكاء الاصطناعي بتاخد رصيد من رصيد الوكالة الشهري.", "Every AI action uses credits from the agency's monthly pool.")}</p>
   ${log.rows.length
     ? html`<div class="scroll"><table><thead><tr><th>${L(lang, "الوقت", "Time")}</th><th>${L(lang, "المستخدم", "User")}</th><th>${L(lang, "الخاصية", "Feature")}</th><th>${L(lang, "اتحسب من", "Counted as")}</th><th>${L(lang, "الرصيد", "Credits")}</th></tr></thead>
-  <tbody>${log.rows.map((r) => html`<tr data-ai-row="${r.feature}"><td dir="ltr">${AiLog.cairoTime(r.at)}</td><td>${r.broker}</td><td>${AiLog.featureLabel(r.feature, lang)}</td><td>${KIND[r.kind][lang === "en" ? 1 : 0]}${r.free ? L(lang, " (ببلاش)", " (free)") : ""}</td><td>${r.credits}</td></tr>`)}</tbody></table></div>`
+  <tbody>${log.rows.map((r) => html`<tr data-ai-row="${r.feature}"><td dir="ltr">${AiLog.cairoTime(r.at)}</td><td>${r.broker}</td><td>${AiLog.featureLabel(r.feature, lang)}</td><td>${KIND[r.kind][lang === "en" ? 1 : 0]}</td><td>${r.credits}</td></tr>`)}</tbody></table></div>`
     : html`<p class="muted">${L(lang, "مفيش استهلاك في الفترة دي.", "No use in this period.")}</p>`}
 </section>`;
 }

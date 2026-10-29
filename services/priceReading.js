@@ -1,8 +1,9 @@
 // services/priceReading.js — A developer's PDF or photographed price list read by AI into a price-sheet preview
 // (Release B, C5). Managers only, and only for an agency the app owner switched on (agencies.price_reading). The
 // manager picks the pages; each page is fingerprinted (lib/pdfPages.js) and a page any agency had read before is
-// reused silently: no AI call and not counted. New pages are counted against the agency's monthly page allowance,
-// checked before any call. The rows go to services/priceSheets.js storePreview, so nothing is saved before the
+// reused: no AI call and no stored rows again, but the agency is charged the page credits as for a fresh read. Nothing in
+// the agency's view says a page was reused; only the owner's page counts reuse. Pages are checked against the allowance
+// before any call. The rows go to services/priceSheets.js storePreview, so nothing is saved before the
 // manager checks the usual preview and applies it. pagesOf and readPages are shared with the brochure reader
 // (services/brochure.js, C6), under the same switch, allowance and cache.
 "use strict";
@@ -32,13 +33,13 @@ async function setForAgency(db, agencyId, input) {
 }
 
 /**
- * Pages the agency used this Cairo month (reused pages are free) and how many more its credits pay for: a fresh page
- * costs the "page" credits (credit_actions), taken from the same monthly pool as every other AI action.
+ * Pages the agency read this Cairo month (reused ones too: they are charged the same) and how many more its credits pay
+ * for: each page costs the "page" credits (credit_actions), taken from the same monthly pool as every other AI action.
  */
 async function usage(db, agencyId, { now = new Date() } = {}) {
   const setting = await settingOf(db, agencyId);
   const [{ rows }, a, per] = await Promise.all([
-    db.query("SELECT count(*)::int AS n FROM price_read_log WHERE agency_id = $1 AND NOT reused AND created_at >= $2", [agencyId, R.monthStart(now).toISOString()]),
+    db.query("SELECT count(*)::int AS n FROM price_read_log WHERE agency_id = $1 AND created_at >= $2", [agencyId, R.monthStart(now).toISOString()]),
     Billing.allowance(db, agencyId, { now }),
     Credits.creditsFor(db, "page")
   ]);
@@ -118,7 +119,7 @@ async function readPages(pool, actor, projectId, list, { prompt, parse, operatio
   const results = new Map(known.map((k) => [k.fingerprint, k.rows]));
   const fresh = list.filter((p) => !results.has(p.fingerprint));
   const use = await usage(pool, actor.agency_id, { now });
-  if (fresh.length > use.left) return { error: "ALLOWANCE", left: use.left, needed: fresh.length };
+  if (list.length > use.left) return { error: "ALLOWANCE", left: use.left, needed: list.length };
   const out = await inBatches(fresh, (p) => readPage(pool, actor, p, { prompt, parse, operationType }));
   const failed = [];
   for (const [i, p] of fresh.entries()) {
@@ -180,14 +181,15 @@ async function read(pool, actor, projectId, { files = [], pages = "" } = {}, { n
   return { ...stored, read: r.read, reused: r.reused, failed: r.failed };
 }
 
-/**
- * What reading this upload would cost, before the manager presses the button: the exact pages picked, how many are
- * already read (free) and the credits for the rest against what is left. Makes no AI call and records nothing.
- * @returns {Promise<{ ok, pages, cached, fresh, credits, left, enough } | { error, total? }>}
- */
-// Any read that spends credits is confirmed with its page count and cost before it runs; a fully cached read is free and runs at once.
+// Any read that spends credits is confirmed with its page count and cost before it runs.
 const CONFIRM_CREDITS = 1;
 
+/**
+ * What reading this upload would cost, before the manager presses the button: the pages picked, the credits they cost
+ * (every page, reused or not) against what is left, and whether this agency has read any of them before (a warning
+ * only: it is charged again). Makes no AI call and records nothing.
+ * @returns {Promise<{ ok, pages, credits, left, enough, confirm, repeat } | { error, total? }>}
+ */
 async function estimate(pool, actor, projectId, { files = [], pages = "" } = {}, { now = new Date() } = {}) {
   if (!isManager(actor)) return { error: "forbidden" };
   const project = await PriceSheets.projectOf(pool, actor, projectId);
@@ -196,12 +198,11 @@ async function estimate(pool, actor, projectId, { files = [], pages = "" } = {},
   if (!setting.enabled) return { error: "OFF" };
   const got = await pagesOf(files, pages, { version: R.PROMPT_VERSION });
   if (got.error) return got;
-  const { rows: known } = await pool.query("SELECT fingerprint FROM price_page_reads WHERE fingerprint = ANY($1::text[])", [got.list.map((p) => p.fingerprint)]);
-  const have = new Set(known.map((k) => k.fingerprint));
-  const fresh = got.list.filter((p) => !have.has(p.fingerprint)).length;
+  const keys = got.list.map((p) => p.fingerprint);
+  const { rows: own } = await pool.query("SELECT 1 FROM price_read_log WHERE agency_id = $1 AND fingerprint = ANY($2::text[]) LIMIT 1", [actor.agency_id, keys]);
   const use = await usage(pool, actor.agency_id, { now });
-  const credits = fresh * use.credits_per_page;
-  return { ok: true, pages: got.list.length, cached: got.list.length - fresh, fresh, credits, left: use.credits_left, enough: credits <= use.credits_left, confirm: credits >= CONFIRM_CREDITS };
+  const credits = got.list.length * use.credits_per_page;
+  return { ok: true, pages: got.list.length, credits, left: use.credits_left, enough: credits <= use.credits_left, confirm: credits >= CONFIRM_CREDITS, repeat: own.length > 0 };
 }
 
 module.exports = { CONFIRM_CREDITS, estimate, settingOf, setForAgency, usage, overview, read, pagesOf, readPages };
