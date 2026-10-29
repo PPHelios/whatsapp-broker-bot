@@ -89,3 +89,9 @@ ALTER TABLE payments ADD COLUMN IF NOT EXISTS bundle_id text REFERENCES credit_b
 -- The owner can add plans from the dashboard, so the plan ids are no longer a fixed list.
 ALTER TABLE agencies DROP CONSTRAINT IF EXISTS agencies_plan_check;
 ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_plan_check;
+
+ALTER TABLE credit_plans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE credit_bundles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE credit_actions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE credit_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE credit_grants ENABLE ROW LEVEL SECURITY;

@@ -8,6 +8,7 @@ CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
 CREATE SEQUENCE IF NOT EXISTS public.assistant_questions_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.broker_passkeys_id_seq;
+CREATE SEQUENCE IF NOT EXISTS public.credit_requests_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.demo_requests_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.error_events_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.lead_events_id_seq;
@@ -833,7 +834,8 @@ CREATE TABLE IF NOT EXISTS public.payments (
   status text DEFAULT 'pending'::text NOT NULL,
   requested_by uuid,
   confirmed_at timestamp with time zone,
-  created_at timestamp with time zone DEFAULT now() NOT NULL
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  bundle_id text
 );
 
 CREATE TABLE IF NOT EXISTS public.viewings (
@@ -1163,6 +1165,58 @@ CREATE TABLE IF NOT EXISTS public.unit_access_requests (
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.credit_plans (
+  id text NOT NULL,
+  name_ar text NOT NULL,
+  name_en text NOT NULL,
+  price_egp integer NOT NULL,
+  seats integer NOT NULL,
+  units integer NOT NULL,
+  credits integer NOT NULL,
+  sort integer DEFAULT 0 NOT NULL,
+  active boolean DEFAULT true NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.credit_bundles (
+  id text NOT NULL,
+  name_ar text NOT NULL,
+  name_en text NOT NULL,
+  price_egp integer NOT NULL,
+  credits integer NOT NULL,
+  sort integer DEFAULT 0 NOT NULL,
+  active boolean DEFAULT true NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.credit_actions (
+  action text NOT NULL,
+  label_ar text NOT NULL,
+  label_en text NOT NULL,
+  credits integer NOT NULL,
+  sort integer DEFAULT 0 NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.credit_requests (
+  id bigint DEFAULT nextval('credit_requests_id_seq'::regclass) NOT NULL,
+  agency_id uuid NOT NULL,
+  broker_id uuid,
+  credits integer NOT NULL,
+  note text,
+  status text DEFAULT 'pending'::text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  decided_at timestamp with time zone
+);
+
+CREATE TABLE IF NOT EXISTS public.credit_grants (
+  agency_id uuid NOT NULL,
+  month text NOT NULL,
+  credits integer NOT NULL,
+  note text,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE app_settings ADD CONSTRAINT app_settings_pkey PRIMARY KEY (key);
@@ -1177,6 +1231,11 @@ ALTER TABLE commission_terms ADD CONSTRAINT commission_terms_pkey PRIMARY KEY (p
 ALTER TABLE commissions ADD CONSTRAINT commissions_pkey PRIMARY KEY (id);
 ALTER TABLE compare_links ADD CONSTRAINT compare_links_pkey PRIMARY KEY (token_hash);
 ALTER TABLE compound_synonyms ADD CONSTRAINT compound_synonyms_pkey PRIMARY KEY (kind, key, synonym);
+ALTER TABLE credit_actions ADD CONSTRAINT credit_actions_pkey PRIMARY KEY (action);
+ALTER TABLE credit_bundles ADD CONSTRAINT credit_bundles_pkey PRIMARY KEY (id);
+ALTER TABLE credit_grants ADD CONSTRAINT credit_grants_pkey PRIMARY KEY (agency_id, month, created_at);
+ALTER TABLE credit_plans ADD CONSTRAINT credit_plans_pkey PRIMARY KEY (id);
+ALTER TABLE credit_requests ADD CONSTRAINT credit_requests_pkey PRIMARY KEY (id);
 ALTER TABLE crm_jobs ADD CONSTRAINT crm_jobs_pkey PRIMARY KEY (name);
 ALTER TABLE deal_splits ADD CONSTRAINT deal_splits_pkey PRIMARY KEY (deal_id, broker_id);
 ALTER TABLE deals ADD CONSTRAINT deals_pkey PRIMARY KEY (id);
@@ -1247,7 +1306,6 @@ ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_month_check CHECK ((EXTRACT(day FRO
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_source_check CHECK (((length(source) >= 1) AND (length(source) <= 60)));
 ALTER TABLE agencies ADD CONSTRAINT agencies_approval_check CHECK ((approval = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])));
 ALTER TABLE agencies ADD CONSTRAINT agencies_code_prefix_check CHECK (((code_prefix IS NULL) OR (code_prefix ~ '^[A-Z]{1,4}$'::text)));
-ALTER TABLE agencies ADD CONSTRAINT agencies_plan_check CHECK ((plan = ANY (ARRAY['solo'::text, 'office'::text, 'agency'::text, 'free'::text])));
 ALTER TABLE agencies ADD CONSTRAINT agencies_referral_credit_months_check CHECK ((referral_credit_months >= 0));
 ALTER TABLE agencies ADD CONSTRAINT agencies_slug_format CHECK (((slug ~ '^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$'::text) AND (NOT (slug = ANY (ARRAY['app'::text, 'api'::text, 'auth'::text, 'login'::text, 'logout'::text, 'webhook'::text, 'health'::text, 'static'::text, 'assets'::text, 'public'::text, 'admin'::text, 's'::text, 'u'::text, 'www'::text, 'aqarchat'::text, 'about'::text, 'help'::text, 'terms'::text, 'privacy'::text, 'pricing'::text, 'blog'::text, 'docs'::text, 'robots'::text, 'favicon'::text, 'manifest'::text, 'sw'::text, 'share'::text, 'new'::text])))));
 ALTER TABLE agencies ADD CONSTRAINT agencies_wa_broker_daily_cap_check CHECK (((wa_broker_daily_cap IS NULL) OR (wa_broker_daily_cap > 0)));
@@ -1283,6 +1341,16 @@ ALTER TABLE commissions ADD CONSTRAINT commissions_status_check CHECK ((status =
 ALTER TABLE compare_links ADD CONSTRAINT compare_links_lang_check CHECK ((lang = ANY (ARRAY['ar'::text, 'en'::text])));
 ALTER TABLE compare_links ADD CONSTRAINT compare_links_listing_ids_check CHECK (((cardinality(listing_ids) >= 2) AND (cardinality(listing_ids) <= 3)));
 ALTER TABLE compound_synonyms ADD CONSTRAINT compound_synonyms_kind_check CHECK ((kind = ANY (ARRAY['compound'::text, 'developer'::text, 'area'::text])));
+ALTER TABLE credit_actions ADD CONSTRAINT credit_actions_credits_check CHECK ((credits >= 0));
+ALTER TABLE credit_bundles ADD CONSTRAINT credit_bundles_credits_check CHECK ((credits > 0));
+ALTER TABLE credit_bundles ADD CONSTRAINT credit_bundles_price_egp_check CHECK ((price_egp > 0));
+ALTER TABLE credit_grants ADD CONSTRAINT credit_grants_credits_check CHECK ((credits > 0));
+ALTER TABLE credit_plans ADD CONSTRAINT credit_plans_credits_check CHECK ((credits >= 0));
+ALTER TABLE credit_plans ADD CONSTRAINT credit_plans_price_egp_check CHECK ((price_egp >= 0));
+ALTER TABLE credit_plans ADD CONSTRAINT credit_plans_seats_check CHECK ((seats >= 1));
+ALTER TABLE credit_plans ADD CONSTRAINT credit_plans_units_check CHECK ((units >= 1));
+ALTER TABLE credit_requests ADD CONSTRAINT credit_requests_credits_check CHECK ((credits > 0));
+ALTER TABLE credit_requests ADD CONSTRAINT credit_requests_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'declined'::text])));
 ALTER TABLE crm_jobs ADD CONSTRAINT crm_jobs_last_status_check CHECK ((last_status = ANY (ARRAY['running'::text, 'success'::text, 'failed'::text])));
 ALTER TABLE deal_splits ADD CONSTRAINT deal_splits_amount_check CHECK ((amount >= 0));
 ALTER TABLE deal_splits ADD CONSTRAINT deal_splits_pct_check CHECK (((pct >= (0)::numeric) AND (pct <= (100)::numeric)));
@@ -1347,9 +1415,8 @@ ALTER TABLE notifications ADD CONSTRAINT notifications_url_check CHECK (((url IS
 ALTER TABLE passkey_challenges ADD CONSTRAINT passkey_challenges_kind_check CHECK ((kind = ANY (ARRAY['register'::text, 'login'::text])));
 ALTER TABLE payments ADD CONSTRAINT payments_amount_egp_check CHECK ((amount_egp > 0));
 ALTER TABLE payments ADD CONSTRAINT payments_check CHECK (((kind = 'plan'::text) = (plan IS NOT NULL)));
-ALTER TABLE payments ADD CONSTRAINT payments_kind_check CHECK ((kind = ANY (ARRAY['plan'::text, 'voice_pack'::text])));
+ALTER TABLE payments ADD CONSTRAINT payments_kind_check CHECK ((kind = ANY (ARRAY['plan'::text, 'voice_pack'::text, 'credit_bundle'::text])));
 ALTER TABLE payments ADD CONSTRAINT payments_months_check CHECK (((months >= 1) AND (months <= 12)));
-ALTER TABLE payments ADD CONSTRAINT payments_plan_check CHECK (((plan IS NULL) OR (plan = ANY (ARRAY['solo'::text, 'office'::text, 'agency'::text]))));
 ALTER TABLE payments ADD CONSTRAINT payments_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'cancelled'::text])));
 ALTER TABLE price_increases ADD CONSTRAINT price_increases_pct_check CHECK ((((pct >= ('-50'::integer)::numeric) AND (pct <= (100)::numeric)) AND (pct <> (0)::numeric)));
 ALTER TABLE price_increases ADD CONSTRAINT price_increases_status_check CHECK ((status = ANY (ARRAY['scheduled'::text, 'applied'::text, 'cancelled'::text])));
@@ -1412,6 +1479,9 @@ ALTER TABLE commissions ADD CONSTRAINT commissions_developer_id_fkey FOREIGN KEY
 ALTER TABLE commissions ADD CONSTRAINT commissions_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL;
 ALTER TABLE compare_links ADD CONSTRAINT compare_links_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE compare_links ADD CONSTRAINT compare_links_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE credit_grants ADD CONSTRAINT credit_grants_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE credit_requests ADD CONSTRAINT credit_requests_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE credit_requests ADD CONSTRAINT credit_requests_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE deal_splits ADD CONSTRAINT deal_splits_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE deal_splits ADD CONSTRAINT deal_splits_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id);
 ALTER TABLE deal_splits ADD CONSTRAINT deal_splits_deal_id_fkey FOREIGN KEY (deal_id) REFERENCES deals(id) ON DELETE CASCADE;
@@ -1462,6 +1532,7 @@ ALTER TABLE notifications ADD CONSTRAINT notifications_merged_into_fkey FOREIGN 
 ALTER TABLE passkey_challenges ADD CONSTRAINT passkey_challenges_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE payment_plans ADD CONSTRAINT payment_plans_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
 ALTER TABLE payments ADD CONSTRAINT payments_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE payments ADD CONSTRAINT payments_bundle_id_fkey FOREIGN KEY (bundle_id) REFERENCES credit_bundles(id);
 ALTER TABLE payments ADD CONSTRAINT payments_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE price_increases ADD CONSTRAINT price_increases_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE price_increases ADD CONSTRAINT price_increases_created_by_fkey FOREIGN KEY (created_by) REFERENCES brokers(id) ON DELETE SET NULL;
@@ -1525,6 +1596,7 @@ CREATE INDEX idx_commissions_agency_status ON public.commissions USING btree (ag
 CREATE INDEX idx_commissions_developer ON public.commissions USING btree (developer_id);
 CREATE INDEX idx_compare_links_broker ON public.compare_links USING btree (broker_id, created_at DESC);
 CREATE INDEX idx_compound_synonyms_norm ON public.compound_synonyms USING btree (synonym_norm);
+CREATE INDEX idx_credit_requests_status ON public.credit_requests USING btree (status, created_at);
 CREATE INDEX idx_deal_splits_broker ON public.deal_splits USING btree (agency_id, broker_id);
 CREATE INDEX idx_deals_agency_closed ON public.deals USING btree (agency_id, closed_at DESC);
 CREATE INDEX idx_deals_lead ON public.deals USING btree (lead_id) WHERE (lead_id IS NOT NULL);
