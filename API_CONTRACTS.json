@@ -1524,6 +1524,7 @@
       "rowsFromAnswer": ["text"]
     },
     "services/priceReading.js": {
+      "CONFIRM_CREDITS": "Number",
       "estimate": ["pool", "actor", "projectId", "params", "params"],
       "settingOf": ["db", "agencyId"],
       "setForAgency": ["db", "agencyId", "input"],
