@@ -686,6 +686,7 @@
     if (btn._rec) {
       setMic(btn, "busy");
       btn._rec.stop();
+      btn._rec.guard(4000);
       return;
     }
     var form = btn.form || btn.closest("form");
@@ -694,6 +695,20 @@
     var rec = new Speech();
     var heard = "";
     var failed = false;
+    var timer = null;
+    // Some browsers start listening but never send results or an end event. If that happens, give up after a while
+    // so the mic is not stuck red or spinning, and say what to do.
+    rec.guard = function (ms) {
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        if (btn._rec !== rec) return;
+        try { rec.abort(); } catch (_) {}
+        btn._rec = null;
+        setMic(btn, "idle");
+        if (heard) form.submit();
+        else toast(EN ? "Voice didn't respond. Check the mic, or type your search." : "الصوت مردش. اتأكد من المايك، أو اكتب بحثك.", true);
+      }, ms);
+    };
     rec.lang = EN ? "en-US" : "ar-EG";
     rec.interimResults = true;
     rec.continuous = false;
@@ -703,6 +718,7 @@
       for (var i = 0; i < ev.results.length; i++) text += ev.results[i][0].transcript;
       heard = text.trim();
       input.value = text;
+      rec.guard(10000);
     };
     rec.onerror = function (ev) {
       failed = true;
@@ -710,6 +726,8 @@
       if (msg) toast(EN ? msg[0] : msg[1], true);
     };
     rec.onend = function () {
+      clearTimeout(timer);
+      if (btn._rec !== rec) return;
       btn._rec = null;
       setMic(btn, "idle");
       if (failed) return;
@@ -719,11 +737,21 @@
     try {
       rec.start();
       setMic(btn, "recording");
+      rec.guard(12000);
     } catch (_) {
       btn._rec = null;
       toast(EN ? VOICE_ERRORS["no-speech"][0] : VOICE_ERRORS["no-speech"][1], true);
     }
   }
+  // Enter (or the iPhone's blue Go key) searches the typed text. It never starts the mic. Arabic input composes with
+  // isComposing, so Enter there only picks the word.
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" || e.isComposing) return;
+    var input = e.target.closest && e.target.closest("form[role=search] input[name=q]");
+    if (!input) return;
+    e.preventDefault();
+    if (input.value.trim()) input.form.submit();
+  });
   if (Speech) {
     var mics = document.querySelectorAll("[data-mic]");
     for (var m = 0; m < mics.length; m++) {

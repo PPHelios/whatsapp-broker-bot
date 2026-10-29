@@ -32,7 +32,7 @@ async function runFilters(pool, agencyId, filters, page) {
 
 function searchBox(q, lang, { voice = false } = {}) {
   return html`<form method="get" action="/app/search" class="searchbox" role="search">
-  ${icon("search", 20)}<input name="q" value="${q}" aria-label="${L(lang, "اكتب طلبك زي ما بتكتبه للبوت", "Type your request as you would to the bot")}" placeholder="${L(lang, "شقة 3 غرف في التجمع تحت 9 مليون", "3-bedroom apartment in New Cairo under 9M")}" autocomplete="off"${voice ? raw(" data-voice-start") : ""}>
+  ${icon("search", 20)}<input name="q" value="${q}" aria-label="${L(lang, "اكتب طلبك زي ما بتكتبه للبوت", "Type your request as you would to the bot")}" placeholder="${L(lang, "شقة 3 غرف في التجمع تحت 9 مليون", "3-bedroom apartment in New Cairo under 9M")}" autocomplete="off" enterkeyhint="search"${voice ? raw(" data-voice-start") : ""}>
   <button type="button" class="mic" data-mic aria-pressed="false" aria-label="${L(lang, "بحث بالصوت: اضغط تبدأ، واضغط تاني تقف", "Voice search: tap to start, tap again to stop")}" hidden><span class="ico-mic">${icon("mic", 20)}</span><span class="ico-stop">${icon("stop", 20)}</span></button>
   <button type="submit" class="sr-only">${L(lang, "بحث", "Search")}</button>
 </form>
