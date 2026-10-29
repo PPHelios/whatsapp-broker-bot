@@ -675,6 +675,7 @@
     "service-not-allowed": [ "Allow the microphone for this site, then try again.", "اسمح للمايك للموقع ده، وجرب تاني." ],
     "audio-capture": [ "No microphone found. Connect one or type.", "مفيش مايك متوصل. وصّل مايك أو اكتب." ],
     "network": [ "Speech service is unreachable. Type your search instead.", "خدمة الصوت مش متاحة دلوقتي. اكتب بحثك." ],
+    "ai": [ "The AI couldn't write that down. Tap the mic again to use the phone's voice.", "الذكاء الاصطناعي مقدرش يكتبها. اضغط المايك تاني عشان صوت التليفون." ],
     "no-speech": [ "Couldn't hear you. Try again or type.", "مسمعناش كويس. جرب تاني أو اكتب." ]
   };
   function setMic(btn, state) {
@@ -682,22 +683,70 @@
     btn.classList.toggle("busy", state === "busy");
     btn.setAttribute("aria-pressed", state === "recording" ? "true" : "false");
   }
-  function listen(btn) {
-    if (btn._rec) {
-      setMic(btn, "busy");
-      btn._rec.stop();
-      btn._rec.guard(4000);
-      return;
-    }
-    var form = btn.form || btn.closest("form");
-    var input = form && form.querySelector("input[name=q]");
-    if (!input) return;
+  function pickType() {
+    var types = ["audio/ogg;codecs=opus", "audio/webm;codecs=opus", "audio/mp4", "audio/webm"];
+    for (var i = 0; i < types.length; i++) if (window.MediaRecorder && MediaRecorder.isTypeSupported(types[i])) return types[i];
+    return "";
+  }
+  // The search box shows a spinner while a search is on its way (the page changes once the form is sent).
+  function busyBox(form, on) {
+    var box = form && form.querySelector(".searchbox");
+    if (box) box.classList.toggle("busy", on);
+  }
+  function send(form) {
+    busyBox(form, true);
+    form.submit();
+  }
+  // Records a note and sends it to the server, which writes it down with the AI. Falls back to the phone's speech
+  // when the server cannot (btn._phone is set, and the next tap uses the phone).
+  function transcribe(btn, form, blob) {
+    var data = new FormData();
+    data.append("voice", blob, "note");
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    setMic(btn, "busy");
+    fetch(btn.getAttribute("data-voice-url"), { method: "POST", body: data, credentials: "same-origin", headers: { "X-CSRF-Token": meta ? meta.content : "" } })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (out) {
+        setMic(btn, "idle");
+        if (out.ok && out.j.q) {
+          form.querySelector("input[name=q]").value = out.j.q;
+          return send(form);
+        }
+        if (out.j.fallback) btn._phone = true;
+        toast(out.j.error || (EN ? VOICE_ERRORS["no-speech"][0] : VOICE_ERRORS["no-speech"][1]), true);
+      })
+      .catch(function () {
+        setMic(btn, "idle");
+        btn._phone = true;
+        toast(EN ? VOICE_ERRORS.ai[0] : VOICE_ERRORS.ai[1], true);
+      });
+  }
+  function recordNote(btn, form) {
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      var type = pickType();
+      var rec = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+      var chunks = [];
+      rec.ondataavailable = function (ev) { if (ev.data.size) chunks.push(ev.data); };
+      rec.onstop = function () {
+        btn._rec = null;
+        stream.getTracks().forEach(function (t) { t.stop(); });
+        transcribe(btn, form, new Blob(chunks, { type: rec.mimeType || type || "audio/webm" }));
+      };
+      btn._rec = rec;
+      rec.start();
+      setMic(btn, "recording");
+    }).catch(function () {
+      toast(EN ? VOICE_ERRORS["not-allowed"][0] : VOICE_ERRORS["not-allowed"][1], true);
+    });
+  }
+  // The phone's own speech recognition, used when the AI path is not available.
+  function listenPhone(btn, form, input) {
     var rec = new Speech();
     var heard = "";
     var failed = false;
     var timer = null;
-    // Some browsers start listening but never send results or an end event. If that happens, give up after a while
-    // so the mic is not stuck red or spinning, and say what to do.
+    // Some browsers start listening but never send results or an end event. Give up after a while so the mic is not
+    // stuck red or spinning, and say what to do.
     rec.guard = function (ms) {
       clearTimeout(timer);
       timer = setTimeout(function () {
@@ -705,7 +754,7 @@
         try { rec.abort(); } catch (_) {}
         btn._rec = null;
         setMic(btn, "idle");
-        if (heard) form.submit();
+        if (heard) send(form);
         else toast(EN ? "Voice didn't respond. Check the mic, or type your search." : "الصوت مردش. اتأكد من المايك، أو اكتب بحثك.", true);
       }, ms);
     };
@@ -731,7 +780,7 @@
       btn._rec = null;
       setMic(btn, "idle");
       if (failed) return;
-      if (heard) form.submit();
+      if (heard) send(form);
       else toast(EN ? VOICE_ERRORS["no-speech"][0] : VOICE_ERRORS["no-speech"][1], true);
     };
     try {
@@ -743,6 +792,24 @@
       toast(EN ? VOICE_ERRORS["no-speech"][0] : VOICE_ERRORS["no-speech"][1], true);
     }
   }
+  function listen(btn) {
+    if (btn._rec) {
+      setMic(btn, "busy");
+      btn._rec.stop();
+      if (btn._rec.guard) btn._rec.guard(4000);
+      return;
+    }
+    var form = btn.form || btn.closest("form");
+    var input = form && form.querySelector("input[name=q]");
+    if (!input) return;
+    input.blur(); // dismiss the keyboard so the mic's state is what the user sees
+    if (canRecord() && btn.getAttribute("data-voice-url") && !btn._phone) return recordNote(btn, form);
+    btn._phone = false;
+    listenPhone(btn, form, input);
+  }
+  function canRecord() {
+    return !!(window.MediaRecorder && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  }
   // Enter (or the iPhone's blue Go key) searches the typed text. It never starts the mic. Arabic input composes with
   // isComposing, so Enter there only picks the word.
   document.addEventListener("keydown", function (e) {
@@ -750,7 +817,8 @@
     var input = e.target.closest && e.target.closest("form[role=search] input[name=q]");
     if (!input) return;
     e.preventDefault();
-    if (input.value.trim()) input.form.submit();
+    input.blur();
+    if (input.value.trim()) send(input.form);
   });
   if (Speech) {
     var mics = document.querySelectorAll("[data-mic]");

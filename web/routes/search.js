@@ -9,6 +9,7 @@ const { logOperation } = require("../../lib/db");
 const { formatInterpretation } = require("../../lib/search");
 const Q = require("../../domain/searchQuery");
 const SearchLink = require("../../domain/searchLink");
+const { uploads, VOICE } = require("../uploads");
 const { html, raw } = require("../html");
 const { icon } = require("../icons");
 const { resultItem } = require("../views/units");
@@ -33,7 +34,7 @@ async function runFilters(pool, agencyId, filters, page) {
 function searchBox(q, lang, { voice = false } = {}) {
   return html`<form method="get" action="/app/search" class="searchbox" role="search">
   ${icon("search", 20)}<input name="q" value="${q}" aria-label="${L(lang, "اكتب طلبك زي ما بتكتبه للبوت", "Type your request as you would to the bot")}" placeholder="${L(lang, "شقة 3 غرف في التجمع تحت 9 مليون", "3-bedroom apartment in New Cairo under 9M")}" autocomplete="off" enterkeyhint="search"${voice ? raw(" data-voice-start") : ""}>
-  <button type="button" class="mic" data-mic aria-pressed="false" aria-label="${L(lang, "بحث بالصوت: اضغط تبدأ، واضغط تاني تقف", "Voice search: tap to start, tap again to stop")}" hidden><span class="ico-mic">${icon("mic", 20)}</span><span class="ico-stop">${icon("stop", 20)}</span></button>
+  <button type="button" class="mic" data-mic data-voice-url="/app/search/voice" aria-pressed="false" aria-label="${L(lang, "بحث بالصوت: اضغط تبدأ، واضغط تاني تقف", "Voice search: tap to start, tap again to stop")}" hidden><span class="ico-mic">${icon("mic", 20)}</span><span class="ico-stop">${icon("stop", 20)}</span></button>
   <button type="submit" class="sr-only">${L(lang, "بحث", "Search")}</button>
 </form>
 <p class="row between small"><span class="muted">${L(lang, "اكتب أو اتكلم زي ما بتكلم البوت.", "Type or speak as you would to the bot.")}</span><a href="/app/searches">${icon("star", 16)} ${L(lang, "البحث المحفوظ", "Saved searches")}</a></p>
@@ -137,6 +138,26 @@ ${refineForm(filters || {}, lang)}
 ${message ? html`<p class="card notice">${message}${message.startsWith("📝") ? html` <a href="/app/units/new">${L(lang, "إضافة وحدة", "Add a unit")}</a>` : ""}</p>` : ""}
 ${results}`
     });
+  });
+
+  // Voice search: the browser sends a note; the AI writes it down (counted against the agency's voice allowance), then
+  // the page searches that text as if it were typed. The phone's own speech is the fallback on the page.
+  web.post("/search/voice", uploads([VOICE]), async (req, res) => {
+    const lang = langOf(req);
+    const { broker } = req.session;
+    const voice = req.files && req.files.voice && req.files.voice[0];
+    if (!voice) return res.status(400).json({ error: L(lang, "سجّل الأول.", "Record first.") });
+    const gate = await RateLimit.hit(pool, `search:broker:${broker.id}`, RateLimit.LIMITS.searchBroker);
+    if (!gate.allowed) return res.status(429).json({ error: L(lang, "بحث كتير في دقيقة. استنى شوية.", "Too many searches in a minute. Wait a moment.") });
+    try {
+      const text = String(await AI.transcribeAudio(voice.buffer, voice.mimetype.split(";")[0], searchCtx(req)) || "").trim().slice(0, 500);
+      if (!text) return res.status(422).json({ error: L(lang, "مسمعناش كويس. جرب تاني.", "Couldn't hear you. Try again.") });
+      return res.json({ q: text });
+    } catch (err) {
+      const quota = err.code && /QUOTA/.test(err.code);
+      if (quota) return res.status(402).json({ error: L(lang, "رصيد الذكاء الاصطناعي خلص. اكتب بحثك.", "AI credits are used up. Type your search.") });
+      return res.status(503).json({ error: L(lang, "الذكاء الاصطناعي مش متاح دلوقتي.", "The AI is unavailable right now."), fallback: true });
+    }
   });
 
   /* Saved searches (per broker, agency-scoped). */
