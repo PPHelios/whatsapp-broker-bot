@@ -185,8 +185,8 @@ async function read(pool, actor, projectId, { files = [], pages = "" } = {}, { n
  * already read (free) and the credits for the rest against what is left. Makes no AI call and records nothing.
  * @returns {Promise<{ ok, pages, cached, fresh, credits, left, enough } | { error, total? }>}
  */
-// A read this expensive (5 new pages at 10 credits) is confirmed with its page count and cost before it runs.
-const CONFIRM_CREDITS = 50;
+// Any read that spends credits is confirmed with its page count and cost before it runs; a fully cached read is free and runs at once.
+const CONFIRM_CREDITS = 1;
 
 async function estimate(pool, actor, projectId, { files = [], pages = "" } = {}, { now = new Date() } = {}) {
   if (!isManager(actor)) return { error: "forbidden" };

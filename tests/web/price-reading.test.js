@@ -131,7 +131,7 @@ describe("reading a PDF", () => {
     expect((await PriceReading.estimate(h.pool, admin, project.id, { files, pages: "" })).error).toBe("pages_required");
   });
 
-  test("a large read (5+ new pages) needs a confirmed yes with its cost", async () => {
+  test("a read that spends credits needs a confirmed yes with its cost", async () => {
     const admin = await row("admin");
     const project = (await Catalogue.saveProject(h.pool, admin, { name: "Big" })).project;
     await PriceReading.setForAgency(h.pool, admin.agency_id, { enabled: "on" });
@@ -167,14 +167,14 @@ describe("reading a PDF", () => {
     expect(pageHtml).toContain('data-pages-left="200"');
 
     const photo = Buffer.from("fake-jpeg-bytes");
-    const up = await agent.post(`/app/catalogue/projects/${project.id}/sheets/read`).field("_csrf", csrf).attach("doc", photo, { filename: "p1.jpg", contentType: "image/jpeg" });
+    const up = await agent.post(`/app/catalogue/projects/${project.id}/sheets/read`).field("_csrf", csrf).field("confirmed", "1").attach("doc", photo, { filename: "p1.jpg", contentType: "image/jpeg" });
     expect(up.status).toBe(303);
     const preview = await agent.get(up.headers.location);
     expect(preview.text).toContain("data-ai-sheet");
     expect(preview.text).toContain("PH-1");
 
     FakeAI.respond(() => new Error("overloaded"));
-    const failed = await agent.post(`/app/catalogue/projects/${project.id}/sheets/read`).field("_csrf", csrf).attach("doc", Buffer.from("other"), { filename: "p2.jpg", contentType: "image/jpeg" });
+    const failed = await agent.post(`/app/catalogue/projects/${project.id}/sheets/read`).field("_csrf", csrf).field("confirmed", "1").attach("doc", Buffer.from("other"), { filename: "p2.jpg", contentType: "image/jpeg" });
     expect(failed.headers.location).toContain("sheet_error=AI_FAILED");
     // A failed read costs nothing.
     expect((await PriceReading.usage(h.pool, admin.agency_id)).used).toBe(1);
