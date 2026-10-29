@@ -5,6 +5,8 @@ const Credits = require("../../lib/credits");
 const UnitCode = require("../../domain/unitCode");
 const { MANAGER_ROLES } = require("../../lib/authz");
 const Billing = require("../../services/billing");
+const AiCredits = require("../../services/credits");
+const { creditTable } = require("../views/credits");
 const AiLog = require("../../services/aiUsageLog");
 const Dash = require("../../services/dashboards");
 const { html } = require("../html");
@@ -93,6 +95,7 @@ function register(web, { pool, page }) {
     const { broker } = req.session;
     const manager = isManager(broker);
     const state = await Credits.check(pool, broker);
+    const [ai, aiActions] = await Promise.all([Billing.allowance(pool, broker.agency_id), AiCredits.actions(pool)]);
     const mine = await Credits.usage(pool, broker.agency_id, { brokerId: broker.id });
     const agency = manager ? await Credits.usage(pool, broker.agency_id) : null;
     const own = manager ? (await pool.query("SELECT name, code_prefix, crm_settings FROM agencies WHERE id = $1", [broker.agency_id])).rows[0] : null;
@@ -122,6 +125,13 @@ ${req.query.saved === "1" ? html`<p class="card notice ok" role="status">✅ ${L
     "١ رصيد = ١ رسالة البوت يبعتها (ردود وتنبيهات). ببلاش: كل حاجة على الموقع، إشعارات الموقع، وعلامة «اتقرت». عند 100% التنبيهات بتوصل على الموقع والردود مستمرة؛ عند الحد الأقصى البوت بيبعت تنبيه واحد في اليوم وبعدها بيعلّم الرسايل مقروءة بس.",
     "1 credit = 1 message the bot sends (replies and alerts). Free: everything on the website, website notifications and read ticks. At 100% alerts move to the website and replies continue; at the ceiling the bot sends one notice a day, then only marks messages as read."
   )}</p></details>
+</section>
+<section class="card" data-ai-credits="${ai.credits.used}" data-ai-credits-limit="${ai.credits.limit}">
+  <h2>🤖 ${L(lang, "رصيد الذكاء الاصطناعي (الشهر الحالي)", "AI credits (this month)")}</h2>
+  <meter min="0" max="${ai.credits.limit}" value="${Math.min(ai.credits.used, ai.credits.limit)}"></meter>
+  <p class="big"><strong>${ai.credits.used}</strong> / ${ai.credits.limit} · ${L(lang, `باقي ${Math.max(0, ai.credits.limit - ai.credits.used)}`, `${Math.max(0, ai.credits.limit - ai.credits.used)} left`)}</p>
+  <p><a href="/app/usage/log">${L(lang, "سجل الاستخدام سطر بسطر", "Use log, line by line")}</a>${manager ? html` · <a href="/app/plan">${L(lang, "اطلب رصيد زيادة", "Ask for more credits")}</a>` : ""}</p>
+  ${creditTable(aiActions, lang)}
 </section>
 ${manager
   ? tabs("usage_tab", [
