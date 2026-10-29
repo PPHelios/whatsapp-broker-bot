@@ -5,6 +5,7 @@ const Describe = require("../../domain/describe");
 const Features = require("../../domain/features");
 const Rules = require("../../domain/fieldRules");
 const { PLAN_ROWS, FREQUENCIES } = require("../forms/unitForm");
+const Credits = require("../../services/credits");
 const { html, raw } = require("../html");
 const { factList } = require("./units");
 
@@ -41,7 +42,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     <label>${L(lang, "الوصف (زي ما بتبعته للبوت)", "Description (as you would send it to the bot)")}<textarea name="describe" rows="3"></textarea></label>
     <div class="row">
       <button type="button" class="secondary" hx-post="/app/units/extract" hx-encoding="multipart/form-data" hx-include="#unit-form" hx-target="#unit-form" hx-swap="outerHTML">✨ ${L(lang, "املأ من الوصف", "Fill from text")}</button>
-      <button type="button" class="secondary" data-voice-target="#unit-form" data-voice-url="/app/units/extract" data-stop="■ ${L(lang, "إيقاف وإرسال", "Stop and send")}" data-unsupported="${L(lang, "المتصفح ده مش بيدعم التسجيل", "Recording is not supported here")}">🎙️ ${L(lang, "سجّل فويس", "Record voice")}</button>
+      <button type="button" class="secondary" data-voice-target="#unit-form" data-voice-url="/app/units/extract" data-stop="■ ${L(lang, "إيقاف وإرسال", "Stop and send")}" data-unsupported="${L(lang, "المتصفح ده مش بيدعم التسجيل", "Recording is not supported here")}">🎙️ ${L(lang, "سجّل فويس", "Record voice")} <span class="muted">(${L(lang, `${Credits.costOf("voice")} رصيد`, `${Credits.costOf("voice")} credits`)})</span></button>
       <span class="spinner" aria-hidden="true"></span>
     </div>
   </section>

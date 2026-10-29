@@ -26,7 +26,7 @@ const ERRORS = {
   pages_required: ["اكتب أرقام الصفحات (مثلاً 1-6).", "Enter the page numbers (e.g. 1-6)."],
   pages_invalid: ["أرقام الصفحات مش مظبوطة.", "The page numbers aren't valid."],
   too_many_pages: [`${G.MAX_FILES} بالكتير في المرة.`, `At most ${G.MAX_FILES} at a time.`],
-  ALLOWANCE: ["صفحات الشهر مش كفاية.", "This month's pages aren't enough."]
+  ALLOWANCE: ["رصيد الشهر مش كفاية.", "This month's credits aren't enough."]
 };
 const KIND = { render: ["منظور", "Render"], amenity: ["خدمات", "Amenity"], master_plan: ["المخطط العام", "Master plan"], layout: ["مخطط وحدة", "Layout"], other: ["تاني", "Other"] };
 const ROLE = { shared: ["لكل الوحدات", "All units"], layout: ["مخطط وحدات", "Unit layout"], hidden: ["مخفي", "Hidden"] };

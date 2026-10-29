@@ -114,6 +114,23 @@ describe("reading a PDF", () => {
     expect((await PriceReading.usage(h.pool, rivalAdmin.agency_id)).used).toBe(0);
   });
 
+  test("the cost is shown before the button: exact pages, cached ones free, no AI call", async () => {
+    const admin = await row("admin");
+    const project = (await Catalogue.saveProject(h.pool, admin, { name: "Badya" })).project;
+    const file = await pdf(["Cover", "Units one", "Units two"]);
+    const files = [{ buffer: file, mimetype: "application/pdf", originalname: "badya.pdf" }];
+    answerByPage();
+    await PriceReading.setForAgency(h.pool, admin.agency_id, { enabled: "on" });
+    await h.query("UPDATE agencies SET pilot = false WHERE id = $1", [admin.agency_id]);
+    const before = await PriceReading.estimate(h.pool, admin, project.id, { files, pages: "2-3" });
+    expect(before).toMatchObject({ ok: true, pages: 2, cached: 0, fresh: 2, credits: 20, left: 80, enough: true });
+    await PriceReading.read(h.pool, admin, project.id, { files, pages: "2" });
+    const after = await PriceReading.estimate(h.pool, admin, project.id, { files, pages: "2-3" });
+    expect(after).toMatchObject({ pages: 2, cached: 1, fresh: 1, credits: 10, left: 70 });
+    expect(FakeAI.calls).toHaveLength(1);
+    expect((await PriceReading.estimate(h.pool, admin, project.id, { files, pages: "" })).error).toBe("pages_required");
+  });
+
   test("photos; a failed page is reported; the web form and the owner's switch", async () => {
     const admin = await row("admin");
     const project = (await Catalogue.saveProject(h.pool, admin, { name: "Mivida" })).project;

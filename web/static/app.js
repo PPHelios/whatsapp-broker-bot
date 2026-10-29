@@ -40,6 +40,28 @@
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () { field.select && field.select(); });
     else if (field.select) { field.select(); try { document.execCommand("copy"); done(); } catch (err) {} }
   });
+  // Document reading: the exact credit cost (pages picked, pages already read are free) before the button is pressed.
+  (function () {
+    var form = document.querySelector("form[data-ai-read]");
+    if (!form || !window.fetch || !window.FormData) return;
+    var note = form.querySelector("[data-ai-estimate]");
+    var cost = form.querySelector("[data-estimate-cost]");
+    var timer = null;
+    var run = function () {
+      var files = form.querySelector('input[type="file"]');
+      if (!files || !files.files.length) return;
+      var url = form.getAttribute("action").replace(/\/read$/, "/estimate");
+      fetch(url, { method: "POST", body: new FormData(form), credentials: "same-origin", headers: { Accept: "application/json" } })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (note && d.text) note.textContent = d.text;
+          if (cost) cost.textContent = d.ok ? "(" + d.credits + ")" : "";
+        })
+        .catch(function () {});
+    };
+    form.addEventListener("input", function () { clearTimeout(timer); timer = setTimeout(run, 400); });
+    form.addEventListener("change", function () { clearTimeout(timer); timer = setTimeout(run, 400); });
+  })();
   // <form data-confirm="…">: ask before a step that can't be undone from the page (deactivating a broker).
   document.addEventListener("submit", function (e) {
     var by = e.submitter && e.submitter.getAttribute && e.submitter.getAttribute("data-confirm");

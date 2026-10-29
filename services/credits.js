@@ -272,7 +272,12 @@ let loadedAt = 0;
 const TTL_MS = 60 * 1000;
 
 /** Loads plans and bundles from the database into domain/plans.js. A database that cannot be read keeps the last values. */
+// Credits per action as last loaded, for screens that print them (button labels); the seed values until the first load.
+let costs = { text: 1, voice: 3, flyer: 3, page: 10, chat_post: 1, assistant: 2 };
+const costOf = (action) => costs[action] ?? 0;
+
 async function refresh(db) {
+  costs = { ...costs, ...(await actionMap(db)) };
   const [p, b] = await Promise.all([plans(db), db.query("SELECT id, name_ar, name_en, price_egp, credits, sort FROM credit_bundles WHERE active ORDER BY sort, price_egp")]);
   Plans.hydrate({ plans: p, bundles: b.rows });
   loadedAt = Date.now();
@@ -294,4 +299,4 @@ function marginOf({ priceEgp, cost }) {
   return priceEgp > 0 ? Math.round((1 - cost / priceEgp) * 100) : null;
 }
 
-module.exports = { ownerOverview, savePlans, saveBundles, saveActionsAndRates, COST_KEY, COST_DEFAULT, requestMore, requestsOf, pendingRequests, grant, decideRequest, monthKey, refresh, ensureFresh, FX_DEFAULT, FX_KEY, planningRate, plans, planById, bundles, actions, actionMap, creditsFor, usedThisMonth, poolFor, marginOf };
+module.exports = { costOf, ownerOverview, savePlans, saveBundles, saveActionsAndRates, COST_KEY, COST_DEFAULT, requestMore, requestsOf, pendingRequests, grant, decideRequest, monthKey, refresh, ensureFresh, FX_DEFAULT, FX_KEY, planningRate, plans, planById, bundles, actions, actionMap, creditsFor, usedThisMonth, poolFor, marginOf };
