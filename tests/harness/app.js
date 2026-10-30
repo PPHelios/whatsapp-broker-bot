@@ -26,8 +26,8 @@ const BROKERS = {
   broker: { id: "10000000-0000-0000-0000-000000000001", agency_id: AGENCY_A, phone: "201000000001", role: "broker", name: "Broker One", lang: "ar" },
   colleague: { id: "10000000-0000-0000-0000-000000000002", agency_id: AGENCY_A, phone: "201000000002", role: "broker", name: "Broker Two", lang: "ar" },
   admin: { id: "10000000-0000-0000-0000-000000000003", agency_id: AGENCY_A, phone: "201000000003", role: "admin", name: "Agency Admin", lang: "en" },
-  manager: { id: "10000000-0000-0000-0000-000000000004", agency_id: AGENCY_A, phone: "201000000004", role: "manager", name: "Agency Manager", lang: "ar", lazy: true },
-  owner: { id: "10000000-0000-0000-0000-000000000005", agency_id: AGENCY_A, phone: "201000000005", role: "owner", name: "Agency Owner", lang: "ar", lazy: true },
+  manager: { id: "10000000-0000-0000-0000-000000000014", agency_id: AGENCY_A, phone: "201000000014", role: "manager", name: "Agency Manager", lang: "ar", lazy: true },
+  owner: { id: "10000000-0000-0000-0000-000000000015", agency_id: AGENCY_A, phone: "201000000015", role: "owner", name: "Agency Owner", lang: "ar", lazy: true },
   rival: { id: "20000000-0000-0000-0000-000000000001", agency_id: AGENCY_B, phone: "201000000009", role: "broker", name: "Rival Broker", lang: "ar" }
 };
 
