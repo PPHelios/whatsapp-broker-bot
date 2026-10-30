@@ -111,17 +111,19 @@ test("seats: on the Free plan (1 seat) a manager can't add another broker; nobod
 
 test("a manager announces a payment, the owner confirms it and the paid period starts; brokers can't pay", async () => {
   await Billing.savePayTo(h.pool, { instapay: "wehdat@instapay", bank: "" });
-  const a = await signIn(h, "admin");
-  const page = await a.agent.get("/app/plan?lang=en");
+  await h.seedBroker("owner"); // plan payments are the agency owner's
+  const a = await signIn(h, "admin"); // the CRM owner (OWNER_BROKER_IDS) for /app/owner
+  const o = await signIn(h, "owner");
+  const page = await o.agent.get("/app/plan?lang=en");
   expect(page.status).toBe(200);
   expect(page.text).toContain('data-source="pilot"');
-  const pay = await a.agent.post("/app/plan/pay").type("form").send({ _csrf: a.csrf, kind: "plan", plan: "agency", months: "3" });
+  const pay = await o.agent.post("/app/plan/pay").type("form").send({ _csrf: o.csrf, kind: "plan", plan: "agency", months: "3" });
   expect(pay.status).toBe(200);
   const ref = (pay.text.match(/data-payment="(WH-[A-Z0-9]{6})"/) || [])[1];
   expect(ref).toBeDefined();
   expect(pay.text).toContain("6,270 EGP");
   expect(pay.text).toContain("wehdat@instapay");
-  expect((await a.agent.post("/app/plan/pay").type("form").send({ _csrf: a.csrf, kind: "plan", plan: "gold", months: "3" })).status).toBe(400);
+  expect((await o.agent.post("/app/plan/pay").type("form").send({ _csrf: o.csrf, kind: "plan", plan: "gold", months: "3" })).status).toBe(400);
 
   const b = await signIn(h, "broker");
   expect((await b.agent.get("/app/plan")).status).toBe(200);
@@ -139,13 +141,13 @@ test("a manager announces a payment, the owner confirms it and the paid period s
   expect((await a.agent.post(`/app/owner/payments/${p.id}/confirm`).type("form").send({ _csrf: a.csrf })).status).toBe(400);
   expect(await h.query("SELECT 1 FROM notifications WHERE kind = 'manager_alert' AND title LIKE $1", [`%${ref}%`])).not.toEqual([]);
   // A credit bundle adds its credits this month.
-  await a.agent.post("/app/plan/pay").type("form").send({ _csrf: a.csrf, kind: "credit_bundle", bundle: "medium" });
+  await o.agent.post("/app/plan/pay").type("form").send({ _csrf: o.csrf, kind: "credit_bundle", bundle: "medium" });
   const [vp] = await h.query("SELECT id, amount_egp FROM payments WHERE kind = 'credit_bundle'");
   expect(Number(vp.amount_egp)).toBe(175);
   await Billing.confirmPayment(h.pool, vp.id);
   expect((await Billing.allowance(h.pool, h.AGENCY_A)).credits).toMatchObject({ plan: 6000, bundles: 500, limit: 6500 });
   // A manager asks for more credits; the owner approves and the grant joins this month's pool.
-  expect((await a.agent.post("/app/plan/credit-request").type("form").send({ _csrf: a.csrf, credits: "300", note: "busy month" })).status).toBe(200);
+  expect((await o.agent.post("/app/plan/credit-request").type("form").send({ _csrf: o.csrf, credits: "300", note: "busy month" })).status).toBe(200);
   const [rq] = await h.query("SELECT id, status FROM credit_requests");
   expect(rq.status).toBe("pending");
   expect(await Credits.decideRequest(h.pool, rq.id, { approve: true })).toMatchObject({ ok: true });

@@ -96,7 +96,7 @@ describe("owner page: plans and credits", () => {
   test("a manager's request reaches the owner page; approving grants the credits; owner can grant directly", async () => {
     const { agent, csrf } = await owner();
     const admin = (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS.admin.id]))[0];
-    expect((await Credits.requestMore(h.pool, admin, { credits: 300, note: "busy month" })).ok).toBe(true);
+    expect((await Credits.requestMore(h.pool, { ...admin, role: "owner" }, { credits: 300, note: "busy month" })).ok).toBe(true);
     const page = await agent.get("/app/owner");
     expect(page.text).toContain("data-credit-request=");
     const [req] = await Credits.pendingRequests(h.pool);

@@ -8,7 +8,7 @@ const Billing = require("../../services/billing");
 const Referrals = require("../../services/referrals");
 const BillingNotices = require("../../services/billingNotices");
 const Plans = require("../../domain/plans");
-const { MANAGER_ROLES } = require("../../lib/authz");
+const { MANAGER_ROLES, isAgencyOwner } = require("../../lib/authz");
 const { html } = require("../html");
 const Credits = require("../../services/credits");
 const { creditTable } = require("../views/credits");
@@ -30,7 +30,7 @@ const REQUEST_STATUS = { pending: ["مستني الرد", "Waiting"], approved: 
 const CREDIT_ERRORS = {
   credits: ["اكتب عدد رصيد من 1 لـ 100,000.", "Enter a number of credits from 1 to 100,000."],
   too_many: ["عندك 3 طلبات مستنية. استنى الرد.", "You already have 3 open requests. Wait for an answer."],
-  forbidden: ["المدير بس يقدر يطلب رصيد.", "Only a manager can ask for credits."]
+  forbidden: ["صاحب الوكالة بس يقدر يطلب رصيد.", "Only the agency owner can ask for credits."]
 };
 const ERRORS = {
   plan: ["اختار باقة ومدة.", "Pick a plan and a period."],
@@ -124,7 +124,7 @@ ${manager
   <button type="submit" class="secondary">${L(lang, "ابعت الطلب", "Send request")}</button>
   ${requests.length ? html`<table data-credit-requests><tbody>${requests.map((x) => html`<tr data-request="${x.id}"><td>${num(x.credits)}</td><td>${(REQUEST_STATUS[x.status] || REQUEST_STATUS.pending)[lang === "en" ? 1 : 0]}</td><td dir="ltr">${day(x.created_at)}</td></tr>`)}</tbody></table>` : ""}
 </form>`
-  : html`<p class="muted">${L(lang, "المدير بس يقدر يغيّر الباقة.", "Only a manager can change the plan.")}</p>`}
+  : html`<p class="muted">${L(lang, "صاحب الوكالة بس يقدر يغيّر الباقة.", "Only the agency owner can change the plan.")}</p>`}
 ${referral ? referralSection(referral, lang) : ""}
 ${payments.length
   ? html`<section class="card"><h2>${L(lang, "المدفوعات", "Payments")}</h2><div class="scroll"><table><tbody>${payments.map(
@@ -141,7 +141,7 @@ function register(web, { pool, page }) {
     const payments = isManager(broker) ? await Billing.paymentsOf(pool, broker.agency_id) : [];
     const requests = isManager(broker) ? await Credits.requestsOf(pool, broker.agency_id) : [];
     const referral = isManager(broker) ? await Referrals.summary(pool, broker.agency_id) : null;
-    return page(req, res, { title: L(lang, "الباقة", "Plan"), nav: "settings", body: planPage({ a, actionsList, requests, limits, payments, payTo, lang, manager: isManager(broker), referral, ...extra }) }, status);
+    return page(req, res, { title: L(lang, "الباقة", "Plan"), nav: "settings", body: planPage({ a, actionsList, requests, limits, payments, payTo, lang, manager: isAgencyOwner(broker), referral, ...extra }) }, status);
   };
 
   web.get("/plan", (req, res) => render(req, res));
@@ -149,7 +149,7 @@ function register(web, { pool, page }) {
   web.post("/plan/credit-request", async (req, res) => {
     const lang = langOf(req);
     const broker = req.session.broker;
-    if (!isManager(broker)) return res.status(403).type("text/plain").send(ERRORS.forbidden[lang === "en" ? 1 : 0]);
+    if (!isAgencyOwner(broker)) return res.status(403).type("text/plain").send(ERRORS.forbidden[lang === "en" ? 1 : 0]);
     const r = await Credits.requestMore(pool, broker, { credits: req.body.credits, note: req.body.note });
     if (r.error) return render(req, res, { notice: html`<p class="card notice bad" role="alert">❌ ${(CREDIT_ERRORS[r.error] || CREDIT_ERRORS.credits)[lang === "en" ? 1 : 0]}</p>` }, r.error === "forbidden" ? 403 : 400);
     return render(req, res, { notice: html`<p class="card notice ok" role="status" data-credit-request-sent>✅ ${L(lang, "الطلب وصل لصاحب التطبيق.", "Your request reached the app owner.")}</p>` });
@@ -158,7 +158,7 @@ function register(web, { pool, page }) {
   web.post("/plan/pay", async (req, res) => {
     const lang = langOf(req);
     const broker = req.session.broker;
-    if (!isManager(broker)) return res.status(403).type("text/plain").send(ERRORS.forbidden[lang === "en" ? 1 : 0]);
+    if (!isAgencyOwner(broker)) return res.status(403).type("text/plain").send(ERRORS.forbidden[lang === "en" ? 1 : 0]);
     const r = await Billing.requestPayment(pool, broker, { kind: req.body.kind, plan: req.body.plan, months: req.body.months, bundle: req.body.bundle });
     if (r.error) return render(req, res, { notice: html`<p class="card notice bad" role="alert">❌ ${(ERRORS[r.error] || ERRORS.plan)[lang === "en" ? 1 : 0]}</p>` }, r.error === "forbidden" ? 403 : 400);
     BillingNotices.paymentRequested(r.payment, r.agency, broker);

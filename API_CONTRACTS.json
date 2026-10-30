@@ -255,6 +255,7 @@
     "lib/authz.js": {
       "MANAGER_ROLES": "Array",
       "isManager": ["broker"],
+      "isAgencyOwner": ["broker"],
       "canView": ["broker", "listing"],
       "canEdit": ["broker", "listing"],
       "canViewLead": ["broker", "lead"],
@@ -1083,7 +1084,8 @@
       "startLinkFor": ["pool", "manager", "brokerId", "params"],
       "invite": ["pool", "manager", "input", "opts"],
       "deactivate": ["pool", "manager", "brokerId", "params"],
-      "inviteText": ["broker", "url", "agencyName"]
+      "inviteText": ["broker", "url", "agencyName"],
+      "changeRole": ["pool", "owner", "brokerId", "newRole"]
     },
     "web/routes/dashboard.js": {
       "register": ["web", "params"]

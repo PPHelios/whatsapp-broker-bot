@@ -15,6 +15,7 @@ jest.setTimeout(90000);
 let h;
 beforeEach(async () => {
   h = await createHarness();
+  await h.seedBroker("manager");
 });
 afterAll(closeHarness);
 
@@ -49,7 +50,7 @@ const importId = (res) => res.headers.location.split("/").pop();
 const unit = async (code) => (await h.query("SELECT * FROM listings WHERE code_norm = upper($1)", [code]))[0];
 
 test("the template downloads as a real workbook with the inventory headers", async () => {
-  const { agent } = await signIn(h, "broker");
+  const { agent } = await signIn(h, "manager");
   const res = await agent.get("/app/import/template.xlsx").buffer(true).parse(binary);
   expect(res.status).toBe(200);
   expect(res.headers["content-type"]).toMatch(/spreadsheetml/);
@@ -65,7 +66,7 @@ test("fake inventory: upload, preview, apply two new units; the manager's export
     ["FX-2", "Mivida", "فيلا", "بيع", "21 مليون", 320, 5, 4, "حديقة", ""],
     ["FX-OLD", "Hyde Park", "شقة", "بيع", "7.4 مليون", 140, 2, 2, "", ""]
   ];
-  const { agent, csrf } = await signIn(h, "broker");
+  const { agent, csrf } = await signIn(h, "manager");
   const preview = await upload(agent, csrf, await workbook(rows));
   expect(preview.status).toBe(303);
   const id = importId(preview);
@@ -93,7 +94,7 @@ test("a broker cannot download the agency export", async () => {
 });
 
 test("a file that is not a workbook, or has no header row, is refused and nothing is imported", async () => {
-  const { agent, csrf } = await signIn(h, "broker");
+  const { agent, csrf } = await signIn(h, "manager");
   const notXlsx = await upload(agent, csrf, Buffer.from("this is a text file"), "fake.xlsx");
   expect(notXlsx.status).toBe(422);
   const wb = new ExcelJS.Workbook();

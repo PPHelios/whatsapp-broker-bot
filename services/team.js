@@ -8,7 +8,7 @@ const Phone = require("../domain/phone");
 const TgLink = require("../lib/tgLink");
 const Brokers = require("./brokers");
 const Billing = require("./billing");
-const { MANAGER_ROLES } = require("../lib/authz");
+const { MANAGER_ROLES, isAgencyOwner } = require("../lib/authz");
 const { getConfig } = require("../config");
 
 const INVITE_ROLES = ["broker", "manager"];
@@ -61,6 +61,8 @@ async function invite(pool, manager, input = {}, opts = {}) {
   if (!name) return { error: "name" };
   if (!digits || !Phone.isEgyptMobile(digits)) return { error: "phone" };
   if (!role) return { error: "role" };
+  // Only the agency owner adds managers; managers add brokers.
+  if (role === "manager" && !isAgencyOwner(manager)) return { error: "forbidden" };
   const lang = input.lang === "en" ? "en" : "ar";
   const { rows: found } = await pool.query("SELECT id, agency_id, role, is_active FROM brokers WHERE phone_normalized = $1", [digits]);
   let brokerId;
@@ -105,4 +107,22 @@ function inviteText(broker, url, agencyName) {
     : `أهلاً ${broker.name}! ${agencyName} ضافك على WehdatHub، مساعد الوحدات والعملاء بتاعنا على تيليجرام.\n١. نزّل تيليجرام لو مش عندك.\n٢. دوس على اللينك ده (يشتغل مرة واحدة، لمدة ٧ أيام): ${url}`;
 }
 
-module.exports = { INVITE_ROLES, listTeam, startLinkFor, invite, deactivate, inviteText };
+/**
+ * The agency owner moves a broker to manager or back. Never their own role, never an admin or owner.
+ * Pending private-data requests are not moved here: each approval re-reads the approver's role.
+ * @returns {Promise<{ ok: true, broker, from, to } | { error }>}
+ */
+async function changeRole(pool, owner, brokerId, newRole) {
+  if (!isAgencyOwner(owner)) return { error: "forbidden" };
+  if (!INVITE_ROLES.includes(String(newRole || ""))) return { error: "role" };
+  if (brokerId === owner.id) return { error: "self" };
+  const { rows } = await pool.query("SELECT id, name, role FROM brokers WHERE id = $1 AND agency_id = $2", [brokerId, owner.agency_id]);
+  if (!rows[0]) return { error: "not_found" };
+  const from = String(rows[0].role || "").toLowerCase();
+  if (TOP_ROLES.includes(from)) return { error: "rank" };
+  if (from === newRole) return { error: "same" };
+  await pool.query("UPDATE brokers SET role = $2 WHERE id = $1", [brokerId, newRole]);
+  return { ok: true, broker: rows[0], from, to: newRole };
+}
+
+module.exports = { INVITE_ROLES, listTeam, startLinkFor, invite, deactivate, inviteText, changeRole };
