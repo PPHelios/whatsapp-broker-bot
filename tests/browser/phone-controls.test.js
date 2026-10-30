@@ -75,7 +75,8 @@ async function checkBody(pg, where) {
 
 async function session(who) {
   const br = h.BROKERS[who];
-  const ctx = await browser.newContext({ viewport: PHONE, isMobile: true, hasTouch: true, permissions: ["microphone"] });
+  // The app's service worker would fetch pages itself and skip the routes below; the test drives the network directly.
+  const ctx = await browser.newContext({ viewport: PHONE, isMobile: true, hasTouch: true, permissions: ["microphone"], serviceWorkers: "block" });
   await ctx.route(/.*/, (route) => (LOCAL.test(route.request().url()) ? route.continue() : route.abort()));
   // A share link opens WhatsApp in a new navigation; abort leaves an error page and breaks the next load. Answer it with
   // an empty response instead, so the page stays put (the app's link is unchanged).
