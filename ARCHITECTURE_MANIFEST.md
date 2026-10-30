@@ -71,6 +71,7 @@
   | `051_assistant_resolved.sql` | `assistant_questions.resolved_at`: an unanswered question leaves the list once a manager adds the info |
   | `052_unit_privacy.sql` | Agency-only unit location and secret details: `projects.lat/lng` (inherited by its units), `unit_access_requests` (a broker asks, the unit's broker or a manager answers); `agencies.crm_settings.secret_details` = restricted (default) or all |
   | `038_assistant.sql` | The assistant (C10 + N1): `project_contexts` (per project summary, facts, source key, built time), `assistant_questions` (question log: channel, found, web, scopes), `agencies.assistant` (owner's web switch and monthly web answers) |
+  | `054_private_portfolio.sql` | The agency owner's private portfolio: `is_private` on `listings` and `leads`, hidden from everyone but the agency owner by `lib/visibility.js`. |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
 * **Graceful Termination & Drain Protocol:** On `SIGTERM` or `SIGINT`, the service enters a draining state:
