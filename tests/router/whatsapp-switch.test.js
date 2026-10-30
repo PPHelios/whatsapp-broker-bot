@@ -20,7 +20,17 @@ afterEach(() => {
 });
 afterAll(closeHarness);
 
-test("unset: the bot replies on WhatsApp as before", async () => {
+test("unset: WhatsApp is off by default (production), so the webhook acknowledges and nothing is sent", async () => {
+  delete process.env.WHATSAPP_ENABLED;
+  resetConfig();
+  h = await createHarness();
+  expect((await request(h.app.app).post("/webhook").send({ entry: [] })).text).toBe("WHATSAPP_DISABLED");
+  expect(await h.text("broker", "مساعدة")).toEqual([]);
+});
+
+test("true: the bot replies on WhatsApp as before", async () => {
+  process.env.WHATSAPP_ENABLED = "true";
+  resetConfig();
   h = await createHarness();
   expect((await h.text("broker", "مساعدة")).length).toBeGreaterThan(0);
 });

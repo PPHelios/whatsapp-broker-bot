@@ -22,6 +22,9 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
+      # WhatsApp is off by default; set to "true" to turn the bot back on (the WHATSAPP_* keys below are then required).
+      - key: WHATSAPP_ENABLED
+        value: "false"
       - key: WHATSAPP_APP_SECRET
         sync: false
       - key: WHATSAPP_VERIFY_TOKEN

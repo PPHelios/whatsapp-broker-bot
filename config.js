@@ -57,8 +57,9 @@ function loadConfig(env = process.env) {
   // Until PUBLIC_BASE_URL is set, Render's own https://<service>.onrender.com address is used.
   const baseUrl = String(env.PUBLIC_BASE_URL || "").trim() || String(env.RENDER_EXTERNAL_URL || "").trim();
 
-  // WhatsApp is on unless WHATSAPP_ENABLED says false/0/off/no; switched off, its variables aren't required.
-  const whatsappEnabled = !/^(false|0|off|no)$/i.test(String(env.WHATSAPP_ENABLED || "").trim());
+  // WhatsApp is off unless WHATSAPP_ENABLED says true/1/on/yes (the code stays in place for when it returns); switched off,
+  // its variables aren't required.
+  const whatsappEnabled = /^(true|1|on|yes)$/i.test(String(env.WHATSAPP_ENABLED || "").trim());
 
   if (isProd) {
     const required = REQUIRED_IN_PRODUCTION.filter((k) => whatsappEnabled || !k.startsWith("WHATSAPP_"));
