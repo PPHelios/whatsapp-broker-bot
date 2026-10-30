@@ -27,7 +27,7 @@ function answerCard(out, question, lang) {
   const forClient = out.found && out.dates?.length;
   return html`<section class="card ${out.found ? "notice ok" : ""}" data-assistant-answer data-found="${out.found ? "yes" : "no"}">
   <p class="muted">❓ ${question}</p>
-  <p style="white-space:pre-line" data-answer-text>${out.answer}</p>
+  <p class="pre" data-answer-text>${out.answer}</p>
   ${dates ? html`<p class="muted" data-answer-dates>${dates}</p>` : ""}
   ${forClient ? html`<p><a class="btn" href="https://wa.me/?text=${encodeURIComponent(out.answer)}" target="_blank" rel="noopener noreferrer" data-send-whatsapp>📤 ${L(lang, "ابعته على واتساب", "Send on WhatsApp")}</a></p>` : ""}
 </section>`;

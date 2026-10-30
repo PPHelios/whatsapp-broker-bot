@@ -21,7 +21,7 @@ function welcome({ manager = false, telegram = false } = {}, lang = "ar") {
 /** The "?" tip of each main screen (by its nav key). */
 const TIPS = {
   search: [
-    ["اكتب طلب العميل بكلامك: النوع، المكان، الغرف، السعر.", "Type the client's request in your own words: type, place, bedrooms, price."],
+    ["اكتب طلب العميل بكلامك، أو اضغط المايك واتكلم: النوع، المكان، الغرف، السعر.", "Type the client's request in your own words, or tap the mic and speak: type, place, bedrooms, price."],
     ["النتايج من وحدات وكالتك والكتالوج بس.", "Results come from your agency's units and the catalogue only."],
     ["افتح الوحدة وابعت رابطها أو صورها للعميل.", "Open a unit to send its link or photos to the client."],
     ["مفيش نتيجة؟ احفظه طلب عميل ويوصلك تنبيه لما تنزل وحدة مناسبة.", "Nothing found? Save it as a client request and get alerted when a unit fits."]
