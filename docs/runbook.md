@@ -85,6 +85,8 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 3. Telegram brokers: send each their Telegram start link privately (one tap on *Start* links their account; one use, 7 days; re-run `onboard` for fresh ones), then `docs/pilot/telegram-howto-ar.md` and `web-howto-ar.md` (or the `-en` versions). WhatsApp brokers must message the bot once before it can reply: send them their start link (one tap, then send), then `docs/pilot/broker-howto-ar.md` and `web-howto-ar.md`, or `broker-howto-en.md` and `web-howto-en.md`.
 4. Deactivating a broker: `npm run onboard -- --deactivate my-agency.json 0101…` — the bot stops answering them, their web sessions end at once, their leads go to the unassigned pool and every manager gets one "N leads to reassign" notification (P6). Don't deactivate with a bare `UPDATE brokers SET is_active = false`: their leads would stay with nobody.
 
+The first account a sign-up creates is the agency's **owner** (role `owner`). Migration `057` gave the same role to the earliest admin of any agency that had none. Old `admin` rows are managers (same powers as `manager`) and keep working.
+
 ## 4b. Telegram bot
 
 1. In Render, set `TELEGRAM_BOT_TOKEN` (from @BotFather; the owner sets it, never paste it in chat), `TELEGRAM_WEBHOOK_SECRET` (random, see §1) and `TELEGRAM_BOT_USERNAME` (`Wehdat_Hub_bot`). `PUBLIC_BASE_URL` (or Render's own URL) must be `https://`.
@@ -234,6 +236,7 @@ ORDER BY projected_pct DESC;
 * **Follow-up reminders:** the `follow_up_reminders` job (every minute) reminds brokers of due follow-ups and viewings and nudges once about new leads nobody contacted in 24 hours. Its last run: `SELECT last_started_at, last_status FROM crm_jobs WHERE name = 'follow_up_reminders';` A reminder that didn't come: `SELECT next_follow_up_at, follow_up_status, follow_up_reminded_at, assigned_broker_id FROM leads WHERE ref = <n> AND agency_id = '<id>';` (no assignee means no reminder; a stamped `follow_up_reminded_at` means it went to the inbox, held until quiet hours end if needed). To remind again, set the follow-up again.
 * **Client privacy (PDPL):** a client asks for their data: a manager opens the client on the website and taps 📦 Export (a zip; 10 an hour). A client asks to be deleted: a manager types the last 4 digits of the client's number under 🗑️ Erase; this cannot be undone, and deals keep only the unit and the money. The `privacy` job erases clients with no activity for 18 months (managers get a warning 30 days before) and clears stored WhatsApp payloads after 7 days. Its last run: `SELECT last_started_at, last_status FROM crm_jobs WHERE name = 'privacy';` Never clear `operation_logs`; it holds no client names or numbers.
 * **Importing a client list:** `/app/leads/import` (CSV or Excel, up to 2,000 rows; template at `/app/leads/import/template.xlsx`). The preview writes nothing; Import runs in the background, so the broker can leave the page. A stuck import: `SELECT id, status, result FROM web_imports WHERE kind = 'leads' ORDER BY created_at DESC LIMIT 5;` — a restart mid-way leaves it `processing` with `result.done` rows saved (each row is its own transaction, so nothing is half-written); the rest is re-imported by uploading the same file again (already-saved rows show as merges).
+* **Needs manager flags:** one open flag per lead (`leads.flagged_at`, `flag_note`, `flagged_by`); each step is an event (`flag`, `flag_handled`) with the note or reply. Open flags for an agency: `SELECT ref, flagged_at, flag_note FROM leads WHERE agency_id = '<id>' AND flagged_at IS NOT NULL ORDER BY flagged_at;`. A broker sets a flag from the web stage form, from Telegram (🔄 Stage → 🙋 Needs manager, then an optional note or "Send without a note"), or by voice or text ("محتاج المدير في ليد …", confirmed before saving). A manager marks it handled from the web (optional reply) or Telegram (Stage → ✅ Handled, optional reply). Alerts go to managers (not the flagger) unless the lead is private.
 * **Share target:** on Android, once the site is installed, WhatsApp's Share menu offers WehdatHub; the shared text opens `/app/share` → the add-lead form (nothing is saved until the broker taps Save). The text travels in the URL (GET), so it can appear in the browser history of that phone.
 
 ## 7d. Switching to the backup number
@@ -243,6 +246,21 @@ If Meta blocks or restricts the bot's number:
 2. Set `WHATSAPP_PHONE_NUMBER_ID` to the new number's id (and `BOT_PHONE` to the number) in Render; redeploy. The access token and webhook stay the same.
 3. Run `npm run onboard -- <agency.json>` again for each agency: it changes nothing in the data and prints new start links. Send each broker theirs: the bot can't write first on a new number (no 24-hour window yet).
 4. Old client share links keep working (they point at the website, not the number). Approved message templates belong to the account, not the number.
+
+## 7e. Roles, private details and the activity log
+
+* **Roles:** `owner` (agency owner: plan and payments, adding and removing managers, the secret-details switch, marking units private, deleting agency data), `manager` (and legacy `admin`: inventory, leads, imports, settings), `broker` (their own units and leads, the units they can see). The CRM owner (the product owner, `OWNER_BROKER_IDS`) is separate and sees `/app/owner` only.
+* **Secret details:** `agencies.crm_settings->>'secret_details'` is `restricted` (default: the unit's broker and managers see owner, unit number, address, location and commission) or `all`. Under `restricted`, another broker's ask is a row in `unit_access_requests` (`pending`, then `approved` or `declined`; an approval lasts 30 days). Who answers: managers; the agency owner only when the agency has no active manager. Asks come from the search results and bot cards ("🔒 Ask details"); each step is in `operation_logs` (`secret_details_request`, `secret_details_decision`, `secret_details_scope`).
+* **Private units:** `listings.is_private` (migration `054`). Hidden from every query except for the agency owner, managers included; the guard is `lib/visibility.js` with `tests/visibility-guard.test.js`. Jobs have no viewer, so they never see private units or leads.
+* **Unit owners:** `unit_owners` (merged by phone within the agency), `listings.owner_id`, history in `unit_owner_events` (migrations `056`). Brokers see an owner only through a unit they can see.
+* **Activity log:** `/app/activity-log` shows `operation_logs` for managers and the agency owner, 90 days, 50 per page.
+* **Imports:** Excel, group posts and chat exports are managers-only (`/app/import`). Spreadsheets sent to the bot in chat are no longer imported (the bot points to the website). Templates are generated by `lib/importTemplate.js`: mandatory columns red, optional grey, a Read me sheet and two marked dummy rows (delete them before a real import). Routes: `/app/import/template.xlsx`, `/app/leads/import/template.xlsx`.
+
+## 7f. Lead intake from Make (Facebook and Instagram ads)
+
+* The owner creates an intake on `/app/owner` (for each agency: name, source, quiet days) and gets its URL once. Table: `lead_intakes`; every request is in `lead_intake_log` (last 4 digits of the phone only).
+* Step-by-step setup, the Make scenario and the JSON are in `docs/make-lead-ads.md`. Test it with 🧪 Test on `/app/owner`, which saves nothing.
+* Stop an intake with ⛔ Stop there; the URL stops working at once.
 
 ## 8. Common problems
 
