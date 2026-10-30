@@ -21,7 +21,8 @@ const post = (agent, csrf, code, extra = {}) =>
   agent.post("/app/units/new").field("_csrf", csrf).field("listing_type", "sale").field("market", "resale").field("property_type", "apartment")
     .field("compound", "Hyde Park").field("price_value", "8.5 مليون").field("area_value", extra.area ?? "150").field("bedrooms", "3").field("bathrooms", "2")
     .field("code", code).field("owner_name", "Mr Owner").field("owner_phone", "01099998888").field("unit_no", "B-14")
-    .field("address", "12 Street 90, Madinaty").field("pin", extra.pin ?? "30.0123, 31.4567");
+    .field("address", "12 Street 90, Madinaty").field("pin", extra.pin ?? "30.0123, 31.4567")
+    .field("owner_lead_confirm", extra.confirm ?? "on");
 
 const unit = async (code) => (await h.query("SELECT * FROM listings WHERE code = $1", [code]))[0];
 
@@ -62,6 +63,13 @@ test("an unclear pin is refused and nothing is saved", async () => {
   const res = await post(agent, csrf, "WEB-4", { pin: "https://maps.app.goo.gl/abc" });
   expect(res.status).toBe(422);
   expect(await unit("WEB-4")).toBeUndefined();
+  expect(await h.query("SELECT 1 FROM leads")).toHaveLength(0);
+});
+
+test("a new owner number is not made into a lead until the broker confirms it", async () => {
+  const { agent, csrf } = await signIn(h, "broker");
+  await post(agent, csrf, "WEB-6", { pin: "", confirm: "" });
+  expect((await unit("WEB-6"))).toBeUndefined();
   expect(await h.query("SELECT 1 FROM leads")).toHaveLength(0);
 });
 

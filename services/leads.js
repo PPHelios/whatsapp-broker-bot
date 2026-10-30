@@ -553,16 +553,18 @@ async function findByPhone(pool, actor, raw) {
 
 /**
  * A unit's owner as a client: the lead with the owner's phone, made as a seller (or landlord for rent) when the
- * agency has none yet (it needs a name). A colleague's client is left alone. Returns { ref } to store, null, or { error }.
+ * agency has none yet (it needs a name and the broker's confirmation). A colleague's client is left alone.
+ * Returns { ref } to store, null, { needsConfirm: true }, or { error }.
  */
-async function linkOwnerLead(pool, actor, { phone, name = null, listingType = "sale" } = {}) {
+async function linkOwnerLead(pool, actor, { phone, name = null, listingType = "sale", confirmed = false } = {}) {
   if (!phone) return null;
   const found = await findByPhone(pool, actor, phone);
   if (found.invalid) return { error: "owner_phone" };
   if (found.lead) return { ref: found.lead.ref };
   if (found.elsewhere) return null;
-  // A number the agency doesn't have yet is only made into a lead with a name for it.
+  // A number the agency doesn't have yet is only made into a lead with a name, and only once the broker confirms it.
   if (!name) return null;
+  if (!confirmed) return { needsConfirm: true };
   const made = await captureLead(pool, actor, { phone, name, kind: listingType === "rent" ? "landlord" : "seller", lawfulBasis: "client_request" }, { quiet: true });
   if (made.outcome === "created" || made.outcome === "merged") return { ref: made.lead.ref };
   return made.outcome === "colleague" ? null : { error: made.outcome };

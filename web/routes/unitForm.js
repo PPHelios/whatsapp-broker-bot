@@ -69,11 +69,12 @@ const savePin = (client, listing, pin) => client.query("UPDATE listings SET lat 
 
 function register(web, { pool, page }) {
   // The owner's lead code: an existing lead of this agency that this broker may see (L-0042), or an error text.
-  const checkOwnerLead = async (broker, listing, lang) => {
+  const checkOwnerLead = async (broker, listing, lang, body = {}) => {
     // An owner's phone links the unit to the owner's lead (made when there is none), unless a code was typed.
     const d = listing?.details || {};
     if (!d.owner_lead && d.owner_phone) {
-      const linked = await Leads.linkOwnerLead(pool, broker, { phone: d.owner_phone, name: d.owner_name, listingType: listing.listing_type });
+      const linked = await Leads.linkOwnerLead(pool, broker, { phone: d.owner_phone, name: d.owner_name, listingType: listing.listing_type, confirmed: body.owner_lead_confirm === "on" });
+      if (linked?.needsConfirm) return L10n(lang, "⛔ الرقم ده جديد عندك. اتأكد من الاسم والرقم وعلّم «أكّد إنه عميل جديد» عشان نضيفه.", "⛔ This owner number is new to you. Check the name and number, then tick \"Confirm new client\" to add them.");
       if (linked?.error) return L10n(lang, "⛔ تليفون المالك مش صح. صححه أو سيبه فاضي.", "⛔ The owner's phone isn't valid. Fix it or leave it empty.");
       if (linked) d.owner_lead = Card.refLabel(linked.ref);
     }
@@ -177,7 +178,7 @@ function register(web, { pool, page }) {
     const again = (status, error, duplicate = null) =>
       formPage(req, res, { mode: "new", values: Form.formFromUnit({ ...ev.listing, code: form.code }), review: reviewPanel({ ...ev, listing: { ...ev.listing, code: form.code } }, lang, { duplicate }), error, duplicate }, status);
     if (!ev.ok) return again(422, L10n(lang, "⛔ في بيانات ناقصة. كملها واضغط حفظ.", "⛔ Some required details are missing."));
-    const leadError = pinError(req.body, lang) || (await checkOwnerLead(broker, ev.listing, lang));
+    const leadError = pinError(req.body, lang) || (await checkOwnerLead(broker, ev.listing, lang, req.body));
     if (leadError) return again(422, leadError);
     // P13: a unit that looks like one already listed asks once; "Save anyway" sends force=1.
     if (req.body.force !== "1") {
@@ -237,7 +238,7 @@ function register(web, { pool, page }) {
       const photoCount = rows[0].n + photos.urls.length;
       const ev = evaluate({ existing: listing, form, lang, photoCount });
       if (!ev.ok) return { rollback: true, listing, ev };
-      const leadError = pinError(req.body, lang) || (await checkOwnerLead(broker, ev.listing, lang));
+      const leadError = pinError(req.body, lang) || (await checkOwnerLead(broker, ev.listing, lang, req.body));
       if (leadError) return { rollback: true, listing, ev, leadError };
       if (photoCount > MAX_PHOTOS) return { rollback: true, listing, ev, tooMany: true };
       const patch = Edits.diffPatch(listing, ev.listing);

@@ -126,6 +126,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     ${input("address", L(lang, "العنوان (للوكالة بس)", "Address (agency only)"), v.address)}
     ${input("pin", L(lang, "لينك جوجل ماب أو الإحداثيات", "Google Maps link or coordinates"), v.pin, { dir: "ltr" })}
   </div>
+  <label class="check"><input type="checkbox" name="owner_lead_confirm" value="on">${L(lang, "أكّد إنه عميل جديد (لو الرقم مش موجود عندك)", "Confirm new client (if this number isn't in your clients yet)")}</label>
   <label>${L(lang, "ملاحظات", "Notes")}<textarea name="notes" rows="2">${v.notes}</textarea></label></section>
 
   <section class="card" data-step="4"><h2>📷 ${L(lang, "الصور (حتى 15)", "Photos (up to 15)")}</h2>
