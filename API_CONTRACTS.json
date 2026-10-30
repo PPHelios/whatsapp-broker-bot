@@ -741,6 +741,15 @@
       "name": "String",
       "send": ["broker", "message", "params"]
     },
+    "web/routes/activityLog.js": {
+      "register": ["web", "params"]
+    },
+    "services/activityLog.js": {
+      "KEEP_DAYS": "Number",
+      "PAGE": "Number",
+      "list": ["pool", "viewer", "params"],
+      "describe": ["row", "lang"]
+    },
     "web/routes/notifications.js": {
       "register": ["web", "params"]
     },

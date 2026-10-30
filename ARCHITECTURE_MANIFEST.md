@@ -73,7 +73,6 @@
   | `038_assistant.sql` | The assistant (C10 + N1): `project_contexts` (per project summary, facts, source key, built time), `assistant_questions` (question log: channel, found, web, scopes), `agencies.assistant` (owner's web switch and monthly web answers) |
   | `054_private_portfolio.sql` | The agency owner's private portfolio: `is_private` on `listings` and `leads`, hidden from everyone but the agency owner by `lib/visibility.js`. |
   | `055_needs_manager.sql` | "Needs manager": `leads.flagged_at/flag_note/flagged_by` and the `flag` / `flag_handled` timeline events. |
-  | `056_access_chain.sql` | Secret-details asks go manager first, then the agency owner: status `owner_review` and `manager_decided_by/at` on `unit_access_requests`. |
 
 * **Non-Blocking Port Binding:** The HTTP server (`app.listen`) must bind immediately to `process.env.PORT` to satisfy Render health probes within the platform's timeout window. Heavy initialization tasks (font loading, recovery routines) must run asynchronously in the background.
 * **Graceful Termination & Drain Protocol:** On `SIGTERM` or `SIGINT`, the service enters a draining state:

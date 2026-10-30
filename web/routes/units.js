@@ -317,7 +317,7 @@ ${rows.length
     : ""}
   ${asks.length
     ? html`<div id="access" class="stack"><h3>${L(lang, "طلبات تشوف البيانات دي", "Asks to see these details")}</h3>${asks.map(
-        (a) => html`<form method="post" action="${path}/access/${a.id}" class="row between">${hidden}<span>${a.name}${a.status === "owner_review" ? html` <span class="badge">${L(lang, `وافق ${a.manager_name || "المدير"}؛ مستني موافقتك`, `${a.manager_name || "A manager"} agreed; needs your approval`)}</span>` : ""}</span><span class="row"><button type="submit" name="approve" value="1" class="small">${L(lang, "موافق", "Allow")}</button><button type="submit" name="approve" value="0" class="secondary small">${L(lang, "لأ", "Decline")}</button></span></form>`
+        (a) => html`<form method="post" action="${path}/access/${a.id}" class="row between">${hidden}<span>${a.name}</span><span class="row"><button type="submit" name="approve" value="1" class="small">${L(lang, "موافق", "Allow")}</button><button type="submit" name="approve" value="0" class="secondary small">${L(lang, "لأ", "Decline")}</button></span></form>`
       )}<p class="muted small">${L(lang, `الموافقة لمدة ${Privacy.GRANT_DAYS} يوم.`, `Access lasts ${Privacy.GRANT_DAYS} days.`)}</p></div>`
     : ""}
 </section>`;

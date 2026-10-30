@@ -120,7 +120,7 @@ test("only managers can export every unit to Excel, on the bot and the web, and 
   expect(logs.map((l) => l.status)).toEqual(["failed", "success"]);
 });
 
-test("with an agency owner the ask goes manager first, then the owner; the owner hears after the manager, the asker after the owner", async () => {
+test("with managers on the team the ask goes to them only; the agency owner can't answer but reads it in the activity log", async () => {
   await seed();
   await h.seedBroker("owner");
   const other = await signIn(h, "colleague");
@@ -132,24 +132,32 @@ test("with an agency owner the ask goes manager first, then the owner; the owner
   const owner = await signIn(h, "owner");
   const manager = await signIn(h, "admin");
   const answer = (s, approve) => s.agent.post(`/app/units/HP-1/access/${id}`).type("form").send({ _csrf: s.csrf, approve });
+  expect((await answer(owner, "1")).status).toBe(403);
   expect((await answer(manager, "1")).status).toBe(303);
-  expect((await h.query("SELECT status FROM unit_access_requests"))[0].status).toBe("owner_review");
-  expect(await ids("unit_access_owner:%")).toEqual([h.BROKERS.owner.id]);
-  expect(await ids("unit_access_answer:%")).toEqual([]);
-  expect(await page(other.agent)).not.toContain("Mr Secret");
-  expect((await answer(manager, "1")).status).toBe(403);
-
-  expect((await answer(owner, "1")).status).toBe(303);
-  expect((await h.query("SELECT status FROM unit_access_requests"))[0].status).toBe("approved");
   expect(await ids("unit_access_answer:%")).toEqual([h.BROKERS.colleague.id]);
   expect(await page(other.agent)).toContain("Mr Secret");
-  const steps = (await h.query("SELECT metadata->>'step' AS step FROM operation_logs WHERE operation_type = 'secret_details_decision' ORDER BY id")).map((r) => r.step);
-  expect(steps).toEqual(["manager", "owner"]);
+
+  const ownerLog = (await owner.agent.get("/app/activity-log")).text;
+  expect(ownerLog).toContain("HP-1");
+  expect(ownerLog).toMatch(/data-log/);
+  expect((await (await signIn(h, "colleague")).agent.get("/app/activity-log")).status).toBe(404);
 });
 
-test("a manager's no ends the ask at once", async () => {
+test("with no manager the agency owner answers the ask", async () => {
   await seed();
+  await h.query("UPDATE brokers SET is_active = false WHERE id = $1", [h.BROKERS.admin.id]);
   await h.seedBroker("owner");
+  const other = await signIn(h, "colleague");
+  await other.agent.post("/app/units/HP-1/access").type("form").send({ _csrf: other.csrf });
+  const [{ id }] = await h.query("SELECT id FROM unit_access_requests");
+  expect((await h.query("SELECT broker_id FROM notifications WHERE dedupe_key LIKE 'unit_access:%'")).map((n) => n.broker_id)).toEqual([h.BROKERS.owner.id]);
+  const owner = await signIn(h, "owner");
+  expect((await owner.agent.post(`/app/units/HP-1/access/${id}`).type("form").send({ _csrf: owner.csrf, approve: "1" })).status).toBe(303);
+  expect(await page(other.agent)).toContain("Mr Secret");
+});
+
+test("a manager's no closes the ask", async () => {
+  await seed();
   const other = await signIn(h, "colleague");
   await other.agent.post("/app/units/HP-1/access").type("form").send({ _csrf: other.csrf });
   const [{ id }] = await h.query("SELECT id FROM unit_access_requests");
