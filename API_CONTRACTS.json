@@ -252,9 +252,16 @@
       "startLink": ["botPhone", "lang"],
       "startLines": ["plan", "botPhone"]
     },
+    "services/privatePortfolio.js": {
+      "setPrivate": ["pool", "owner", "kind", "id", "value"]
+    },
     "lib/visibility.js": {
-      "units": ["_alias"],
-      "leads": ["_alias"]
+      "units": ["alias"],
+      "leads": ["alias"],
+      "allUnits": [],
+      "allLeads": [],
+      "run": ["viewer", "fn"],
+      "asSystem": ["fn"]
     },
     "lib/authz.js": {
       "MANAGER_ROLES": "Array",

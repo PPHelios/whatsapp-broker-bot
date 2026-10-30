@@ -12,7 +12,7 @@ const SKIP_DIRS = new Set(["node_modules", "tests", "scripts", ".git", "static",
 const BASELINE = path.join(ROOT, "tests", "visibility-baseline.json");
 const READ = /\b(FROM|JOIN)\s+(listings|leads)\b/gi;
 // `vis:exempt` in the statement (or on the line of a FROM constant) marks a read that must see every row: plan-limit counts, erasure, and fragments whose users add the helper.
-const USES_HELPER = /\bVis\.(units|leads)\(|vis:exempt/;
+const USES_HELPER = /\bVis\.(units|leads|allUnits|allLeads)\(|vis:exempt/;
 
 function files(dir, out = []) {
   if (!fs.existsSync(dir)) return out;

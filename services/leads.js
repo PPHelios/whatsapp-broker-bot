@@ -569,6 +569,7 @@ async function listLeads(pool, actor, f = {}, { now = new Date() } = {}) {
   if (f.stage && Stages.STAGES.includes(f.stage)) add("l.stage = ?", f.stage);
   if (f.kind && Stages.KINDS.includes(f.kind)) add("l.kind = ?", f.kind);
   if (f.source) add("l.source = ?", String(f.source));
+  if (f.private && Authz.isAgencyOwner(actor)) where.push("l.is_private");
   if (f.noNextStep) where.push("l.follow_up_status IS DISTINCT FROM 'open' AND l.stage NOT IN ('won', 'lost')");
   if (f.overdue) add("l.follow_up_status = 'open' AND l.next_follow_up_at < ?", now.toISOString());
   if (f.dueToday) {

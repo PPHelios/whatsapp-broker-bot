@@ -394,7 +394,8 @@ CREATE TABLE IF NOT EXISTS public.listings (
   area_key text,
   stale_asked_at timestamp with time zone,
   stale_hidden_at timestamp with time zone,
-  phase_id uuid
+  phase_id uuid,
+  is_private boolean DEFAULT false NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.listing_images (
@@ -707,7 +708,8 @@ CREATE TABLE IF NOT EXISTS public.leads (
   interest_nudged_at timestamp with time zone,
   assigned_at timestamp with time zone,
   response_due_at timestamp with time zone,
-  response_jumps integer DEFAULT 0 NOT NULL
+  response_jumps integer DEFAULT 0 NOT NULL,
+  is_private boolean DEFAULT false NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.lead_events (
@@ -1618,6 +1620,7 @@ CREATE INDEX idx_leads_follow_up ON public.leads USING btree (next_follow_up_at)
 CREATE INDEX idx_leads_phones ON public.leads USING gin (phones);
 CREATE INDEX idx_leads_response_due ON public.leads USING btree (response_due_at) WHERE (response_due_at IS NOT NULL);
 CREATE INDEX idx_leads_untouched ON public.leads USING btree (created_at) WHERE ((stage = 'new'::text) AND (last_contact_at IS NULL) AND (nudged_at IS NULL));
+CREATE INDEX leads_private ON public.leads USING btree (agency_id) WHERE is_private;
 CREATE INDEX idx_leases_agency ON public.leases USING btree (agency_id);
 CREATE INDEX leases_tenant_lead_idx ON public.leases USING btree (tenant_lead_id) WHERE (tenant_lead_id IS NOT NULL);
 CREATE INDEX idx_listing_drafts_updated ON public.listing_drafts USING btree (updated_at);
@@ -1644,6 +1647,7 @@ CREATE INDEX listings_agency_code_idx ON public.listings USING btree (agency_id,
 CREATE INDEX listings_agency_status_created_idx ON public.listings USING btree (agency_id, status, created_at DESC);
 CREATE INDEX listings_agency_status_idx ON public.listings USING btree (agency_id, status);
 CREATE INDEX listings_location_keywords_gin ON public.listings USING gin (location_keywords);
+CREATE INDEX listings_private ON public.listings USING btree (agency_id) WHERE is_private;
 CREATE INDEX listings_search_trgm ON public.listings USING gin (search_text_normalized gin_trgm_ops);
 CREATE INDEX listings_search_trgm_idx ON public.listings USING gin (search_text gin_trgm_ops);
 CREATE UNIQUE INDEX uq_listings_agency_code_norm ON public.listings USING btree (agency_id, code_norm);

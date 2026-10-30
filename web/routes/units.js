@@ -17,6 +17,7 @@ const LeaseRules = require("../../domain/leases");
 const Commission = require("../../domain/commission");
 const { icon } = require("../icons");
 const Privacy = require("../../services/unitPrivacy");
+const Portfolio = require("../../services/privatePortfolio");
 const Bulk = require("../../services/bulk");
 const { logOperation } = require("../../lib/db");
 const { html } = require("../html");
@@ -116,8 +117,9 @@ function register(web, { pool, page }) {
     const { broker } = req.session;
     const status = STATUSES.includes(req.query.status) ? req.query.status : "active";
     const mine = req.query.mine === "1";
+    const onlyPrivate = req.query.private === "1" && Authz.isAgencyOwner(broker);
     const { rows } = await pool.query(
-      `SELECT * FROM listings WHERE ${Vis.units("listings")} AND agency_id = $1 AND status = $2 ${mine ? "AND broker_id = $3" : ""}
+      `SELECT * FROM listings WHERE ${Vis.units("listings")} AND agency_id = $1 AND status = $2 ${mine ? "AND broker_id = $3" : ""}${onlyPrivate ? " AND is_private" : ""}
        ORDER BY confirmed_at DESC NULLS LAST, created_at DESC, id DESC LIMIT 200`,
       mine ? [broker.agency_id, status, broker.id] : [broker.agency_id, status]
     );
@@ -132,6 +134,7 @@ ${notice || ""}
 </nav>
 <p class="row between small">
   <a class="pill-link${mine ? " on" : ""}" href="/app/units?status=${status}${mine ? "" : "&mine=1"}"${mine ? html` aria-pressed="true"` : ""}>${icon(mine ? "check" : "leads", 16)} ${L(lang, "وحداتي بس", "Mine only")}</a>
+  ${Authz.isAgencyOwner(broker) ? html`<a class="pill-link${onlyPrivate ? " on" : ""}" href="/app/units?status=${status}${onlyPrivate ? "" : "&private=1"}">🔒 ${L(lang, "الخاصة", "Private")}</a>` : ""}
   <a href="/app/insights">${icon("chart", 16)} ${L(lang, "أسعار المتر", "Prices per m²")}</a>
 </p>
 ${rows.length
@@ -320,6 +323,15 @@ ${rows.length
 </section>`;
   }
 
+  // The agency owner moves a unit in or out of the private portfolio.
+  web.post("/units/:code/portfolio", async (req, res, next) => {
+    const { broker } = req.session;
+    const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
+    if (!listing || !Authz.isAgencyOwner(broker)) return next();
+    await Portfolio.setPrivate(pool, broker, "unit", listing.id, req.body.value === "1");
+    return res.redirect(303, `/app/units/${encodeURIComponent(listing.code)}`);
+  });
+
   web.post("/units/:code/private", async (req, res, next) => {
     const { broker } = req.session;
     const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
@@ -385,6 +397,7 @@ ${rows.length
     ${listing.status === "active" ? html`<a class="btn secondary" href="/app/compare?codes=${encodeURIComponent(listing.code)}" data-compare-start>⚖️ ${L(lang, "قارن", "Compare")}</a>` : ""}
     ${images.length && listing.status === "active" ? html`<a class="btn secondary" href="/app/units/${encodeURIComponent(listing.code)}/share-media">📤 ${L(lang, "ابعت الصور للعميل", "Send photos to a client")}</a>` : ""}
   </div>
+  ${Authz.isAgencyOwner(broker) ? html`<form method="post" action="/app/units/${encodeURIComponent(listing.code)}/portfolio" class="row" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${listing.is_private ? "0" : "1"}"><button type="submit" class="secondary">${listing.is_private ? L(lang, "🔓 رجّعها لكل الفريق", "🔓 Make visible to the team") : L(lang, "🔒 خليها خاصة بالمالك", "🔒 Keep private to the owner")}</button>${listing.is_private ? html`<span class="badge">🔒 ${L(lang, "خاصة", "Private")}</span>` : ""}</form>` : ""}
 </article>
 ${priv}
 ${listing.listing_type === "rent" && Authz.canEdit(broker, listing) ? leaseSection(listing, await Leases.forListing(pool, listing), lang, req.session.csrf, req.query.lease, await Leases.tenantChoices(pool, broker)) : ""}
