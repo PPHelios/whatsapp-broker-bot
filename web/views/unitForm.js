@@ -122,6 +122,9 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     ${input("owner_lead", L(lang, "كود العميل لو المالك عميل عندك (L-0042)", "Lead code if the owner is your client (L-0042)"), v.owner_lead, { dir: "ltr", extra: ' placeholder="L-0042" list="lead-codes"' })}
     ${input("commission", L(lang, "العمولة", "Commission"), v.commission)}
     ${input("co_broker", L(lang, "وسيط مشارك", "Co-broker"), v.co_broker)}
+    ${input("unit_no", L(lang, "رقم الوحدة", "Unit no."), v.unit_no, { dir: "ltr" })}
+    ${input("address", L(lang, "العنوان (للوكالة بس)", "Address (agency only)"), v.address)}
+    ${input("pin", L(lang, "لينك جوجل ماب أو الإحداثيات", "Google Maps link or coordinates"), v.pin, { dir: "ltr" })}
   </div>
   <label>${L(lang, "ملاحظات", "Notes")}<textarea name="notes" rows="2">${v.notes}</textarea></label></section>
 

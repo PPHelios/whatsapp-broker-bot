@@ -19,8 +19,8 @@ const FORM_COLUMNS = [
   "delivery_raw", "down_payment_value", "remaining_amount", "installment_value", "payment_frequency", "installments_end",
   "installment_years", "maintenance_pct"
 ];
-const FORM_DETAILS = ["land_area", "garden_area", "roof_area", "project", "developer", "rent_period", "currency", "owner_name", "owner_phone", "owner_lead", "commission", "co_broker", "notes", "clean_summary"];
-const INTERNAL_DETAILS = ["owner_name", "owner_phone", "owner_lead", "commission", "co_broker", "notes"];
+const FORM_DETAILS = ["land_area", "garden_area", "roof_area", "project", "developer", "rent_period", "currency", "owner_name", "owner_phone", "owner_lead", "commission", "co_broker", "notes", "clean_summary", "unit_no", "address"];
+const INTERNAL_DETAILS = ["owner_name", "owner_phone", "owner_lead", "commission", "co_broker", "notes", "unit_no", "address"];
 
 const one = (v) => (Array.isArray(v) ? v[v.length - 1] : v);
 const many = (v) => (v === undefined || v === null || v === "" ? [] : Array.isArray(v) ? v : [v]);
@@ -117,6 +117,8 @@ function unitFromForm(body = {}) {
       owner_lead: str(body.owner_lead, 20),
       commission: str(body.commission, 120),
       co_broker: str(body.co_broker, 120),
+      unit_no: str(body.unit_no, 40),
+      address: str(body.address, 200),
       notes: str(body.notes, 1000),
       clean_summary: str(body.clean_summary, 600)
     }
@@ -195,6 +197,7 @@ function formFromUnit(l = {}) {
     v[`plan_years_${i}`] = fmt(p.years);
     v[`plan_freq_${i}`] = fmt(p.frequency);
   }
+  v.pin = l.lat != null && l.lng != null ? `${l.lat}, ${l.lng}` : "";
   for (const k of FORM_DETAILS) v[k] = fmt(d[k]);
   return v;
 }
