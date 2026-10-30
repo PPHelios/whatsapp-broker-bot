@@ -13,6 +13,8 @@ const WebAuth = require("../../lib/webAuth");
 const Leads = require("../../services/leads");
 
 process.env.OWNER_BROKER_IDS = "10000000-0000-0000-0000-000000000003";
+// The server checks the page origin on every write (same-origin): the browser must reach it at this address.
+process.env.PUBLIC_BASE_URL = "http://127.0.0.1:4571";
 jest.setTimeout(900000);
 
 const PHONE = { width: 390, height: 844 };
@@ -240,8 +242,8 @@ beforeAll(async () => {
     if (c.operation === "search_parse") return { intent: "search", language: "ar", filters: { bedrooms_min: 3, bedrooms_max: 3, price_max: 9e6 } };
     return "{}";
   });
-  server = h.app.app.listen(0);
-  base = `http://127.0.0.1:${server.address().port}`;
+  server = h.app.app.listen(4571);
+  base = "http://127.0.0.1:4571";
 });
 
 afterAll(async () => {
