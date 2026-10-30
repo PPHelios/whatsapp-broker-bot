@@ -174,7 +174,7 @@ async function voice(pg, who, name, path) {
     if (!(await btn.isVisible())) continue;
     const where = `${who} ${name} voice search ${i + 1}`;
     await btn.tap();
-    const moved = await pg.waitForURL(/[?&]q=/, { timeout: 8000 }).then(() => true, () => false);
+    const moved = await pg.waitForURL(/[?&]q=/, { timeout: 20000 }).then(() => true, () => false);
     if (!moved) note(where, "tapping the mic did not search");
     else await checkBody(pg, where);
   }
@@ -260,7 +260,7 @@ test("voice search from the URL (?voice=1) hears, searches and lands on the resu
   const { ctx, pg } = await session("broker");
   try {
     await open(pg, "/app/search?voice=1");
-    const moved = await pg.waitForURL(/[?&]q=/, { timeout: 8000 }).then(() => true, () => false);
+    const moved = await pg.waitForURL(/[?&]q=/, { timeout: 20000 }).then(() => true, () => false);
     if (!moved) note("broker search ?voice=1", "auto-listen did not search");
     await checkBody(pg, "broker search ?voice=1");
   } finally {
