@@ -1,7 +1,8 @@
 // services/unitPrivacy.js — Who sees a unit's secret details (owner, owner phone, commission, co-broker, notes, unit
 // number, address and the map pin). The agency chooses: 'restricted' (default: the unit's broker and managers) or
-// 'all' (every broker in the agency). A broker who may not see them asks once; the unit's broker or a manager says
-// yes or no. Every switch, ask, answer and managers' Excel export is logged. Nothing here ever reaches client pages.
+// 'all' (every broker in the agency). A broker who may not see them asks once; a manager says yes, then the agency owner
+// (when the agency has one); either can say no. Every switch, ask, answer and managers' Excel export is logged and each
+// step is notified. Nothing here ever reaches client pages.
 "use strict";
 
 const { isManager, isAgencyOwner } = require("../lib/authz");
@@ -97,72 +98,118 @@ async function setPin(pool, actor, listing, pin, { source = "web" } = {}) {
   return { ok: true };
 }
 
-/** A broker asks to see a unit's secret details: its broker and the managers hear (once a day per asker). */
+/** Active people of the agency by rank: managers (not the owner) and agency owners. */
+async function approvers(pool, agencyId) {
+  const all = await Notifications.managersOf(pool, agencyId);
+  return { managers: all.filter((m) => !isAgencyOwner(m)), owners: all.filter(isAgencyOwner) };
+}
+
+const alert = (pool, to, { key, ar, en: eng, bodyAr = "", bodyEn = "", listing }) => {
+  const en = to.preferred_lang === "en";
+  return Notifications.notifyBroker(pool, to, {
+    kind: "manager_alert",
+    dedupeKey: key,
+    title: en ? eng : ar,
+    body: en ? bodyEn : bodyAr,
+    url: `/app/units/${encodeURIComponent(listing.code)}#access`,
+    listingId: listing.id
+  }).catch(() => {});
+};
+
+/**
+ * A broker asks to see a unit's secret details. The chain: a manager says yes, then the agency owner. Managers hear first
+ * (the owner hears first only when the agency has no other manager); every step is logged.
+ */
 async function requestAccess(pool, broker, listing) {
   if (await canSee(pool, broker, listing)) return { ok: true, already: true };
-  const open = await pool.query("SELECT id FROM unit_access_requests WHERE agency_id = $1 AND listing_id = $2 AND broker_id = $3 AND status = 'pending' LIMIT 1", [broker.agency_id, listing.id, broker.id]);
+  const open = await pool.query("SELECT id FROM unit_access_requests WHERE agency_id = $1 AND listing_id = $2 AND broker_id = $3 AND status IN ('pending', 'owner_review') LIMIT 1", [broker.agency_id, listing.id, broker.id]);
   const id = open.rows[0]?.id || (await pool.query("INSERT INTO unit_access_requests (agency_id, listing_id, broker_id) VALUES ($1, $2, $3) RETURNING id", [broker.agency_id, listing.id, broker.id])).rows[0].id;
   logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "secret_details_request", status: "success", metadata: { code: listing.code, request_id: id } });
+  if (open.rows[0]) return { ok: true, id };
   const day = new Date().toISOString().slice(0, 10);
-  const deciders = await Notifications.managersOf(pool, broker.agency_id);
-  if (listing.broker_id && !deciders.some((m) => m.id === listing.broker_id)) {
-    const { rows } = await pool.query("SELECT * FROM brokers WHERE id = $1 AND agency_id = $2 AND is_active", [listing.broker_id, broker.agency_id]);
-    deciders.push(...rows);
-  }
-  for (const d of deciders) {
+  const { managers, owners } = await approvers(pool, broker.agency_id);
+  for (const d of managers.length ? managers : owners) {
     if (d.id === broker.id) continue;
-    const en = d.preferred_lang === "en";
-    await Notifications.notifyBroker(pool, d, {
-      kind: "manager_alert",
-      dedupeKey: `unit_access:${id}:${day}`,
-      title: en ? `🔒 ${broker.name} asks to see ${listing.code}'s private details` : `🔒 ${broker.name} بيطلب يشوف بيانات ${listing.code} الخاصة`,
-      body: en ? "Owner, address and pin. Answer on the unit page." : "المالك والعنوان واللوكيشن. رد من صفحة الوحدة.",
-      url: `/app/units/${encodeURIComponent(listing.code)}#access`,
-      listingId: listing.id
-    }).catch(() => {});
+    await alert(pool, d, {
+      key: `unit_access:${id}:${day}`,
+      ar: `🔒 ${broker.name} بيطلب يشوف بيانات ${listing.code} الخاصة`,
+      en: `🔒 ${broker.name} asks to see ${listing.code}'s private details`,
+      bodyAr: "المالك والعنوان واللوكيشن. رد من صفحة الوحدة.",
+      bodyEn: "Owner, address and pin. Answer on the unit page.",
+      listing
+    });
   }
   return { ok: true, id };
 }
 
-/** Open asks for one unit (for its broker or a manager). */
+/**
+ * Open asks this person may answer now: managers see the first step, the agency owner sees the first step (when the agency
+ * has no other manager, or to answer for a manager) and every ask a manager passed on. Each row says which step it is at.
+ */
 async function pendingFor(pool, actor, listing) {
-  if (!(isManager(actor) || listing.broker_id === actor.id) || listing.agency_id !== actor.agency_id) return [];
+  if (!isManager(actor) || listing.agency_id !== actor.agency_id) return [];
   const { rows } = await pool.query(
-    `SELECT r.id, r.created_at, b.name FROM unit_access_requests r JOIN brokers b ON b.id = r.broker_id
-      WHERE r.agency_id = $1 AND r.listing_id = $2 AND r.status = 'pending' ORDER BY r.created_at`,
+    `SELECT r.id, r.created_at, r.status, b.name, m.name AS manager_name FROM unit_access_requests r
+       JOIN brokers b ON b.id = r.broker_id LEFT JOIN brokers m ON m.id = r.manager_decided_by
+      WHERE r.agency_id = $1 AND r.listing_id = $2 AND r.status IN ('pending', 'owner_review') ORDER BY r.created_at`,
     [actor.agency_id, listing.id]
   );
-  return rows;
+  return isAgencyOwner(actor) ? rows : rows.filter((r) => r.status === "pending");
 }
 
 /** Does this broker have an open ask for the unit? */
 async function hasPending(pool, broker, listing) {
-  const { rows } = await pool.query("SELECT 1 FROM unit_access_requests WHERE agency_id = $1 AND listing_id = $2 AND broker_id = $3 AND status = 'pending' LIMIT 1", [broker.agency_id, listing.id, broker.id]);
+  const { rows } = await pool.query("SELECT 1 FROM unit_access_requests WHERE agency_id = $1 AND listing_id = $2 AND broker_id = $3 AND status IN ('pending', 'owner_review') LIMIT 1", [broker.agency_id, listing.id, broker.id]);
   return rows.length > 0;
 }
 
-/** The unit's broker or a manager says yes or no; the asker hears. */
+/**
+ * A manager or the agency owner answers an ask. A manager's yes passes it to the agency owner (when the agency has one) and
+ * tells them; the owner's yes grants access. Either can say no. The asker hears the final answer.
+ * @returns {Promise<{ ok: true, status } | { ok: false, reason }>}
+ */
 async function decide(pool, actor, listing, requestId, approve) {
-  if (!(isManager(actor) || listing.broker_id === actor.id) || listing.agency_id !== actor.agency_id) return { ok: false, reason: "not_allowed" };
+  if (!isManager(actor) || listing.agency_id !== actor.agency_id) return { ok: false, reason: "not_allowed" };
+  const owner = isAgencyOwner(actor);
+  const { rows: cur } = await pool.query("SELECT status, broker_id FROM unit_access_requests WHERE id = $1 AND agency_id = $2 AND listing_id = $3", [requestId, actor.agency_id, listing.id]);
+  if (!cur[0] || !["pending", "owner_review"].includes(cur[0].status)) return { ok: false, reason: "not_found" };
+  if (cur[0].status === "owner_review" && !owner) return { ok: false, reason: "not_allowed" };
+  const hasOwner = owner || (await approvers(pool, actor.agency_id)).owners.length > 0;
+  const passOn = approve && cur[0].status === "pending" && !owner && hasOwner;
+  const next = !approve ? "declined" : passOn ? "owner_review" : "approved";
   const { rows } = await pool.query(
-    `UPDATE unit_access_requests SET status = $4, decided_by = $3, decided_at = now()
-      WHERE id = $1 AND agency_id = $2 AND listing_id = $5 AND status = 'pending' RETURNING broker_id`,
-    [requestId, actor.agency_id, actor.id, approve ? "approved" : "declined", listing.id]
+    passOn
+      ? `UPDATE unit_access_requests SET status = 'owner_review', manager_decided_by = $3, manager_decided_at = now()
+          WHERE id = $1 AND agency_id = $2 AND listing_id = $4 AND status = 'pending' RETURNING broker_id`
+      : `UPDATE unit_access_requests SET status = $5, decided_by = $3, decided_at = now()
+          WHERE id = $1 AND agency_id = $2 AND listing_id = $4 AND status IN ('pending', 'owner_review') RETURNING broker_id`,
+    passOn ? [requestId, actor.agency_id, actor.id, listing.id] : [requestId, actor.agency_id, actor.id, listing.id, next]
   );
   if (!rows[0]) return { ok: false, reason: "not_found" };
-  logOperation(pool, { agency_id: actor.agency_id, broker_id: actor.id, operation_type: "secret_details_decision", status: "success", metadata: { code: listing.code, request_id: requestId, approved: Boolean(approve) } });
+  logOperation(pool, { agency_id: actor.agency_id, broker_id: actor.id, operation_type: "secret_details_decision", status: "success", metadata: { code: listing.code, request_id: requestId, approved: Boolean(approve), step: owner ? "owner" : "manager", result: next } });
   const asker = (await pool.query("SELECT * FROM brokers WHERE id = $1 AND agency_id = $2", [rows[0].broker_id, actor.agency_id])).rows[0];
-  if (asker) {
-    const en = asker.preferred_lang === "en";
-    await Notifications.notifyBroker(pool, asker, {
-      kind: "manager_alert",
-      dedupeKey: `unit_access_answer:${requestId}`,
-      title: approve ? (en ? `✅ You can see ${listing.code}'s private details` : `✅ تقدر تشوف بيانات ${listing.code} الخاصة`) : en ? `${listing.code}: access not given` : `${listing.code}: الطلب اترفض`,
-      url: `/app/units/${encodeURIComponent(listing.code)}`,
-      listingId: listing.id
-    }).catch(() => {});
+  if (passOn) {
+    for (const o of (await approvers(pool, actor.agency_id)).owners) {
+      await alert(pool, o, {
+        key: `unit_access_owner:${requestId}`,
+        ar: `🔒 ${actor.name} وافق: ${asker?.name || ""} عايز يشوف بيانات ${listing.code} الخاصة`,
+        en: `🔒 ${actor.name} agreed: ${asker?.name || ""} wants ${listing.code}'s private details`,
+        bodyAr: "محتاج موافقتك. رد من صفحة الوحدة.",
+        bodyEn: "Your approval is needed. Answer on the unit page.",
+        listing
+      });
+    }
+    return { ok: true, status: next };
   }
-  return { ok: true };
+  if (asker) {
+    await alert(pool, asker, {
+      key: `unit_access_answer:${requestId}`,
+      ar: approve ? `✅ تقدر تشوف بيانات ${listing.code} الخاصة` : `${listing.code}: الطلب اتقفل من غير موافقة`,
+      en: approve ? `✅ You can see ${listing.code}'s private details` : `${listing.code}: access not given`,
+      listing
+    });
+  }
+  return { ok: true, status: next };
 }
 
 module.exports = { SCOPES, SECRET_DETAILS, GRANT_DAYS, scopeOf, setScope, canSee, redact, forBroker, pinOf, mapsUrl, parsePin, setPin, requestAccess, pendingFor, hasPending, decide };
