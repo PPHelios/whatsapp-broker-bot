@@ -34,6 +34,8 @@ const REVERSIBLE = {
   follow_up_set: FOLLOW_UP_FIELDS,
   follow_up_done: FOLLOW_UP_FIELDS,
   note: [],
+  flag: ["flagged_at", "flag_note", "flagged_by"],
+  flag_handled: ["flagged_at", "flag_note", "flagged_by"],
   assigned: ["assigned_broker_id", "assigned_at", "response_due_at", "response_jumps"]
 };
 
@@ -431,6 +433,75 @@ async function addNote(pool, actor, key, text, { version = null, now = new Date(
 }
 
 /**
+ * A broker who may work the lead asks a manager for help: one open flag per lead, with a note. Every active manager except
+ * the flagger is alerted (nobody at all for a private lead). Returns { ok, lead } | { error }.
+ */
+async function flagForManager(pool, actor, key, text, { version = null, now = new Date() } = {}) {
+  const note = String(text ?? "").trim();
+  if (!note) return { error: "flag_empty" };
+  if (note.length > NOTE_MAX) return { error: "note_too_long" };
+  const r = await mutate(pool, actor, key, { kind: "flag", version, now }, (lead) =>
+    lead.flagged_at ? { error: "already_flagged" } : { fields: { flagged_at: now.toISOString(), flag_note: note, flagged_by: actor.id }, data: { text: note } }
+  );
+  if (r.ok && !r.lead.is_private) {
+    for (const m of await Notifications.managersOf(pool, actor.agency_id)) {
+      if (m.id === actor.id) continue;
+      await Notifications.notifyBroker(pool, m, {
+        kind: "manager_alert",
+        dedupeKey: `flag:${r.lead.id}:${now.getTime()}`,
+        title: L(m, `🙋 ${actor.name} محتاج مدير: ${Card.displayName(r.lead, m.preferred_lang)}`, `🙋 ${actor.name} needs a manager: ${Card.displayName(r.lead, m.preferred_lang)}`),
+        body: `${Card.refLabel(r.lead.ref)} · ${note.slice(0, 140)}`,
+        url: leadUrl(r.lead),
+        leadId: r.lead.id,
+        now
+      });
+    }
+  }
+  return r;
+}
+
+/** A manager marks the open flag handled, with an optional reply; the broker who flagged is told. */
+async function handleFlag(pool, actor, key, reply, { version = null, now = new Date() } = {}) {
+  const text = String(reply ?? "").trim().slice(0, NOTE_MAX);
+  const r = await mutate(pool, actor, key, { kind: "flag_handled", version, manage: true, now }, (lead) =>
+    lead.flagged_at ? { fields: { flagged_at: null, flag_note: null, flagged_by: null }, data: { reply: text || null, flagged_by: lead.flagged_by } } : { unchanged: true }
+  );
+  if (r.ok && r.lead.is_private !== true) {
+    const flaggedBy = (await pool.query("SELECT id, agency_id, preferred_lang FROM brokers WHERE id = (SELECT (data->>'flagged_by')::uuid FROM lead_events WHERE id = $1)", [r.eventId])).rows[0];
+    if (flaggedBy && flaggedBy.id !== actor.id) {
+      await Notifications.notifyBroker(pool, flaggedBy, {
+        kind: "manager_alert",
+        dedupeKey: `flag_done:${r.eventId}`,
+        title: L(flaggedBy, `✅ ${actor.name} خلّص طلبك: ${Card.displayName(r.lead, flaggedBy.preferred_lang)}`, `✅ ${actor.name} handled your request: ${Card.displayName(r.lead, flaggedBy.preferred_lang)}`),
+        body: text,
+        url: leadUrl(r.lead),
+        leadId: r.lead.id,
+        now
+      });
+    }
+  }
+  return r;
+}
+
+/** Managers: open flags, oldest first (name, ref, note, who flagged). */
+async function openFlags(pool, actor) {
+  if (!Authz.canManageLeads(actor)) return null;
+  const { rows } = await pool.query(
+    `SELECT ${LEAD_COLS}, f.name AS flagged_by_name ${FROM_LEADS} LEFT JOIN brokers f ON f.id = l.flagged_by
+      WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.flagged_at IS NOT NULL ORDER BY l.flagged_at, l.ref`,
+    [actor.agency_id]
+  );
+  return rows;
+}
+
+/** How many open flags wait on the managers (null for a broker: they have no such list). */
+async function flagCount(pool, actor) {
+  if (!Authz.canManageLeads(actor)) return null;
+  const { rows } = await pool.query("SELECT count(*)::int AS n FROM leads l WHERE " + Vis.leads("l") + " AND l.agency_id = $1 AND l.flagged_at IS NOT NULL", [actor.agency_id]);
+  return rows[0].n;
+}
+
+/**
  * The broker talked to the client: a new lead moves to contacted and its response deadline ends. The first contact by
  * the broker someone gave the lead to records how many minutes it took (speed-to-lead, R3).
  */
@@ -687,6 +758,10 @@ module.exports = {
   assignLead,
   setStage,
   addNote,
+  flagForManager,
+  handleFlag,
+  openFlags,
+  flagCount,
   markContacted,
   setFollowUp,
   completeFollowUp,

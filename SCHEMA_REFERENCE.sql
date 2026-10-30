@@ -709,7 +709,10 @@ CREATE TABLE IF NOT EXISTS public.leads (
   assigned_at timestamp with time zone,
   response_due_at timestamp with time zone,
   response_jumps integer DEFAULT 0 NOT NULL,
-  is_private boolean DEFAULT false NOT NULL
+  is_private boolean DEFAULT false NOT NULL,
+  flagged_at timestamp with time zone,
+  flag_note text,
+  flagged_by uuid
 );
 
 CREATE TABLE IF NOT EXISTS public.lead_events (
@@ -1378,7 +1381,7 @@ ALTER TABLE developers ADD CONSTRAINT developers_name_check CHECK (((length(btri
 ALTER TABLE developers ADD CONSTRAINT developers_name_en_check CHECK (((name_en IS NULL) OR (length(name_en) <= 120)));
 ALTER TABLE developers ADD CONSTRAINT developers_notes_check CHECK (((notes IS NULL) OR (length(notes) <= 1000)));
 ALTER TABLE error_events ADD CONSTRAINT error_events_kind_check CHECK ((kind = ANY (ARRAY['error'::text, 'report'::text])));
-ALTER TABLE lead_events ADD CONSTRAINT lead_events_kind_check CHECK ((kind = ANY (ARRAY['created'::text, 'inquiry'::text, 'assigned'::text, 'stage'::text, 'note'::text, 'contacted'::text, 'follow_up_set'::text, 'follow_up_done'::text, 'request_set'::text, 'match_sent'::text, 'share_opened'::text, 'deal'::text, 'exported'::text, 'merged'::text, 'undo'::text])));
+ALTER TABLE lead_events ADD CONSTRAINT lead_events_kind_check CHECK ((kind = ANY (ARRAY['created'::text, 'inquiry'::text, 'assigned'::text, 'stage'::text, 'note'::text, 'contacted'::text, 'follow_up_set'::text, 'follow_up_done'::text, 'request_set'::text, 'match_sent'::text, 'share_opened'::text, 'deal'::text, 'exported'::text, 'merged'::text, 'undo'::text, 'flag'::text, 'flag_handled'::text])));
 ALTER TABLE lead_intake_log ADD CONSTRAINT lead_intake_log_outcome_check CHECK ((outcome = ANY (ARRAY['created'::text, 'merged'::text, 'colleague'::text, 'repeat'::text, 'erased_before'::text, 'invalid'::text, 'test'::text, 'error'::text])));
 ALTER TABLE lead_intakes ADD CONSTRAINT lead_intakes_name_check CHECK (((length(name) >= 1) AND (length(name) <= 60)));
 ALTER TABLE lead_intakes ADD CONSTRAINT lead_intakes_quiet_days_check CHECK (((quiet_days >= 1) AND (quiet_days <= 60)));
@@ -1511,6 +1514,7 @@ ALTER TABLE lead_matches ADD CONSTRAINT lead_matches_search_id_fkey FOREIGN KEY 
 ALTER TABLE leads ADD CONSTRAINT leads_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE leads ADD CONSTRAINT leads_assigned_broker_id_fkey FOREIGN KEY (assigned_broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE leads ADD CONSTRAINT leads_created_by_broker_id_fkey FOREIGN KEY (created_by_broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE leads ADD CONSTRAINT leads_flagged_by_fkey FOREIGN KEY (flagged_by) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE leads ADD CONSTRAINT leads_follow_up_listing_id_fkey FOREIGN KEY (follow_up_listing_id) REFERENCES listings(id) ON DELETE SET NULL;
 ALTER TABLE leases ADD CONSTRAINT leases_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE leases ADD CONSTRAINT leases_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
@@ -1620,6 +1624,7 @@ CREATE INDEX idx_leads_follow_up ON public.leads USING btree (next_follow_up_at)
 CREATE INDEX idx_leads_phones ON public.leads USING gin (phones);
 CREATE INDEX idx_leads_response_due ON public.leads USING btree (response_due_at) WHERE (response_due_at IS NOT NULL);
 CREATE INDEX idx_leads_untouched ON public.leads USING btree (created_at) WHERE ((stage = 'new'::text) AND (last_contact_at IS NULL) AND (nudged_at IS NULL));
+CREATE INDEX leads_flagged ON public.leads USING btree (agency_id, flagged_at) WHERE (flagged_at IS NOT NULL);
 CREATE INDEX leads_private ON public.leads USING btree (agency_id) WHERE is_private;
 CREATE INDEX idx_leases_agency ON public.leases USING btree (agency_id);
 CREATE INDEX leases_tenant_lead_idx ON public.leases USING btree (tenant_lead_id) WHERE (tenant_lead_id IS NOT NULL);

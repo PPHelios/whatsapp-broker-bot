@@ -119,6 +119,10 @@ function timelineLine(ev, lang) {
         return d.from_ref
           ? L(lang, `🔗 اتدمج معاه ${refLabel(d.from_ref)}${d.from_name ? ` (${d.from_name})` : ""}`, `🔗 Merged with ${refLabel(d.from_ref)}${d.from_name ? ` (${d.from_name})` : ""}`)
           : L(lang, "🔗 رقم إضافي اتضاف", "🔗 Another number added");
+      case "flag":
+        return `🙋 ${L(lang, "محتاج مدير", "Needs manager")}: ${d.text || ""}`;
+      case "flag_handled":
+        return `✅ ${L(lang, "المدير خلّص", "Manager handled")}${d.reply ? `: ${d.reply}` : ""}`;
       case "undo":
         return L(lang, "↩️ تراجع", "↩️ Undone");
       default:
