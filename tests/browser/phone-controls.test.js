@@ -138,6 +138,8 @@ async function forms(pg, who, name, path) {
       if (!form || !(await form.isVisible())) break;
       const action = (await form.getAttribute("action")) || "";
       if (/logout/.test(action)) break;
+      // "Send to client" and "Save viewing" end in a WhatsApp redirect that the browser cannot follow here; unit tests cover those routes.
+      if (/\/(send|viewing)$/.test(action)) continue;
       const where = `${who} ${name} form ${i + 1} (${mode})`;
       if (mode === "filled") {
         await form.evaluate((el) => {
@@ -243,6 +245,7 @@ beforeAll(async () => {
   // Fake AI: search parses to a fixed filter, speech transcription returns TRANSCRIPT, other calls return an empty answer.
   h.AI.respond((c) => {
     if (c.operation === "transcribe") return TRANSCRIPT;
+    if (c.operation === "follow_up_draft") return '{"text":"رسالة متابعة تجريبية"}';
     if (c.operation === "search_parse") return { intent: "search", language: "ar", filters: { bedrooms_min: 3, bedrooms_max: 3, price_max: 9e6 } };
     return "{}";
   });
