@@ -750,6 +750,22 @@
       "list": ["pool", "viewer", "params"],
       "describe": ["row", "lang"]
     },
+    "web/routes/owners.js": {
+      "register": ["web", "params"],
+      "unitOwnerBlock": ["pool", "viewer", "listing", "lang", "csrf", "notice"]
+    },
+    "services/unitOwners.js": {
+      "findOrCreate": ["db", "agencyId", "params"],
+      "syncFromListing": ["db", "broker", "listing"],
+      "getFor": ["pool", "viewer", "ownerId"],
+      "listFor": ["pool", "viewer", "params"],
+      "history": ["pool", "viewer", "ownerId", "params"],
+      "edit": ["pool", "actor", "ownerId", "params"],
+      "remove": ["pool", "actor", "ownerId"],
+      "reassign": ["pool", "actor", "listing", "to"],
+      "leadFor": ["pool", "viewer", "owner"],
+      "forLead": ["pool", "viewer", "lead"]
+    },
     "web/routes/notifications.js": {
       "register": ["web", "params"]
     },

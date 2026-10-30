@@ -18,6 +18,7 @@ const Commission = require("../../domain/commission");
 const { icon } = require("../icons");
 const Privacy = require("../../services/unitPrivacy");
 const Portfolio = require("../../services/privatePortfolio");
+const { unitOwnerBlock } = require("./owners");
 const Bulk = require("../../services/bulk");
 const { logOperation } = require("../../lib/db");
 const { html } = require("../html");
@@ -127,7 +128,7 @@ function register(web, { pool, page }) {
     return page(req, res, {
       title: L(lang, "الوحدات", "Units"),
       nav: "units",
-      body: html`<div class="row between"><h1>${L(lang, "الوحدات", "Units")}</h1><a class="btn small" href="/app/units/new">${icon("plus", 18)} ${L(lang, "وحدة", "Unit")}</a></div>
+      body: html`<div class="row between"><h1>${L(lang, "الوحدات", "Units")}</h1><a class="btn small" href="/app/units/new">${icon("plus", 18)} ${L(lang, "وحدة", "Unit")}</a><a class="btn secondary small" href="/app/owners">👤 ${L(lang, "المُلّاك", "Owners")}</a></div>
 ${notice || ""}
 <nav class="seg" aria-label="${L(lang, "الحالة", "Status")}">
   ${tab("active", L(lang, "متاحة", "Available"))}${tab("sold", L(lang, "مباعة", "Sold"))}${tab("archived", L(lang, "مؤرشفة", "Archived"))}
@@ -388,6 +389,7 @@ ${rows.length
   ${factList(view.listing, lang)}
   ${project ? projectLine(project, lang, { catalogue: Boolean(listing.details?.catalogue) }) : ""}
   ${listing.details?.owner_lead && Authz.canEdit(broker, listing) ? html`<p class="muted" data-owner-lead>🔗 ${L(lang, "المالك عميل عندك", "The owner is your client")}: <a href="/app/leads/${encodeURIComponent(listing.details.owner_lead)}">${listing.details.owner_lead}</a></p>` : ""}
+  ${!view.hidden ? await unitOwnerBlock(pool, broker, listing, lang, req.session.csrf) : ""}
   ${linkable ? resaleLinkForm(listing, project, await Catalogue.listProjects(pool, broker), lang, req.session.csrf) : ""}
   ${market ? marketLine(market, listing, lang) : ""}
   ${historyLine(prices, lang)}
