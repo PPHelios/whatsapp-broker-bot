@@ -58,11 +58,14 @@ test("by default only the unit's broker and managers see the secret details; ano
   expect(logs.map((l) => l.operation_type)).toEqual(["secret_details_decision", "secret_details_request"]);
 });
 
-test("a manager can open secret details to every broker; brokers can't change it", async () => {
+test("the agency owner can open secret details to every broker; managers and brokers can't change it", async () => {
   await seed();
   const other = await signIn(h, "colleague");
   expect((await other.agent.post("/app/dashboard/secret-details").type("form").send({ _csrf: other.csrf, scope: "all" })).status).toBe(403);
-  const admin = await signIn(h, "admin");
+  const manager = await signIn(h, "admin");
+  expect((await manager.agent.post("/app/dashboard/secret-details").type("form").send({ _csrf: manager.csrf, scope: "all" })).status).toBe(403);
+  await h.seedBroker("owner");
+  const admin = await signIn(h, "owner");
   expect((await admin.agent.get("/app/dashboard")).text).toContain('id="data-security"');
   expect((await admin.agent.post("/app/dashboard/secret-details").type("form").send({ _csrf: admin.csrf, scope: "all" })).status).toBe(303);
   expect(await page(other.agent)).toContain("Mr Secret");

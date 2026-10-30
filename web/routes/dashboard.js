@@ -27,7 +27,7 @@ const { tabs } = require("../views/tabs");
 const { icon } = require("../icons");
 const Privacy = require("../../services/unitPrivacy");
 const OwnerAgencies = require("../../services/ownerAgencies");
-const { isManager } = require("../../lib/authz");
+const { isManager, isAgencyOwner } = require("../../lib/authz");
 const { logOperation } = require("../../lib/db");
 const Vis = require("../../lib/visibility");
 
@@ -134,7 +134,7 @@ ${d.sources && d.sources.length
 }
 
 /** Data security for managers: who sees private unit details, and the Excel export of every unit. */
-function privacySection(scope, lang, csrf, notice) {
+function privacySection(scope, lang, csrf, notice, canSwitch = false) {
   const opt = (v, label) => html`<label class="pill"><input type="radio" name="scope" value="${v}"${scope === v ? html` checked` : ""}><span>${label}</span></label>`;
   return html`<section class="card stack" id="data-security">
   <h2>${L(lang, "أمان البيانات", "Data security")}</h2>
@@ -143,7 +143,7 @@ function privacySection(scope, lang, csrf, notice) {
     <p>${L(lang, "مين يشوف المالك والعمولة ورقم الوحدة والعنوان واللوكيشن؟", "Who sees the owner, commission, unit number, address and pin?")}</p>
     <div class="pills">${opt("restricted", L(lang, "صاحب الوحدة والمديرين", "The unit's broker and managers"))}${opt("all", L(lang, "كل البروكرز في الوكالة", "Every broker in the agency"))}</div>
     <p class="muted small">${L(lang, "لو مقفولة، أي بروكر تاني يقدر يطلب يشوفها، وصاحب الوحدة أو مدير يوافق. كل طلب ورد بيتسجل.", "When closed, another broker can ask; the unit's broker or a manager answers. Every ask and answer is logged.")}</p>
-    <button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>
+    ${canSwitch ? html`<button type="submit" class="secondary">${L(lang, "حفظ", "Save")}</button>` : html`<p class="muted small">${L(lang, "مالك الوكالة بس يغيّر ده.", "Only the agency owner changes this.")}</p>`}
   </form>
   <p><a class="btn secondary" href="/app/units-export.xlsx" download>${icon("import", 18)} ${L(lang, "نزّل كل الوحدات (إكسيل)", "Download all units (Excel)")}</a> <span class="muted small">${L(lang, "للمديرين بس، وكل تنزيل بيتسجل.", "Managers only; every download is logged.")}</span></p>
 </section>`;
@@ -485,13 +485,13 @@ function register(web, { pool, page }) {
     const d = await Dash.agencyDashboard(pool, req.session.broker, { days: req.query.days, brokerId: String(req.query.broker || "") || null });
     if (!d) return res.status(403).type("text/plain").send(L(lang, "للمديرين بس", "Managers only"));
     const [leases, targets, quotas, scope] = await Promise.all([Leases.upcoming(pool, req.session.broker), Targets.progress(pool, req.session.broker.agency_id), Quotas.forAgency(pool, req.session.broker.agency_id), Privacy.scopeOf(pool, req.session.broker.agency_id)]);
-    return page(req, res, { title: L(lang, "لوحة الوكالة", "Agency dashboard"), nav: "dashboard", body: html`${agencyPage(d, lang)}${privacySection(scope, lang, req.session.csrf, req.query.privacy)}${quotaSection(quotas, lang)}${targetsSection([...targets.values()], lang)}${leaseEnds(leases || [], lang)}` });
+    return page(req, res, { title: L(lang, "لوحة الوكالة", "Agency dashboard"), nav: "dashboard", body: html`${agencyPage(d, lang)}${privacySection(scope, lang, req.session.csrf, req.query.privacy, isAgencyOwner(req.session.broker))}${quotaSection(quotas, lang)}${targetsSection([...targets.values()], lang)}${leaseEnds(leases || [], lang)}` });
   });
 
-  // Who sees a unit's private details (services/unitPrivacy.js); managers only.
+  // Who sees a unit's private details (services/unitPrivacy.js); the agency owner only.
   web.post("/dashboard/secret-details", async (req, res) => {
     const out = await Privacy.setScope(pool, req.session.broker, String(req.body.scope || ""));
-    if (!out.ok) return res.status(403).type("text/plain").send(L(langOf(req), "للمديرين بس", "Managers only"));
+    if (!out.ok) return res.status(403).type("text/plain").send(L(langOf(req), "لمالك الوكالة بس", "Agency owner only"));
     return res.redirect(303, "/app/dashboard?privacy=saved#data-security");
   });
 
