@@ -139,6 +139,10 @@ async function digestData(pool, agencyId, now) {
       WHERE ${Vis.leads("leads")} AND agency_id = $1 AND stage = 'new' AND last_contact_at IS NULL`,
     [agencyId, new Date(now.getTime() - 24 * 3600 * 1000).toISOString()]
   );
+  const flagged = await pool.query(
+    `SELECT count(*)::int AS n, min(flagged_at) AS oldest FROM leads WHERE ${Vis.leads("leads")} AND agency_id = $1 AND flagged_at IS NOT NULL`,
+    [agencyId]
+  );
   const events = await pool.query(
     `SELECT broker_id, kind, data->>'to' AS to_stage, count(*)::int AS n FROM lead_events
       WHERE agency_id = $1 AND created_at >= $2 AND undone_at IS NULL AND kind IN ('stage', 'contacted')
@@ -186,6 +190,7 @@ async function digestData(pool, agencyId, now) {
     sources: [...sources.entries()].sort((a, b) => b[1] - a[1]),
     uncontacted: untouched.rows[0].n,
     uncontactedOld: untouched.rows[0].old,
+    flagged: flagged.rows[0].n,
     stageMoves,
     deals: dealCount,
     commission,
@@ -198,7 +203,7 @@ const money = (n, m) => `${Math.round(n).toLocaleString("en-US")} ${L(m, "ج.م"
 /** The digest as a notification message for one manager, or null on a day with nothing at all. */
 function digestMessage(manager, d) {
   const lg = lang(manager);
-  if (!d.newLeads && !d.uncontacted && !Object.keys(d.stageMoves).length && !d.deals) return null;
+  if (!d.newLeads && !d.uncontacted && !d.flagged && !Object.keys(d.stageMoves).length && !d.deals) return null;
   const lines = [];
   const src = d.sources.slice(0, 3).map(([s, n]) => `${s === "—" ? L(manager, "بدون مصدر", "no source") : Stages.sourceLabel(s, lg) || s} ${n}`).join(" · ");
   lines.push(L(manager, `🆕 عملاء جداد النهارده: ${d.newLeads}`, `🆕 New leads today: ${d.newLeads}`) + (d.newLeads && src ? ` (${src})` : ""));
@@ -209,6 +214,7 @@ function digestMessage(manager, d) {
         (d.uncontactedOld ? L(manager, ` (${d.uncontactedOld} أكتر من 24 ساعة)`, ` (${d.uncontactedOld} over 24 hours)`) : "")
     );
   }
+  if (d.flagged) lines.push(L(manager, `🙋 مستنيينك: ${d.flagged}`, `🙋 Waiting on you: ${d.flagged}`));
   const moves = Stages.STAGES.filter((s) => d.stageMoves[s]).map((s) => `${Stages.stageLabel(s, lg)} ${d.stageMoves[s]}`);
   if (moves.length) lines.push(L(manager, `🔀 تحركات المراحل: `, `🔀 Stage moves: `) + moves.join(" · "));
   lines.push(L(manager, `🤝 صفقات النهارده: ${d.deals}`, `🤝 Deals today: ${d.deals}`) + (d.deals ? ` · ${L(manager, "عمولة", "commission")} ${money(d.commission, manager)}` : ""));
