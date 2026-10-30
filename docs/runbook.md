@@ -50,7 +50,7 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `CHAT_ZIP_MAX_MB` | no | `50` | Largest WhatsApp chat-export zip (with photos) the import page takes, in MB (at most 200). Supabase Free refuses uploads over 50 MB, so raise it only on a paid Supabase plan. |
 | `KEEP_AWAKE` | no | off | `true` makes the instance ping its own `/health` every 10 minutes so Render Free doesn't spin it down. Off when unset, because Render Free's monthly instance hours are capped (the workspace has a second free service). Turn on for the POC. |
 | `KEEP_AWAKE_HOURS` | no | `6-1` | Cairo hours when the keep-awake ping runs (`from-to`, may wrap past midnight; `0-0` = all day). 06:00–01:00 is about 590 hours a month. |
-| `SUPPORT_WHATSAPP` / `SUPPORT_TELEGRAM` | no | off | The owner's WhatsApp number (digits, with country code) and/or Telegram username. When set, every signed-in page footer shows "Talk to a person" (WhatsApp first, else Telegram). |
+| `SUPPORT_TELEGRAM` | no | off | The owner's Telegram username. When set, every signed-in page footer shows "Talk to a person" linking to `t.me/<username>`. |
 | `OWNER_BROKER_IDS` | no | empty | Broker ids (comma-separated UUIDs) of the product owner. Only they see the app tracking dashboard at `/app/owner` (weekly active agencies and brokers, units/leads/deals, AI cost per agency, errors). Everyone else gets a 404 there. |
 
 ## 2. Render

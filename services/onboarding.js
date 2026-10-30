@@ -47,12 +47,9 @@ async function telegramLink(pool, broker) {
   return TgLink.startLink(username, await TgLink.issueLinkToken(pool, broker));
 }
 
-/** "Talk to a person": the owner's WhatsApp (with a first line ready) or Telegram, or null when neither is set. */
-function supportUrl(broker = null, lang = "ar") {
-  const { whatsapp, telegram } = getConfig().support || {};
-  const who = broker ? ` (${broker.name})` : "";
-  const text = lang === "en" ? `Hi, I need help with WehdatHub${who}` : `أهلاً، محتاج مساعدة في WehdatHub${who}`;
-  if (whatsapp && whatsapp.length >= 10) return `https://wa.me/${whatsapp}?text=${encodeURIComponent(text)}`;
+/** "Talk to a person": the owner's Telegram username, or null when it isn't set. */
+function supportUrl() {
+  const { telegram } = getConfig().support || {};
   if (telegram && telegram.length >= 5) return `https://t.me/${telegram}`;
   return null;
 }
