@@ -15,6 +15,7 @@ const { logOperation } = require("../../lib/db");
 const Rules = require("../../domain/fieldRules");
 const Card = require("../../domain/leadCard");
 const Leads = require("../../services/leads");
+const Privacy = require("../../services/unitPrivacy");
 const Leases = require("../../services/leases");
 const Plans = require("../../domain/plans");
 const Form = require("../forms/unitForm");
@@ -61,9 +62,21 @@ function evaluate({ existing, form, lang, photoCount }) {
   return Rules.evaluate(Form.composeFromForm({ existing, form, lang }), { lang, photoCount });
 }
 
+// The agency-only map pin typed in the form: a Google Maps link or coordinates; empty clears it.
+const pinFrom = (body) => (String(body.pin || "").trim() ? Privacy.parsePin(body.pin) : null);
+const pinError = (body, lang) => (String(body.pin || "").trim() && !pinFrom(body) ? L10n(lang, "⛔ اللوكيشن مش واضح. الصق لينك جوجل ماب أو الإحداثيات.", "⛔ The location isn't clear. Paste a Google Maps link or the coordinates.") : null);
+const savePin = (client, listing, pin) => client.query("UPDATE listings SET lat = $3, lng = $4, updated_at = now() WHERE id = $1 AND agency_id = $2", [listing.id, listing.agency_id, pin?.lat ?? null, pin?.lng ?? null]);
+
 function register(web, { pool, page }) {
   // The owner's lead code: an existing lead of this agency that this broker may see (L-0042), or an error text.
   const checkOwnerLead = async (broker, listing, lang) => {
+    // An owner's phone links the unit to the owner's lead (made when there is none), unless a code was typed.
+    const d = listing?.details || {};
+    if (!d.owner_lead && d.owner_phone) {
+      const linked = await Leads.linkOwnerLead(pool, broker, { phone: d.owner_phone, name: d.owner_name, listingType: listing.listing_type });
+      if (linked?.error) return L10n(lang, "⛔ تليفون المالك مش صح. صححه أو سيبه فاضي.", "⛔ The owner's phone isn't valid. Fix it or leave it empty.");
+      if (linked) d.owner_lead = Card.refLabel(linked.ref);
+    }
     const raw = listing?.details?.owner_lead;
     if (!raw) return null;
     const ref = Card.parseRef(raw);
@@ -164,7 +177,7 @@ function register(web, { pool, page }) {
     const again = (status, error, duplicate = null) =>
       formPage(req, res, { mode: "new", values: Form.formFromUnit({ ...ev.listing, code: form.code }), review: reviewPanel({ ...ev, listing: { ...ev.listing, code: form.code } }, lang, { duplicate }), error, duplicate }, status);
     if (!ev.ok) return again(422, L10n(lang, "⛔ في بيانات ناقصة. كملها واضغط حفظ.", "⛔ Some required details are missing."));
-    const leadError = await checkOwnerLead(broker, ev.listing, lang);
+    const leadError = pinError(req.body, lang) || (await checkOwnerLead(broker, ev.listing, lang));
     if (leadError) return again(422, leadError);
     // P13: a unit that looks like one already listed asks once; "Save anyway" sends force=1.
     if (req.body.force !== "1") {
@@ -182,6 +195,7 @@ function register(web, { pool, page }) {
       await client.query("BEGIN");
       result = await Store.createListing(client, broker, { fields: ev.listing, code: form.code, lang });
       if (result.listing) {
+        await savePin(client, result.listing, pinFrom(req.body));
         const added = await Store.addPhotos(client, result.listing, photos.urls);
         // The broker ordered the photos by hand: AI ordering is skipped for this unit (saves AI credits).
         if (req.body.photo_manual === "on" && added.length) await Store.reorderPhotos(client, result.listing, added.map((r) => r.id), { force: true });
@@ -223,12 +237,13 @@ function register(web, { pool, page }) {
       const photoCount = rows[0].n + photos.urls.length;
       const ev = evaluate({ existing: listing, form, lang, photoCount });
       if (!ev.ok) return { rollback: true, listing, ev };
-      const leadError = await checkOwnerLead(broker, ev.listing, lang);
+      const leadError = pinError(req.body, lang) || (await checkOwnerLead(broker, ev.listing, lang));
       if (leadError) return { rollback: true, listing, ev, leadError };
       if (photoCount > MAX_PHOTOS) return { rollback: true, listing, ev, tooMany: true };
       const patch = Edits.diffPatch(listing, ev.listing);
       const res2 = await Store.applyListingPatch(client, broker, { listing, patch, expectedVersion });
       if (res2.conflict) return { rollback: true, listing, ev, conflict: true };
+      await savePin(client, res2.listing, pinFrom(req.body));
       const removed = await Store.removePhotos(client, listing, removeIds);
       await Store.addPhotos(client, listing, photos.urls);
       // P3: the order the broker dragged the photos into (new photos follow).

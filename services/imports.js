@@ -18,6 +18,8 @@ const { normalizeCode } = require("../domain/searchQuery");
 const { normalizeSearch } = require("../domain/searchText");
 const Supabase = require("../lib/supabase");
 const PhotoHash = require("./photoHash");
+const Leads = require("./leads");
+const Card = require("../domain/leadCard");
 
 const MONEY = ["price_value", "down_payment_value", "remaining_amount", "installment_value"];
 const DETAIL_LABELS = { owner_name: ["المالك", "Owner"], owner_phone: ["تليفون المالك", "Owner phone"], notes: ["ملاحظات", "Notes"], clean_summary: ["الوصف", "Description"], summary_en: ["الوصف بالإنجليزي", "English summary"], floor: ["الدور", "Floor"] };
@@ -194,6 +196,8 @@ async function claim(pool, broker, id, kind) {
 }
 
 async function insertOne(pool, broker, fields, code, lang) {
+  const owner = await Leads.linkOwnerLead(pool, broker, { phone: fields.details?.owner_phone, name: fields.details?.owner_name, listingType: fields.listing_type });
+  if (owner?.ref) fields.details = { ...fields.details, owner_lead: Card.refLabel(owner.ref) };
   const client = await pool.connect();
   try {
     await client.query("BEGIN");

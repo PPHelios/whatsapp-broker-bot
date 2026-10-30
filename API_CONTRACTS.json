@@ -777,6 +777,7 @@
       "wasErased": ["pool", "actor", "e164"],
       "normalizePhones": ["raw"],
       "captureLead": ["pool", "actor", "input", "params"],
+      "linkOwnerLead": ["pool", "actor", "params"],
       "assignLead": ["pool", "actor", "key", "toBrokerId", "params"],
       "setStage": ["pool", "actor", "key", "params"],
       "addNote": ["pool", "actor", "key", "text", "params"],

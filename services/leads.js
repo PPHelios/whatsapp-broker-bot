@@ -552,6 +552,21 @@ async function findByPhone(pool, actor, raw) {
 }
 
 /**
+ * A unit's owner as a client: the lead with the owner's phone, made as a seller (or landlord for rent) when the
+ * agency has none yet. A colleague's client is left alone. Returns { ref } to store, null, or { error }.
+ */
+async function linkOwnerLead(pool, actor, { phone, name = null, listingType = "sale" } = {}) {
+  if (!phone) return null;
+  const found = await findByPhone(pool, actor, phone);
+  if (found.invalid) return { error: "owner_phone" };
+  if (found.lead) return { ref: found.lead.ref };
+  if (found.elsewhere) return null;
+  const made = await captureLead(pool, actor, { phone, name, kind: listingType === "rent" ? "landlord" : "seller", lawfulBasis: "client_request" }, { quiet: true });
+  if (made.outcome === "created" || made.outcome === "merged") return { ref: made.lead.ref };
+  return made.outcome === "colleague" ? null : { error: made.outcome };
+}
+
+/**
  * Pages of 20, newest activity first. Brokers see only their own leads; managers all, with a broker filter.
  * @param {Object} f - { q (name, phone digits or L- ref), stage, kind, source, brokerId ("none" = unassigned), noNextStep, overdue, dueToday, offset, limit }
  */
@@ -682,6 +697,7 @@ module.exports = {
   wasErased,
   normalizePhones,
   captureLead,
+  linkOwnerLead,
   assignLead,
   setStage,
   addNote,
