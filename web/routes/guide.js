@@ -38,7 +38,10 @@ const SECTIONS = [
       ["كل وحدة بتاخد كود قصير زي NH-V12 (حروف الوكالة + نوع الوحدة + رقم). ابعت الكود في أي وقت يطلعلك الكارت.", "Every unit gets a short code like NH-V12 (agency letters + unit type + number). Send the code any time to get its card."],
       ["من الكارت: تعديل، تم البيع، أرشفة، لينك للعميل، بروشور.", "From the card: edit, mark sold, archive, a client link, a flyer."],
       ["لو وحدة متعدلتش ٢١ يوم، البوت يسألك «لسه متاحة؟». لو محدش رد لحد ٣٠ يوم بتتخفى من البحث (مش بتتمسح).", "If a unit hasn't changed for 21 days the bot asks \"still available?\". With no answer by day 30 it is hidden from search (never deleted)."],
-      ["من الموقع تقدر تستورد شيت إكسيل أو شات واتساب متصدّر.", "On the website you can import an Excel sheet or an exported WhatsApp chat."]
+      ["الاستيراد (شيت إكسيل، جروب، أو شات متصدّر بالصور) للمديرين بس، من الموقع: «الوحدات ← استيراد». قبل الحفظ بتشوف كل صف هيعمل إيه. القالب فيه أمثلة، والأعمدة الحمرا مطلوبة والرمادي اختياري.", "Importing (an Excel sheet, a group post, or an exported chat with photos) is for managers only, on the website under Units → Import. You see what every row will do before anything is saved. The template has samples: red columns are mandatory, grey ones optional."],
+      ["البيانات الخاصة (المالك، رقم الوحدة، العنوان، اللوكيشن، العمولة) بتظهر للوسيط بتاع الوحدة والمديرين بس. وسيط تاني يضغط «🔒 اطلب البيانات» على نتيجة البحث أو الكارت؛ المدير بيرد، ولو الوكالة فتحت البيانات للكل مفيش طلبات.", "Secret details (owner, unit number, address, location, commission) show to the unit's broker and managers only. Another broker taps \"🔒 Ask for private details\" on a search result or card; a manager answers. If the agency opened them to all brokers, there are no requests."],
+      ["مالك الوكالة ممكن يعلّم وحدة «خاصة»: بتتخفى من البحث والقوايم لأي حد غيره، حتى المديرين.", "The agency owner can mark a unit private: it is hidden from search and lists for everyone else, managers included."],
+      ["مالك الوحدة (البروفايل) متسجل لوحده بمكالماته ومتابعاته، ومتربط بوحداته. المدير يقدر يعدّل المالك، أو ينقل الوحدة لمالك تاني، أو لعميل اشترى.", "Each unit owner has their own profile, separate from clients, listing their units. A manager can edit the owner, move a unit to another owner, or to a client who bought it."]
     ]
   },
   {
@@ -57,6 +60,10 @@ const SECTIONS = [
       ["ابعت «ليد» ومعاه رسالة العميل أو فويس، أو حوّل رسالته، أو ابعت رقمه. البوت يعمل كارت العميل بعد ما تأكد.", "Send \"lead\" with the client's message or a voice note, forward their message, or send their number. The bot makes the client's card once you confirm."],
       ["عملاء إعلانات فيسبوك: المدير يرفع ملف CSV من Meta Leads Center في «العملاء ← استيراد».", "Facebook ad leads: a manager uploads the Meta Leads Center CSV under \"Leads → Import\"."],
       ["أزرار الكارت: 📞 كلمته، 📅 متابعة، 🔄 المرحلة. كل مرحلة بتتسجل في التقارير.", "Card buttons: 📞 Called, 📅 Follow-up, 🔄 Stage. Every stage counts in the reports."],
+      ["محتاج مدير في عميل؟ من الكارت دوس 🔄 المرحلة واختار «🙋 محتاج مدير»، واكتب للمدير محتاج إيه (اختياري، أو ابعت من غير ملاحظة). المديرين بيتبلغوا فوراً.", "Need a manager on a client? From the card tap 🔄 Stage and choose \"🙋 Needs manager\", then write what you need (optional, or send it without a note). The managers are alerted straight away."],
+      ["أو قول في فويس أو اكتب «محتاج المدير في ليد أحمد»، والبوت يعرضلك التأكيد قبل ما يحفظ.", "Or say or type \"I need my manager on Ahmed's lead\"; the bot shows you a confirmation before it saves."],
+      ["المدير بيشوف العميل في «محتاجين مدير»، وبيقدر يكتب رد اختياري ويعلّمه «اتعالج»، والوسيط بيوصله الرد.", "The manager sees it under \"Needs manager\", can write an optional reply and mark it handled; the broker gets the reply."],
+      ["عميل واحد ليه طلب مفتوح واحد بس؛ لو محتاج تاني، المدير الأول يعلّم اللي قبله اتعالج.", "A client has one open flag at a time; once the manager marks it handled, you can flag again."],
       ["احفظ طلب العميل («طلب» + اللي عايزه) وأول ما تنزل وحدة تناسبه أو سعرها ينزل هتتبلغ.", "Save the client's request (\"request\" + what they want) and you hear as soon as a unit fits or drops its price."],
       ["«عملائي» و«متابعات» بيجيبولك قوايمك في أي وقت.", "\"leads\" and \"followups\" bring up your lists any time."]
     ]
@@ -76,7 +83,10 @@ const SECTIONS = [
     items: [
       ["«فريقي»: ضيف وسيط، اعمله لينك تيليجرام، أو أوقفه (عملاؤه بيرجعوا للمديرين).", "\"My team\": add a broker, make their Telegram link, or deactivate them (their clients come back to the managers)."],
       ["«لوحة الوكالة»: العملاء والصفقات والعمولة وترتيب البروكرز لآخر ٧ أو ٣٠ أو ٩٠ يوم.", "\"Agency dashboard\": leads, deals, commission and the broker leaderboard for the last 7, 30 or 90 days."],
-      ["حوّل عميل لبروكر: «حول L-0042 لـ سارة».", "Hand a client to a broker: \"assign L-0042 to Sara\"."]
+      ["حوّل عميل لبروكر: «حول L-0042 لـ سارة».", "Hand a client to a broker: \"assign L-0042 to Sara\"."],
+      ["«سجل النشاط» (من القايمة): كل اللي اتعمل في الوكالة لآخر ٩٠ يوم؛ طلبات البيانات الخاصة والتعديلات بتتسجل هنا.", "\"Activity log\" (in the menu): everything done in the agency for the last 90 days; requests for private details and edits are recorded there."],
+      ["طلبات البيانات الخاصة بيرد عليها أي مدير؛ ولو مفيش مدير غير مالك الوكالة، المالك هو اللي بيرد.", "Any manager can answer a private-details request; if the agency has no manager other than its owner, the owner answers."],
+      ["مالك الوكالة (أول حساب اتسجل للوكالة): بيدير الخطة والدفع، وبيضيف أو بيشيل المديرين، وبيحدد هل البيانات الخاصة مفتوحة للكل أو للمديرين بس، وبيعلّم الوحدات الخاصة. وبيشوف كل اللي المديرين بيشوفوه.", "The agency owner (the first account of the agency): manages the plan and payments, adds or removes managers, chooses whether secret details are open to all brokers or to managers only, and marks units private. Sees everything the managers see."]
     ]
   },
 
@@ -99,6 +109,8 @@ const FAQ = [
   [["هل بياناتي بيشوفها حد من وكالة تانية؟", "Can another agency see my data?"], ["لأ. كل وكالة شايفة وحداتها وعملاءها بس.", "No. Every agency sees only its own units and clients."]],
   [["العميل بيشوف إيه لما أبعتله لينك وحدة؟", "What does a client see when I send a unit link?"], ["صفحة فيها الصور والتفاصيل ورقم تواصل الوكالة، من غير أي بيانات داخلية. لو الوحدة اتباعت اللينك بيقول إنها مبقتش متاحة.", "A page with the photos, the details and the agency's contact number, with no internal data. If the unit is sold the link says it's no longer available."]],
   [["العميل طلب يمسح بياناته؛ أعمل إيه؟", "A client asked us to delete their data. What do I do?"], ["المدير يفتح العميل على الموقع ويختار «مسح نهائي» ويكتب آخر ٤ أرقام من رقمه. وتقدر تصدّر بياناته الأول لو طلبها.", "A manager opens the client on the website, chooses \"Erase for good\" and types the last 4 digits of their number. You can export their data first if they ask for it."]],
+  [["مين بيشوف البيانات الخاصة للوحدة؟", "Who sees a unit's private details?"], ["الوسيط بتاع الوحدة والمديرين. أي وسيط تاني بيطلبها، والمدير بيرد، وكل طلب بيتسجل.", "The unit's broker and the managers. Any other broker asks, a manager answers, and every request is logged."]],
+  [["المدير بيشوف الوحدات الخاصة بمالك الوكالة؟", "Can managers see units the agency owner marked private?"], ["لأ. الوحدة الخاصة مخفية عن أي حد غير مالك الوكالة، حتى المديرين.", "No. A private unit is hidden from everyone except the agency owner, managers included."]],
   [["البوت فهم غلط؛ أصلّحه إزاي؟", "The bot got something wrong. How do I fix it?"], ["قبل الحفظ دوس «✏️ تعديل». بعد الحفظ: «تعديل الكود السعر ٩٫٥ مليون» أو من الموقع.", "Before saving tap \"✏️ Edit\". After saving: \"edit CODE price 9.5M\" or use the website."]],
   [["في حاجة مش شغالة.", "Something isn't working."], ["ابعت «عطل» واللي حصل للبوت، أو «🐞 بلّغ عن مشكلة» تحت أي صفحة. هيوصلك رقم البلاغ.", "Send \"bug\" and what happened to the bot, or use \"🐞 Report a problem\" at the bottom of any page. You get a report number."]],
   [["ليه تيليجرام مش واتساب؟", "Why Telegram and not WhatsApp?"], ["تيليجرام مجاني للرسايل والصور والأزرار، فالتنبيهات مش بتتكلف. واتساب بيفضل للتواصل مع العملاء.", "Telegram is free for messages, photos and buttons, so alerts cost nothing. WhatsApp stays for talking to clients."]],
