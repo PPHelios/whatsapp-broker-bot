@@ -124,7 +124,7 @@ function register(web, { pool, page }) {
     const lang = langOf(req);
     const { broker } = req.session;
     const manager = isManager(broker);
-    const brokerId = manager && req.query.broker ? String(req.query.broker) : null;
+    const brokerId = manager && req.query.broker ? (req.query.broker === "me" ? broker.id : String(req.query.broker)) : null;
     const open = Stages.STAGES.filter((s) => !Stages.isClosed(s));
     const cols = await Promise.all(Stages.STAGES.map(async (s) => [s, await Leads.listLeads(pool, broker, { stage: s, brokerId, limit: Stages.isClosed(s) ? 10 : 40, offset: 0 })]));
     const brokers = manager ? await activeBrokers(pool, broker.agency_id) : [];
@@ -141,7 +141,7 @@ function register(web, { pool, page }) {
       body: html`<div class="row between"><h1>${L(lang, "لوحة العملاء", "Lead board")}</h1><a class="btn secondary small" href="/app/leads">${L(lang, "القايمة", "List")}</a></div>
 ${moved ? html`<p class="card notice ok" role="status">✅ ${L(lang, `${moved} اتنقل.`, `${moved} moved.`)}${req.query.undo ? html` <a href="/app/leads/${moved}">${L(lang, "افتحه للتراجع", "Open it to undo")}</a>` : ""}</p>` : ""}
 ${manager
-  ? html`<form method="get" action="/app/leads/board"><select name="broker" data-autosubmit aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل الفريق", "Whole team")}</option><option value="none"${brokerId === "none" ? html` selected` : ""}>${L(lang, "مش متسلم", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${b.id === brokerId ? html` selected` : ""}>${b.name}</option>`)}</select><noscript><button type="submit">${L(lang, "تطبيق", "Apply")}</button></noscript></form>`
+  ? html`<form method="get" action="/app/leads/board"><select name="broker" data-autosubmit aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل الفريق", "Whole team")}</option><option value="me"${req.query.broker === "me" ? html` selected` : ""}>${L(lang, "المسلّمة ليّ", "Assigned to me")}</option><option value="none"${brokerId === "none" ? html` selected` : ""}>${L(lang, "مش متسلم", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${b.id === brokerId && req.query.broker !== "me" ? html` selected` : ""}>${b.name}</option>`)}</select><noscript><button type="submit">${L(lang, "تطبيق", "Apply")}</button></noscript></form>`
   : ""}
 <p class="muted small">${L(lang, "اسحب العميل لعمود تاني، أو اختار المرحلة واضغط «انقل». «ضاع» من صفحة العميل عشان سبب الضياع.", "Drag a lead to another column, or pick a stage and tap Move. Mark Lost from the lead page (it needs a reason).")}</p>
 <div class="board-cols" data-board>${cols.map(([s, r]) => html`<section class="bcol" id="col-${s}" data-stage="${s}"><h2>${Stages.stageLabel(s, lang)} <b>${r.rows.length}${r.more ? "+" : ""}</b></h2><ol>${r.rows.map(card)}</ol></section>`)}</div>`
@@ -158,7 +158,7 @@ ${manager
       q: String(req.query.q || "").slice(0, 80),
       kind: req.query.kind,
       source: req.query.source ? String(req.query.source).slice(0, 60) : null,
-      brokerId: manager ? req.query.broker : null,
+      brokerId: manager ? (req.query.broker === "me" ? broker.id : req.query.broker) : null,
       stage: Stages.STAGES.includes(tab) ? tab : null,
       dueToday: tab === "due_today",
       overdue: tab === "overdue",
@@ -192,7 +192,7 @@ ${/^L-\d{4,6}$/.test(String(req.query.erased || "")) ? html`<p class="card notic
   <select name="kind" aria-label="${L(lang, "النوع", "Type")}"><option value="">${L(lang, "كل الأنواع", "All types")}</option>${Stages.KINDS.map((k) => html`<option value="${k}"${req.query.kind === k ? html` selected` : ""}>${Stages.kindLabel(k, lang)}</option>`)}</select>
   <select name="source" aria-label="${L(lang, "المصدر", "Source")}"><option value="">${L(lang, "كل المصادر", "All sources")}</option>${Stages.SOURCES.map(([en, ar]) => html`<option value="${en}"${f.source === en ? html` selected` : ""}>${lang === "en" ? en : ar}</option>`)}${extraSources.map((x) => html`<option value="${x}"${f.source === x ? html` selected` : ""}>${x}</option>`)}</select>
   ${manager
-    ? html`<select name="broker" aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل الوسطاء", "All brokers")}</option><option value="none"${req.query.broker === "none" ? html` selected` : ""}>${L(lang, "مش متسلم", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${req.query.broker === b.id ? html` selected` : ""}>${b.name}</option>`)}</select>`
+    ? html`<select name="broker" aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل الوسطاء", "All brokers")}</option><option value="me"${req.query.broker === "me" ? html` selected` : ""}>${L(lang, "المسلّمة ليّ", "Assigned to me")}</option><option value="none"${req.query.broker === "none" ? html` selected` : ""}>${L(lang, "مش متسلم", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${req.query.broker === b.id ? html` selected` : ""}>${b.name}</option>`)}</select>`
     : ""}
   </div>
   <div class="row sheet-actions"><button type="submit">${L(lang, "تطبيق", "Apply")}</button><a class="btn secondary" href="/app/leads">${L(lang, "مسح", "Clear")}</a></div>
