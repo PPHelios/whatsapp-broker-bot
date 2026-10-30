@@ -40,7 +40,7 @@ const daysLeft = async (agencyId) => {
   return Math.round((new Date(a.paid_until) - Date.now()) / DAY);
 };
 const pay = async (manager, months = 1) => {
-  const r = await Billing.requestPayment(h.pool, manager, { kind: "plan", plan: "solo", months });
+  const r = await Billing.requestPayment(h.pool, { ...manager, role: "owner" }, { kind: "plan", plan: "solo", months });
   expect(r.ok).toBe(true);
   return r.payment;
 };

@@ -33,7 +33,8 @@ test("the manager dashboard shows the limits; brokers can't open it; the guide e
   expect(dash.status).toBe(200);
   expect(dash.text).toContain('id="limits"');
   for (const k of ["credits", "units", "seats"]) expect(dash.text).toContain(`data-quota="${k}"`);
-  const plan = await agent.get("/app/plan?lang=en");
+  await h.seedBroker("owner");
+  const plan = await (await signIn(h, "owner")).agent.get("/app/plan?lang=en"); // the credit request is the agency owner's
   expect(plan.text).toContain("data-credit-table");
   expect(plan.text).toContain("data-credit-request");
   const guide = await agent.get("/app/guide?lang=en");

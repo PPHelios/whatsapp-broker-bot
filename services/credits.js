@@ -3,7 +3,7 @@
 "use strict";
 
 const Plans = require("../domain/plans");
-const { MANAGER_ROLES } = require("../lib/authz");
+const { MANAGER_ROLES, isAgencyOwner } = require("../lib/authz");
 const ErrorReports = require("../lib/errorReports");
 
 const FX_KEY = "planning_fx_egp_per_usd";
@@ -115,7 +115,7 @@ const monthKey = (now = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZo
 
 /** A manager asks the app owner for more credits: { ok, request } | { error }. The owner is told on Telegram. */
 async function requestMore(db, manager, { credits, note = "" } = {}) {
-  if (!MANAGER_ROLES.includes(String(manager.role || "").toLowerCase())) return { error: "forbidden" };
+  if (!isAgencyOwner(manager)) return { error: "forbidden" };
   const n = Math.round(Number(credits));
   if (!Number.isFinite(n) || n < 1 || n > 100000) return { error: "credits" };
   const { rows: open } = await db.query("SELECT count(*)::int AS n FROM credit_requests WHERE agency_id = $1 AND status = 'pending'", [manager.agency_id]);

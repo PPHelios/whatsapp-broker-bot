@@ -11,7 +11,7 @@ const crypto = require("crypto");
 const Plans = require("../domain/plans");
 const Credits = require("./credits");
 const { withTransaction } = require("../lib/db");
-const { MANAGER_ROLES } = require("../lib/authz");
+const { MANAGER_ROLES, isAgencyOwner } = require("../lib/authz");
 const Referrals = require("./referrals");
 
 const DAY = 24 * 3600 * 1000;
@@ -157,7 +157,7 @@ function priceOf({ kind, plan, months, bundle }) {
  * @param {Object} input - { kind: plan|credit_bundle, plan, months, bundle }
  */
 async function requestPayment(db, manager, input = {}) {
-  if (!isManager(manager)) return { error: "forbidden" };
+  if (!isAgencyOwner(manager)) return { error: "forbidden" };
   const kind = input.kind === "credit_bundle" ? "credit_bundle" : "plan";
   const months = kind === "plan" ? Number(input.months) : 1;
   const plan = kind === "plan" ? String(input.plan || "") : null;
