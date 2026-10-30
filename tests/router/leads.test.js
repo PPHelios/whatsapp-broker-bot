@@ -286,10 +286,10 @@ describe("commands in both languages", () => {
   test("help lists the CRM commands in both languages", async () => {
     const ar = one("broker", await h.text("broker", "مساعدة")).text;
     expect(ar).toContain("عملائي");
-    expect(ar).toContain("my leads");
+    expect(ar).toContain("*leads*");
     const en = one("admin", await h.text("admin", "help")).text;
-    expect(en).toContain("assign L-0042 to Sara");
-    expect(en).toContain("حول L-0042 لـ سارة");
+    expect(en).toContain("*assign* L-0042 to Sara");
+    expect(en).toContain("*حول* L-0042 لـ سارة");
   });
 
   test("cancel clears a lead draft", async () => {

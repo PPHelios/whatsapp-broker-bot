@@ -109,6 +109,39 @@ describe("sessions and CSRF", () => {
     expect(hx.headers["hx-redirect"]).toBe("/app/login?next=%2Fapp%2F");
   });
 
+  test("an old page's form gets a way back instead of a bare error; a form after the session ended goes to sign-in", async () => {
+    const { agent, csrf } = await signIn(h, "broker");
+    const stale = await agent.post("/app/logout").set("Referer", "http://127.0.0.1/app/leads?x=1").type("form").send({ _csrf: "y".repeat(32) });
+    expect(stale.status).toBe(403);
+    expect(stale.text).toMatch(/href="\/app\/leads\?x=1"/);
+    const hx = await agent.post("/app/logout").set("HX-Request", "true").set("X-CSRF-Token", "y".repeat(32));
+    expect(hx.headers["hx-refresh"]).toBe("true");
+    expect((await agent.get("/app/csrf")).body.csrf).toBe(csrf);
+    const gone = await request(web()).post("/app/leads/new").set("Referer", "http://127.0.0.1/app/leads/new").type("form").send({ name: "x" });
+    expect(gone.status).toBe(303);
+    expect(gone.headers.location).toBe("/app/login?next=%2Fapp%2Fleads%2Fnew");
+    expect((await request(web()).post("/app/leads/new").set("Referer", "https://evil.example/app/x")).status).toBe(401);
+  });
+
+  test("F25: the More page shows Dashboard to managers and App tracking to the owner only", async () => {
+    const nav = (text) => (text.match(/<h1>[^<]*<\/h1>([\s\S]*?)<\/main>/) || [])[1] || "";
+    const broker = nav((await (await signIn(h, "broker")).agent.get("/app/more")).text);
+    expect(broker).toContain("/app/catalogue");
+    expect(broker).toContain("/app/deals");
+    expect(broker).not.toContain("/app/dashboard");
+    const { resetConfig } = require("../../config");
+    process.env.OWNER_BROKER_IDS = h.BROKERS.admin.id;
+    resetConfig();
+    try {
+      const admin = nav((await (await signIn(h, "admin")).agent.get("/app/more")).text);
+      expect(admin).toContain("/app/dashboard");
+      expect(admin).toContain("/app/owner");
+    } finally {
+      delete process.env.OWNER_BROKER_IDS;
+      resetConfig();
+    }
+  });
+
   test("private pages are never cached and carry the CSRF token for htmx", async () => {
     const { agent } = await signIn(h, "broker");
     const r = await agent.get("/app/");

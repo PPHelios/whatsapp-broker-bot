@@ -172,7 +172,8 @@ describe("inventory summary (STATS-01)", () => {
     expect(ar.text).toContain("مشاريع المطورين:* 1");
     expect(ar.text).toMatch(/1\. \*Hyde Park\*: 2 وحدة/);
     expect(ar.text).not.toContain("Rival Park");
-    expect(ar.buttons.map((b) => b.id)).toEqual(["cmd:export", "cmd:add"]);
+    // Export is for managers only (the whole inventory in one file).
+    expect(ar.buttons.map((b) => b.id)).toEqual(["cmd:add"]);
 
     const [en] = to("admin", await h.text("admin", "stats"));
     expect(en.text).toContain("*Total Units:* 4");

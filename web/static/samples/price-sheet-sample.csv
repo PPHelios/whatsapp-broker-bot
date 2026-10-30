@@ -1,0 +1,6 @@
+unit code,building,type,floor,area,bedrooms,garden,price,status
+B12-301,B12,apartment,3,165,3,,9200000,available
+B12-304,B12,apartment,3,180,3,,9900000,available
+B12-G01,B12,apartment,0,150,2,60,8800000,available
+V-07,Villas,villa,,320,5,250,32000000,reserved
+,,apartment,,165,3,,9100000,

@@ -158,7 +158,7 @@ describe("the pages", () => {
     expect((await b.agent.get("/app/catalogue")).text).toMatch(/iCity/);
     const rival = await signIn(h, "rival");
     expect((await rival.agent.get(url)).status).toBe(404);
-    expect((await agent.get("/app/")).text).toMatch(/href="\/app\/catalogue"/);
+    expect((await agent.get("/app/more")).text).toMatch(/href="\/app\/catalogue"/);
   });
 
   test("a linked unit's page names its project and links (internal ones marked); the bot's collateral lists them", async () => {
@@ -174,5 +174,45 @@ describe("the pages", () => {
     const sent = (await h.text("broker", "layout BD-5")).map((r) => JSON.stringify(r));
     expect(sent.join("\n")).toMatch(/Brochure\*: https:\/\/example.com\/b.pdf/);
     expect(sent.join("\n")).toMatch(/Commission letter\* 🔒/);
+  });
+});
+
+describe("F20 uploaded files", () => {
+  test("new project with a brochure file and a link; upload on the project page; broker cannot upload; delete removes the file", async () => {
+    const Storage = require("../harness/fake-supabase");
+    const { agent, csrf } = await signIn(h, "admin");
+    const pdf = Buffer.from("%PDF-1.4 fake");
+    const created = await agent.post("/app/catalogue/projects").field("_csrf", csrf).field("name", "Zed").field("material_url", "https://example.com/zed").attach("file", pdf, { filename: "Zed Brochure.pdf", contentType: "application/pdf" });
+    expect(created.status).toBe(303);
+    expect(created.headers.location).toMatch(/saved=1$/);
+    const url = created.headers.location.split("?")[0];
+    const [project] = await h.query("SELECT id FROM projects WHERE name = 'Zed'");
+    let mats = await h.query("SELECT * FROM project_materials WHERE project_id = $1 ORDER BY created_at", [project.id]);
+    expect(mats.map((m) => [m.kind, m.label, Boolean(m.storage_path), m.client_visible])).toEqual([["brochure", "Zed Brochure", true, false], ["other", "Link", false, false]]);
+    expect(mats[0].storage_path).toMatch(new RegExp(`^${h.AGENCY_A}/projects/${project.id}/[0-9a-f]{24}-zed-brochure\\.pdf$`));
+    expect(mats[0].url).toContain(mats[0].storage_path);
+
+    const up = await agent.post(`${url}/materials/upload`).field("_csrf", csrf).field("kind", "layout").field("unit_type", "3BR").field("client_visible", "1").attach("file", Buffer.from("\x89PNG"), { filename: "a.png", contentType: "image/png" });
+    expect(up.status).toBe(303);
+    const page = await agent.get(url);
+    expect(page.text).toContain("data-material-upload");
+    expect(page.text).toContain("📎 Zed Brochure");
+    mats = await h.query("SELECT * FROM project_materials WHERE project_id = $1 AND kind = 'layout'", [project.id]);
+    expect(mats[0]).toMatchObject({ unit_type: "3BR", client_visible: true });
+
+    const bad = await agent.post(`${url}/materials/upload`).field("_csrf", csrf).attach("file", Buffer.from("x"), { filename: "a.txt", contentType: "text/plain" });
+    expect(bad.status).toBe(415);
+
+    const b = await signIn(h, "broker");
+    expect((await b.agent.post(`${url}/materials/upload`).field("_csrf", b.csrf).attach("file", pdf, { filename: "x.pdf", contentType: "application/pdf" })).status).toBe(403);
+
+    const [brochure] = await h.query("SELECT * FROM project_materials WHERE project_id = $1 AND kind = 'brochure'", [project.id]);
+    expect((await Storage.downloadListingImage(brochure.url))).not.toBeNull();
+    expect((await agent.post(`${url}/materials/${brochure.id}/delete`).set("X-CSRF-Token", csrf).type("form").send("")).status).toBe(303);
+    expect(await Storage.downloadListingImage(brochure.url)).toBeNull();
+    // Uploaded files are not link-checked.
+    const checked = [];
+    await Catalogue.checkLinks(h.pool, { opens: async (u) => (checked.push(u), true), notify: async () => {} });
+    expect(checked.some((u) => u.startsWith("https://storage.test/"))).toBe(false);
   });
 });

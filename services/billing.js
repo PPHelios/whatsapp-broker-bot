@@ -9,6 +9,7 @@
 
 const crypto = require("crypto");
 const Plans = require("../domain/plans");
+const Credits = require("./credits");
 const { withTransaction } = require("../lib/db");
 const { MANAGER_ROLES } = require("../lib/authz");
 const Referrals = require("./referrals");
@@ -34,54 +35,77 @@ async function agencyRow(db, agencyId) {
   return rows[0] || null;
 }
 
-/** This Cairo month's AI use: text requests, voice notes, and voice packs bought. */
-async function monthUsage(db, agencyId, now = new Date()) {
+/** The agency's seats and available units now. */
+async function monthUsage(db, agencyId) {
   const { rows } = await db.query(
     `SELECT
-       (SELECT count(*) FILTER (WHERE COALESCE(metadata->>'media', '') <> 'audio')::int FROM operation_logs
-         WHERE agency_id = $1 AND status = 'success' AND model_used IS NOT NULL AND created_at >= ${MONTH_START}) AS text,
-       (SELECT count(*) FILTER (WHERE metadata->>'media' = 'audio')::int FROM operation_logs
-         WHERE agency_id = $1 AND status = 'success' AND model_used IS NOT NULL AND created_at >= ${MONTH_START}) AS voice,
-       (SELECT count(*)::int FROM payments
-         WHERE agency_id = $1 AND kind = 'voice_pack' AND status = 'confirmed' AND confirmed_at >= ${MONTH_START}) AS packs,
-       (SELECT count(*)::int FROM brokers WHERE agency_id = $1 AND is_active) AS seats`,
-    [agencyId, now.toISOString()]
+       (SELECT count(*)::int FROM brokers WHERE agency_id = $1 AND is_active) AS seats,
+       (SELECT count(*)::int FROM listings WHERE agency_id = $1 AND status = 'active') AS units`,
+    [agencyId]
   );
   return rows[0];
 }
 
 /**
  * The agency's plan and how much of it is used this month.
- * @returns {Promise<{ plan, source, until, text: { used, limit }, voice: { used, limit, packs }, seats: { used, limit } }>}
+ * @returns {Promise<{ plan, source, until, credits: { used, limit, plan, bundles, grants }, seats: { used, limit }, units }>}
  */
 async function allowance(db, agencyId, { now = new Date() } = {}) {
   const agency = await agencyRow(db, agencyId);
   const { plan, source, until } = effectivePlan(agency, now);
-  const u = await monthUsage(db, agencyId, now);
+  const [u, used, pool] = await Promise.all([monthUsage(db, agencyId), Credits.usedThisMonth(db, agencyId, { now }), Credits.poolFor(db, agencyId, plan.id, { now })]);
   return {
     agency,
     plan,
     source,
     until,
-    text: { used: u.text, limit: plan.text },
-    voice: { used: u.voice, limit: plan.voice + u.packs * Plans.VOICE_PACK.notes, packs: u.packs },
-    seats: { used: u.seats, limit: plan.seats }
+    credits: { used, limit: pool.total, plan: pool.plan, bundles: pool.bundles, grants: pool.grants },
+    seats: { used: u.seats, limit: plan.seats },
+    units: { used: u.units, limit: await unitLimit(db, plan) }
   };
 }
 
-/** Throws PLAN_QUOTA_EXCEEDED (handled like the daily AI caps) when this month's text or voice allowance is used up. */
-async function checkAllowance(db, agencyId, { audio = false, now = new Date() } = {}) {
-  const a = await allowance(db, agencyId, { now });
-  const bucket = audio ? a.voice : a.text;
-  if (bucket.used >= bucket.limit) {
-    const err = new Error(`Plan ${audio ? "voice" : "text"} allowance used up for the month`);
+/** The unit cap per plan ({ free, solo, office, agency, ... } → number): set on the owner's Plans and credits section. */
+async function planLimits() {
+  const out = {};
+  for (const p of Plans.ALL) out[p.id] = p.units;
+  return out;
+}
+
+async function unitLimit(db, plan) {
+  return plan.units;
+}
+
+/**
+ * Whether one more available unit fits the plan: { ok, used, limit, plan }. Sold and archived units don't count, so
+ * an agency is never punished for keeping its history; a unit marked available again is not checked.
+ */
+async function unitCapacity(db, agencyId, { adding = 1, now = new Date() } = {}) {
+  const agency = await agencyRow(db, agencyId);
+  const { plan } = effectivePlan(agency, now);
+  const { rows } = await db.query("SELECT count(*)::int AS n FROM listings WHERE agency_id = $1 AND status = 'active'", [agencyId]);
+  const limit = await unitLimit(db, plan);
+  return { ok: rows[0].n + adding <= limit, used: rows[0].n, limit, plan };
+}
+
+/**
+ * Throws PLAN_QUOTA_EXCEEDED (handled like the daily AI caps) when the agency has used this month's credits (the plan's
+ * pool plus bundles and grants; services/credits.js). Only AI calls are checked, so searches fall back to the local
+ * parser and the website forms keep working with no AI when the credits are gone.
+ */
+async function checkAllowance(db, agencyId, { now = new Date() } = {}) {
+  const agency = await agencyRow(db, agencyId);
+  const { plan } = effectivePlan(agency, now);
+  const [used, pool] = await Promise.all([Credits.usedThisMonth(db, agencyId, { now }), Credits.poolFor(db, agencyId, plan.id, { now })]);
+  if (used >= pool.total) {
+    const err = new Error("AI credits used up for the month");
     err.code = "PLAN_QUOTA_EXCEEDED";
-    err.kind = audio ? "voice" : "text";
-    err.limit = bucket.limit;
-    err.used = bucket.used;
+    err.kind = "credits";
+    err.limit = pool.total;
+    err.used = used;
     throw err;
   }
-  return a;
+  return { used, limit: pool.total };
 }
 
 /** Whether one more active broker fits the plan. */
@@ -121,23 +145,24 @@ function newReference() {
   return `WH-${[...bytes].map((b) => REF_ALPHABET[b % REF_ALPHABET.length]).join("")}`;
 }
 
-/** The amount for a plan and months, or a voice pack. */
-function priceOf({ kind, plan, months }) {
-  if (kind === "voice_pack") return Plans.VOICE_PACK.priceEgp;
+/** The amount for a plan and months, or an extra credit bundle. */
+function priceOf({ kind, plan, months, bundle }) {
+  if (kind === "credit_bundle") return Plans.bundleById(bundle)?.priceEgp ?? null;
   const p = Plans.PLANS.find((x) => x.id === plan);
   return p && MONTHS.includes(months) ? p.priceEgp * months : null;
 }
 
 /**
  * A manager announces a payment: { ok, payment } with its amount and reference, or { error }.
- * @param {Object} input - { kind: plan|voice_pack, plan, months }
+ * @param {Object} input - { kind: plan|credit_bundle, plan, months, bundle }
  */
 async function requestPayment(db, manager, input = {}) {
   if (!isManager(manager)) return { error: "forbidden" };
-  const kind = input.kind === "voice_pack" ? "voice_pack" : "plan";
+  const kind = input.kind === "credit_bundle" ? "credit_bundle" : "plan";
   const months = kind === "plan" ? Number(input.months) : 1;
   const plan = kind === "plan" ? String(input.plan || "") : null;
-  const amount = priceOf({ kind, plan, months });
+  const bundle = kind === "credit_bundle" ? String(input.bundle || "") : null;
+  const amount = priceOf({ kind, plan, months, bundle });
   if (!amount) return { error: "plan" };
   const agency = await agencyRow(db, manager.agency_id);
   if (!agency || agency.approval !== "approved") return { error: "forbidden" };
@@ -145,9 +170,9 @@ async function requestPayment(db, manager, input = {}) {
   if (open[0].n >= MAX_PENDING) return { error: "too_many" };
   for (let i = 0; i < 5; i++) {
     const { rows } = await db.query(
-      `INSERT INTO payments (agency_id, kind, plan, months, amount_egp, reference, requested_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (reference) DO NOTHING RETURNING *`,
-      [manager.agency_id, kind, plan, months, amount, newReference(), manager.id]
+      `INSERT INTO payments (agency_id, kind, plan, months, amount_egp, reference, requested_by, bundle_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (reference) DO NOTHING RETURNING *`,
+      [manager.agency_id, kind, plan, months, amount, newReference(), manager.id, bundle]
     );
     if (rows[0]) return { ok: true, payment: rows[0], agency };
   }
@@ -169,8 +194,8 @@ async function pendingPayments(db) {
 
 /**
  * The owner confirms a payment: a plan payment extends paid_until by its months from the later of now and the current
- * end (and the agency is no longer a free pilot), plus any referral months it earns (services/referrals.js); a voice
- * pack counts for the month it is confirmed in.
+ * end (and the agency is no longer a free pilot), plus any referral months it earns (services/referrals.js); a credit
+ * bundle adds its credits for the month it is confirmed in.
  * @returns {Promise<{ ok, payment, agency, referral } | { error }>}
  */
 async function confirmPayment(pool, id, { now = new Date() } = {}) {
@@ -251,6 +276,8 @@ module.exports = {
   allowance,
   checkAllowance,
   seatAvailable,
+  planLimits,
+  unitCapacity,
   getSetting,
   setSetting,
   payTo,

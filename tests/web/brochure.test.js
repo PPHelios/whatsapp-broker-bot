@@ -86,10 +86,10 @@ test("read the brochure: facts stored, lines suggested, nothing public until sav
   expect(p.highlights).toEqual({ ar: ["سطر يدوي"], en: [] }); // the saved lines stay until the manager saves new ones
   expect((await PriceReading.usage(h.pool, admin.agency_id)).used).toBe(2);
 
-  // Same pages again: no page reads (cache), only the lines call.
+  // Same pages again: no page reads (cache), only the lines call; the agency is charged for them all the same.
   await Brochure.read(h.pool, admin, project.id, { files, pages: "2, 1" });
   expect(FakeAI.calls.filter((c) => c.operation === "brochure_read")).toHaveLength(2);
-  expect((await PriceReading.usage(h.pool, admin.agency_id)).used).toBe(2);
+  expect((await PriceReading.usage(h.pool, admin.agency_id)).used).toBe(4);
 
   // Before saving, the client page shows only the manager's typed line.
   let page = await publicPage();

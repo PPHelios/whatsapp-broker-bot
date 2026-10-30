@@ -1,6 +1,6 @@
 // tests/web/price-reading.test.js — Release B C5: a PDF or photographed price list read by AI into the usual
 // price-sheet preview: off until the owner switches it on, the manager picks pages, a monthly page allowance checked
-// before any call, pages read once reused silently across agencies (no AI call, not counted), and the rows never
+// before any call, pages another agency read are reused with no AI call but charged as usual, and the rows never
 // invented (only what the model copied).
 "use strict";
 
@@ -15,6 +15,7 @@ const { resetConfig } = require("../../config");
 const FakeAI = require("../harness/fake-ai");
 const Catalogue = require("../../services/catalogue");
 const PriceReading = require("../../services/priceReading");
+const Credits = require("../../services/credits");
 const R = require("../../domain/priceReading");
 
 jest.setTimeout(60000);
@@ -83,12 +84,15 @@ describe("reading a PDF", () => {
 
     expect((await PriceReading.read(h.pool, admin, project.id, { files, pages: "2-3" })).error).toBe("OFF");
     expect((await PriceReading.read(h.pool, await row("broker"), project.id, { files, pages: "2" })).error).toBe("forbidden");
-    await PriceReading.setForAgency(h.pool, admin.agency_id, { enabled: "on", pages_month: "1" });
+    await PriceReading.setForAgency(h.pool, admin.agency_id, { enabled: "on" });
+    // A Free-plan pool (80 credits) with 7 pages already paid (70 credits) leaves room for one page of 10 credits.
+    await h.query("UPDATE agencies SET pilot = false WHERE id = $1", [admin.agency_id]);
+    await h.query("INSERT INTO price_read_log (agency_id, fingerprint, reused) SELECT $1, 'old' || g, false FROM generate_series(1, 7) g", [admin.agency_id]);
     expect(await PriceReading.read(h.pool, admin, project.id, { files, pages: "2-3" })).toEqual({ error: "ALLOWANCE", left: 1, needed: 2 });
     expect(FakeAI.calls).toHaveLength(0);
     expect((await PriceReading.read(h.pool, admin, project.id, { files, pages: "" })).error).toBe("pages_required");
 
-    await PriceReading.setForAgency(h.pool, admin.agency_id, { enabled: "on", pages_month: "5" });
+    await Credits.grant(h.pool, admin.agency_id, 40);
     const r = await PriceReading.read(h.pool, admin, project.id, { files, pages: "2-3" });
     expect(r).toMatchObject({ ok: true, read: 2, reused: 0 });
     expect(FakeAI.calls.map((c) => c.operation)).toEqual(["price_list_read", "price_list_read"]);
@@ -107,7 +111,43 @@ describe("reading a PDF", () => {
     const again = await PriceReading.read(h.pool, rivalAdmin, theirs.id, { files, pages: "3, 2" });
     expect(again).toMatchObject({ ok: true, read: 0, reused: 2 });
     expect(FakeAI.calls).toHaveLength(2);
-    expect((await PriceReading.usage(h.pool, rivalAdmin.agency_id)).used).toBe(0);
+    expect((await PriceReading.usage(h.pool, rivalAdmin.agency_id)).used).toBe(2);
+  });
+
+  test("the cost is shown before the button: every page is charged; a repeat by the same agency warns; no AI call", async () => {
+    const admin = await row("admin");
+    const project = (await Catalogue.saveProject(h.pool, admin, { name: "Badya" })).project;
+    const file = await pdf(["Cover", "Units one", "Units two"]);
+    const files = [{ buffer: file, mimetype: "application/pdf", originalname: "badya.pdf" }];
+    answerByPage();
+    await PriceReading.setForAgency(h.pool, admin.agency_id, { enabled: "on" });
+    await h.query("UPDATE agencies SET pilot = false WHERE id = $1", [admin.agency_id]);
+    const before = await PriceReading.estimate(h.pool, admin, project.id, { files, pages: "2-3" });
+    expect(before).toMatchObject({ ok: true, pages: 2, credits: 20, left: 80, enough: true, repeat: false });
+    await PriceReading.read(h.pool, admin, project.id, { files, pages: "2" });
+    const after = await PriceReading.estimate(h.pool, admin, project.id, { files, pages: "2-3" });
+    expect(after).toMatchObject({ pages: 2, credits: 20, left: 70, repeat: true, confirm: true });
+    expect(FakeAI.calls).toHaveLength(1);
+    expect((await PriceReading.estimate(h.pool, admin, project.id, { files, pages: "" })).error).toBe("pages_required");
+  });
+
+  test("a read that spends credits needs a confirmed yes with its cost", async () => {
+    const admin = await row("admin");
+    const project = (await Catalogue.saveProject(h.pool, admin, { name: "Big" })).project;
+    await PriceReading.setForAgency(h.pool, admin.agency_id, { enabled: "on" });
+    await h.query("UPDATE agencies SET pilot = false WHERE id = $1", [admin.agency_id]);
+    const file = await pdf(["a", "b", "c", "d", "e", "f"]);
+    const { agent, csrf } = await signIn(h, "admin");
+    answerByPage();
+    const send = (extra) => agent.post(`/app/catalogue/projects/${project.id}/sheets/read`).field("_csrf", csrf).field("pages", "1-6").field(extra).attach("doc", file, { filename: "big.pdf", contentType: "application/pdf" });
+    const est = await agent.post(`/app/catalogue/projects/${project.id}/sheets/estimate`).field("_csrf", csrf).field("pages", "1-6").attach("doc", file, { filename: "big.pdf", contentType: "application/pdf" });
+    expect(est.body).toMatchObject({ ok: true, pages: 6, credits: 60, confirm: true });
+    const refused = await send({ confirmed: "0" });
+    expect(refused.headers.location).toContain("sheet_error=CONFIRM");
+    expect(FakeAI.calls).toHaveLength(0);
+    const ok = await send({ confirmed: "1" });
+    expect(ok.headers.location).not.toContain("sheet_error");
+    expect(FakeAI.calls.length).toBe(6);
   });
 
   test("photos; a failed page is reported; the web form and the owner's switch", async () => {
@@ -124,17 +164,17 @@ describe("reading a PDF", () => {
     expect(sw.status).toBe(200);
     pageHtml = (await agent.get(`/app/catalogue/projects/${project.id}`)).text;
     expect(pageHtml).toContain("data-ai-read");
-    expect(pageHtml).toContain('data-pages-left="10"');
+    expect(pageHtml).toContain('data-pages-left="200"');
 
     const photo = Buffer.from("fake-jpeg-bytes");
-    const up = await agent.post(`/app/catalogue/projects/${project.id}/sheets/read`).field("_csrf", csrf).attach("doc", photo, { filename: "p1.jpg", contentType: "image/jpeg" });
+    const up = await agent.post(`/app/catalogue/projects/${project.id}/sheets/read`).field("_csrf", csrf).field("confirmed", "1").attach("doc", photo, { filename: "p1.jpg", contentType: "image/jpeg" });
     expect(up.status).toBe(303);
     const preview = await agent.get(up.headers.location);
     expect(preview.text).toContain("data-ai-sheet");
     expect(preview.text).toContain("PH-1");
 
     FakeAI.respond(() => new Error("overloaded"));
-    const failed = await agent.post(`/app/catalogue/projects/${project.id}/sheets/read`).field("_csrf", csrf).attach("doc", Buffer.from("other"), { filename: "p2.jpg", contentType: "image/jpeg" });
+    const failed = await agent.post(`/app/catalogue/projects/${project.id}/sheets/read`).field("_csrf", csrf).field("confirmed", "1").attach("doc", Buffer.from("other"), { filename: "p2.jpg", contentType: "image/jpeg" });
     expect(failed.headers.location).toContain("sheet_error=AI_FAILED");
     // A failed read costs nothing.
     expect((await PriceReading.usage(h.pool, admin.agency_id)).used).toBe(1);

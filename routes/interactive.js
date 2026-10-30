@@ -95,6 +95,8 @@ async function handleInteractive(broker, message, ctx) {
     recentButtonClicks.set(clickKey, now + 3000);
   }
 
+  // A location pin's unit choice (pin:<code>:<lat>:<lng>).
+  if (await require("./unitPin").handlePinButton(broker, replyId, ctx)) return "done";
   // CRM lead buttons (ld:*): each reloads the lead and checks rights (lib/leadIntake.js).
   if (await LeadIntake.handleButton(broker, replyId, ctx)) return "done";
   // Deal review buttons (dl:*): the deal waits server-side (lib/deals.js).
@@ -699,6 +701,16 @@ async function handleInteractive(broker, message, ctx) {
   // session_type = 'search_state' holds { ids, offset, total } (lib/search.js handleMore).
   if (replyId === "MORE_SEARCH" || replyId.startsWith("search_more:")) {
     return await S.handleMore(broker, ctx);
+  }
+
+  // F5: a numbered search result → that unit's album and card (as sending its code does).
+  if (replyId.startsWith("open:")) {
+    const code = T.extractCleanCode(replyId.slice(5)).toUpperCase();
+    const { rows } = await pool.query("SELECT * FROM listings WHERE agency_id = $1 AND code_norm = $2 LIMIT 1", [broker.agency_id, code]);
+    if (rows.length) {
+      await require("./commandState").setRecentBrokerListing(pool, broker.id, rows[0].code, ctx.recentBrokerListings);
+      return await require("./commandDeliverables").deliverUnitInspectionCard(rows[0], broker, lang, pool);
+    }
   }
 
   // 17. Unrecognized or Stale Button ID

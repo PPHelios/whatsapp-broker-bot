@@ -116,10 +116,10 @@ async function sendInventoryStats(broker, ctx, startTime) {
     }
 
     await replyButtons(broker, statsMsg, [
-      {
+      ...(require("../lib/authz").isManager(broker) ? [{
         id: "cmd:export",
         title: lang === "en" ? "Export Excel 📊" : "تصدير الإكسيل 📊"
-      },
+      }] : []),
       {
         id: "cmd:add",
         title: lang === "en" ? "New Unit 📝" : "إضافة وحدة 📝"
@@ -148,6 +148,12 @@ async function sendInventoryStats(broker, ctx, startTime) {
 /** DEL-06: the agency's active units as an .xlsx, built after the reply (one export a minute per broker). */
 async function startInventoryExport(broker, ctx) {
   const { pool, lang, cooldowns } = ctx;
+  // The whole inventory leaves the app in one file, so only managers may export it (and each export is logged below).
+  if (!require("../lib/authz").isManager(broker)) {
+    logCommandOp(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "command_inventory_export", status: "failed", error_code: "not_manager" });
+    await reply(broker, lang === "en" ? "🔒 Only managers can export all the units. Ask your manager." : "🔒 تصدير كل الوحدات للمديرين بس. اطلبه من مديرك.");
+    return true;
+  }
   const cooldownRemaining = await checkBrokerCooldown(
     pool,
     broker.id,

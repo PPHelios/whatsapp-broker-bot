@@ -29,7 +29,7 @@ const QUIET_DAYS = 60; // N3: "60 days since you spoke" on a client that fits
 function capFor(broker, dailyCap) {
   const linked = Boolean(broker.telegram_chat_id);
   const channel = Notifications.prefsOf(broker, { telegramLinked: linked }).channels.match;
-  return linked && channel === "telegram" ? Math.max(dailyCap, TELEGRAM_DAILY_CAP) : dailyCap;
+  return linked && (channel === "telegram" || channel === "both") ? Math.max(dailyCap, TELEGRAM_DAILY_CAP) : dailyCap;
 }
 
 const en = (b) => b?.preferred_lang === "en";

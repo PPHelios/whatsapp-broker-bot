@@ -99,7 +99,7 @@ async function freshDb() {
     shared = await createTestDb();
   } else {
     const { rows } = await shared.pool.query(
-      "SELECT string_agg(format('public.%I', tablename), ', ') AS t FROM pg_tables WHERE schemaname = 'public' AND tablename NOT IN ('schema_migrations', 'compound_synonyms', 'search_vocabulary')"
+      "SELECT string_agg(format('public.%I', tablename), ', ') AS t FROM pg_tables WHERE schemaname = 'public' AND tablename NOT IN ('schema_migrations', 'compound_synonyms', 'search_vocabulary', 'credit_plans', 'credit_bundles', 'credit_actions')"
     );
     await shared.pool.query(`TRUNCATE ${rows[0].t} RESTART IDENTITY CASCADE`);
   }
@@ -195,6 +195,7 @@ async function createHarness() {
     AI,
     Storage,
     Push,
+    pool,
     BROKERS,
     AGENCY_A,
     AGENCY_B,

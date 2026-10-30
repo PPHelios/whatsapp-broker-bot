@@ -167,3 +167,11 @@ test("the primary plan copy carries the plan, delivery and maintenance terms", (
   expect(p).toMatch(/الصيانة \(8%\): 880,000 ج.م \(عند الاستلام\)/);
   expect(p).toMatch(/🗓 تسليم 2028 Q2/);
 });
+
+test("bot result card: what and where with the code, then price and size, then terms", () => {
+  const l = { code: "NH-A12", property_type: "apartment", listing_type: "sale", compound: "هايد بارك", price_value: 8.5e6, area_value: 165, bedrooms: 3, bathrooms: 2 };
+  const lines = D.resultCard(l, "ar").split("\n");
+  expect(lines[0]).toBe("🏠 شقة · هايد بارك · `NH-A12`");
+  expect(lines[1]).toMatch(/^ {3}💰 .*📐 .*🛏 3 · 🛁 2$/);
+  expect(D.searchResults([l], { total: 1 })).toMatch(/^1\. 🏠 /m);
+});

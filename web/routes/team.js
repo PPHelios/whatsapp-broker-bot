@@ -15,6 +15,7 @@ const Phone = require("../../domain/phone");
 const RateLimit = require("../../lib/rateLimit");
 const { MANAGER_ROLES } = require("../../lib/authz");
 const { html } = require("../html");
+const { tabs } = require("../views/tabs");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
@@ -50,7 +51,7 @@ function linkCard(broker, url, agencyName, lang) {
   const wa = Phone.waMeUrl(broker.phone_number, Team.inviteText(broker, url, agencyName));
   return html`<section class="card notice ok" data-start-link>
   <h2>📨 ${L(lang, `لينك تيليجرام لـ ${broker.name}`, `Telegram link for ${broker.name}`)}</h2>
-  <p dir="ltr"><input readonly value="${url}" aria-label="${L(lang, "لينك البداية", "Start link")}"></p>
+  <p class="row" dir="ltr"><input readonly value="${url}" id="start-link" aria-label="${L(lang, "لينك البداية", "Start link")}"> <button type="button" class="secondary" data-copy="#start-link">📋 ${L(lang, "نسخ", "Copy")}</button></p>
   <p class="muted">${L(lang, "يشتغل مرة واحدة لمدة ٧ أيام. ابعته للوسيط؛ أول ما يدوس عليه حسابه على تيليجرام يتربط.", "Works once, for 7 days. Send it to the broker; tapping it links their Telegram account.")}</p>
   ${wa ? html`<p><a class="btn" href="${wa}" target="_blank" rel="noopener noreferrer">📤 ${L(lang, "ابعته على واتساب", "Send on WhatsApp")}</a></p>` : ""}
 </section>`;
@@ -82,6 +83,22 @@ function rulesCard(rules, lang) {
   </fieldset>
   <label>${L(lang, "أقصى عدد تحويلات للعميل", "Most moves per lead")} <input name="max_jumps" type="number" min="1" max="${Rules.MAX_JUMPS}" value="${rules.max_jumps}"></label>
   <p class="muted">${L(lang, "العميل اللي بتسجله لنفسك مش بيتحول. الوسيط اللي في إجازة مش بياخد عملاء جداد.", "A lead you add for yourself never moves. A broker who is away gets no new leads.")}</p>
+  <button type="submit">${L(lang, "احفظ", "Save")}</button>
+</form>`;
+}
+
+function routingCard({ routing, brokers }, lang) {
+  return html`<form method="post" action="/app/team/routing" class="card stack" data-lead-routing>
+  <h2>🔁 ${L(lang, "مين ياخد العملاء الجداد", "Who gets new leads")}</h2>
+  <label class="row"><input type="checkbox" name="round_robin" value="on"${routing.round_robin ? html` checked` : ""}> ${L(lang, "توزيع بالدور على الوسطاء", "Round robin between brokers")}</label>
+  <p class="muted">${L(lang, "لو مقفول، العملاء اللي جايين من الإعلانات والفورمز بيفضلوا مع المديرين يوزعوهم بإيدهم، ومفيش تحويل تلقائي.", "When off, leads from ads and forms stay with the managers to hand out themselves, and nothing moves on its own.")}</p>
+  <p class="muted">${L(lang, "اسحب الأسماء (أو استخدم الأسهم) لترتيب الدور: الأول ياخد العميل الجاي، وبعده اللي تحته. اللي في إجازة بيتعدّى.", "Drag the names (or use the arrows) to set the order: the first gets the next lead, then the one below. Anyone away is skipped.")}</p>
+  <ol data-sortable>${brokers.map(
+    (b) => html`<li draggable="true" data-routing-broker="${b.id}"><input type="hidden" name="order" value="${b.id}">
+    <span class="grow">${b.name} <span class="muted">(${b.role})</span>${routing.last === b.id ? html` <span class="badge">${L(lang, "خد آخر عميل", "got the last lead")}</span>` : ""}</span>
+    <span data-open-leads>${L(lang, `${b.open_leads} عميل مفتوح`, `${b.open_leads} open leads`)}</span>
+    <button type="button" class="secondary" data-move="up" aria-label="${L(lang, "لفوق", "Up")}">↑</button><button type="button" class="secondary" data-move="down" aria-label="${L(lang, "لتحت", "Down")}">↓</button></li>`
+  )}</ol>
   <button type="submit">${L(lang, "احفظ", "Save")}</button>
 </form>`;
 }
@@ -123,39 +140,43 @@ function cairoDay(d) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(d));
 }
 
-function teamPage({ team, lang, rules, speed, notice = null, link = null, now = new Date() }) {
+function memberCard(b, lang, speed, today, now) {
+  return html`<li class="member" data-broker="${b.id}" data-active="${b.is_active ? "1" : "0"}">
+  <div class="m-head"><b>${b.name}</b> <span class="chip">${b.role}</span>${b.is_active ? "" : html` <span class="muted">(${L(lang, "موقوف", "deactivated")}${b.deactivated_at ? ` ${when(b.deactivated_at)}` : ""})</span>`}${Rules.awayNow(b, now) ? html` <span class="badge" data-away>🌴 ${L(lang, `إجازة لحد ${cairoDay(b.away_until)}`, `away until ${cairoDay(b.away_until)}`)}</span>` : ""}</div>
+  <dl class="m-facts">
+    <div><dt>Telegram</dt><dd>${b.telegram ? "✅" : b.link_until ? html`⏳ <span class="muted">${L(lang, `لينك لحد ${when(b.link_until)}`, `link until ${when(b.link_until)}`)}</span>` : "—"}</dd></div>
+    <div><dt>${L(lang, "آخر نشاط", "Last active")}</dt><dd dir="ltr">${when(b.last_active_at)}</dd></div>
+    <div><dt>${L(lang, "سرعة الرد", "Speed to lead")}</dt><dd data-speed>${speedCell(speed.get(b.id), lang)}</dd></div>
+  </dl>
+  <div class="row m-actions">${b.is_active && !b.telegram ? html`<form method="post" action="/app/team/${b.id}/link"><button type="submit" class="secondary">🔗 ${L(lang, "لينك جديد", "New link")}</button></form>` : ""}
+  ${b.is_active ? html`<form method="post" action="/app/team/${b.id}/deactivate" data-confirm="${L(lang, "متأكد؟ عملاؤه هيرجعوا للمدير.", "Sure? Their leads go back to the managers.")}"><button type="submit" class="secondary">⛔ ${L(lang, "إيقاف", "Deactivate")}</button></form>` : html`<form method="post" action="/app/team/invite"><input type="hidden" name="name" value="${b.name}"><input type="hidden" name="phone" value="${b.phone_number}"><input type="hidden" name="role" value="${["broker", "manager"].includes(b.role) ? b.role : "broker"}"><button type="submit" class="secondary">↩️ ${L(lang, "رجّعه", "Bring back")}</button></form>`}</div>
+  ${memberTools(b, lang, today)}
+</li>`;
+}
+
+/** tab: 0 the team (default), 1 the lead rules (opened after saving one). */
+function teamPage({ team, lang, rules, speed, routing, notice = null, link = null, tab = 0, now = new Date() }) {
   const today = cairoDay(now);
-  return html`<h1>👥 ${L(lang, "الفريق والقواعد", "Team and rules")}</h1>
+  const active = team.filter((b) => b.is_active).length;
+  return html`<h1>${L(lang, "الفريق", "Team")}</h1>
 ${notice}
 ${link || ""}
-<form method="post" action="/app/team/invite" class="card stack">
-  <h2>➕ ${L(lang, "ضيف وسيط", "Invite a broker")}</h2>
+${tabs("team_tab", [
+  [L(lang, `الفريق (${active})`, `Team (${active})`), html`<details class="card invite"${team.length <= 1 ? html` open` : ""}>
+  <summary>➕ ${L(lang, "ضيف بروكر", "Invite a broker")}</summary>
+  <form method="post" action="/app/team/invite" class="stack">
   <label>${L(lang, "الاسم", "Name")} <input name="name" required maxlength="80"></label>
   <label>${L(lang, "الموبايل", "Mobile")} <input name="phone" required inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx"></label>
   <label>${L(lang, "الدور", "Role")} <select name="role"><option value="broker">${L(lang, "بروكر", "Broker")}</option><option value="manager">${L(lang, "مدير", "Manager")}</option></select></label>
   <label>${L(lang, "لغة البوت", "Bot language")} <select name="lang"><option value="ar">العربية</option><option value="en">English</option></select></label>
   <button type="submit">${L(lang, "ضيف واعمل لينك تيليجرام", "Add and make a Telegram link")}</button>
-</form>
-<section class="card">
-  <h2>${L(lang, "الفريق", "Team")}</h2>
-  <div class="scroll"><table>
-  <thead><tr><th>${L(lang, "الاسم", "Name")}</th><th>${L(lang, "الدور", "Role")}</th><th>Telegram</th><th>${L(lang, "آخر نشاط", "Last active")}</th><th>${L(lang, "سرعة الرد (30 يوم)", "Speed to lead (30 days)")}</th><th></th></tr></thead>
-  <tbody>${team.map(
-    (b) => html`<tr data-broker="${b.id}" data-active="${b.is_active ? "1" : "0"}">
-  <td>${b.name}${b.is_active ? "" : html` <span class="muted">(${L(lang, "موقوف", "deactivated")}${b.deactivated_at ? ` ${when(b.deactivated_at)}` : ""})</span>`}${Rules.awayNow(b, now) ? html` <span class="badge" data-away>🌴 ${L(lang, `إجازة لحد ${cairoDay(b.away_until)}`, `away until ${cairoDay(b.away_until)}`)}</span>` : ""}
-  ${memberTools(b, lang, today)}</td>
-  <td>${b.role}</td>
-  <td>${b.telegram ? "✅" : b.link_until ? html`⏳ <span class="muted">${L(lang, `لينك لحد ${when(b.link_until)}`, `link until ${when(b.link_until)}`)}</span>` : "—"}</td>
-  <td dir="ltr">${when(b.last_active_at)}</td>
-  <td data-speed>${speedCell(speed.get(b.id), lang)}</td>
-  <td class="row">${b.is_active && !b.telegram ? html`<form method="post" action="/app/team/${b.id}/link"><button type="submit" class="secondary">🔗 ${L(lang, "لينك جديد", "New link")}</button></form>` : ""}
-  ${b.is_active ? html`<form method="post" action="/app/team/${b.id}/deactivate" data-confirm="${L(lang, "متأكد؟ عملاؤه هيرجعوا للمدير.", "Sure? Their leads go back to the managers.")}"><button type="submit" class="secondary">⛔ ${L(lang, "إيقاف", "Deactivate")}</button></form>` : html`<form method="post" action="/app/team/invite"><input type="hidden" name="name" value="${b.name}"><input type="hidden" name="phone" value="${b.phone_number}"><input type="hidden" name="role" value="${["broker", "manager"].includes(b.role) ? b.role : "broker"}"><button type="submit" class="secondary">↩️ ${L(lang, "رجّعه", "Bring back")}</button></form>`}</td>
-</tr>`
-  )}</tbody></table></div>
-  <p class="muted">${L(lang, "الإيقاف بيقفل دخوله فوراً وبيرجّع عملاءه للمديرين. الحسابات مش بتتمسح؛ الموقوفين في الآخر، والأقدم في الآخر خالص.", "Deactivating signs them out at once and returns their leads to the managers. Accounts are never deleted; former brokers are listed last, the longest gone at the very end.")}</p>
-  <p class="muted">${L(lang, "سرعة الرد: متوسط الدقايق من ما العميل يتسلم لحد أول مكالمة، للعملاء اللي حد تاني سلّمهم.", "Speed to lead: median minutes from a lead being given to the first contact, for leads someone else gave them.")}</p>
-</section>
-${rulesCard(rules, lang)}`;
+  </form>
+</details>
+<ul class="members">${team.map((b) => memberCard(b, lang, speed, today, now))}</ul>
+<p class="muted">${L(lang, "الإيقاف بيقفل دخوله فوراً وبيرجّع عملاءه للمديرين. الحسابات مش بتتمسح؛ الموقوفين في الآخر، والأقدم في الآخر خالص.", "Deactivating signs them out at once and returns their leads to the managers. Accounts are never deleted; former brokers are listed last, the longest gone at the very end.")}</p>
+<p class="muted">${L(lang, "سرعة الرد: متوسط الدقايق من ما العميل يتسلم لحد أول مكالمة، للعملاء اللي حد تاني سلّمهم.", "Speed to lead: median minutes from a lead being given to the first contact, for leads someone else gave them.")}</p>`],
+  [L(lang, "توزيع العملاء والقواعد", "Lead rules"), html`${routingCard(routing, lang)}${rulesCard(rules, lang)}`]
+], { open: tab })}`;
 }
 
 function register(web, { pool, page }) {
@@ -166,7 +187,8 @@ function register(web, { pool, page }) {
     if (!team) return forbidden(req, res);
     const rules = await LeadRules.getRules(pool, req.session.broker.agency_id);
     const speed = await LeadRules.speedToLead(pool, req.session.broker.agency_id, { waitMinutes: rules.wait_minutes });
-    return page(req, res, { title: L(lang, "الفريق والقواعد", "Team and rules"), nav: "settings", body: teamPage({ team, lang, rules, speed, ...extra }) }, status);
+    const routing = await LeadRules.routingList(pool, req.session.broker.agency_id);
+    return page(req, res, { title: L(lang, "الفريق", "Team"), nav: "settings", body: teamPage({ team, lang, rules, speed, routing, ...extra }) }, status);
   };
   const bad = (code, lang) => html`<p class="card notice bad" role="alert">❌ ${errorText(code, lang)}</p>`;
 
@@ -199,11 +221,21 @@ function register(web, { pool, page }) {
   web.post("/team/rules", async (req, res) => {
     const lang = langOf(req);
     const r = await LeadRules.saveRules(pool, req.session.broker, req.body);
-    if (r.error) return render(req, res, { notice: bad(r.field || r.error, lang) }, r.error === "forbidden" ? 403 : 400);
+    if (r.error) return render(req, res, { tab: 1, notice: bad(r.field || r.error, lang) }, r.error === "forbidden" ? 403 : 400);
     const msg = r.rules.enabled
       ? L(lang, `✅ القاعدة شغالة: ${r.rules.wait_minutes} دقيقة في ساعات الشغل.`, `✅ The rule is on: ${r.rules.wait_minutes} minutes in working hours.`)
       : L(lang, "✅ اتحفظت؛ القاعدة مقفولة.", "✅ Saved; the rule is off.");
-    return render(req, res, { notice: html`<p class="card notice ok" role="status">${msg}</p>` });
+    return render(req, res, { tab: 1, notice: html`<p class="card notice ok" role="status">${msg}</p>` });
+  });
+
+  web.post("/team/routing", async (req, res) => {
+    const lang = langOf(req);
+    const r = await LeadRules.saveRouting(pool, req.session.broker, { roundRobin: req.body.round_robin === "on", order: req.body.order });
+    if (r.error) return render(req, res, { tab: 1, notice: bad(r.error, lang) }, r.error === "forbidden" ? 403 : 400);
+    const msg = r.routing.round_robin
+      ? L(lang, "✅ اتحفظ: العملاء الجداد بيتوزعوا بالترتيب ده.", "✅ Saved: new leads go round in this order.")
+      : L(lang, "✅ اتحفظ: التوزيع بالدور مقفول؛ العملاء الجداد بيفضلوا مع المديرين.", "✅ Saved: round robin is off; new leads stay with the managers.");
+    return render(req, res, { tab: 1, notice: html`<p class="card notice ok" role="status">${msg}</p>` });
   });
 
   web.post("/team/:id/away", async (req, res) => {

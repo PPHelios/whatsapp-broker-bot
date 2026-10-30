@@ -26,8 +26,11 @@
       btn._rec = rec;
       btn.classList.add("recording");
       btn.textContent = btn.getAttribute("data-stop") || "■";
+      // A note longer than a minute costs more to read: stop at 60 seconds.
+      var cap = setTimeout(function () { if (btn._rec) btn._rec.stop(); }, 60000);
       rec.ondataavailable = function (ev) { if (ev.data.size) chunks.push(ev.data); };
       rec.onstop = function () {
+        clearTimeout(cap);
         stream.getTracks().forEach(function (t) { t.stop(); });
         btn._rec = null;
         btn.classList.remove("recording");

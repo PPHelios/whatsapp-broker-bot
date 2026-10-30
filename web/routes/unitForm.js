@@ -13,6 +13,10 @@ const RateLimit = require("../../lib/rateLimit");
 const { normalizeImageBuffer, MAX_PHOTOS } = require("../../lib/images");
 const { logOperation } = require("../../lib/db");
 const Rules = require("../../domain/fieldRules");
+const Card = require("../../domain/leadCard");
+const Leads = require("../../services/leads");
+const Leases = require("../../services/leases");
+const Plans = require("../../domain/plans");
 const Form = require("../forms/unitForm");
 const Session = require("../session");
 const { uploads, PHOTO, VOICE } = require("../uploads");
@@ -58,8 +62,20 @@ function evaluate({ existing, form, lang, photoCount }) {
 }
 
 function register(web, { pool, page }) {
-  const formPage = (req, res, opts, status = 200) => {
+  // The owner's lead code: an existing lead of this agency that this broker may see (L-0042), or an error text.
+  const checkOwnerLead = async (broker, listing, lang) => {
+    const raw = listing?.details?.owner_lead;
+    if (!raw) return null;
+    const ref = Card.parseRef(raw);
+    const lead = ref ? await Leads.getLead(pool, broker, ref) : null;
+    if (!lead) return L10n(lang, `⛔ كود العميل ${raw} مش موجود عندك. اكتبه زي L-0042 أو سيبه فاضي.`, `⛔ Lead code ${raw} wasn't found in your clients. Write it like L-0042 or leave it empty.`);
+    listing.details.owner_lead = Card.refLabel(ref);
+    return null;
+  };
+
+  const formPage = async (req, res, opts, status = 200) => {
     const lang = langOf(req);
+    const leadChoices = await Leases.tenantChoices(pool, req.session.broker).catch(() => []);
     const edit = opts.mode === "edit";
     return page(
       req,
@@ -67,7 +83,7 @@ function register(web, { pool, page }) {
       {
         title: edit ? `${L10n(lang, "تعديل", "Edit")} ${opts.code}` : L10n(lang, "إضافة وحدة", "Add a unit"),
         nav: edit ? "units" : "add",
-        body: html`<h1>${edit ? `✏️ ${L10n(lang, "تعديل", "Edit")} ${opts.code}` : `➕ ${L10n(lang, "إضافة وحدة", "Add a unit")}`}</h1>${unitForm({ lang, csrf: req.session.csrf, ...opts })}${placeList()}`
+        body: html`<h1>${edit ? `✏️ ${L10n(lang, "تعديل", "Edit")} ${opts.code}` : `➕ ${L10n(lang, "إضافة وحدة", "Add a unit")}`}</h1>${unitForm({ lang, csrf: req.session.csrf, ...opts })}${placeList()}<datalist id="lead-codes">${leadChoices.map((c) => html`<option value="${c.label.split(" ")[0]}">${c.label}</option>`)}</datalist>`
       },
       status
     );
@@ -116,7 +132,7 @@ function register(web, { pool, page }) {
           ...view,
           values: Form.formFromUnit({ ...base, code: form.code }),
           error: quota
-            ? L10n(lang, "⛔ حد الذكاء الاصطناعي خلص (حد اليوم أو رصيد الباقة). املأ البيانات يدوياً.", "⛔ The AI limit was reached (today's limit or your plan's allowance). Fill the fields by hand.")
+            ? L10n(lang, "⛔ رصيد الذكاء الاصطناعي خلص. املأ البيانات يدوياً هنا من غير رصيد، أو اطلب رصيد زيادة من صفحة الباقة.", "⛔ Your AI credits are used up. Fill the fields by hand here (no credits needed) or ask for more on the Plan page.")
             : L10n(lang, "❌ تعذر قراءة الوصف حالياً. املأ البيانات يدوياً أو حاول تاني.", "❌ Could not read the description right now. Fill the fields by hand or try again.")
         }))
       );
@@ -148,6 +164,8 @@ function register(web, { pool, page }) {
     const again = (status, error, duplicate = null) =>
       formPage(req, res, { mode: "new", values: Form.formFromUnit({ ...ev.listing, code: form.code }), review: reviewPanel({ ...ev, listing: { ...ev.listing, code: form.code } }, lang, { duplicate }), error, duplicate }, status);
     if (!ev.ok) return again(422, L10n(lang, "⛔ في بيانات ناقصة. كملها واضغط حفظ.", "⛔ Some required details are missing."));
+    const leadError = await checkOwnerLead(broker, ev.listing, lang);
+    if (leadError) return again(422, leadError);
     // P13: a unit that looks like one already listed asks once; "Save anyway" sends force=1.
     if (req.body.force !== "1") {
       const duplicate = await Store.findDuplicate(pool, broker.agency_id, ev.listing);
@@ -163,13 +181,21 @@ function register(web, { pool, page }) {
     try {
       await client.query("BEGIN");
       result = await Store.createListing(client, broker, { fields: ev.listing, code: form.code, lang });
-      if (result.listing) await Store.addPhotos(client, result.listing, photos.urls);
+      if (result.listing) {
+        const added = await Store.addPhotos(client, result.listing, photos.urls);
+        // The broker ordered the photos by hand: AI ordering is skipped for this unit (saves AI credits).
+        if (req.body.photo_manual === "on" && added.length) await Store.reorderPhotos(client, result.listing, added.map((r) => r.id), { force: true });
+      }
       await client.query(result.listing ? "COMMIT" : "ROLLBACK");
     } catch (err) {
       await client.query("ROLLBACK").catch(() => {});
       throw err;
     } finally {
       client.release();
+    }
+    if (result.limit) {
+      Supabase.deleteStorageFiles(photos.urls).catch(() => {});
+      return again(403, Plans.unitLimitText(result.limit, lang));
     }
     if (result.conflict) {
       Supabase.deleteStorageFiles(photos.urls).catch(() => {});
@@ -197,13 +223,18 @@ function register(web, { pool, page }) {
       const photoCount = rows[0].n + photos.urls.length;
       const ev = evaluate({ existing: listing, form, lang, photoCount });
       if (!ev.ok) return { rollback: true, listing, ev };
+      const leadError = await checkOwnerLead(broker, ev.listing, lang);
+      if (leadError) return { rollback: true, listing, ev, leadError };
       if (photoCount > MAX_PHOTOS) return { rollback: true, listing, ev, tooMany: true };
       const patch = Edits.diffPatch(listing, ev.listing);
       const res2 = await Store.applyListingPatch(client, broker, { listing, patch, expectedVersion });
       if (res2.conflict) return { rollback: true, listing, ev, conflict: true };
       const removed = await Store.removePhotos(client, listing, removeIds);
       await Store.addPhotos(client, listing, photos.urls);
-      return { saved: res2.listing, removed, columns: Object.keys(patch) };
+      // P3: the order the broker dragged the photos into (new photos follow).
+      const order = [].concat(req.body.photo_order || []).filter((id) => /^[0-9a-f-]{36}$/.test(id) && !removeIds.includes(id));
+      const reordered = (order.length > 1 || req.body.photo_manual === "on") && (await Store.reorderPhotos(client, res2.listing, order, { force: req.body.photo_manual === "on" }));
+      return { saved: res2.listing, removed, reordered, columns: Object.keys(patch) };
     });
 
     if (out.missing || out.forbidden) {
@@ -212,7 +243,9 @@ function register(web, { pool, page }) {
     }
     if (!out.saved) {
       Supabase.deleteStorageFiles(photos.urls).catch(() => {});
-      const error = out.conflict
+      const error = out.leadError
+        ? out.leadError
+        : out.conflict
         ? L10n(lang, `⚠️ الوحدة #${out.listing.code} اتعدلت من شخص تاني أثناء التعديل. افتح التعديل من جديد.`, `⚠️ #${out.listing.code} was changed by someone else meanwhile. Open the edit again.`)
         : out.tooMany
         ? L10n(lang, `⚠️ الحد الأقصى ${MAX_PHOTOS} صورة للوحدة.`, `⚠️ At most ${MAX_PHOTOS} photos per unit.`)
@@ -234,7 +267,7 @@ function register(web, { pool, page }) {
     }
     // Storage files are removed outside the transaction (SEC-04).
     if (out.removed.length) Supabase.deleteStorageFiles(out.removed).catch(() => {});
-    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: out.saved.code, operation_type: "web_unit_edit", metadata: { columns: out.columns, photos_added: photos.urls.length, photos_removed: out.removed.length } });
+    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: out.saved.code, operation_type: "web_unit_edit", metadata: { columns: out.columns, photos_added: photos.urls.length, photos_removed: out.removed.length, photos_reordered: Boolean(out.reordered) } });
     return res.redirect(303, `/app/units/${encodeURIComponent(out.saved.code)}?saved=1`);
   });
 }

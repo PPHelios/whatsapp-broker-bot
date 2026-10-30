@@ -12,13 +12,14 @@ const RateLimit = require("../../lib/rateLimit");
 const Sheets = require("../../lib/sheets");
 const { logOperation } = require("../../lib/db");
 const Imports = require("../../services/imports");
+const Plans = require("../../domain/plans");
 const ChatPhotos = require("../../services/chatPhotos");
-const Bulk = require("../../services/bulk");
 const Chat = require("../../domain/chatExport");
 const Describe = require("../../domain/describe");
 const Session = require("../session");
 const { uploads } = require("../uploads");
 const { html, raw } = require("../html");
+const { tabs } = require("../views/tabs");
 const { stripMarkdown } = require("../views/units");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
@@ -92,6 +93,7 @@ function resultCard(r, lang) {
     ${line(L(lang, "اتغيرت من شخص تاني بعد المراجعة (متعدلتش)", "Changed by someone else since the review (not applied)"), r.conflicts)}
     ${line(L(lang, "متطبقتش", "Not applied"), r.failed)}
   </ul>
+  ${r.limit ? html`<p class="notice bad" data-unit-limit>${Plans.unitLimitText(r.limit, lang)}</p>` : ""}
 </div>`;
 }
 
@@ -154,40 +156,48 @@ ${applied ? "" : html`<button type="submit">✅ ${L(lang, "ضيف المختار
 function register(web, { pool, page }) {
   const importPage = (req, res, body, status = 200) => page(req, res, { title: L(langOf(req), "استيراد", "Import"), nav: "import", body }, status);
 
-  web.get("/import", (req, res) => {
+  /**
+   * The import hub: one tile per way in (Excel, pasted group posts, a chat export with photos, leads). An error shows
+   * above its own form, with that tile open (tab: 0 Excel, 1 group posts, 2 chat with photos).
+   */
+  const importHub = (req, { notice = null, tab = 0 } = {}) => {
     const lang = langOf(req);
-    return importPage(
-      req,
-      res,
-      html`<h1>📥 ${L(lang, "استيراد", "Import")}</h1>
-<form method="post" action="/app/import/excel" enctype="multipart/form-data" class="card stack">
+    const err = (n) => (notice && tab === n ? notice : "");
+    return html`<h1>${L(lang, "استيراد", "Import")}</h1>
+${tabs("import_tab", [
+  [html`<span class="ti">📊</span>${L(lang, "شيت إكسيل", "Excel sheet")}`, html`${err(0)}<form method="post" action="/app/import/excel" enctype="multipart/form-data" class="card stack">
   <input type="hidden" name="_csrf" value="${req.session.csrf}">
   <h2>📊 ${L(lang, "شيت إكسيل (مقارنة بالمخزون)", "Excel sheet (compared with your inventory)")}</h2>
   <p class="muted">${L(lang, "هنوريك الجديد والمتغير قبل أي حفظ. ينفع شيت التصدير من البوت أو", "You see what is new and what changed before anything is saved. The bot's export works, or")} <a href="/app/import/template.xlsx">${L(lang, "النموذج ده", "this template")}</a>.</p>
   <input type="file" name="sheet" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
   <button type="submit">${L(lang, "قارن", "Compare")}</button>
-</form>
-<form method="post" action="/app/import/group" enctype="multipart/form-data" class="card stack">
+</form>`],
+  [html`<span class="ti">💬</span>${L(lang, "بوستات جروبات", "Group posts")}`, html`${err(1)}<form method="post" action="/app/import/group" enctype="multipart/form-data" class="card stack">
   <input type="hidden" name="_csrf" value="${req.session.csrf}">
   <h2>💬 ${L(lang, "بوستات الجروبات", "Group posts")}</h2>
   <label>${L(lang, "الصق البوستات (سيب سطرين فاضيين بين كل بوست)", "Paste the posts (two empty lines between posts)")}<textarea name="text" rows="6"></textarea></label>
   <label>${L(lang, "أو ارفع تصدير الشات من واتساب (.txt أو .zip)", "Or upload a WhatsApp chat export (.txt or .zip)")}<input type="file" name="chat" accept=".txt,.zip,text/plain,application/zip"></label>
+  <label>${L(lang, "استورد البوستات من تاريخ", "Import posts from")}<input type="date" name="since" value="${Chat.defaultSince()}"></label>
   <p class="muted">${L(lang, `بنقرا لحد ${Chat.MAX_POSTS} بوست في المرة، وبنعلّم المكرر.`, `Up to ${Chat.MAX_POSTS} posts at a time; duplicates are flagged.`)}</p>
   <button type="submit">${L(lang, "اقرأ البوستات", "Read the posts")}</button>
-</form>
-<form method="post" action="/app/import/zip" class="card stack" data-zip-upload data-max="${Supabase.CHAT_ZIP_MAX_BYTES}">
+</form>`],
+  [html`<span class="ti">📷</span>${L(lang, "شات بالصور", "Chat with photos")}`, html`${err(2)}<form method="post" action="/app/import/zip" class="card stack" data-zip-upload data-max="${Supabase.CHAT_ZIP_MAX_BYTES}">
   <input type="hidden" name="_csrf" value="${req.session.csrf}">
   <input type="hidden" name="path" value="">
   <input type="hidden" name="filename" value="">
   <h2>📷 ${L(lang, "تصدير شات بالصور", "Chat export with photos")}</h2>
   <p class="muted">${L(lang, `من واتساب: الجروب ← المزيد ← تصدير الشات ← «إرفاق الوسائط». ارفع الـ zip هنا (لحد ${Math.round(Supabase.CHAT_ZIP_MAX_BYTES / 1048576)} ميجا): كل صورة بتروح للبوست بتاعها (نفس الراسل وفي خلال دقايق)، لحد ${Chat.MAX_PHOTOS} صورة للوحدة، وبنعلّم الصور اللي موجودة على وحدة عندك.`, `In WhatsApp: the group → More → Export chat → "Attach media". Upload the zip here (up to ${Math.round(Supabase.CHAT_ZIP_MAX_BYTES / 1048576)} MB): each photo goes to its post (same sender, within minutes), up to ${Chat.MAX_PHOTOS} a unit, and photos already on one of your units are flagged.`)}</p>
+  <label>${L(lang, "استورد البوستات من تاريخ", "Import posts from")}<input type="date" name="since" value="${Chat.defaultSince()}"></label>
   <input type="file" accept=".zip,application/zip" data-zip-file required>
   <progress max="100" value="0" hidden data-zip-progress></progress>
   <p class="muted" hidden data-zip-status data-msg-big="${L(lang, "الملف أكبر من المسموح.", "The file is larger than allowed.")}" data-msg-fail="${L(lang, "الرفع فشل. جرب تاني.", "The upload failed. Try again.")}" data-msg-wait="${L(lang, "جاري الرفع…", "Uploading…")}"></p>
   <button type="submit">${L(lang, "ارفع واقرأ", "Upload and read")}</button>
-</form>`
-    );
-  });
+</form>`]
+], { open: tab, cls: "tiles" })}
+<p class="card row between"><span>👥 ${L(lang, "عملاء من ملف (فيسبوك أو إكسيل)؟", "Leads from a file (Facebook or Excel)?")}</span><a class="btn secondary small" href="/app/leads/import">${L(lang, "استيراد عملاء", "Import leads")}</a></p>`;
+  };
+
+  web.get("/import", (req, res) => importPage(req, res, importHub(req)));
 
   web.get("/import/template.xlsx", async (_req, res) => {
     const wb = new ExcelJS.Workbook();
@@ -204,7 +214,7 @@ function register(web, { pool, page }) {
     const lang = langOf(req);
     const { broker } = req.session;
     const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
-    if (!gate.allowed) return importPage(req, res, html`<p class="card notice bad">⏳ ${L(lang, "رفعت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment.")}</p>`, 429);
+    if (!gate.allowed) return importPage(req, res, importHub(req, { tab: 0, notice: html`<p class="card notice bad" role="alert">⏳ ${L(lang, "رفعت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment.")}</p>` }), 429);
     const file = (req.files?.sheet || [])[0];
     let sheet;
     try {
@@ -217,7 +227,7 @@ function register(web, { pool, page }) {
         TOO_MANY_ROWS: L(lang, `أكتر من ${Sheets.MAX_ROWS} صف.`, `More than ${Sheets.MAX_ROWS} rows.`)
       }[err.code];
       if (!msg) throw err;
-      return importPage(req, res, html`<p class="card notice bad">⚠️ ${msg} <a href="/app/import">${L(lang, "رجوع", "Back")}</a></p>`, 422);
+      return importPage(req, res, importHub(req, { tab: 0, notice: html`<p class="card notice bad" role="alert">⚠️ ${msg}</p>` }), 422);
     }
     const plan = await Imports.planExcel(pool, broker, sheet, { lang });
     const id = await Imports.savePlan(pool, broker, "excel", plan, { filename: String(file.originalname || "").slice(0, 120) });
@@ -229,10 +239,10 @@ function register(web, { pool, page }) {
     const lang = langOf(req);
     const { broker } = req.session;
     const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
-    if (!gate.allowed) return importPage(req, res, html`<p class="card notice bad">⏳ ${L(lang, "رفعت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment.")}</p>`, 429);
+    if (!gate.allowed) return importPage(req, res, importHub(req, { tab: 1, notice: html`<p class="card notice bad" role="alert">⏳ ${L(lang, "رفعت ملفات كتير. استنى شوية.", "Too many uploads. Wait a moment.")}</p>` }), 429);
     const file = (req.files?.chat || [])[0];
     const text = [String(req.body.text || ""), await chatText(file)].filter((t) => t.trim()).join("\n\n\n");
-    const found = Chat.candidatePosts(text);
+    const found = Chat.candidatePosts(text, { since: req.body.since });
     if (file && ChatPhotos.isZip(file.buffer)) {
       // A small zip sent with the form: read with its photos in the background, pasted posts first.
       const id = await Imports.startGroupImport(pool, broker, [], {
@@ -240,13 +250,13 @@ function register(web, { pool, page }) {
         ctx: { pool, broker, agency: req.session.agency, lang },
         lang,
         filename: String(file.originalname || "").slice(0, 120),
-        prepare: (importId) => ChatPhotos.postsFromExport(pool, broker, importId, { buffer: file.buffer }, { extraPosts: found.posts })
+        prepare: (importId) => ChatPhotos.postsFromExport(pool, broker, importId, { buffer: file.buffer }, { extraPosts: found.posts, since: req.body.since })
       });
       logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", metadata: { kind: "group_zip", bytes: file.buffer.length } });
       return res.redirect(303, `/app/import/${id}`);
     }
     if (!found.posts.length) {
-      return importPage(req, res, html`<p class="card notice">🔍 ${L(lang, "ملقيناش بوستات فيها وحدات (سعر ومساحة أو غرف).", "No posts describing a unit (price and area or rooms) were found.")} <a href="/app/import">${L(lang, "رجوع", "Back")}</a></p>`, 422);
+      return importPage(req, res, importHub(req, { tab: 1, notice: html`<p class="card notice bad" role="alert">🔍 ${L(lang, "ملقيناش بوستات فيها وحدات (سعر ومساحة أو غرف).", "No posts describing a unit (price and area or rooms) were found.")}</p>` }), 422);
     }
     const id = await Imports.startGroupImport(pool, broker, found.posts, {
       AI,
@@ -275,7 +285,7 @@ function register(web, { pool, page }) {
     const { broker } = req.session;
     const target = String(req.body.path || "");
     if (!ZIP_PATH.test(target) || !target.startsWith(zipPrefix(broker))) {
-      return importPage(req, res, html`<p class="card notice bad">⚠️ ${L(lang, "اختار ملف الـ zip الأول.", "Choose the zip file first.")} <a href="/app/import">${L(lang, "رجوع", "Back")}</a></p>`, 400);
+      return importPage(req, res, importHub(req, { tab: 2, notice: html`<p class="card notice bad" role="alert">⚠️ ${L(lang, "اختار ملف الـ zip الأول.", "Choose the zip file first.")}</p>` }), 400);
     }
     const tmp = path.join(os.tmpdir(), `chat-${crypto.randomBytes(8).toString("hex")}.zip`);
     const id = await Imports.startGroupImport(pool, broker, [], {
@@ -291,7 +301,7 @@ function register(web, { pool, page }) {
           if (err.code === "TOO_LARGE") return { error: "too_large" };
           throw err;
         }
-        return ChatPhotos.postsFromExport(pool, broker, importId, { file: tmp });
+        return ChatPhotos.postsFromExport(pool, broker, importId, { file: tmp }, { since: req.body.since });
       },
       cleanup: async () => {
         await fs.promises.unlink(tmp).catch(() => {});
@@ -327,35 +337,6 @@ function register(web, { pool, page }) {
     return res.redirect(303, `/app/import/${imp.id}`);
   });
 
-  /* Bulk edit from the units list. */
-  web.post("/units/bulk", async (req, res) => {
-    const lang = langOf(req);
-    const { broker } = req.session;
-    let out;
-    try {
-      out = await Bulk.bulkUpdate(pool, broker, { codes: [].concat(req.body.code || []), action: req.body.action, pct: req.body.pct });
-    } catch (err) {
-      if (err.code !== "INVALID_BULK") throw err;
-      return page(req, res, { title: L(lang, "تعديل جماعي", "Bulk edit"), nav: "units", body: html`<p class="card notice bad">⚠️ ${L(lang, "اختار وحدات وإجراء صحيح (النسبة من -50% لـ +100%).", "Pick units and a valid action (percent from -50% to +100%).")} <a href="/app/units">${L(lang, "رجوع", "Back")}</a></p>` }, 422);
-    }
-    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_bulk_edit", metadata: { action: req.body.action, pct: req.body.pct || null, updated: out.updated.length, forbidden: out.forbidden.length, conflicts: out.conflicts.length } });
-    const line = (label, list) => (list.length ? html`<li data-outcome>${label}: ${list.length} <span class="muted">${list.join("، ")}</span></li>` : "");
-    return page(req, res, {
-      title: L(lang, "تعديل جماعي", "Bulk edit"),
-      nav: "units",
-      body: html`<div class="card notice" data-bulk-result>
-  <h1>✅ ${L(lang, "تعديل جماعي", "Bulk edit")}</h1>
-  <ul>
-    ${line(L(lang, "اتعدلت", "Updated"), out.updated)}
-    ${line(L(lang, "مش من حقك تعدلها", "Not yours to change"), out.forbidden)}
-    ${line(L(lang, "أسعار مطور (بتتعدل بشيت الأسعار)", "Developer prices (change them with the price sheet)"), out.skipped)}
-    ${line(L(lang, "اتغيرت في نفس اللحظة، جرب تاني", "Changed at the same moment, try again"), out.conflicts)}
-    ${line(L(lang, "مش موجودة", "Not found"), out.missing)}
-  </ul>
-  <a href="/app/units">${L(lang, "رجوع للوحدات", "Back to units")}</a>
-</div>`
-    });
-  });
 }
 
 module.exports = { register, chatText, TEMPLATE_HEADERS };

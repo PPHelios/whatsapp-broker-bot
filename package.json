@@ -16,7 +16,9 @@
     "test:safeguards": "jest tests/safeguards.test.js --runInBand",
     "test:router": "node --experimental-vm-modules node_modules/jest/bin/jest.js tests/router --runInBand",
     "test:jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
+    "test:browser": "node tests/browser/search-voice.browser.js",
     "test:ci": "npm run test:unit && npm run test:jest",
+    "test:browser": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testMatch '**/tests/browser/**/*.test.js' --testPathIgnorePatterns /node_modules/",
     "test": "npm run audit:schema && npm run test:pipeline && npm run test:ci",
     "migrate": "node --env-file=.env scripts/migrate.js",
     "onboard": "node --env-file=.env scripts/onboard.js",
@@ -32,7 +34,8 @@
     ],
     "testPathIgnorePatterns": [
       "/node_modules/",
-      "<rootDir>/tests/e2e.test.js"
+      "<rootDir>/tests/e2e.test.js",
+      "<rootDir>/tests/browser/"
     ]
   },
   "engines": {
@@ -59,6 +62,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",
     "jest": "29.7.0",
+    "playwright": "^1.63.0",
     "supertest": "7.3.1",
     "typescript": "7.0.2"
   }

@@ -59,6 +59,19 @@ function atMs(at) {
   return Date.UTC(year, Number(mo) - 1, Number(d), hour, Number(mm), Number(ss || 0));
 }
 
+/** "2026-07-30" (a date input) → ms at the start of that day, or null; and the default "last 30 days" start. */
+const sinceMs = (v) => {
+  const m = String(v || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+};
+const DEFAULT_DAYS = 30;
+const defaultSince = (now = new Date()) => new Date(now.getTime() - DEFAULT_DAYS * 86400000).toISOString().slice(0, 10);
+/** Messages older than since are dropped; a message whose time can't be read is kept. */
+const notOlder = (since) => (m) => {
+  const t = atMs(m.at);
+  return since === null || t === null || t >= since;
+};
+
 /**
  * A chat export with media → messages [{ sender, at, text, files, i }]: a photo line becomes a file of its message
  * (Android puts a caption under it), other media lines are dropped.
@@ -118,8 +131,9 @@ function assignPhotos(messages, posts) {
  * A chat export with its media (the .zip WhatsApp makes) → candidate posts like candidatePosts, each with the photo
  * file names that belong to it.
  */
-function candidatePostsWithPhotos(text) {
-  const messages = parseWithAttachments(text);
+function candidatePostsWithPhotos(text, { since = null } = {}) {
+  const from = sinceMs(since);
+  const messages = parseWithAttachments(text).filter(notOlder(from));
   const seen = new Set();
   const posts = [];
   let skipped = 0;
@@ -168,8 +182,8 @@ function looksLikeListing(text) {
  * Upload or paste → candidate posts, de-duplicated by normalized text, at most MAX_POSTS.
  * @returns {{ posts: [{ sender, at, text, hash }], total, skipped, duplicates, truncated }}
  */
-function candidatePosts(text) {
-  const messages = isChatExport(text) ? parseChatExport(text) : splitPasted(text);
+function candidatePosts(text, { since = null } = {}) {
+  const messages = (isChatExport(text) ? parseChatExport(text) : splitPasted(text)).filter(notOlder(sinceMs(since)));
   const seen = new Set();
   const posts = [];
   let skipped = 0;
@@ -190,4 +204,4 @@ function candidatePosts(text) {
   return { posts: posts.slice(0, MAX_POSTS), total: messages.length, skipped, duplicates, truncated: Math.max(0, posts.length - MAX_POSTS) };
 }
 
-module.exports = { MAX_POSTS, MAX_PHOTOS, isChatExport, parseChatExport, splitPasted, looksLikeListing, candidatePosts, atMs, parseWithAttachments, assignPhotos, candidatePostsWithPhotos };
+module.exports = { DEFAULT_DAYS, defaultSince, MAX_POSTS, MAX_PHOTOS, isChatExport, parseChatExport, splitPasted, looksLikeListing, candidatePosts, atMs, parseWithAttachments, assignPhotos, candidatePostsWithPhotos };

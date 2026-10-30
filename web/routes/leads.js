@@ -6,6 +6,8 @@
 "use strict";
 
 const Leads = require("../../services/leads");
+const IntakeUrls = require("../../services/leadIntake");
+const Leases = require("../../services/leases");
 const FollowUpDrafts = require("../../services/followUpDrafts");
 const LeadMerge = require("../../services/leadMerge");
 const LeadRequests = require("../../services/leadRequests");
@@ -25,6 +27,8 @@ const { logOperation } = require("../../lib/db");
 const Session = require("../session");
 const { uploads, VOICE } = require("../uploads");
 const { html } = require("../html");
+const { icon } = require("../icons");
+const UnitPrivacy = require("../../services/unitPrivacy");
 const V = require("../views/leads");
 const { refineForm } = require("../views/searchForm");
 
@@ -59,9 +63,10 @@ function viewingSection({ lead, viewing: v, unit, path, hidden, lang }) {
   </div>`
     : html`<p class="muted">${L(lang, "حدد ميعاد ووحدة ومكان، وهيتفتح واتساب على شات العميل برسالة فيها لينك يأكد منه أو يختار ميعاد تاني.", "Set a time, unit and place; WhatsApp opens on the client's chat with a link to confirm or pick another time.")}</p>`}
   <form method="post" action="${path}/viewing" class="grid">${hidden}
-    <label>${L(lang, "إمتى (بتوقيت القاهرة)", "When (Cairo time)")}<input type="datetime-local" name="at" required value="${at ? Stages.toCairoLocal(at) : ""}"></label>
+    <label>${L(lang, "إمتى (بتوقيت القاهرة)", "When (Cairo time)")}<input type="datetime-local" name="at" required value="${at ? Stages.toCairoLocal(at) : Stages.nextHourLocal()}"></label>
     <label>${L(lang, "كود الوحدة", "Unit code")}<input name="unit" dir="ltr" value="${(open && v.code) || unit?.code || ""}"></label>
-    <label>${L(lang, "المكان", "Place")}<input name="place" maxlength="200" value="${(open && v.place) || ""}" placeholder="${L(lang, "مثلاً: بوابة 3، هايد بارك", "e.g. Gate 3, Hyde Park")}"></label>
+    <label>${L(lang, "المكان", "Place")}<input name="place" maxlength="200" value="${(open && v.place) || unit?.mapsUrl || ""}" placeholder="${L(lang, "مثلاً: بوابة 3، هايد بارك", "e.g. Gate 3, Hyde Park")}"></label>
+    ${unit?.mapsUrl ? "" : html`<p class="muted small">${L(lang, "اختياري: ابعت للعميل مكان المقابلة.", "Optional: send the client the meeting point.")} <button type="button" class="link" data-my-location data-fail="${L(lang, "مقدرناش نجيب مكانك.", "Couldn't get your location.")}" hidden>${L(lang, "استخدم مكاني دلوقتي", "Use where I am now")}</button></p>`}
     <button type="submit">📲 ${v ? L(lang, "ابعت ميعاد جديد للعميل", "Send a new time to the client") : L(lang, "ابعت الميعاد للعميل على واتساب", "Send the time to the client on WhatsApp")}</button>
   </form>
 </section>`;
@@ -114,6 +119,35 @@ function register(web, { pool, page }) {
   /* The list                                                            */
   /* ------------------------------------------------------------------ */
 
+  /* The lead board: one column per stage, swipe across; drag a card (or pick a stage) to move it. */
+  web.get("/leads/board", async (req, res) => {
+    const lang = langOf(req);
+    const { broker } = req.session;
+    const manager = isManager(broker);
+    const brokerId = manager && req.query.broker ? String(req.query.broker) : null;
+    const open = Stages.STAGES.filter((s) => !Stages.isClosed(s));
+    const cols = await Promise.all(Stages.STAGES.map(async (s) => [s, await Leads.listLeads(pool, broker, { stage: s, brokerId, limit: Stages.isClosed(s) ? 10 : 40, offset: 0 })]));
+    const brokers = manager ? await activeBrokers(pool, broker.agency_id) : [];
+    const moved = /^L-\d{4,6}$/.test(String(req.query.moved || "")) ? req.query.moved : null;
+    const card = (l) => html`<li class="bcard" data-lead="${Card.refLabel(l.ref)}" draggable="true">
+      <a href="${V.leadPath(l)}"><strong>${Card.displayName(l, lang)}</strong> <span class="muted small" dir="ltr">${Card.refLabel(l.ref)}</span></a>
+      <span class="muted small">${l.follow_up_status === "open" ? `⏰ ${V.when(l.next_follow_up_at, lang)}` : L(lang, "مفيش خطوة جاية", "No next step")}${manager ? ` · ${l.assignee_name || L(lang, "مش متسلم", "Unassigned")}` : ""}</span>
+      <form method="post" action="${V.leadPath(l, "/stage")}" class="bmove"><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="version" value="${l.version}"><input type="hidden" name="back" value="board">
+        <select name="stage" aria-label="${L(lang, "انقل لـ", "Move to")}">${open.concat("won").map((s) => html`<option value="${s}"${s === l.stage ? html` selected` : ""}>${Stages.stageLabel(s, lang)}</option>`)}</select><button type="submit" class="secondary small">${L(lang, "انقل", "Move")}</button></form>
+    </li>`;
+    return page(req, res, {
+      title: L(lang, "لوحة العملاء", "Lead board"),
+      nav: "leads",
+      body: html`<div class="row between"><h1>${L(lang, "لوحة العملاء", "Lead board")}</h1><a class="btn secondary small" href="/app/leads">${L(lang, "القايمة", "List")}</a></div>
+${moved ? html`<p class="card notice ok" role="status">✅ ${L(lang, `${moved} اتنقل.`, `${moved} moved.`)}${req.query.undo ? html` <a href="/app/leads/${moved}">${L(lang, "افتحه للتراجع", "Open it to undo")}</a>` : ""}</p>` : ""}
+${manager
+  ? html`<form method="get" action="/app/leads/board"><select name="broker" data-autosubmit aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل الفريق", "Whole team")}</option><option value="none"${brokerId === "none" ? html` selected` : ""}>${L(lang, "مش متسلم", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${b.id === brokerId ? html` selected` : ""}>${b.name}</option>`)}</select><noscript><button type="submit">${L(lang, "تطبيق", "Apply")}</button></noscript></form>`
+  : ""}
+<p class="muted small">${L(lang, "اسحب العميل لعمود تاني، أو اختار المرحلة واضغط «انقل». «ضاع» من صفحة العميل عشان سبب الضياع.", "Drag a lead to another column, or pick a stage and tap Move. Mark Lost from the lead page (it needs a reason).")}</p>
+<div class="board-cols" data-board>${cols.map(([s, r]) => html`<section class="bcol" id="col-${s}" data-stage="${s}"><h2>${Stages.stageLabel(s, lang)} <b>${r.rows.length}${r.more ? "+" : ""}</b></h2><ol>${r.rows.map(card)}</ol></section>`)}</div>`
+    });
+  });
+
   web.get("/leads", async (req, res) => {
     const lang = langOf(req);
     const { broker } = req.session;
@@ -135,6 +169,7 @@ function register(web, { pool, page }) {
     const { rows, more } = await Leads.listLeads(pool, broker, f);
     const pipe = manager ? await Leads.pipeline(pool, broker) : null;
     const brokers = manager ? await activeBrokers(pool, broker.agency_id) : [];
+    const extraSources = await IntakeUrls.sourcesFor(pool, broker.agency_id);
     const qs = (over) => {
       const p = new URLSearchParams();
       const all = { tab, q: f.q, kind: req.query.kind || "", source: f.source || "", broker: manager ? req.query.broker || "" : "", ...over };
@@ -147,36 +182,34 @@ function register(web, { pool, page }) {
     return page(req, res, {
       title: L(lang, "العملاء", "Leads"),
       nav: "leads",
-      body: html`<h1>👤 ${L(lang, "العملاء", "Leads")}</h1>
+      body: html`<div class="row between"><h1>${L(lang, "العملاء", "Leads")}</h1><span class="row"><a class="btn secondary small" href="/app/leads/board" aria-label="${L(lang, "لوحة العملاء", "Lead board")}">${icon("board", 18)}</a><a class="btn secondary small" href="/app/leads/import" aria-label="${L(lang, "استيراد من ملف", "Import a file")}">${icon("import", 18)}</a><a class="btn small" href="/app/leads/new">${icon("plus", 18)} ${L(lang, "عميل جديد", "New lead")}</a></span></div>
 ${/^L-\d{4,6}$/.test(String(req.query.erased || "")) ? html`<p class="card notice" role="status">🔒 ${L(lang, `العميل ${req.query.erased} اتمسح نهائياً.`, `Client ${req.query.erased} was erased for good.`)}</p>` : ""}
-<div class="row"><a class="btn" href="/app/leads/new">➕ ${L(lang, "عميل جديد", "New lead")}</a> <a class="btn secondary" href="/app/leads/import">📥 ${L(lang, "استيراد من ملف", "Import a file")}</a></div>
-${pipe
-  ? html`<section class="card" id="pipeline"><h2>📊 ${L(lang, "المراحل", "Pipeline")}</h2>
-  <ul class="tags">${Stages.STAGES.map((s) => html`<li data-stage="${s}"><a href="${qs({ tab: s, page: "" })}">${Stages.stageLabel(s, lang)}: ${pipe.stages[s]}</a></li>`)}</ul>
-  ${pipe.overdue.length
-    ? html`<p><strong>${L(lang, "متابعات متأخرة لكل وسيط:", "Overdue follow-ups per broker:")}</strong></p><ul>${pipe.overdue.map(
-        (o) => html`<li data-overdue-broker="${o.broker_id || "none"}"><a href="${qs({ tab: "overdue", broker: o.broker_id || "none" })}">${o.name || L(lang, "مش متسلم", "Unassigned")}: ${o.n}</a></li>`
-      )}</ul>`
-    : ""}
-</section>`
-  : ""}
-<nav class="row card tabs">${TABS.map((t) => html`<a href="${qs({ tab: t, page: "" })}"${t === tab ? html` aria-current="page"` : ""}>${tabLabel(t)}</a>`)}</nav>
-<form method="get" action="/app/leads" class="card row">
+<form method="get" action="/app/leads" class="stack">
   <input type="hidden" name="tab" value="${tab}">
-  <input name="q" value="${f.q}" placeholder="${L(lang, "اسم، رقم أو L-0042", "Name, phone or L-0042")}">
-  <select name="kind"><option value="">${L(lang, "كل الأنواع", "All types")}</option>${Stages.KINDS.map((k) => html`<option value="${k}"${req.query.kind === k ? html` selected` : ""}>${Stages.kindLabel(k, lang)}</option>`)}</select>
-  <select name="source"><option value="">${L(lang, "كل المصادر", "All sources")}</option>${Stages.SOURCES.map(([en, ar]) => html`<option value="${en}"${f.source === en ? html` selected` : ""}>${lang === "en" ? en : ar}</option>`)}</select>
+  <div class="searchbox">${icon("search", 20)}<input name="q" value="${f.q}" aria-label="${L(lang, "بحث في العملاء", "Search leads")}" placeholder="${L(lang, "اسم، رقم أو L-0042", "Name, phone or L-0042")}"><button type="submit" class="sr-only">${L(lang, "بحث", "Search")}</button></div>
+  <details class="card sheet"${req.query.kind || f.source || (manager && req.query.broker) ? html` open` : ""}><summary>${L(lang, "الفلاتر", "Filters")}${[req.query.kind, f.source, manager ? req.query.broker : ""].filter(Boolean).length ? html` <span class="chip">${[req.query.kind, f.source, manager ? req.query.broker : ""].filter(Boolean).length}</span>` : ""}</summary>
+  <div class="grid two">
+  <select name="kind" aria-label="${L(lang, "النوع", "Type")}"><option value="">${L(lang, "كل الأنواع", "All types")}</option>${Stages.KINDS.map((k) => html`<option value="${k}"${req.query.kind === k ? html` selected` : ""}>${Stages.kindLabel(k, lang)}</option>`)}</select>
+  <select name="source" aria-label="${L(lang, "المصدر", "Source")}"><option value="">${L(lang, "كل المصادر", "All sources")}</option>${Stages.SOURCES.map(([en, ar]) => html`<option value="${en}"${f.source === en ? html` selected` : ""}>${lang === "en" ? en : ar}</option>`)}${extraSources.map((x) => html`<option value="${x}"${f.source === x ? html` selected` : ""}>${x}</option>`)}</select>
   ${manager
-    ? html`<select name="broker"><option value="">${L(lang, "كل الوسطاء", "All brokers")}</option><option value="none"${req.query.broker === "none" ? html` selected` : ""}>${L(lang, "مش متسلم", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${req.query.broker === b.id ? html` selected` : ""}>${b.name}</option>`)}</select>`
+    ? html`<select name="broker" aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل الوسطاء", "All brokers")}</option><option value="none"${req.query.broker === "none" ? html` selected` : ""}>${L(lang, "مش متسلم", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${req.query.broker === b.id ? html` selected` : ""}>${b.name}</option>`)}</select>`
     : ""}
-  <button type="submit" class="secondary">🔍 ${L(lang, "بحث", "Search")}</button>
+  </div>
+  <div class="row sheet-actions"><button type="submit">${L(lang, "تطبيق", "Apply")}</button><a class="btn secondary" href="/app/leads">${L(lang, "مسح", "Clear")}</a></div>
+  </details>
 </form>
+<ul class="chipbar"${pipe ? html` id="pipeline"` : ""} aria-label="${L(lang, "المراحل", "Stages")}">${TABS.map((t) => html`<li${Stages.STAGES.includes(t) ? html` data-stage="${t}"` : ""}><a href="${qs({ tab: t, page: "" })}"${t === tab ? html` aria-current="page"` : ""}>${tabLabel(t)}${pipe && Stages.STAGES.includes(t) ? html` <b>${pipe.stages[t]}</b>` : ""}</a></li>`)}</ul>
+${pipe && pipe.overdue.length
+  ? html`<details class="card notice warn"><summary>${L(lang, "متابعات متأخرة لكل وسيط", "Overdue follow-ups per broker")}: ${pipe.overdue.reduce((a, o) => a + Number(o.n), 0)}</summary><ul class="rows">${pipe.overdue.map(
+      (o) => html`<li data-overdue-broker="${o.broker_id || "none"}"><a class="listrow" href="${qs({ tab: "overdue", broker: o.broker_id || "none" })}">${o.name || L(lang, "مش متسلم", "Unassigned")}<b>${o.n}</b></a></li>`
+    )}</ul></details>`
+  : ""}
 ${rows.length
   ? html`<ol class="results">${rows.map((r) => V.leadRow(r, lang, { manager }))}</ol>
-<p class="row">${n > 0 ? html`<a href="${qs({ page: n - 1 })}">${L(lang, "→ السابق", "← Previous")}</a>` : ""} ${more ? html`<a href="${qs({ page: n + 1 })}">${L(lang, "التالي ←", "Next →")}</a>` : ""}</p>`
-  : html`<p class="card">${f.q || tab !== "all"
+<p class="row between">${n > 0 ? html`<a class="btn secondary" href="${qs({ page: n - 1 })}">${L(lang, "→ السابق", "← Previous")}</a>` : html`<span></span>`} ${more ? html`<a class="btn secondary" href="${qs({ page: n + 1 })}">${L(lang, "التالي ←", "Next →")}</a>` : ""}</p>`
+  : html`<div class="card empty"><p>${f.q || tab !== "all"
       ? L(lang, "مفيش عملاء بالشروط دي.", "No leads match.")
-      : L(lang, "مفيش عملاء لسه: حوّل رسالة عميل للبوت، أو ضيف واحد من هنا.", "No leads yet: forward a client's message to the bot, or add one here.")} <a href="/app/leads/new">➕ ${L(lang, "عميل جديد", "New lead")}</a></p>`}`
+      : L(lang, "مفيش عملاء لسه: حوّل رسالة عميل للبوت، أو ضيف واحد من هنا.", "No leads yet: forward a client's message to the bot, or add one here.")}</p><a class="btn" href="/app/leads/new">${L(lang, "عميل جديد", "New lead")}</a></div>`}`
     });
   });
 
@@ -188,7 +221,8 @@ ${rows.length
     const lang = langOf(req);
     const { broker } = req.session;
     const brokers = isManager(broker) ? await activeBrokers(pool, broker.agency_id) : null;
-    return page(req, res, { title: L(lang, "عميل جديد", "New lead"), nav: "leads", body: html`<h1>➕ ${L(lang, "عميل جديد", "New lead")}</h1>${V.leadForm({ lang, csrf: req.session.csrf, brokers, ...opts })}` }, status);
+    const extraSources = await IntakeUrls.sourcesFor(pool, broker.agency_id);
+    return page(req, res, { title: L(lang, "عميل جديد", "New lead"), nav: "leads", body: html`<h1>➕ ${L(lang, "عميل جديد", "New lead")}</h1>${V.leadForm({ lang, csrf: req.session.csrf, brokers, extraSources, ...opts })}` }, status);
   };
 
   /** Prefill from shared or pasted text: the numbers written in it, no AI. */
@@ -298,7 +332,10 @@ ${rows.length
     for (const r of requests) r.matches = await LeadRequests.currentMatches(pool, broker.agency_id, r.filters, { limit: 3 });
     const brokers = manager ? await activeBrokers(pool, broker.agency_id) : [];
     const viewing = await Viewings.latestFor(pool, broker.agency_id, lead.id);
-    const unit = lead.follow_up_listing_id ? (await pool.query("SELECT code FROM listings WHERE id = $1 AND agency_id = $2", [lead.follow_up_listing_id, broker.agency_id])).rows[0] : null;
+    const leases = await Leases.forTenant(pool, broker.agency_id, lead.id);
+    const unit = lead.follow_up_listing_id ? (await pool.query("SELECT * FROM listings WHERE id = $1 AND agency_id = $2", [lead.follow_up_listing_id, broker.agency_id])).rows[0] : null;
+    // The viewing place starts from the unit's agency-only pin when this broker may see it.
+    if (unit && (await UnitPrivacy.canSee(pool, broker, unit))) unit.mapsUrl = UnitPrivacy.mapsUrl(await UnitPrivacy.pinOf(pool, unit));
     const path = V.leadPath(lead);
     const hidden = html`<input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="version" value="${lead.version}">`;
     return page(
@@ -311,27 +348,35 @@ ${rows.length
           ? html` <form method="post" action="${path}/undo" class="inline"><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="event" value="${undoEvent}"><button type="submit" class="link">↩️ ${L(lang, "تراجع", "Undo")}</button></form>`
           : ""}</div>` : ""}
 ${V.leadHeader(lead, lang)}
-<div class="card row"><form method="post" action="${path}/contacted" class="inline">${hidden}<button type="submit">📞 ${L(lang, "كلمته", "I called")}</button></form>
-  <a class="btn secondary" href="/app/deals/new?lead=${Card.refLabel(lead.ref)}">🤝 ${L(lang, "سجل صفقة", "Record deal")}</a>
-  <form method="post" action="${path}/draft" class="inline">${hidden}<button type="submit" class="secondary">✍️ ${L(lang, "اكتبلي رسالة متابعة", "Draft a follow-up message")}</button></form></div>
+${manager ? html`<p class="muted" data-merge-hint>🔗 ${L(lang, "نفس العميل متسجل برقم تاني؟", "Same client saved under another number?")} <a href="#merge">${L(lang, "ادمج السجلين", "Merge the two records")}</a></p>` : ""}
+<div class="actions3"><form method="post" action="${path}/contacted">${hidden}<button type="submit" class="secondary">${icon("check", 20)} ${L(lang, "كلمته", "I called")}</button></form>
+  <form method="post" action="${path}/draft">${hidden}<button type="submit" class="secondary">${icon("chat", 20)} ${L(lang, "اكتبلي رسالة متابعة", "Draft a follow-up message")}</button></form>
+  <a class="btn secondary" href="/app/deals/new?lead=${Card.refLabel(lead.ref)}">${icon("deal", 20)} ${L(lang, "سجل صفقة", "Record deal")}</a></div>
 ${draft
   ? html`<section class="card notice ok" id="draft" data-follow-up-draft>
   <h2>✍️ ${L(lang, "رسالة المتابعة (راجعها قبل ما تبعت)", "Follow-up message (check it before sending)")}</h2>
-  <p style="white-space:pre-line" data-draft-text>${draft.text}</p>
+  <p class="pre" data-draft-text>${draft.text}</p>
   ${draft.wa ? html`<p><a class="btn" href="${draft.wa}" target="_blank" rel="noopener noreferrer" data-draft-send>📤 ${L(lang, "ابعتها على واتساب", "Send on WhatsApp")}</a></p>` : html`<p class="muted">${L(lang, "الرقم ده أرضي؛ انسخ الرسالة وابعتها بنفسك.", "This number is a landline; copy the message and send it yourself.")}</p>`}
   <p class="muted">${L(lang, "اتكتبت من بيانات العميل بس. عشان تبقى بأسلوبك، حط مثال من رسايلك في الإعدادات.", "Written from this client's record only. To make it sound like you, add a sample of your messages in Settings.")}</p>
 </section>`
   : ""}
-<section class="card" id="stage"><h2>🔄 ${L(lang, "المرحلة", "Stage")}</h2>
-  <form method="post" action="${path}/stage" class="row">${hidden}
-    <select name="stage">${Stages.STAGES.map((s) => html`<option value="${s}"${s === lead.stage ? html` selected` : ""}>${Stages.stageLabel(s, lang)}</option>`)}</select>
-    <input name="lost_reason" maxlength="200" placeholder="${L(lang, "سبب الضياع (لو ضاع)", "Why lost (if lost)")}" value="${lead.lost_reason || ""}">
+<section class="card stageform" id="stage"><h2>${L(lang, "المرحلة", "Stage")}</h2>
+  <form method="post" action="${path}/stage" class="stack">${hidden}
+    <div class="pills" role="radiogroup" aria-label="${L(lang, "المرحلة", "Stage")}">${Stages.STAGES.map((s) => html`<label class="pill"><input type="radio" name="stage" value="${s}"${s === lead.stage ? html` checked` : ""}><span>${Stages.stageLabel(s, lang)}</span></label>`)}</div>
+    <label class="lost-reason">${L(lang, "سبب الضياع", "Why lost")}<input name="lost_reason" maxlength="200" placeholder="${L(lang, "سبب الضياع (لو ضاع)", "Why lost (if lost)")}" value="${lead.lost_reason || ""}"></label>
     <button type="submit">${L(lang, "حفظ", "Save")}</button>
   </form>
 </section>
+<div class="tabs ltabs">
+  <input type="radio" name="lead_tab" id="lt-next" class="tab-radio" checked>
+  <input type="radio" name="lead_tab" id="lt-req" class="tab-radio">
+  <input type="radio" name="lead_tab" id="lt-hist" class="tab-radio">
+  <input type="radio" name="lead_tab" id="lt-more" class="tab-radio">
+  <div class="tab-bar" role="tablist"><label for="lt-next" role="tab">${L(lang, "الخطوة الجاية", "Next step")}</label><label for="lt-req" role="tab">${L(lang, "الطلبات", "Requests")}${requests.length ? ` (${requests.length})` : ""}</label><label for="lt-hist" role="tab">${L(lang, "السجل", "History")}</label><label for="lt-more" role="tab">${L(lang, "المزيد", "More")}</label></div>
+  <div class="tab-panel" data-tab="lt-next">
 <section class="card" id="follow-up"><h2>📅 ${L(lang, "المتابعة", "Follow-up")}</h2>
   <form method="post" action="${path}/follow-up" class="grid">${hidden}
-    <label>${L(lang, "إمتى (بتوقيت القاهرة)", "When (Cairo time)")}<input type="datetime-local" name="at" required value="${lead.follow_up_status === "open" ? Stages.toCairoLocal(lead.next_follow_up_at) : ""}"></label>
+    <label>${L(lang, "إمتى (بتوقيت القاهرة)", "When (Cairo time)")}<input type="datetime-local" name="at" required value="${lead.follow_up_status === "open" ? Stages.toCairoLocal(lead.next_follow_up_at) : Stages.nextHourLocal()}"></label>
     <label>${L(lang, "النوع", "Type")}<select name="kind"><option value="call">${L(lang, "مكالمة", "Call")}</option><option value="viewing"${lead.follow_up_kind === "viewing" ? html` selected` : ""}>${L(lang, "معاينة", "Viewing")}</option></select></label>
     <label>${L(lang, "كود الوحدة (للمعاينة)", "Unit code (viewing)")}<input name="unit" dir="ltr" value="${unit?.code || ""}"></label>
     <label>${L(lang, "ملاحظة", "Note")}<input name="note" maxlength="300" value="${lead.follow_up_status === "open" ? lead.follow_up_note || "" : ""}"></label>
@@ -341,35 +386,8 @@ ${draft
   <form method="post" action="${path}/follow-up/postpone">${hidden}<button type="submit" class="secondary">📅 ${L(lang, "أجّل يوم", "Postpone a day")}</button></form>` : ""}
 </section>
 ${viewingSection({ lead, viewing, unit, path, hidden, lang })}
-${manager
-  ? html`<section class="card" id="merge"><h2>🔗 ${L(lang, "دمج عميل مكرر", "Merge a duplicate")}</h2>
-  <p class="muted">${L(lang, "لو العميل ده متسجل مرتين برقمين مختلفين: اكتب رقم السجل التاني (L-…) مرتين، وكل حاجة فيه (أرقامه، تاريخه، طلباته، معايناته، صفقاته) هتتنقل هنا، والسجل التاني هيتمسح. مينفعش يترجع.", "If this client is saved twice under two numbers: type the other record's reference (L-…) twice; everything on it (numbers, history, requests, viewings, deals) moves here and the other record is deleted. This can't be undone.")}</p>
-  <form method="post" action="${path}/merge" class="row">${hidden}
-    <label>${L(lang, "السجل التاني", "The other record")}<input name="other" required dir="ltr" placeholder="L-0042" size="8"></label>
-    <label>${L(lang, "اكتبه تاني للتأكيد", "Type it again to confirm")}<input name="confirm" required dir="ltr" size="8"></label>
-    <button type="submit" class="danger">🔗 ${L(lang, "ادمج هنا", "Merge into this one")}</button>
-  </form>
-</section>
-<section class="card" id="privacy"><h2>🔒 ${L(lang, "بيانات العميل (للمدير)", "Client data (managers)")}</h2>
-  <p><a class="btn secondary" href="${path}/export">📦 ${L(lang, "تصدير بياناته (zip)", "Export their data (zip)")}</a></p>
-  <form method="post" action="${path}/erase" class="row">${hidden}
-    <label>${L(lang, "للمسح النهائي اكتب آخر 4 أرقام من رقمه", "To erase for good, type the last 4 digits of their number")}<input name="confirm" inputmode="numeric" maxlength="4" pattern="[0-9٠-٩]{4}" required dir="ltr"></label>
-    <button type="submit" class="danger">🗑️ ${L(lang, "امسح العميل", "Erase the client")}</button>
-  </form>
-  <p class="muted">${L(lang, "المسح نهائي: العميل وتاريخه وطلباته بيتمسحوا، والصفقات بتفضل من غير اسمه ورقمه.", "Erasing is final: the client, their history and requests are deleted; deals stay without their name and number.")}</p>
-</section>`
-  : ""}
-<section class="card" id="note"><h2>📝 ${L(lang, "ملاحظة", "Note")}</h2>
-  <form method="post" action="${path}/note" class="stack">${hidden}<textarea name="text" rows="2" maxlength="1000" required></textarea><button type="submit" class="secondary">${L(lang, "إضافة", "Add")}</button></form>
-</section>
-${manager
-  ? html`<section class="card" id="assign"><h2>🧑‍💼 ${L(lang, "تسليم لوسيط", "Assign")}</h2>
-  <form method="post" action="${path}/assign" class="row">${hidden}
-    <select name="broker"><option value="">${L(lang, "مش متسلم لحد", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${b.id === lead.assigned_broker_id ? html` selected` : ""}>${b.name}</option>`)}</select>
-    <button type="submit">${L(lang, "تسليم", "Assign")}</button>
-  </form>
-</section>`
-  : ""}
+  </div>
+  <div class="tab-panel" data-tab="lt-req">
 ${Stages.WANTS_UNIT.includes(lead.kind) || requests.length
   ? html`<section class="card" id="requests"><h2>🔎 ${L(lang, "طلبات العميل", "Requests")} (${requests.length}/${LeadRequests.MAX_REQUESTS})</h2>
   ${requests.length
@@ -388,7 +406,48 @@ ${Stages.WANTS_UNIT.includes(lead.kind) || requests.length
     : ""}
 </section>`
   : ""}
+${Stages.WANTS_UNIT.includes(lead.kind) || requests.length ? "" : html`<p class="card muted">${L(lang, "العميل ده مش بيدور على وحدة.", "This client isn't looking for a unit.")}</p>`}
+  </div>
+  <div class="tab-panel" data-tab="lt-hist">
+<section class="card" id="note"><h2>📝 ${L(lang, "ملاحظة", "Note")}</h2>
+  <form method="post" action="${path}/note" class="stack">${hidden}<textarea name="text" rows="2" maxlength="1000" required></textarea><button type="submit" class="secondary">${L(lang, "إضافة", "Add")}</button></form>
+</section>
 ${tl ? V.timelineList(tl.rows, lang, { more: tl.more, lead }) : ""}
+  </div>
+  <div class="tab-panel" data-tab="lt-more">
+${manager
+  ? html`<section class="card" id="assign"><h2>🧑‍💼 ${L(lang, "تسليم لوسيط", "Assign")}</h2>
+  <form method="post" action="${path}/assign" class="row">${hidden}
+    <select name="broker"><option value="">${L(lang, "مش متسلم لحد", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${b.id === lead.assigned_broker_id ? html` selected` : ""}>${b.name}</option>`)}</select>
+    <button type="submit">${L(lang, "تسليم", "Assign")}</button>
+  </form>
+</section>`
+  : ""}
+${leases.length
+  ? html`<section class="card" id="leases"><h2>🔑 ${L(lang, "إيجار", "Lease")}</h2><ul>${leases.map(
+      (z) => html`<li data-tenant-lease="${z.code}"><a href="/app/units/${encodeURIComponent(z.code)}#lease">${z.code}</a> · ${L(lang, `من ${Stages.cairoDay(new Date(z.start_date))} لحد ${Stages.cairoDay(z.end)}`, `${Stages.cairoDay(new Date(z.start_date))} to ${Stages.cairoDay(z.end)}`)}</li>`
+    )}</ul></section>`
+  : ""}
+${manager
+  ? html`<section class="card" id="merge"><h2>🔗 ${L(lang, "دمج عميل مكرر", "Merge a duplicate")}</h2>
+  <p class="muted">${L(lang, "لو العميل ده متسجل مرتين برقمين مختلفين: اكتب رقم السجل التاني (L-…) مرتين، وكل حاجة فيه (أرقامه، تاريخه، طلباته، معايناته، صفقاته) هتتنقل هنا، والسجل التاني هيتمسح. مينفعش يترجع.", "If this client is saved twice under two numbers: type the other record's reference (L-…) twice; everything on it (numbers, history, requests, viewings, deals) moves here and the other record is deleted. This can't be undone.")}</p>
+  <form method="post" action="${path}/merge" class="row">${hidden}
+    <label>${L(lang, "السجل التاني", "The other record")}<input name="other" required dir="ltr" placeholder="L-0042" size="8"></label>
+    <label>${L(lang, "اكتبه تاني للتأكيد", "Type it again to confirm")}<input name="confirm" required dir="ltr" size="8"></label>
+    <button type="submit" class="danger">🔗 ${L(lang, "ادمج هنا", "Merge into this one")}</button>
+  </form>
+</section>
+<section class="card" id="privacy"><h2>🔒 ${L(lang, "بيانات العميل (للمدير)", "Client data (managers)")}</h2>
+  <p><a class="btn secondary" href="${path}/export">📦 ${L(lang, "تصدير بياناته (zip)", "Export their data (zip)")}</a></p>
+  <form method="post" action="${path}/erase" class="row">${hidden}
+    <label>${L(lang, "للمسح النهائي اكتب آخر 4 أرقام من رقمه", "To erase for good, type the last 4 digits of their number")}<input name="confirm" inputmode="numeric" maxlength="4" pattern="[0-9٠-٩]{4}" required dir="ltr"></label>
+    <button type="submit" class="danger">🗑️ ${L(lang, "امسح العميل", "Erase the client")}</button>
+  </form>
+  <p class="muted">${L(lang, "المسح نهائي: العميل وتاريخه وطلباته بيتمسحوا، والصفقات بتفضل من غير اسمه ورقمه.", "Erasing is final: the client, their history and requests are deleted; deals stay without their name and number.")}</p>
+</section>`
+  : ""}
+  </div>
+</div>
 ${V.bottomBar(lead, lang, broker.name)}`
       },
       status
@@ -434,6 +493,8 @@ ${V.bottomBar(lead, lang, broker.name)}`
       const version = req.body.version === undefined || req.body.version === "" ? null : Number(req.body.version);
       const r = await run(req, lead, version);
       if (r.ok && r.redirect) return res.redirect(303, r.redirect);
+      // From the lead board: back to the board, on the column the lead moved to.
+      if ((r.ok || r.unchanged) && req.body.back === "board") return res.redirect(303, `/app/leads/board?moved=${Card.refLabel((r.lead || lead).ref)}${r.eventId ? `&undo=${r.eventId}` : ""}#col-${req.body.stage || ""}`);
       if (r.ok || r.unchanged) return res.redirect(303, `${V.leadPath(r.lead || lead)}?done=${doneKey}${r.eventId ? `&undo=${r.eventId}` : ""}`);
       const fresh = (await Leads.getLead(pool, req.session.broker, lead.id)) || lead;
       if (r.conflict) {

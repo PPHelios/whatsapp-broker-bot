@@ -4,6 +4,7 @@
 "use strict";
 
 const { html } = require("../html");
+const Words = require("../../domain/commandWords");
 
 const T = (lang, pair) => pair[lang === "en" ? 1 : 0];
 
@@ -19,10 +20,21 @@ const SECTIONS = [
     ]
   },
   {
+    id: "limits",
+    title: ["🚦 الحدود والرصيد", "🚦 Limits and credits"],
+    items: [
+      ["باقتك ليها رصيد شهري واحد للذكاء الاصطناعي لكل الوكالة (طلب نصي ١، فويس ٣، أول فلاير للوحدة ٣، صفحة ملف جديدة ١٠)، وعدد وحدات متاحة، وعدد مستخدمين. لو الرصيد خلص: الإضافة والبحث بيفضلوا شغالين من الموقع. الوحدات المباعة والمؤرشفة مش بتتحسب.", "Your plan has one monthly AI credit pool for the whole agency (text request 1, voice note 3, a unit's first flyer 3, a new document page 10), a number of available units and a number of users. When credits run out, adding and searching on the website still work. Sold and archived units don't count."],
+      ["قراية قوايم الأسعار (PDF وصور) بالذكاء الاصطناعي ليها حد صفحات شهري ومقفولة لحد ما صاحب التطبيق يفتحها. الصفحة اللي اتقرت قبل كده ببلاش، وشيت الإكسيل بيتقرا ببلاش.", "AI reading of price lists (PDF and photos) has a monthly page limit and is off until the app owner switches it on. A page read before is free, and an Excel sheet is read free."],
+      ["ردود المساعد من الإنترنت اختيارية، ليها حد شهري، ومكتوب عليها غير مؤكد. الرد من بيانات وكالتك مش بيتحسب منها.", "Assistant web answers are optional, have a monthly limit and are labelled unverified. Answers from your agency's data don't use it."],
+      ["ترتيب الصور بإيدك (سحب وإفلات) بيوفر رصيد الذكاء الاصطناعي. المدير يقفل ترتيب الصور بالذكاء الاصطناعي لكل الوكالة من صفحة استخدامي.", "Ordering photos by hand (drag and drop) saves AI credits. A manager can switch AI photo ordering off for the whole agency on My usage."],
+      ["المدير يشوف كل الحدود وكام استهلكت من لوحة الوكالة، وصفحة الباقة فيها الأسعار والترقية. لو الحد خلص، كل حاجة بتفضل شغالة بإيدك وبياناتك مش بتتمسح.", "Managers see every limit and how much is used on the agency dashboard; the Plan page has prices and upgrades. When a limit is reached everything keeps working by hand and your data is never deleted."]
+    ]
+  },
+  {
     id: "units",
     title: ["🏠 الوحدات", "🏠 Units"],
     items: [
-      ["ابعت «اضافة»، بعدين الصور، بعدين فويس أو رسالة بالتفاصيل (الكمبوند، المساحة، السعر، الغرف)، واكتب «تم». البوت يوريك فهم إيه وتأكد.", "Send \"add\", then the photos, then a voice note or a message with the details (compound, area, price, bedrooms), and send \"done\". The bot shows what it understood for you to confirm."],
+      ["ابعت «إضافة»، بعدين الصور، بعدين فويس أو رسالة بالتفاصيل (الكمبوند، المساحة، السعر، الغرف)، واكتب «تم». البوت يوريك فهم إيه وتأكد.", "Send \"add\", then the photos, then a voice note or a message with the details (compound, area, price, bedrooms), and send \"done\". The bot shows what it understood for you to confirm."],
       ["كل وحدة بتاخد كود قصير زي NH-V12 (حروف الوكالة + نوع الوحدة + رقم). ابعت الكود في أي وقت يطلعلك الكارت.", "Every unit gets a short code like NH-V12 (agency letters + unit type + number). Send the code any time to get its card."],
       ["من الكارت: تعديل، تم البيع، أرشفة، لينك للعميل، بروشور.", "From the card: edit, mark sold, archive, a client link, a flyer."],
       ["لو وحدة متعدلتش ٢١ يوم، البوت يسألك «لسه متاحة؟». لو محدش رد لحد ٣٠ يوم بتتخفى من البحث (مش بتتمسح).", "If a unit hasn't changed for 21 days the bot asks \"still available?\". With no answer by day 30 it is hidden from search (never deleted)."],
@@ -46,7 +58,7 @@ const SECTIONS = [
       ["عملاء إعلانات فيسبوك: المدير يرفع ملف CSV من Meta Leads Center في «العملاء ← استيراد».", "Facebook ad leads: a manager uploads the Meta Leads Center CSV under \"Leads → Import\"."],
       ["أزرار الكارت: 📞 كلمته، 📅 متابعة، 🔄 المرحلة. كل مرحلة بتتسجل في التقارير.", "Card buttons: 📞 Called, 📅 Follow-up, 🔄 Stage. Every stage counts in the reports."],
       ["احفظ طلب العميل («طلب» + اللي عايزه) وأول ما تنزل وحدة تناسبه أو سعرها ينزل هتتبلغ.", "Save the client's request (\"request\" + what they want) and you hear as soon as a unit fits or drops its price."],
-      ["«عملائي» و«متابعات» بيجيبولك قوايمك في أي وقت.", "\"my leads\" and \"followups\" bring up your lists any time."]
+      ["«عملائي» و«متابعات» بيجيبولك قوايمك في أي وقت.", "\"leads\" and \"followups\" bring up your lists any time."]
     ]
   },
   {
@@ -74,14 +86,28 @@ const FAQ = [
   [["العميل بيشوف إيه لما أبعتله لينك وحدة؟", "What does a client see when I send a unit link?"], ["صفحة فيها الصور والتفاصيل ورقم تواصل الوكالة، من غير أي بيانات داخلية. لو الوحدة اتباعت اللينك بيقول إنها مبقتش متاحة.", "A page with the photos, the details and the agency's contact number, with no internal data. If the unit is sold the link says it's no longer available."]],
   [["العميل طلب يمسح بياناته؛ أعمل إيه؟", "A client asked us to delete their data. What do I do?"], ["المدير يفتح العميل على الموقع ويختار «مسح نهائي» ويكتب آخر ٤ أرقام من رقمه. وتقدر تصدّر بياناته الأول لو طلبها.", "A manager opens the client on the website, chooses \"Erase for good\" and types the last 4 digits of their number. You can export their data first if they ask for it."]],
   [["البوت فهم غلط؛ أصلّحه إزاي؟", "The bot got something wrong. How do I fix it?"], ["قبل الحفظ دوس «✏️ تعديل». بعد الحفظ: «تعديل الكود السعر ٩٫٥ مليون» أو من الموقع.", "Before saving tap \"✏️ Edit\". After saving: \"edit CODE price 9.5M\" or use the website."]],
-  [["في حاجة مش شغالة.", "Something isn't working."], ["ابعت «بلاغ» واللي حصل للبوت، أو «🐞 بلّغ عن مشكلة» تحت أي صفحة. هيوصلك رقم البلاغ.", "Send \"bug\" and what happened to the bot, or use \"🐞 Report a problem\" at the bottom of any page. You get a report number."]],
+  [["في حاجة مش شغالة.", "Something isn't working."], ["ابعت «عطل» واللي حصل للبوت، أو «🐞 بلّغ عن مشكلة» تحت أي صفحة. هيوصلك رقم البلاغ.", "Send \"bug\" and what happened to the bot, or use \"🐞 Report a problem\" at the bottom of any page. You get a report number."]],
   [["ليه تيليجرام مش واتساب؟", "Why Telegram and not WhatsApp?"], ["تيليجرام مجاني للرسايل والصور والأزرار، فالتنبيهات مش بتتكلف. واتساب بيفضل للتواصل مع العملاء.", "Telegram is free for messages, photos and buttons, so alerts cost nothing. WhatsApp stays for talking to clients."]],
   [["الموقع بطيء أول ما بفتحه.", "The website is slow the first time I open it."], ["في فترة التجربة السيرفر بينام لما محدش بيستخدمه، وأول فتحة ممكن تاخد دقيقة.", "During the trial the server sleeps when nobody uses it, so the first load can take up to a minute."]]
 ];
 
+/** A command's words as <code> chips (the example when it has no word). The English page shows the English words only. */
+function commandWords(c, lang) {
+  const arg = (en) => (en ? c.argEn || c.arg : c.arg);
+  const chip = (w, en) => html`<code dir="${en ? "ltr" : "rtl"}">${w}${arg(en) ? ` ${arg(en)}` : ""}</code>`;
+  const words = lang === "en" ? (c.en.length ? c.en : [c.enHint].filter(Boolean)).map((w) => chip(w, true)) : [...c.ar.map((w) => chip(w, false)), ...c.en.map((w) => chip(w, true))];
+  const example = lang === "en" ? c.exampleEn || c.example : c.example;
+  return words.length ? html`${words.map((x, i) => html`${i ? " / " : ""}${x}`)}` : html`<code dir="auto">${example}</code>`;
+}
+
 function guidePage(lang) {
   return html`<h1>📘 ${T(lang, ["دليل سريع", "Quick guide"])}</h1>
-<nav class="card row" aria-label="${T(lang, ["المحتوى", "Contents"])}">${SECTIONS.map((s) => html`<a href="#${s.id}">${T(lang, s.title)}</a>`)}<a href="#faq">❓ ${T(lang, ["أسئلة شائعة", "FAQ"])}</a></nav>
+<nav class="card row" aria-label="${T(lang, ["المحتوى", "Contents"])}"><a href="#commands">📖 ${T(lang, ["الأوامر", "Commands"])}</a>${SECTIONS.map((s) => html`<a href="#${s.id}">${T(lang, s.title)}</a>`)}<a href="#faq">❓ ${T(lang, ["أسئلة شائعة", "FAQ"])}</a></nav>
+<section class="card" id="commands">
+  <h2>📖 ${T(lang, ["أوامر البوت", "Bot commands"])}</h2>
+  <p class="muted">${T(lang, ["العربي بأي طريقة كتابة (أ/ا، ة/ه، ى/ي زي بعض) والإنجليزي كابيتال أو سمول.", "English words work in any case. Arabic words work in any spelling (switch the guide to Arabic to see them)."])}</p>
+  ${Words.grouped().map((g) => html`<h3>${T(lang, g.title)}</h3><div class="scroll"><table data-commands="${g.id}"><tbody>${g.commands.map((c) => html`<tr><td>${commandWords(c, lang)}</td><td>${T(lang, c.help)}${c.manager ? T(lang, [" (للمديرين)", " (managers)"]) : ""}</td></tr>`)}</tbody></table></div>`)}
+</section>
 ${SECTIONS.map(
   (s) => html`<section class="card" id="${s.id}">
   <h2>${T(lang, s.title)}</h2>

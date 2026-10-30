@@ -146,7 +146,7 @@ describe("Team and rules page", () => {
     const { agent, csrf } = await signIn(h, "admin");
     const page = await agent.get("/app/team");
     expect(page.status).toBe(200);
-    expect(page.text).toContain("Team and rules");
+    expect(page.text).toContain("Lead rules");
     expect(page.text).toContain("data-lead-rules");
 
     const bad = await agent.post("/app/team/rules").type("form").send({ _csrf: csrf, ...ALWAYS, wait_minutes: "1" });

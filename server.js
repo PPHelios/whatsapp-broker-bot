@@ -4,6 +4,7 @@
 "use strict";
 
 const express = require("express");
+const Credits = require("./services/credits");
 const crypto = require("crypto");
 
 const { getConfig } = require("./config");
@@ -35,6 +36,11 @@ function createApp({ pool, config = getConfig(), jobs, tapGuard = TapGuard.creat
   // tapGuard drops repeated button taps (double taps, re-taps while a slow review runs): lib/tapGuard.js.
 
   const app = express();
+
+  // Plans, bundles and credits per action come from the database (owner page); keep the in-memory copy fresh.
+  app.use((_req, _res, next) => {
+    Credits.ensureFresh(pool).finally(next);
+  });
 
   // Capture raw body for cryptographic HMAC verification
   app.use(
@@ -151,6 +157,16 @@ function createApp({ pool, config = getConfig(), jobs, tapGuard = TapGuard.creat
     }
   });
 
+  // L1: per-agency lead intake (Make.com lead ads, forms): POST JSON or form fields to the agency's secret URL.
+  app.post("/intake/:token", express.urlencoded({ extended: false, limit: "64kb" }), async (req, res, next) => {
+    try {
+      const r = await require("./services/leadIntake").receive(pool, req.params.token, req.body || {});
+      res.status(r.status).json(r.json);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // Release 2: the broker web app (/app/) and the public pages, after /webhook and /health.
   mountWeb(app, { pool, config });
 
@@ -214,6 +230,7 @@ async function start() {
     if (applied.length) console.log(`[MIGRATE] ${applied.length} migration(s) applied`);
   }
 
+  await Credits.refresh(pool).catch((err) => console.warn("Plans load failed, using the starting copy:", err.message));
   const { app, state, scheduler, bootRecovery, preWarmAssets } = createApp({ pool, config });
 
   // Start Server & Bind Port Immediately for Render Health Probes

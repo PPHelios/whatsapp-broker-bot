@@ -69,3 +69,20 @@ test("no tick, no reminders", async () => {
   await agent.post("/app/units/RENT-2/lease").type("form").send({ _csrf: csrf, start_date: start, months: "12" });
   expect(await Leases.remindDue(h.pool)).toEqual({ sent: 0 });
 });
+
+test("F10: the tenant is picked by lead ref; the lease shows on that lead; an unknown ref is refused", async () => {
+  await h.insertListing({ code: "RENT-3", listing_type: "rent", broker_id: h.BROKERS.broker.id });
+  const { agent, csrf } = await signIn(h, "broker");
+  await require("../../services/leads").captureLead(h.pool, { ...h.BROKERS.broker }, { phones: "01012340000", name: "Omar Tenant", kind: "tenant" });
+  const [{ ref }] = await h.query("SELECT ref FROM leads");
+  const label = `L-${String(ref).padStart(4, "0")}`;
+  const form = await agent.get("/app/units/RENT-3");
+  expect(form.text).toContain(`<option value="${label} Omar Tenant">`);
+  const bad = await agent.post("/app/units/RENT-3/lease").type("form").send({ _csrf: csrf, start_date: "2026-11-01", months: "12", tenant_name: "L-9999" });
+  expect(bad.headers.location).toContain("lease=bad_bad_tenant");
+  await agent.post("/app/units/RENT-3/lease").type("form").send({ _csrf: csrf, start_date: "2026-11-01", months: "12", tenant_name: label });
+  const [lease] = await h.query("SELECT tenant_name, tenant_lead_id FROM leases");
+  expect(lease.tenant_name).toBe(`${label} Omar Tenant`);
+  expect(lease.tenant_lead_id).toBeTruthy();
+  expect((await agent.get(`/app/leads/${label}`)).text).toContain('data-tenant-lease="RENT-3"');
+});

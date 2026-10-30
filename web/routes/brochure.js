@@ -27,7 +27,7 @@ const ERRORS = {
   pages_required: ["اكتب أرقام الصفحات (مثلاً 1-6).", "Enter the page numbers (e.g. 1-6)."],
   pages_invalid: ["أرقام الصفحات مش مظبوطة.", "The page numbers aren't valid."],
   too_many_pages: [`${B.MAX_PAGES} صفحات بالكتير.`, `At most ${B.MAX_PAGES} pages.`],
-  ALLOWANCE: ["صفحات الشهر مش كفاية.", "This month's pages aren't enough."],
+  ALLOWANCE: ["رصيد الشهر مش كفاية.", "This month's credits aren't enough."],
   AI_FAILED: ["القراءة فشلت؛ جرب تاني.", "Reading failed; try again."],
   NO_FACTS: ["ملقيناش معلومات في الصفحات دي.", "No facts found on those pages."],
   too_many_lines: [`${B.MAX_LINES} سطور بالكتير.`, `At most ${B.MAX_LINES} lines.`],

@@ -64,6 +64,6 @@ test("today in Cairo goes into the prompt, with the fence", () => {
 test("summary lines in both languages", () => {
   const u = { contacted: true, stage: "lost", lostReason: "Price", followUp: null, note: "x" };
   const lead = { ref: 3, name: "Sara", stage: "contacted" };
-  expect(U.summaryLines(u, lead, "en")).toBe("👤 Sara · L-0003\n📞 Contacted\n🔄 📞 Contacted → ❌ Lost (Price)\n📝 x");
+  expect(U.summaryLines(u, lead, "en")).toBe("👤 Sara · L-0003 · not contacted yet\n📞 Contacted\n🔄 📞 Contacted → ❌ Lost (Price)\n📝 x");
   expect(U.summaryLines(u, lead, "ar")).toContain("❌ ضاعت (Price)");
 });

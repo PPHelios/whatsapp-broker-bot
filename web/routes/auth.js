@@ -12,6 +12,7 @@ const { t } = require("../../lib/copy");
 const TgInit = require("../../domain/tgInitData");
 const TgLink = require("../../lib/tgLink");
 const Passkeys = require("../../services/passkeys");
+const { getConfig } = require("../../config");
 const S = require("../session");
 const { html } = require("../html");
 
@@ -29,11 +30,12 @@ const tooMany = (page, req, res, gate) => {
 };
 
 function loginForm({ pre, next, message = null, lang = "ar" }) {
-  return html`<div class="card">
-  <h1>🔐 ${L(lang, "الدخول", "Sign in")}</h1>
+  const bot = getConfig().telegram.botUsername;
+  const botUrl = /^[A-Za-z0-9_]{5,32}$/.test(bot || "") ? `https://t.me/${bot}` : null;
+  return html`<div class="card auth">
+  <h1>${L(lang, "الدخول", "Sign in")}</h1>
+  <p class="muted">${L(lang, "اكتب رقم الموبايل المسجل وهيوصلك رابط الدخول على البوت.", "Enter your registered mobile and a sign-in link reaches you through the bot.")}</p>
   ${message ? html`<p class="notice card">${message}</p>` : ""}
-  <p>${lang === "en" ? html`Send <strong>"login"</strong> to the WehdatHub bot (Telegram, or WhatsApp) and you'll get a sign-in link right away. Inside Telegram, the WehdatHub button opens the website already signed in.` : html`ابعت <strong>«دخول»</strong> لبوت WehdatHub (على تليجرام أو واتساب)، وهيوصلك رابط الدخول على طول. ومن جوه تليجرام، زرار WehdatHub بيفتح الموقع وانت داخل على طول.`}</p>
-  <p>${L(lang, "أو اكتب رقم الموبايل المسجل وهنبعتلك الرابط على البوت:", "Or enter your registered mobile number and we'll send the link through the bot:")}</p>
   <form method="post" action="/app/login" class="stack">
     <input type="hidden" name="_csrf" value="${pre}">
     <input type="hidden" name="next" value="${next}">
@@ -41,9 +43,13 @@ function loginForm({ pre, next, message = null, lang = "ar" }) {
     <button type="submit">${L(lang, "ابعتلي رابط الدخول", "Send me a sign-in link")}</button>
   </form>
   <div id="passkey-login" class="stack" data-csrf="${pre}" data-next="${next}" hidden>
-    <p>${L(lang, "أو لو فعّلت الدخول بالبصمة/الوش من الإعدادات:", "Or, if you turned on passkeys in Settings:")}</p>
-    <button type="button" class="secondary" data-passkey-login>🔑 ${L(lang, "ادخل بالبصمة أو الوش (Passkey)", "Sign in with a passkey")}</button>
+    <p class="or"><span>${L(lang, "أو", "or")}</span></p>
+    <button type="button" class="secondary" data-passkey-login>🔑 ${L(lang, "ادخل ببصمة الإصبع أو الوجه", "Sign in with a passkey")}</button>
     <p class="muted" data-passkey-status></p>
+  </div>
+  <div class="auth-tip">
+    <p>${lang === "en" ? html`Or send <strong>"login"</strong> to the WehdatHub bot. Inside Telegram, the WehdatHub button opens the website already signed in.` : html`أو ابعت <strong>«دخول»</strong> لبوت WehdatHub. ومن جوه تليجرام، زرار WehdatHub بيفتح الموقع وانت داخل على طول.`}</p>
+    ${botUrl ? html`<a class="btn secondary small" href="${botUrl}" rel="noopener">✈️ ${L(lang, "افتح البوت", "Open the bot")}</a>` : ""}
   </div>
 </div>`;
 }

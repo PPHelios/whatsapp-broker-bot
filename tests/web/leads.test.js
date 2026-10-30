@@ -42,7 +42,7 @@ describe("the list", () => {
     expect(all.text).toContain("Sara Mine");
     expect(all.text).toContain("Omar Theirs");
     expect(all.text).not.toContain("Rival Client");
-    expect(all.text).toMatch(/data-stage="new"><a[^>]*>🆕 New: 2/);
+    expect(all.text).toMatch(/data-stage="new"><a[^>]*>🆕 New <b>2<\/b>/);
     const r = await signIn(h, "rival");
     expect((await r.agent.get("/app/leads")).text).not.toContain("Sara Mine");
   });
@@ -117,7 +117,7 @@ describe("add a lead", () => {
     expect(r.status).toBe(200);
     expect(r.text).toContain('value="Typed Name"');
     expect(r.text).toContain('value="0101 234 5678"');
-    expect(r.text).toMatch(/<option value="tenant" selected>/);
+    expect(r.text).toMatch(/name="kind" value="tenant" checked>/);
     expect(r.text).toMatch(/<option value="Facebook" selected>/);
     expect(r.text).toContain("25 ألف");
     expect(h.AI.calls[0].operation).toBe("lead_extraction");

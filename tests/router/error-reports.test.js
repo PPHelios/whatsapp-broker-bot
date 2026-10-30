@@ -60,7 +60,7 @@ test("a crashing turn is stored with its context, the broker gets the reference 
   expect(row.stack).not.toContain(process.cwd());
   expect(row.alerted_at).not.toBeNull();
   expect(textOf(replies)).toContain(`#E${row.id}`);
-  expect(textOf(replies)).toContain("*بلاغ*");
+  expect(textOf(replies)).toContain("*عطل*");
 
   expect(alerts).toHaveLength(1);
   expect(alerts[0]).toMatchObject({ chat_id: "999" });

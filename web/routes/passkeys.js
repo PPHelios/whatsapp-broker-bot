@@ -12,10 +12,10 @@ const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "—");
 /** The Settings card. */
 function passkeySection({ enabled, keys, lang, notice = null }) {
   return html`<section class="card stack" id="passkeys" data-passkeys-enabled="${enabled ? "yes" : "no"}">
-  <h2>🔑 ${L(lang, "الدخول بالبصمة أو الوش (Passkey)", "Sign in with a passkey")}</h2>
-  <p class="muted">${L(lang, "بدل رابط البوت، تدخل الموقع ببصمة صباعك أو وشك أو قفل الشاشة. مقفولة لحد ما تفتحها؛ لو قفلتها، كل الـ Passkeys بتاعتك بتتمسح.", "Instead of a bot link, sign in with your fingerprint, face or screen lock. Off until you turn it on; turning it off removes all your passkeys.")}</p>
+  <h2>🔑 ${L(lang, "الدخول ببصمة الإصبع أو الوجه (Passkey)", "Sign in with a passkey")}</h2>
+  <p class="muted">${L(lang, "بدل رابط البوت، تدخل الموقع ببصمة الإصبع أو الوجه أو قفل الشاشة. مقفولة لحد ما تفتحها؛ لو قفلتها، كل الـ Passkeys بتاعتك بتتمسح.", "Instead of a bot link, sign in with your fingerprint, face or screen lock. Off until you turn it on; turning it off removes all your passkeys.")}</p>
   ${notice ? html`<p class="notice" data-passkey-notice>${notice}</p>` : ""}
-  <form method="post" action="/app/settings/passkey" class="row">
+  <form method="post" action="/app/settings/passkey" class="row"${enabled ? html` data-confirm="${L(lang, "لو قفلتها، كل الـ Passkeys بتاعتك هتتمسح. متأكد؟", "Turning this off removes all your passkeys. Are you sure?")}"` : ""}>
     <input type="hidden" name="enabled" value="${enabled ? "" : "on"}">
     <button type="submit" class="${enabled ? "secondary" : ""}">${enabled ? L(lang, "اقفل الدخول بالـ Passkey", "Turn passkeys off") : L(lang, "افتح الدخول بالـ Passkey", "Turn passkeys on")}</button>
   </form>
@@ -24,7 +24,7 @@ function passkeySection({ enabled, keys, lang, notice = null }) {
   <p class="muted" data-passkey-status></p>
   ${keys.length
     ? html`<ul>${keys.map((k) => html`<li data-passkey="${k.id}">${k.label || L(lang, "جهاز", "Device")} · ${L(lang, "اتضاف", "added")} ${day(k.created_at)} · ${L(lang, "آخر دخول", "last used")} ${day(k.last_used_at)}
-      <form method="post" action="/app/passkeys/${k.id}/remove" class="inline"><button type="submit" class="secondary">${L(lang, "امسح", "Remove")}</button></form></li>`)}</ul>`
+      <form method="post" action="/app/passkeys/${k.id}/remove" class="inline" data-confirm="${L(lang, "تمسح الـ Passkey دي؟", "Remove this passkey?")}"><button type="submit" class="secondary">${L(lang, "امسح", "Remove")}</button></form></li>`)}</ul>`
     : html`<p class="muted">${L(lang, "مفيش Passkeys لسه.", "No passkeys yet.")}</p>`}`
     : ""}
 </section>`;

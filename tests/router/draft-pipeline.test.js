@@ -63,7 +63,7 @@ describe("P13: the review card flags a unit already listed", () => {
 
 describe("Add by voice → review → confirm (plan verification #1)", () => {
   test("resale installment unit 'بحري ناصية فيها غرفة مربية', no delivery", async () => {
-    await h.text("broker", "اضافة");
+    await h.text("broker", "اضافه") // F4: spelling-blind command;
     await h.voice("broker");
     answerExtraction(extraction());
 
@@ -188,7 +188,7 @@ describe("Only the staged review is committed (A2)", () => {
     const review = await h.text("broker", "تم");
     expect(textOf(review)).toMatch(/ناقص لإتمام الحفظ/);
     expect(textOf(review)).toMatch(/السعر/);
-    expect(buttonsOf(review)).not.toContain("draft_confirm");
+    expect(buttonsOf(review)).toEqual(["DRAFT_SAVE", "draft_cancel"]);
     await h.tap("broker", "draft_confirm");
     expect(await listings()).toHaveLength(0);
   });
@@ -380,5 +380,17 @@ describe("Extraction failure keeps the draft", () => {
     await h.tap("broker", "DRAFT_SAVE");
     await h.tap("broker", "draft_confirm");
     expect(await listings()).toHaveLength(1);
+  });
+});
+
+describe("F6: compound names snap to known ones", () => {
+  test("«هاييد بارك» as the AI heard it is saved as «هايد بارك» and the card says so", async () => {
+    await h.text("broker", "اضافة");
+    await h.text("broker", "شقة في هاييد بارك 200 متر 3 غرف 10 مليون");
+    answerExtraction(extraction({ compound: "هاييد بارك", compound_en: "Hyde Park" }));
+    const review = await h.text("broker", "تم");
+    expect(textOf(review)).toContain("اسم الكمبوند اتصحح: هاييد بارك ← هايد بارك");
+    await h.tap("broker", "draft_confirm");
+    expect((await listings())[0].compound).toBe("هايد بارك");
   });
 });

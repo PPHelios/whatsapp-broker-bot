@@ -8,6 +8,7 @@
 const Lz = require("../domain/leases");
 const Describe = require("../domain/describe");
 const Notifications = require("../lib/notifications");
+const Card = require("../domain/leadCard");
 const { canEdit, isManager } = require("../lib/authz");
 
 const cairoDay = (d = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
@@ -22,17 +23,46 @@ async function save(db, actor, listing, form) {
   if (listing.listing_type !== "rent") return { error: "not_rent" };
   const f = Lz.fromForm(form);
   if (f.error) return f;
+  // F10: "L-0042" (or "L-0042 Ahmed") names one of the agency's leads; the lead's name is kept as the tenant name.
+  let tenantLeadId = null;
+  const ref = f.tenant_name ? Card.parseRef(f.tenant_name.split(/\s/)[0]) : null;
+  if (ref) {
+    const lead = (await db.query("SELECT id, name, ref FROM leads WHERE agency_id = $1 AND ref = $2", [actor.agency_id, ref])).rows[0];
+    if (!lead) return { error: "bad_tenant" };
+    tenantLeadId = lead.id;
+    f.tenant_name = `${Card.refLabel(lead.ref)}${lead.name ? ` ${lead.name}` : ""}`.slice(0, 120);
+  }
   const { rows } = await db.query(
-    `INSERT INTO leases (agency_id, listing_id, broker_id, tenant_name, start_date, months, rent, increase_pct, remind)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-     ON CONFLICT (listing_id) DO UPDATE SET broker_id = EXCLUDED.broker_id, tenant_name = EXCLUDED.tenant_name, start_date = EXCLUDED.start_date,
+    `INSERT INTO leases (agency_id, listing_id, broker_id, tenant_name, start_date, months, rent, increase_pct, remind, tenant_lead_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     ON CONFLICT (listing_id) DO UPDATE SET broker_id = EXCLUDED.broker_id, tenant_name = EXCLUDED.tenant_name, tenant_lead_id = EXCLUDED.tenant_lead_id, start_date = EXCLUDED.start_date,
        months = EXCLUDED.months, rent = EXCLUDED.rent, increase_pct = EXCLUDED.increase_pct, remind = EXCLUDED.remind,
        reminded = CASE WHEN leases.start_date = EXCLUDED.start_date AND leases.months = EXCLUDED.months THEN leases.reminded ELSE '{}' END,
        updated_at = now()
      RETURNING *`,
-    [actor.agency_id, listing.id, actor.id, f.tenant_name, f.start_date, f.months, f.rent, f.increase_pct, f.remind]
+    [actor.agency_id, listing.id, actor.id, f.tenant_name, f.start_date, f.months, f.rent, f.increase_pct, f.remind, tenantLeadId]
   );
   return { ok: true, lease: rows[0] };
+}
+
+/** F10: the leases where this lead is the tenant: [{ code, start_date, months, end }]. */
+// Lead refs a broker can pick as a tenant: managers see the agency, brokers their own leads.
+async function tenantChoices(db, broker) {
+  const mgr = isManager(broker);
+  const { rows } = await db.query(
+    `SELECT ref, name FROM leads WHERE agency_id = $1 ${mgr ? "" : "AND assigned_broker_id = $2"}
+      ORDER BY (kind = 'tenant') DESC, last_activity_at DESC LIMIT 200`,
+    mgr ? [broker.agency_id] : [broker.agency_id, broker.id]
+  );
+  return rows.map((r) => ({ label: `${Card.refLabel(r.ref)}${r.name ? ` ${r.name}` : ""}` }));
+}
+
+async function forTenant(db, agencyId, leadId) {
+  const { rows } = await db.query(
+    `SELECT z.*, l.code FROM leases z JOIN listings l ON l.id = z.listing_id WHERE z.agency_id = $1 AND z.tenant_lead_id = $2 ORDER BY z.start_date DESC`,
+    [agencyId, leadId]
+  );
+  return rows.map((r) => ({ ...r, end: Lz.endDate(r) }));
 }
 
 async function remove(db, actor, listing) {
@@ -106,4 +136,4 @@ function reminderJob() {
   return { name: "lease_reminders", everyMs: 60 * 60 * 1000, run: ({ pool, now }) => remindDue(pool, { now }) };
 }
 
-module.exports = { forListing, save, remove, upcoming, remindDue, reminderJob };
+module.exports = { forListing, forTenant, tenantChoices, save, remove, upcoming, remindDue, reminderJob };

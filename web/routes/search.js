@@ -9,7 +9,9 @@ const { logOperation } = require("../../lib/db");
 const { formatInterpretation } = require("../../lib/search");
 const Q = require("../../domain/searchQuery");
 const SearchLink = require("../../domain/searchLink");
-const { html } = require("../html");
+const { uploads, VOICE } = require("../uploads");
+const { html, raw } = require("../html");
+const { icon } = require("../icons");
 const { resultItem } = require("../views/units");
 const { refineForm } = require("../views/searchForm");
 
@@ -29,12 +31,14 @@ async function runFilters(pool, agencyId, filters, page) {
   return { ...res, rows, offset };
 }
 
-function searchBox(q, lang) {
-  return html`<form method="get" action="/app/search" class="card stack" role="search">
-  <label>${L(lang, "اكتب طلبك زي ما بتكتبه للبوت", "Type your request as you would to the bot")}
-    <input name="q" value="${q}" placeholder="${L(lang, "شقة 3 غرف في التجمع تحت 9 مليون", "3-bedroom apartment in New Cairo under 9M")}" autocomplete="off"></label>
-  <div class="row"><button type="submit">🔍 ${L(lang, "بحث", "Search")}</button><a href="/app/searches">${L(lang, "⭐ البحث المحفوظ", "⭐ Saved searches")}</a></div>
-</form>`;
+function searchBox(q, lang, { voice = false } = {}) {
+  return html`<form method="get" action="/app/search" class="searchbox" role="search">
+  ${icon("search", 20)}<input name="q" value="${q}" aria-label="${L(lang, "اكتب طلبك زي ما بتكتبه للبوت", "Type your request as you would to the bot")}" placeholder="${L(lang, "شقة 3 غرف في التجمع تحت 9 مليون", "3-bedroom apartment in New Cairo under 9M")}" autocomplete="off" enterkeyhint="search"${voice ? raw(" data-voice-start") : ""}>
+  <button type="button" class="mic" data-mic data-voice-url="/app/search/voice" aria-pressed="false" aria-label="${L(lang, "بحث بالصوت: اضغط تبدأ، واضغط تاني تقف", "Voice search: tap to start, tap again to stop")}" hidden><span class="ico-mic">${icon("mic", 20)}</span><span class="ico-stop">${icon("stop", 20)}</span></button>
+  <button type="submit" class="sr-only">${L(lang, "بحث", "Search")}</button>
+</form>
+<p class="row between small"><span class="muted">${L(lang, "اكتب أو اتكلم زي ما بتكلم البوت.", "Type or speak as you would to the bot.")}</span><a href="/app/searches">${icon("star", 16)} ${L(lang, "البحث المحفوظ", "Saved searches")}</a></p>
+`;
 }
 
 function pager(token, page, total, lang) {
@@ -56,17 +60,18 @@ function resultsSection({ res, filters, token, page, lang, savedId = null }) {
 ${filters.code ? "" : html`<p><a class="btn secondary" href="/app/leads/new?request=${token}" data-save-request>🔔 ${L(lang, "احفظه طلب عميل", "Save as a client's request")}</a> <span class="muted">${L(lang, "وهتتبلغ أول ما تنزل وحدة تناسبه.", "You'll hear when a unit fits.")}</span></p>`}</div>`;
   }
   return html`<section id="results">
-  ${res.relaxed ? html`<p class="card notice warn">⚠️ ${L(lang, "مفيش تطابق تام — أقرب النتائج لـ", "No exact match — closest units for")} <strong>${interp}</strong></p>` : html`<h2>🔍 ${interp}</h2>`}
-  <p class="muted">${L(lang, `${res.total} وحدة مطابقة`, `${res.total} matching unit(s)`)}${res.total > total ? L(lang, ` (أول ${total})`, ` (first ${total})`) : ""}</p>
-  <ol class="results" start="${res.offset + 1}">${res.rows.map((r) => resultItem(r, lang))}</ol>
-  ${pager(token, page, res.total, lang)}
+  ${res.relaxed ? html`<p class="card notice warn">⚠️ ${L(lang, "مفيش تطابق تام — أقرب النتائج لـ", "No exact match — closest units for")} <strong>${interp}</strong></p>` : html`<h2 class="interp">${interp}</h2>`}
+  <div class="row between"><p class="muted">${L(lang, `${res.total} وحدة مطابقة`, `${res.total} matching unit(s)`)}${res.total > total ? L(lang, ` (أول ${total})`, ` (first ${total})`) : ""}</p>
   ${savedId
     ? ""
-    : html`<form method="post" action="/app/searches" class="row card">
+    : html`<details class="savebox"><summary class="btn secondary small">${icon("star", 16)} ${L(lang, "احفظ البحث", "Save search")}</summary>
+    <form method="post" action="/app/searches" class="row">
     <input type="hidden" name="f" value="${token}">
     <label>${L(lang, "اسم البحث", "Name")}<input name="name" required maxlength="80" value="${interp.slice(0, 80)}"></label>
-    <button type="submit" class="secondary">⭐ ${L(lang, "احفظ البحث", "Save search")}</button>
-  </form>`}
+    <button type="submit">${L(lang, "حفظ", "Save")}</button>
+  </form></details>`}</div>
+  <ol class="results" start="${res.offset + 1}">${res.rows.map((r) => resultItem(r, lang))}</ol>
+  ${pager(token, page, res.total, lang)}
 </section>`;
 }
 
@@ -83,7 +88,8 @@ function register(web, { pool, page }) {
     let source = "form";
     const t0 = Date.now();
 
-    if (q) {
+    // A search link (?f=) is the result of an earlier search: Back and reloads use it without asking the AI again.
+    if (q && !req.query.f) {
       const gate = await RateLimit.hit(pool, `search:broker:${broker.id}`, RateLimit.LIMITS.searchBroker);
       if (!gate.allowed) return page(req, res, { title: L(lang, "بحث", "Search"), nav: "search", body: html`${searchBox(q, lang)}<p class="card notice bad">⏳ ${L(lang, "بحث كتير في دقيقة. استنى شوية.", "Too many searches in a minute. Wait a moment.")}</p>` }, 429);
       const parsed = await Search.parseRequest(AI, { text: q, ctx: searchCtx(req) });
@@ -107,10 +113,12 @@ function register(web, { pool, page }) {
     }
 
     let results = "";
+    let searchUrl = null;
     if (filters) {
       const token = SearchLink.encodeFilters(filters);
       const out = await runFilters(pool, broker.agency_id, filters, pageNo);
       results = resultsSection({ res: out, filters, token, page: pageNo, lang });
+      searchUrl = `/app/search?f=${token}${pageNo > 1 ? `&page=${pageNo}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}`;
       logOperation(pool, {
         agency_id: broker.agency_id,
         broker_id: broker.id,
@@ -125,11 +133,31 @@ function register(web, { pool, page }) {
     return page(req, res, {
       title: L(lang, "بحث", "Search"),
       nav: "search",
-      body: html`${searchBox(q, lang)}
+      body: html`${searchUrl ? html`<span data-search-url="${searchUrl}" hidden></span>` : ""}${searchBox(q, lang, { voice: req.query.voice === "1" })}
+${refineForm(filters || {}, lang)}
 ${message ? html`<p class="card notice">${message}${message.startsWith("📝") ? html` <a href="/app/units/new">${L(lang, "إضافة وحدة", "Add a unit")}</a>` : ""}</p>` : ""}
-${results}
-${refineForm(filters || {}, lang, { open: !filters && !q })}`
+${results}`
     });
+  });
+
+  // Voice search: the browser sends a note; the AI writes it down (counted against the agency's voice allowance), then
+  // the page searches that text as if it were typed. The phone's own speech is the fallback on the page.
+  web.post("/search/voice", uploads([VOICE]), async (req, res) => {
+    const lang = langOf(req);
+    const { broker } = req.session;
+    const voice = req.files && req.files.voice && req.files.voice[0];
+    if (!voice) return res.status(400).json({ error: L(lang, "سجّل الأول.", "Record first.") });
+    const gate = await RateLimit.hit(pool, `search:broker:${broker.id}`, RateLimit.LIMITS.searchBroker);
+    if (!gate.allowed) return res.status(429).json({ error: L(lang, "بحث كتير في دقيقة. استنى شوية.", "Too many searches in a minute. Wait a moment.") });
+    try {
+      const text = String(await AI.transcribeAudio(voice.buffer, voice.mimetype.split(";")[0], searchCtx(req)) || "").trim().slice(0, 500);
+      if (!text) return res.status(422).json({ error: L(lang, "مسمعناش كويس. جرب تاني.", "Couldn't hear you. Try again.") });
+      return res.json({ q: text });
+    } catch (err) {
+      const quota = err.code && /QUOTA/.test(err.code);
+      if (quota) return res.status(402).json({ error: L(lang, "رصيد الذكاء الاصطناعي خلص. اكتب بحثك.", "AI credits are used up. Type your search.") });
+      return res.status(503).json({ error: L(lang, "الذكاء الاصطناعي مش متاح دلوقتي.", "The AI is unavailable right now."), fallback: true });
+    }
   });
 
   /* Saved searches (per broker, agency-scoped). */

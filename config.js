@@ -131,6 +131,11 @@ function loadConfig(env = process.env) {
       telegramChatId: String(env.ALERT_TELEGRAM_CHAT_ID || "").trim(),
       everyMin: Math.max(1, int(env.ALERT_EVERY_MIN, 30))
     },
+    // "Talk to a person" (services/onboarding.js): the owner's WhatsApp number and/or Telegram username.
+    support: {
+      whatsapp: String(env.SUPPORT_WHATSAPP || "").replace(/[^0-9]/g, ""),
+      telegram: String(env.SUPPORT_TELEGRAM || "").trim().replace(/^@/, "").replace(/[^A-Za-z0-9_]/g, "")
+    },
     scheduler: {
       // On by default outside tests; tests call tick({ now }) with a fixed clock instead.
       enabled: env.SCHEDULER_ENABLED ? env.SCHEDULER_ENABLED !== "false" : env.NODE_ENV !== "test",

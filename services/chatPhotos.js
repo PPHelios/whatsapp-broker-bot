@@ -72,7 +72,7 @@ async function storePhotos(pool, broker, importId, posts, entries) {
  * Reads a chat export zip into group-import posts with their photos stored.
  * @returns {Promise<{ posts, skipped, duplicates, photos } | { error: no_chat|no_posts }>}
  */
-async function postsFromExport(pool, broker, importId, source, { extraPosts = [] } = {}) {
+async function postsFromExport(pool, broker, importId, source, { extraPosts = [], since = null } = {}) {
   let opened;
   try {
     opened = await openExport(source);
@@ -80,7 +80,7 @@ async function postsFromExport(pool, broker, importId, source, { extraPosts = []
     if (err.code === "NO_CHAT" || /signature|zip|end of central directory/i.test(err.message)) return { error: "no_chat" };
     throw err;
   }
-  const found = Chat.candidatePostsWithPhotos(opened.text);
+  const found = Chat.candidatePostsWithPhotos(opened.text, { since });
   const posts = [...extraPosts, ...found.posts].slice(0, Chat.MAX_POSTS);
   if (!posts.length) return { error: "no_posts" };
   await storePhotos(pool, broker, importId, posts, opened.entries);

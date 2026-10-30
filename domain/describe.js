@@ -276,8 +276,12 @@ function internalLines(l, lang = "ar") {
   return [
     d.owner_name && `👤 ${en ? "Owner" : "المالك"}: ${d.owner_name}`,
     d.owner_phone && `📞 ${en ? "Owner phone" : "تليفون المالك"}: ${d.owner_phone}`,
+    d.owner_lead && `🔗 ${en ? "Owner is client" : "المالك عميل"} ${d.owner_lead}`,
     d.commission && `💼 ${en ? "Commission" : "العمولة"}: ${d.commission}`,
     d.co_broker && `🤝 ${en ? "Co-broker" : "وسيط مشارك"}: ${d.co_broker}`,
+    d.unit_no && `🔢 ${en ? "Unit no." : "رقم الوحدة"}: ${d.unit_no}`,
+    d.address && `🏠 ${en ? "Address" : "العنوان"}: ${d.address}`,
+    l.lat != null && l.lng != null && `📍 https://maps.google.com/?q=${l.lat},${l.lng}`,
     d.notes && `📝 ${en ? "Notes" : "ملاحظات"}: ${d.notes}`
   ].filter(Boolean);
 }
@@ -433,15 +437,33 @@ function searchResult(l, lang = "ar") {
   return f ? `${compactLine(l, lang)}\n   ✨ ${f}` : compactLine(l, lang);
 }
 
+/**
+ * One search result as a short card for the bot: what and where with the code, then price and size, then delivery,
+ * payment and when it was confirmed, then the features. Empty lines are left out.
+ */
+function resultCard(l, lang = "ar") {
+  const en = lang === "en";
+  const beds = kindOf(l) === "studio" || kindOf(l) === "commercial" ? null : num(l.bedrooms);
+  const baths = num(l.bathrooms);
+  const delivery = Delivery.formatDelivery(l, lang);
+  const conf = confirmedLine(l, lang)?.replace(/ (مؤكدة|Confirmed)/, "");
+  const loc = en ? l.compound_en || l.details?.compound_en || latinOnly(l.compound) : l.compound || l.compound_en || l.district;
+  const join = (parts) => parts.filter(Boolean).join(" · ");
+  const head = join([`🏠 ${typeLabel(l, lang)}`, loc, `\`${l.code}\``]);
+  const size = join([priceLabel(l, lang) ? `💰 ${priceLabel(l, lang)}` : null, areaLabel(l, lang) ? `📐 ${areaLabel(l, lang)}` : null, beds && beds > 0 ? `🛏 ${beds}` : null, baths && baths > 0 ? `🛁 ${baths}` : null]);
+  const terms = join([delivery ? `🗓 ${delivery.replace(en ? /Delivery /i : /تسليم /, "")}` : null, paymentHint(l, lang), conf]);
+  const f = featuresLine(l, lang);
+  return [head, size, terms && !terms.startsWith("🗓") ? `💳 ${terms}` : terms, f ? `✨ ${f}` : null].filter(Boolean).join("\n   ");
+}
+
 /** A page of search results with numbering and the footer hint. */
 function searchResults(rows = [], { offset = 0, total = 0, lang = "ar" } = {}) {
   const en = lang === "en";
   const count = Number(total) || Number(rows[0]?.total_count) || rows.length;
   const out = [en ? `🔍 ${count} matching unit(s)` : `🔍 ${count} وحدة مطابقة`, ""];
-  rows.forEach((r, i) => out.push(`${offset + i + 1}. ${searchResult(r, lang)}`));
+  rows.forEach((r, i) => out.push(`${offset + i + 1}. ${resultCard(r, lang)}`, ""));
   const more = offset + rows.length < count;
   out.push(
-    "",
     more
       ? en
         ? "Send a code for details · tap More for the next results"
@@ -541,6 +563,7 @@ module.exports = {
   paymentHint,
   featuresLine,
   compactLine,
+  resultCard,
   searchResult,
   searchResults,
   planCopy,

@@ -151,7 +151,7 @@ const when = (d, lang) =>
 /** "This will change" lines. */
 function summaryLines(u, lead, lang = "ar", { unitCode = null } = {}) {
   const en = lang === "en";
-  const lines = [`👤 ${Card.displayName(lead, lang)} · ${Card.refLabel(lead.ref)}`];
+  const lines = [`👤 ${Card.displayName(lead, lang)} · ${Card.refLabel(lead.ref)} · ${Card.whoHint(lead, lang)}`];
   if (u.contacted) lines.push(en ? "📞 Contacted" : "📞 اتكلمتوا");
   if (u.stage && u.stage !== lead.stage) {
     const reason = u.stage === "lost" && u.lostReason ? ` (${u.lostReason})` : "";

@@ -14,8 +14,8 @@ const stamp = (d) => (d ? new Date(d).toISOString() : "-");
 const typeLabel = (t) => (Describe.TYPE_LABELS?.[t] ? Describe.TYPE_LABELS[t][1] : t || "unit");
 
 /** The key that changes when anything the context is built from changes. */
-function sourceKey({ project, unitsKey = "", plansKey = "", phasesKey = "", materialsKey = "" }) {
-  const parts = [stamp(project.updated_at), stamp(project.prices_updated_at), stamp(project.highlights_at), stamp(project.brochure?.read_at), unitsKey, plansKey, phasesKey, materialsKey];
+function sourceKey({ project, unitsKey = "", plansKey = "", phasesKey = "", materialsKey = "", priceSheet = null }) {
+  const parts = [stamp(project.updated_at), stamp(project.prices_updated_at), stamp(project.highlights_at), stamp(project.brochure?.read_at), unitsKey, plansKey, phasesKey, materialsKey, stamp(priceSheet?.applied_at), stamp(project.plans_draft?.applied?.applied_at)];
   return crypto.createHash("sha1").update(parts.join("|")).digest("hex");
 }
 
@@ -54,7 +54,7 @@ const planLine = (p) =>
  * The context: { summary, facts } where facts = { name, name_en, developer, location, status, delivery, phases,
  * plans, prices: { as_of, ranges }, materials, highlights, brochure: { as_of, facts } }.
  */
-function build({ project: p, developer = null, phases = [], plans = [], units = [], materials = [] }) {
+function build({ project: p, developer = null, phases = [], plans = [], units = [], materials = [], priceSheet = null }) {
   const delivery = p.delivery_year ? `${p.delivery_quarter ? `Q${p.delivery_quarter} ` : ""}${p.delivery_year}` : p.delivery_raw || null;
   const ranges = priceRanges(units);
   const facts = {
@@ -69,9 +69,19 @@ function build({ project: p, developer = null, phases = [], plans = [], units = 
     plans: plans.map(planLine),
     prices: { as_of: day(p.prices_updated_at), ranges },
     materials: materials.filter((m) => m.client_visible && m.check_status !== "broken").map((m) => ({ label: m.label, kind: m.kind, url: m.url })),
+    // Information managers added to answer questions the data could not (services/assistant.js addInfo).
+    agency_notes: p.notes ? String(p.notes).slice(0, 1500) : null,
     highlights: Array.isArray(p.highlights?.en) && p.highlights.en.length ? p.highlights.en : Array.isArray(p.highlights?.ar) ? p.highlights.ar : [],
-    brochure: { as_of: day(p.brochure?.read_at), facts: (p.brochure?.facts || []).slice(0, MAX_FACTS).map((f) => f.text) }
+    brochure: { as_of: day(p.brochure?.read_at), facts: (p.brochure?.facts || []).slice(0, MAX_FACTS).map((f) => f.text) },
+    // F22: what came from uploaded files, each with its date.
+    sources: {
+      prices: priceSheet?.applied_at ? { file: priceSheet.file_name || null, read_by_ai: priceSheet.source === "ai", as_of: day(priceSheet.applied_at) } : null,
+      plans: p.plans_draft?.applied ? { file: p.plans_draft.applied.file_name || null, as_of: day(p.plans_draft.applied.read_at) } : null,
+      brochure: p.brochure?.read_at ? { file: p.brochure.file_name || null, as_of: day(p.brochure.read_at) } : null,
+      files: materials.filter((m) => m.storage_path).map((m) => ({ label: m.label, kind: m.kind, as_of: day(m.created_at) }))
+    }
   };
+  const src = facts.sources;
   const lines = [
     `${facts.name}${facts.name_en && facts.name_en !== facts.name ? ` (${facts.name_en})` : ""}${facts.developer ? ` by ${facts.developer}` : ""}${facts.location ? `, ${facts.location}` : ""}.`,
     facts.status ? `Status: ${facts.status}.` : null,
@@ -85,7 +95,12 @@ function build({ project: p, developer = null, phases = [], plans = [], units = 
           .join("; ")}.`
       : "No prices recorded.",
     facts.highlights.length ? `Highlights: ${facts.highlights.join("; ")}.` : null,
-    facts.materials.length ? `Client materials: ${facts.materials.map((m) => m.label).join(", ")}.` : null
+    facts.agency_notes ? `Agency notes: ${facts.agency_notes}` : null,
+    facts.materials.length ? `Client materials: ${facts.materials.map((m) => m.label).join(", ")}.` : null,
+    src.prices ? `Prices come from ${src.prices.file ? `the file ${src.prices.file}` : "a price sheet"}${src.prices.read_by_ai ? " (read by AI)" : ""}, applied ${src.prices.as_of}.` : null,
+    src.plans ? `Payment plans were read from ${src.plans.file ? `the file ${src.plans.file}` : "a developer file"} on ${src.plans.as_of}.` : null,
+    src.brochure ? `Brochure facts were read from ${src.brochure.file ? `the file ${src.brochure.file}` : "the brochure"} on ${src.brochure.as_of}.` : null,
+    src.files.length ? `Uploaded files: ${src.files.map((f) => `${f.label} (${f.kind}, ${f.as_of})`).join("; ")}.` : null
   ].filter(Boolean);
   return { summary: lines.join("\n"), facts };
 }

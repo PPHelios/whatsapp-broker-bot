@@ -45,13 +45,13 @@ describe("Reply truth (plan #7, Part 2 C)", () => {
   test("a failed inventory workbook delivery tells the broker instead of going silent", async () => {
     await h.insertListing({ code: "HP-201" });
     h.WA.failNext("document");
-    const replies = await h.text("broker", "excel");
-    expect(textOf(replies)).toMatch(/تعذر إنشاء ملف الإكسيل/);
+    const replies = await h.text("admin", "excel");
+    expect(textOf(replies)).toMatch(/Failed to generate the inventory spreadsheet/);
   });
 
   test("the inventory workbook is delivered as a document when sending works", async () => {
     await h.insertListing({ code: "HP-201" });
-    const replies = await h.text("broker", "excel");
+    const replies = await h.text("admin", "excel");
     expect(replies.some((r) => r.type === "document" && /^Inventory_/.test(r.filename))).toBe(true);
   });
 });

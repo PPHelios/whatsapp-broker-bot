@@ -24,14 +24,14 @@ const ERRORS = {
 };
 
 function closedPage(lang) {
-  return html`<div class="card"><h1>🔒 ${L(lang, "التسجيل مقفول دلوقتي", "Sign-up is closed for now")}</h1>
+  return html`<div class="card auth"><h1>${L(lang, "التسجيل مقفول دلوقتي", "Sign-up is closed for now")}</h1>
 <p>${L(lang, "سيب بياناتك في فورم «جرّبه مع وكالتك» وهنكلمك.", "Leave your details in the \"Try it with your agency\" form and we'll call you.")}</p>
 <p><a class="btn" href="/?lang=${lang}#try">${L(lang, "جرّبه مع وكالتك", "Try it with your agency")}</a></p></div>`;
 }
 
 function signupForm(lang, { error, values = {} } = {}) {
-  return html`<form method="post" action="/app/signup" class="card stack" id="signup">
-  <h1>🏢 ${L(lang, "سجّل وكالتك", "Sign up your agency")}</h1>
+  return html`<form method="post" action="/app/signup" class="card stack auth" id="signup">
+  <h1>${L(lang, "سجّل وكالتك", "Sign up your agency")}</h1>
   <p class="muted">${L(lang, `${Plans.TRIAL.days} يوم تجربة مجانية على باقة المكتب بعد موافقتنا. بعدها تختار باقة أو تكمّل على الباقة المجانية.`, `A ${Plans.TRIAL.days}-day free trial on the Office plan once we approve it. Then pick a plan or carry on with the Free plan.`)}</p>
   ${error ? html`<p class="notice bad" role="alert">❌ ${ERRORS[error][lang === "en" ? 1 : 0]}</p>` : ""}
   <label>${L(lang, "اسم الوكالة", "Agency name")} <input name="agency" required maxlength="120" autocomplete="organization" value="${values.agency || ""}"></label>
