@@ -101,7 +101,7 @@ describe("Webhook hardening", () => {
   const body = JSON.stringify({ entry: [] });
 
   test("fail-closed: no app secret means every webhook is rejected", async () => {
-    const app = createApp({ pool: h.pool, config: loadConfig({}) });
+    const app = createApp({ pool: h.pool, config: loadConfig({ WHATSAPP_ENABLED: "true" }) });
     await request(app.app).post("/webhook").set("Content-Type", "application/json").send(body).expect(401);
   });
 
@@ -117,7 +117,7 @@ describe("Webhook hardening", () => {
   });
 
   test("the verify handshake fails when no verify token is configured", async () => {
-    const app = createApp({ pool: h.pool, config: loadConfig({}) });
+    const app = createApp({ pool: h.pool, config: loadConfig({ WHATSAPP_ENABLED: "true" }) });
     await request(app.app).get("/webhook?hub.mode=subscribe&hub.verify_token=&hub.challenge=1").expect(403);
   });
 });

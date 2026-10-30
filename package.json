@@ -26,6 +26,9 @@
   },
   "jest": {
     "testEnvironment": "node",
+    "setupFiles": [
+      "<rootDir>/tests/setup/whatsapp-on.js"
+    ],
     "testMatch": [
       "**/tests/**/*.test.js"
     ],

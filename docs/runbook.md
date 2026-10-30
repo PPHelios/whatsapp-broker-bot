@@ -14,7 +14,7 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `TELEGRAM_BOT_TOKEN` | for Telegram | — | The bot's token from @BotFather. Set it yourself in Render; never paste it in chat. Without it the Telegram bot is off. |
 | `TELEGRAM_WEBHOOK_SECRET` | with the token | — | A random string (`node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`) given to `setWebhook`; Telegram echoes it in `X-Telegram-Bot-Api-Secret-Token` and every other request is refused. The server registers the webhook with it on every start (`lib/tgSetup.js`), so changing it only needs a redeploy. |
 | `TELEGRAM_BOT_USERNAME` | with the token | — | The bot's @username (without @), used to build the brokers' `t.me/<bot>?start=…` start links. |
-| `WHATSAPP_ENABLED` | no | on | `false` (or `0`/`off`/`no`) switches the WhatsApp bot off: the webhook answers 200 and does nothing, nothing is sent on WhatsApp (alerts go to web push and the website inbox), and the `WHATSAPP_*` variables stop being required. Unset or empty = on. Clients' `wa.me` links and share pages don't depend on it. |
+| `WHATSAPP_ENABLED` | no | off | Set to `true` (or `1`/`on`/`yes`) to turn the WhatsApp bot on. Off (unset, empty or any other value): the webhook answers 200 and does nothing, nothing is sent on WhatsApp (alerts go to web push and the website inbox), and the `WHATSAPP_*` variables aren't required. The code stays in place. Clients' `wa.me` links and share pages don't depend on it. |
 | `WHATSAPP_APP_SECRET` | yes | — | Meta app secret; every webhook must carry a valid `X-Hub-Signature-256` (fail-closed). |
 | `WHATSAPP_VERIFY_TOKEN` | yes | — | The token you type in Meta when subscribing the webhook (`GET /webhook`). |
 | `WHATSAPP_ACCESS_TOKEN` | yes | — | System-user token for the Cloud API. |
@@ -91,7 +91,7 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 2. Deploy. On every start the server calls `setWebhook` (with the secret), sets the *WehdatHub* menu button (opens `/app/tg`, the website inside Telegram) and the `/help` `/login` commands. Render's log shows `[TELEGRAM] webhook and menu set`; `[TELEGRAM] setup failed: …` means the token or URL is wrong.
 3. Check from any machine: `https://api.telegram.org/bot<token>/getWebhookInfo` shows our URL and `pending_update_count`. Only the owner runs this (it needs the token).
 4. Brokers link with their start link or by tapping *📱 Share my number* in the bot (only their own number counts). Telegram replies, alerts and sign-in links are free (`tg_outbound`, never in the credits).
-5. To switch the WhatsApp bot off, set `WHATSAPP_ENABLED=false` (clients' `wa.me` links and the "Send on WhatsApp" buttons keep working).
+5. WhatsApp is off by default. To turn it on, set `WHATSAPP_ENABLED=true` (clients' `wa.me` links and the "Send on WhatsApp" buttons work either way).
 6. Rotating the token: revoke it in @BotFather, put the new one in Render, redeploy. Rotating the secret: change it in Render and redeploy.
 
 ## 5. Rotating secrets

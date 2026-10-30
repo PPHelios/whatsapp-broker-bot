@@ -8,7 +8,7 @@ PROD.NODE_ENV = "production";
 PROD.PUBLIC_BASE_URL = "https://aqarchat.onrender.com/";
 
 test("production refuses to start without required variables", () => {
-  expect(() => loadConfig({ NODE_ENV: "production" })).toThrow(/WHATSAPP_APP_SECRET/);
+  expect(() => loadConfig({ NODE_ENV: "production", WHATSAPP_ENABLED: "true" })).toThrow(/WHATSAPP_APP_SECRET/);
   const { DATABASE_URL, ...noDb } = PROD;
   expect(() => loadConfig(noDb)).toThrow(/DATABASE_URL/);
 });
@@ -58,10 +58,10 @@ test("built-in Gemini prices: Flash $0.75/$3.75 now, $1.50/$7.50 from 1 January 
   expect(estimateCostUsd("gemini-3.5-flash-lite", 1e6, 1e6, DEFAULT_AI_PRICES, new Date("2027-06-01T00:00:00Z"))).toBe(2.8);
 });
 
-test("WHATSAPP_ENABLED: on when unset or empty, off for false/0/off/no; off, the WhatsApp variables aren't required", () => {
-  for (const v of [undefined, "", "true", "1", "yes"]) expect(loadConfig({ WHATSAPP_ENABLED: v }).whatsapp.enabled).toBe(true);
-  for (const v of ["false", "FALSE", "0", "off", " no "]) expect(loadConfig({ WHATSAPP_ENABLED: v }).whatsapp.enabled).toBe(false);
+test("WHATSAPP_ENABLED: off when unset or empty, on only for true/1/on/yes; off, the WhatsApp variables aren't required", () => {
+  for (const v of [undefined, "", "false", "0", "off", "no"]) expect(loadConfig({ WHATSAPP_ENABLED: v }).whatsapp.enabled).toBe(false);
+  for (const v of ["true", "TRUE", "1", "on", " yes "]) expect(loadConfig({ WHATSAPP_ENABLED: v }).whatsapp.enabled).toBe(true);
   const noWa = Object.fromEntries(Object.entries(PROD).filter(([k]) => !k.startsWith("WHATSAPP_")));
-  expect(() => loadConfig(noWa)).toThrow(/WHATSAPP_APP_SECRET/);
-  expect(loadConfig({ ...noWa, WHATSAPP_ENABLED: "false" }).whatsapp.enabled).toBe(false);
+  expect(() => loadConfig({ ...noWa, WHATSAPP_ENABLED: "true" })).toThrow(/WHATSAPP_APP_SECRET/);
+  expect(loadConfig(noWa).whatsapp.enabled).toBe(false);
 });
