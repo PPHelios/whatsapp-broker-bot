@@ -74,7 +74,7 @@ function register(web, { pool, page }) {
     const d = listing?.details || {};
     if (!d.owner_lead && d.owner_phone) {
       const linked = await Leads.linkOwnerLead(pool, broker, { phone: d.owner_phone, name: d.owner_name, listingType: listing.listing_type, confirmed: body.owner_lead_confirm === "on" });
-      if (linked?.needsConfirm) return L10n(lang, "⛔ الرقم ده جديد عندك. اتأكد من الاسم والرقم وعلّم «أكّد إنه عميل جديد» عشان نضيفه.", "⛔ This owner number is new to you. Check the name and number, then tick \"Confirm new client\" to add them.");
+      if (linked?.needsConfirm) return L10n(lang, "⛔ اتأكد إن ده عميل المالك وعلّم «أكّد ربط المالك بالعميل» عشان نحفظه.", "⛔ Check this is the owner's client, then tick \"Confirm the owner link\" to save it.");
       if (linked?.error) return L10n(lang, "⛔ تليفون المالك مش صح. صححه أو سيبه فاضي.", "⛔ The owner's phone isn't valid. Fix it or leave it empty.");
       if (linked) d.owner_lead = Card.refLabel(linked.ref);
     }

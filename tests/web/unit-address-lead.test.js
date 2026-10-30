@@ -79,3 +79,11 @@ test("a new owner number without a name is not made into a lead", async () => {
   expect((await unit("WEB-5")).details).not.toHaveProperty("owner_lead");
   expect(await h.query("SELECT 1 FROM leads")).toHaveLength(0);
 });
+
+test("linking to an existing client also waits for the broker's confirmation", async () => {
+  const { agent, csrf } = await signIn(h, "broker");
+  await post(agent, csrf, "WEB-2");
+  await post(agent, csrf, "WEB-7", { pin: "", area: "170", confirm: "" });
+  expect(await unit("WEB-7")).toBeUndefined();
+  expect(await h.query("SELECT 1 FROM leads")).toHaveLength(1);
+});
