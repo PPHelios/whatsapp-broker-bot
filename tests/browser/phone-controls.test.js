@@ -13,6 +13,8 @@ const WebAuth = require("../../lib/webAuth");
 const Leads = require("../../services/leads");
 
 process.env.OWNER_BROKER_IDS = "10000000-0000-0000-0000-000000000003";
+// The server checks the page origin on every write (same-origin): the browser must reach it at this address.
+process.env.PUBLIC_BASE_URL = "http://127.0.0.1:4571";
 jest.setTimeout(900000);
 
 const PHONE = { width: 390, height: 844 };
@@ -73,8 +75,12 @@ async function checkBody(pg, where) {
 
 async function session(who) {
   const br = h.BROKERS[who];
-  const ctx = await browser.newContext({ viewport: PHONE, isMobile: true, hasTouch: true, permissions: ["microphone"] });
+  // The app's service worker would fetch pages itself and skip the routes below; the test drives the network directly.
+  const ctx = await browser.newContext({ viewport: PHONE, isMobile: true, hasTouch: true, permissions: ["microphone"], serviceWorkers: "block" });
   await ctx.route(/.*/, (route) => (LOCAL.test(route.request().url()) ? route.continue() : route.abort()));
+  // A share link opens WhatsApp in a new navigation; abort leaves an error page and breaks the next load. Answer it with
+  // an empty response instead, so the page stays put (the app's link is unchanged).
+  await ctx.route(/^https:\/\/(api\.whatsapp\.com|wa\.me)\//, (route) => route.fulfill({ status: 204, body: "" }));
   await ctx.addInitScript(FAKE_SPEECH);
   const pg = await ctx.newPage();
   pg.setDefaultTimeout(15000);
@@ -132,6 +138,8 @@ async function forms(pg, who, name, path) {
       if (!form || !(await form.isVisible())) break;
       const action = (await form.getAttribute("action")) || "";
       if (/logout/.test(action)) break;
+      // "Send to client" and "Save viewing" end in a WhatsApp redirect that the browser cannot follow here; unit tests cover those routes.
+      if (/\/(send|viewing)$/.test(action)) continue;
       const where = `${who} ${name} form ${i + 1} (${mode})`;
       if (mode === "filled") {
         await form.evaluate((el) => {
@@ -164,6 +172,14 @@ async function forms(pg, who, name, path) {
   }
 }
 
+// One tap starts the mic and a second tap stops it. The AI path records on the first tap and sends the note on the second;
+// the phone's own speech stops by itself, so the second tap is only needed when it is still listening.
+async function hear(pg, btn) {
+  await btn.tap();
+  const recording = await pg.waitForSelector(".mic.recording", { timeout: 8000 }).then(() => true, () => false);
+  if (recording) await btn.tap();
+}
+
 // Voice buttons: the search mic must hear, search and navigate; a recording button must send the note once it stops.
 async function voice(pg, who, name, path) {
   await open(pg, path);
@@ -173,7 +189,7 @@ async function voice(pg, who, name, path) {
     const btn = (await pg.$$("[data-mic]"))[i];
     if (!(await btn.isVisible())) continue;
     const where = `${who} ${name} voice search ${i + 1}`;
-    await btn.tap();
+    await hear(pg, btn);
     const moved = await pg.waitForURL(/[?&]q=/, { timeout: 8000 }).then(() => true, () => false);
     if (!moved) note(where, "tapping the mic did not search");
     else await checkBody(pg, where);
@@ -229,11 +245,12 @@ beforeAll(async () => {
   // Fake AI: search parses to a fixed filter, speech transcription returns TRANSCRIPT, other calls return an empty answer.
   h.AI.respond((c) => {
     if (c.operation === "transcribe") return TRANSCRIPT;
+    if (c.operation === "follow_up_draft") return '{"text":"رسالة متابعة تجريبية"}';
     if (c.operation === "search_parse") return { intent: "search", language: "ar", filters: { bedrooms_min: 3, bedrooms_max: 3, price_max: 9e6 } };
     return "{}";
   });
-  server = h.app.app.listen(0);
-  base = `http://127.0.0.1:${server.address().port}`;
+  server = h.app.app.listen(4571);
+  base = "http://127.0.0.1:4571";
 });
 
 afterAll(async () => {
@@ -260,8 +277,12 @@ test("voice search from the URL (?voice=1) hears, searches and lands on the resu
   const { ctx, pg } = await session("broker");
   try {
     await open(pg, "/app/search?voice=1");
+    // Listening never starts on page load: nothing searches until the mic is tapped.
+    const auto = await pg.waitForURL(/[?&]q=/, { timeout: 3000 }).then(() => true, () => false);
+    if (auto) note("broker search ?voice=1", "listened on page load");
+    await hear(pg, await pg.$("[data-mic]"));
     const moved = await pg.waitForURL(/[?&]q=/, { timeout: 8000 }).then(() => true, () => false);
-    if (!moved) note("broker search ?voice=1", "auto-listen did not search");
+    if (!moved) note("broker search ?voice=1", "tapping the mic did not search");
     await checkBody(pg, "broker search ?voice=1");
   } finally {
     await ctx.close();

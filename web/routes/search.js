@@ -155,7 +155,7 @@ ${results}`
       return res.json({ q: text });
     } catch (err) {
       const quota = err.code && /QUOTA/.test(err.code);
-      if (quota) return res.status(402).json({ error: L(lang, "رصيد الذكاء الاصطناعي خلص. اكتب بحثك.", "AI credits are used up. Type your search.") });
+      if (quota) return res.status(402).json({ error: L(lang, "رصيد الذكاء الاصطناعي خلص. اضغط المايك تاني عشان صوت التليفون.", "AI credits are used up. Tap the mic again to use the phone's voice."), fallback: true });
       return res.status(503).json({ error: L(lang, "الذكاء الاصطناعي مش متاح دلوقتي.", "The AI is unavailable right now."), fallback: true });
     }
   });
