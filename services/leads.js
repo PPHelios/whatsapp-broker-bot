@@ -14,6 +14,7 @@ const LeadRules = require("./leadRules");
 const Rules = require("../domain/leadRules");
 const { withTransaction, logOperation } = require("../lib/db");
 const { getConfig } = require("../config");
+const Vis = require("../lib/visibility");
 
 const MAX_PHONES = 3;
 const UNDO_MS = 10 * 60 * 1000;
@@ -23,7 +24,7 @@ const DAY_MS = 24 * 3600 * 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BROKER_COLS = "id, agency_id, name, role, is_active, preferred_lang, phone_number, phone_normalized, notify_prefs, away_until";
 const LEAD_COLS = "l.*, a.name AS assignee_name";
-const FROM_LEADS = "FROM leads l LEFT JOIN brokers a ON a.id = l.assigned_broker_id AND a.agency_id = l.agency_id";
+const FROM_LEADS = "FROM leads l LEFT JOIN brokers a ON a.id = l.assigned_broker_id AND a.agency_id = l.agency_id"; // vis:exempt: every use adds Vis.leads("l") to its WHERE
 
 // The fields each reversible event changes; undo puts them back.
 const FOLLOW_UP_FIELDS = ["next_follow_up_at", "follow_up_kind", "follow_up_listing_id", "follow_up_note", "follow_up_status", "follow_up_reminded_at"];
@@ -88,7 +89,7 @@ async function loadLead(db, agencyId, key, { forUpdate = false } = {}) {
   const k = keyClause(key);
   if (!k) return null;
   const { rows } = await db.query(
-    forUpdate ? `SELECT l.* FROM leads l WHERE l.agency_id = $1 AND ${k.sql} FOR UPDATE` : `SELECT ${LEAD_COLS} ${FROM_LEADS} WHERE l.agency_id = $1 AND ${k.sql}`,
+    forUpdate ? `SELECT l.* FROM leads l WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND ${k.sql} FOR UPDATE` : `SELECT ${LEAD_COLS} ${FROM_LEADS} WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND ${k.sql}`,
     [agencyId, k.value]
   );
   return rows[0] || null;
@@ -177,7 +178,7 @@ async function captureLead(pool, actor, input = {}, { now = new Date(), quiet = 
     // One capture at a time per agency, so two brokers adding the same number can't both create it.
     await client.query("SELECT pg_advisory_xact_lock(hashtext('leads'), hashtext($1))", [actor.agency_id]);
     if (input.allowErased) await client.query("DELETE FROM lead_erasures WHERE agency_id = $1 AND phone_hash = ANY($2::text[])", [actor.agency_id, hashes]);
-    const found = await client.query("SELECT * FROM leads WHERE agency_id = $1 AND phones && $2::text[] ORDER BY created_at LIMIT 1 FOR UPDATE", [
+    const found = await client.query("SELECT * FROM leads WHERE " + Vis.leads("leads") + " AND agency_id = $1 AND phones && $2::text[] ORDER BY created_at LIMIT 1 FOR UPDATE", [
       actor.agency_id,
       parsed.phones
     ]);
@@ -192,7 +193,7 @@ async function captureLead(pool, actor, input = {}, { now = new Date(), quiet = 
       // Numbers not on this lead (and not on another lead) are added, up to three.
       const fresh = parsed.phones.filter((p) => !existing.phones.includes(p));
       const taken = fresh.length
-        ? (await client.query("SELECT unnest(phones) AS p FROM leads WHERE agency_id = $1 AND id <> $2 AND phones && $3::text[]", [actor.agency_id, existing.id, fresh])).rows.map((r) => r.p)
+        ? (await client.query("SELECT unnest(phones) AS p FROM leads WHERE " + Vis.leads("leads") + " AND agency_id = $1 AND id <> $2 AND phones && $3::text[]", [actor.agency_id, existing.id, fresh])).rows.map((r) => r.p)
         : [];
       const added = fresh.filter((p) => !taken.includes(p)).slice(0, MAX_PHONES - existing.phones.length);
       const { rows } = await client.query(
@@ -329,7 +330,7 @@ async function applyUpdate(pool, actor, key, u, { now = new Date() } = {}) {
   if (u.followUp) {
     if (!(u.followUp.at instanceof Date) || Number.isNaN(u.followUp.at.getTime())) return { error: "follow_up_time" };
     if (u.followUp.listingId) {
-      const x = await pool.query("SELECT 1 FROM listings WHERE id = $1 AND agency_id = $2", [u.followUp.listingId, actor.agency_id]);
+      const x = await pool.query("SELECT 1 FROM listings WHERE " + Vis.units("listings") + " AND id = $1 AND agency_id = $2", [u.followUp.listingId, actor.agency_id]);
       if (!x.rows.length) return { error: "unit_not_found" };
     }
   }
@@ -452,7 +453,7 @@ async function setFollowUp(pool, actor, key, { at, kind = "call", listingId = nu
   if (!at || Number.isNaN(when.getTime())) return { error: "follow_up_time" };
   if (!Stages.FOLLOW_UP_KINDS.includes(kind)) return { error: "follow_up_kind" };
   if (listingId) {
-    const u = await pool.query("SELECT 1 FROM listings WHERE id = $1 AND agency_id = $2", [listingId, actor.agency_id]);
+    const u = await pool.query("SELECT 1 FROM listings WHERE " + Vis.units("listings") + " AND id = $1 AND agency_id = $2", [listingId, actor.agency_id]);
     if (!u.rows.length) return { error: "unit_not_found" };
   }
   return mutate(pool, actor, key, { kind: "follow_up_set", version, now }, () => ({
@@ -545,7 +546,7 @@ async function getLead(pool, actor, key) {
 async function findByPhone(pool, actor, raw) {
   const e164 = Phone.toE164(raw);
   if (!e164) return { lead: null, elsewhere: false, invalid: true };
-  const { rows } = await pool.query(`SELECT ${LEAD_COLS} ${FROM_LEADS} WHERE l.agency_id = $1 AND l.phones @> ARRAY[$2]::text[] LIMIT 1`, [actor.agency_id, e164]);
+  const { rows } = await pool.query(`SELECT ${LEAD_COLS} ${FROM_LEADS} WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.phones @> ARRAY[$2]::text[] LIMIT 1`, [actor.agency_id, e164]);
   const lead = rows[0];
   if (!lead) return { lead: null, elsewhere: false };
   return Authz.canViewLead(actor, lead) ? { lead, elsewhere: false } : { lead: null, elsewhere: true };
@@ -585,7 +586,7 @@ async function listLeads(pool, actor, f = {}, { now = new Date() } = {}) {
   const limit = Math.min(Math.max(parseInt(f.limit, 10) || PAGE, 1), 100);
   const offset = Math.max(parseInt(f.offset, 10) || 0, 0);
   const { rows } = await pool.query(
-    `SELECT ${LEAD_COLS} ${FROM_LEADS} WHERE ${where.join(" AND ")} ORDER BY l.last_activity_at DESC, l.ref DESC LIMIT ${limit + 1} OFFSET ${offset}`,
+    `SELECT ${LEAD_COLS} ${FROM_LEADS} WHERE ${Vis.leads("l")} AND ${where.join(" AND ")} ORDER BY l.last_activity_at DESC, l.ref DESC LIMIT ${limit + 1} OFFSET ${offset}`,
     args
   );
   return { rows: rows.slice(0, limit), more: rows.length > limit };
@@ -593,7 +594,7 @@ async function listLeads(pool, actor, f = {}, { now = new Date() } = {}) {
 
 /** True when the agency has a lead with this reference (visible or not): "not yours" rather than "no such lead". */
 async function refExists(pool, actor, ref) {
-  const { rows } = await pool.query("SELECT 1 FROM leads WHERE agency_id = $1 AND ref = $2", [actor.agency_id, ref]);
+  const { rows } = await pool.query("SELECT 1 FROM leads WHERE " + Vis.leads("leads") + " AND agency_id = $1 AND ref = $2", [actor.agency_id, ref]);
   return rows.length > 0;
 }
 
@@ -601,7 +602,7 @@ async function refExists(pool, actor, ref) {
 async function dueFollowUps(pool, actor, { limit = 5 } = {}) {
   const { rows } = await pool.query(
     `SELECT ${LEAD_COLS}, count(*) OVER () AS total ${FROM_LEADS}
-      WHERE l.agency_id = $1 AND l.assigned_broker_id = $2 AND l.follow_up_status = 'open'
+      WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.assigned_broker_id = $2 AND l.follow_up_status = 'open'
       ORDER BY l.next_follow_up_at LIMIT $3`,
     [actor.agency_id, actor.id, limit]
   );
@@ -611,11 +612,11 @@ async function dueFollowUps(pool, actor, { limit = 5 } = {}) {
 /** Managers' pipeline: leads per stage and overdue follow-ups per broker (null for a broker). */
 async function pipeline(pool, actor, { now = new Date() } = {}) {
   if (!Authz.canManageLeads(actor)) return null;
-  const stages = await pool.query("SELECT stage, count(*)::int AS n FROM leads WHERE agency_id = $1 GROUP BY stage", [actor.agency_id]);
+  const stages = await pool.query("SELECT stage, count(*)::int AS n FROM leads WHERE " + Vis.leads("leads") + " AND agency_id = $1 GROUP BY stage", [actor.agency_id]);
   const overdue = await pool.query(
     `SELECT l.assigned_broker_id AS broker_id, b.name, count(*)::int AS n
        FROM leads l LEFT JOIN brokers b ON b.id = l.assigned_broker_id AND b.agency_id = l.agency_id
-      WHERE l.agency_id = $1 AND l.follow_up_status = 'open' AND l.next_follow_up_at < $2
+      WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.follow_up_status = 'open' AND l.next_follow_up_at < $2
       GROUP BY l.assigned_broker_id, b.name ORDER BY n DESC`,
     [actor.agency_id, now.toISOString()]
   );

@@ -29,6 +29,7 @@ const Privacy = require("../../services/unitPrivacy");
 const OwnerAgencies = require("../../services/ownerAgencies");
 const { isManager } = require("../../lib/authz");
 const { logOperation } = require("../../lib/db");
+const Vis = require("../../lib/visibility");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
@@ -499,7 +500,7 @@ function register(web, { pool, page }) {
     const { broker } = req.session;
     if (!isManager(broker)) return res.status(403).type("text/plain").send(L(langOf(req), "للمديرين بس", "Managers only"));
     const t0 = Date.now();
-    const { rows: listings } = await pool.query("SELECT * FROM listings WHERE agency_id = $1 AND status = 'active' ORDER BY created_at DESC", [broker.agency_id]);
+    const { rows: listings } = await pool.query("SELECT * FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND status = 'active' ORDER BY created_at DESC", [broker.agency_id]);
     const { rows: agencies } = await pool.query("SELECT * FROM agencies WHERE id = $1", [broker.agency_id]);
     const buf = await require("../../lib/excel").buildAgencyInventoryWorkbook({ listings, agency: agencies[0], broker, lang: langOf(req) });
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "command_inventory_export", status: "success", total_duration_ms: Date.now() - t0, metadata: { channel: "web", rowsCount: listings.length } });

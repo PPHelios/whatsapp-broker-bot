@@ -14,6 +14,7 @@ const Card = require("../domain/leadCard");
 const Describe = require("../domain/describe");
 const Stages = require("../domain/leadStages");
 const SearchLink = require("../domain/searchLink");
+const Vis = require("../lib/visibility");
 
 const OVERLAP_MS = 2 * 60 * 1000; // a write committed just after the last sweep is still read
 const FIRST_LOOKBACK_MS = 10 * 60 * 1000; // the first sweep never alerts on old inventory
@@ -105,7 +106,7 @@ async function sweep(pool, { now = new Date(), watermark = {}, dailyCap = DAILY_
   const since = watermark.at ? new Date(new Date(watermark.at).getTime() - OVERLAP_MS) : new Date(now.getTime() - FIRST_LOOKBACK_MS);
   const { rows: changed } = await pool.query(
     `SELECT id, agency_id, updated_at FROM listings
-      WHERE status = 'active' AND updated_at > $1 AND updated_at <= $2
+      WHERE ${Vis.units("listings")} AND status = 'active' AND updated_at > $1 AND updated_at <= $2
       ORDER BY updated_at, id LIMIT $3`,
     [since.toISOString(), now.toISOString(), BATCH]
   );
@@ -125,7 +126,7 @@ async function sweep(pool, { now = new Date(), watermark = {}, dailyCap = DAILY_
     const { rows: requests } = await pool.query(
       `SELECT s.id, s.filters, s.broker_id, l.id AS lead_id, l.ref, l.name, l.phone_e164, l.assigned_broker_id, l.stage, l.last_contact_at, l.created_at AS lead_created_at
          FROM saved_searches s JOIN leads l ON l.id = s.lead_id AND l.agency_id = s.agency_id
-        WHERE s.agency_id = $1 AND s.alerts_enabled AND l.stage NOT IN ('won', 'lost')`,
+        WHERE ${Vis.leads("l")} AND s.agency_id = $1 AND s.alerts_enabled AND l.stage NOT IN ('won', 'lost')`,
       [agencyId]
     );
     counts.requests += requests.length;

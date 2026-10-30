@@ -18,6 +18,7 @@ const Links = require("../lib/links");
 const LeadImport = require("../domain/leadImport");
 const Stages = require("../domain/leadStages");
 const Card = require("../domain/leadCard");
+const Vis = require("../lib/visibility");
 
 const PER_HOUR = { limit: 300, windowSec: 3600 };
 const LOG_KEEP = 50;
@@ -213,7 +214,7 @@ async function log(pool, agencyId, { intakeId = null, limit = LOG_KEEP } = {}) {
   const { rows } = await pool.query(
     `SELECT g.*, i.name AS intake_name, l.ref AS lead_ref FROM lead_intake_log g JOIN lead_intakes i ON i.id = g.intake_id
        LEFT JOIN leads l ON l.id = g.lead_id
-      WHERE g.agency_id = $1 ${intakeId ? "AND g.intake_id = $3" : ""} ORDER BY g.id DESC LIMIT $2`,
+      WHERE ${Vis.leads("l")} AND g.agency_id = $1 ${intakeId ? "AND g.intake_id = $3" : ""} ORDER BY g.id DESC LIMIT $2`,
     intakeId ? [agencyId, limit, intakeId] : [agencyId, limit]
   );
   return rows;
@@ -225,7 +226,7 @@ async function sourcesFor(pool, agencyId) {
   const { rows } = await pool.query(
     `SELECT source FROM (
        SELECT source, 1000000 AS n FROM lead_intakes WHERE agency_id = $1 AND revoked_at IS NULL
-       UNION ALL SELECT source, count(*) AS n FROM leads WHERE agency_id = $1 AND source IS NOT NULL AND source <> '' GROUP BY source
+       UNION ALL SELECT source, count(*) AS n FROM leads WHERE ${Vis.leads("leads")} AND agency_id = $1 AND source IS NOT NULL AND source <> '' GROUP BY source
      ) s GROUP BY source ORDER BY max(n) DESC, source LIMIT 40`,
     [agencyId]
   );

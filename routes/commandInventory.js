@@ -4,6 +4,7 @@
 const T = require("../lib/text");
 const { reply, replyButtons, replyDocument } = require("../lib/dispatcher");
 const { logCommandOp, checkBrokerCooldown, setBrokerCooldown, releaseBrokerCooldown } = require("./commandState");
+const Vis = require("../lib/visibility");
 
 /** STATS-01: counts by status and inventory type, portfolio value, average price and the top areas. */
 async function sendInventoryStats(broker, ctx, startTime) {
@@ -20,13 +21,13 @@ async function sendInventoryStats(broker, ctx, startTime) {
         COALESCE(SUM(price_value) FILTER (WHERE status = 'active'), 0)::numeric AS total_active_value,
         COALESCE(AVG(price_value) FILTER (WHERE status = 'active' AND price_value > 0), 0)::numeric AS avg_active_price
       FROM listings
-      WHERE agency_id = $1
+      WHERE ${Vis.units("listings")} AND agency_id = $1
     `;
 
     const topAreasQuery = `
       SELECT COALESCE(compound, district, city, 'أخرى') AS area_name, COUNT(*)::integer AS unit_count
       FROM listings
-      WHERE agency_id = $1 AND status = 'active' AND (compound IS NOT NULL OR district IS NOT NULL OR city IS NOT NULL)
+      WHERE ${Vis.units("listings")} AND agency_id = $1 AND status = 'active' AND (compound IS NOT NULL OR district IS NOT NULL OR city IS NOT NULL)
       GROUP BY 1
       ORDER BY unit_count DESC
       LIMIT 3
@@ -184,7 +185,7 @@ async function startInventoryExport(broker, ctx) {
     const exportStartTime = Date.now();
     try {
       const { rows: listings } = await pool.query(
-        "SELECT * FROM listings WHERE agency_id = $1 AND status = 'active' ORDER BY created_at DESC",
+        "SELECT * FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND status = 'active' ORDER BY created_at DESC",
         [broker.agency_id]
       );
       const { rows: agencies } = await pool.query(

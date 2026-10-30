@@ -4,6 +4,7 @@
 "use strict";
 
 const C = require("../domain/projectContext");
+const Vis = require("../lib/visibility");
 
 async function load(db, agencyId, projectId) {
   const { rows } = await db.query("SELECT * FROM projects WHERE id = $1 AND agency_id = $2", [projectId, agencyId]);
@@ -13,7 +14,7 @@ async function load(db, agencyId, projectId) {
     project.developer_id ? db.query("SELECT name FROM developers WHERE id = $1", [project.developer_id]) : { rows: [] },
     db.query("SELECT name, status, delivery_year, delivery_quarter, created_at FROM project_phases WHERE project_id = $1 ORDER BY created_at", [project.id]),
     db.query("SELECT name, down_payment_pct, years, frequency, discount_pct, maintenance_pct, updated_at FROM project_plans WHERE project_id = $1 ORDER BY position, created_at", [project.id]),
-    db.query("SELECT property_type, price_value, area_value, bedrooms, status, details, updated_at FROM listings WHERE project_id = $1 AND agency_id = $2", [project.id, agencyId]),
+    db.query("SELECT property_type, price_value, area_value, bedrooms, status, details, updated_at FROM listings WHERE " + Vis.units("listings") + " AND project_id = $1 AND agency_id = $2", [project.id, agencyId]),
     db.query("SELECT label, kind, url, client_visible, check_status, storage_path, created_at FROM project_materials WHERE project_id = $1 ORDER BY created_at", [project.id]),
     // F22: the price list file the current prices came from.
     db.query("SELECT file_name, source, applied_at FROM price_sheets WHERE project_id = $1 AND status = 'applied' ORDER BY applied_at DESC NULLS LAST LIMIT 1", [project.id])

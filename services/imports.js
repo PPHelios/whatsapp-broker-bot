@@ -18,6 +18,7 @@ const { normalizeCode } = require("../domain/searchQuery");
 const { normalizeSearch } = require("../domain/searchText");
 const Supabase = require("../lib/supabase");
 const PhotoHash = require("./photoHash");
+const Vis = require("../lib/visibility");
 
 const MONEY = ["price_value", "down_payment_value", "remaining_amount", "installment_value"];
 const DETAIL_LABELS = { owner_name: ["المالك", "Owner"], owner_phone: ["تليفون المالك", "Owner phone"], notes: ["ملاحظات", "Notes"], clean_summary: ["الوصف", "Description"], summary_en: ["الوصف بالإنجليزي", "English summary"], floor: ["الدور", "Floor"] };
@@ -99,7 +100,7 @@ const ERROR_LABELS = { code: ["كود غير صالح", "Invalid code"], propert
 async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
   const parsed = sheet.rows.map((r) => ({ rowNumber: r.rowNumber, ...SheetImport.rowToDraft(r.cells) }));
   const codes = [...new Set(parsed.map((p) => normalizeCode(p.code)).filter(Boolean))];
-  const { rows: found } = await pool.query("SELECT * FROM listings WHERE agency_id = $1 AND code_norm = ANY($2::text[])", [broker.agency_id, codes]);
+  const { rows: found } = await pool.query("SELECT * FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND code_norm = ANY($2::text[])", [broker.agency_id, codes]);
   const byCode = new Map(found.map((l) => [l.code_norm, l]));
   const seen = new Set();
   const items = [];
@@ -158,7 +159,7 @@ async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
   const matched = items.filter((i) => i.listing_id).length;
   if (matched > 0 && matched >= codes.length * 0.5) {
     const { rows } = await pool.query(
-      "SELECT code, broker_id, agency_id FROM listings WHERE agency_id = $1 AND status = 'active' AND NOT (code_norm = ANY($2::text[])) ORDER BY code LIMIT 500",
+      "SELECT code, broker_id, agency_id FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND status = 'active' AND NOT (code_norm = ANY($2::text[])) ORDER BY code LIMIT 500",
       [broker.agency_id, codes]
     );
     missing = rows.filter((l) => Authz.canEdit(broker, l)).map((l) => l.code);

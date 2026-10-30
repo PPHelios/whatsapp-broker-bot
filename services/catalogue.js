@@ -9,6 +9,7 @@ const { isManager, canEdit } = require("../lib/authz");
 const { normalizeArabicDigits } = require("../lib/listingText");
 const crypto = require("crypto");
 const Storage = require("../lib/supabase");
+const Vis = require("../lib/visibility");
 
 const STATUSES = ["launching", "selling", "sold_out"];
 const KINDS = ["master_plan", "brochure", "layout", "video", "location", "website", "price_sheet", "other"];
@@ -119,7 +120,7 @@ async function listProjects(db, actor, { archived = false, developerId = null } 
   const { rows } = await db.query(
     `SELECT p.id, p.name, p.name_en, p.status, p.district, p.city, p.delivery_year, p.delivery_quarter, p.prices_updated_at,
             p.archived_at, p.developer_id, d.name AS developer_name_ar, d.name_en AS developer_name_en,
-            (SELECT count(*)::int FROM listings l WHERE l.project_id = p.id AND l.status = 'active') AS units,
+            (SELECT count(*)::int FROM listings l WHERE ${Vis.units("l")} AND l.project_id = p.id AND l.status = 'active') AS units,
             (SELECT count(*)::int FROM project_plans pl WHERE pl.project_id = p.id) AS plans
      FROM projects p LEFT JOIN developers d ON d.id = p.developer_id
      WHERE p.agency_id = $1 AND (p.archived_at IS NOT NULL) = $2 AND ($3::uuid IS NULL OR p.developer_id = $3)
@@ -241,7 +242,7 @@ async function getProject(db, actor, id) {
     db
       .query(
         `SELECT id, code, property_type, area_value, bedrooms, price_value, status, phase_id, developer_unit_code, inventory_type, details
-         FROM listings WHERE project_id = $1 AND agency_id = $2 ORDER BY status, code LIMIT 200`,
+         FROM listings WHERE ${Vis.units("listings")} AND project_id = $1 AND agency_id = $2 ORDER BY status, code LIMIT 200`,
         [id, actor.agency_id]
       )
       .then((r) => r.rows)
@@ -438,7 +439,7 @@ async function syncUnits(db, projectId) {
   if (!project) return 0;
   const { rows: plans } = await db.query("SELECT * FROM project_plans WHERE project_id = $1 ORDER BY position, created_at", [projectId]);
   const { rows: units } = await db.query(
-    "SELECT id, phase_id, payment_terms FROM listings WHERE project_id = $1 AND NOT COALESCE((payment_terms->>'plans_own')::boolean, false)",
+    "SELECT id, phase_id, payment_terms FROM listings WHERE " + Vis.units("listings") + " AND project_id = $1 AND NOT COALESCE((payment_terms->>'plans_own')::boolean, false)",
     [projectId]
   );
   let n = 0;

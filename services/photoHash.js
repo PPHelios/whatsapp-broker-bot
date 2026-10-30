@@ -4,6 +4,7 @@
 // a new photo within MAX_DISTANCE bits of a photo on another active unit of the agency is flagged as "same photo as".
 "use strict";
 
+const Vis = require("../lib/visibility");
 const sharp = require("sharp");
 const Supabase = require("../lib/supabase");
 const Billing = require("./billing");
@@ -43,7 +44,7 @@ async function sameAs(db, agencyId, hashes = [], { excludeListingId = null } = {
     `SELECT DISTINCT ON (h.hash) h.hash, l.code
        FROM unnest($2::text[]) AS h(hash)
        JOIN listing_images i ON i.agency_id = $1 AND i.phash IS NOT NULL AND bit_count(i.phash # h.hash::bit(64)) <= $3
-       JOIN listings l ON l.id = i.listing_id AND l.status = 'active' AND ($4::uuid IS NULL OR l.id <> $4::uuid)
+       JOIN listings l ON l.id = i.listing_id AND l.status = 'active' AND ${Vis.units("l")} AND ($4::uuid IS NULL OR l.id <> $4::uuid)
       ORDER BY h.hash, bit_count(i.phash # h.hash::bit(64)), l.created_at`,
     [agencyId, list, MAX_DISTANCE, excludeListingId]
   );

@@ -13,6 +13,7 @@ const Links = require("../lib/links");
 const Phone = require("../domain/phone");
 const Describe = require("../domain/describe");
 const { notifyBroker } = require("../lib/notifications");
+const Vis = require("../lib/visibility");
 
 const HOUR = 3600 * 1000;
 const DURATION_MS = HOUR;
@@ -37,7 +38,7 @@ function unitLabel(listing, lang = "ar") {
 async function latestFor(db, agencyId, leadId) {
   const { rows } = await db.query(
     `SELECT v.*, l.code, l.property_type, l.compound, l.district, l.area_value FROM viewings v LEFT JOIN listings l ON l.id = v.listing_id
-      WHERE v.agency_id = $1 AND v.lead_id = $2 ORDER BY v.created_at DESC LIMIT 1`,
+      WHERE ${Vis.units("l")} AND v.agency_id = $1 AND v.lead_id = $2 ORDER BY v.created_at DESC LIMIT 1`,
     [agencyId, leadId]
   );
   return rows[0] || null;
@@ -95,7 +96,7 @@ async function byToken(db, token) {
        FROM viewings v JOIN agencies a ON a.id = v.agency_id
        LEFT JOIN brokers b ON b.id = v.broker_id
        LEFT JOIN listings l ON l.id = v.listing_id
-      WHERE v.token_hash = $1`,
+      WHERE ${Vis.units("l")} AND v.token_hash = $1`,
     [tokenHash(token)]
   );
   return rows[0] || null;
@@ -128,7 +129,7 @@ async function respond(pool, token, { action, proposedAt = null, note = null, no
 
 async function alertBroker(pool, v, now) {
   const { rows } = await pool.query(
-    "SELECT b.*, l.ref, l.name AS lead_name FROM brokers b JOIN leads l ON l.id = $2 WHERE b.id = $1 AND b.is_active",
+    "SELECT b.*, l.ref, l.name AS lead_name FROM brokers b JOIN leads l ON l.id = $2 WHERE " + Vis.leads("l") + " AND b.id = $1 AND b.is_active",
     [v.broker_id, v.lead_id]
   );
   const b = rows[0];

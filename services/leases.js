@@ -10,6 +10,7 @@ const Describe = require("../domain/describe");
 const Notifications = require("../lib/notifications");
 const Card = require("../domain/leadCard");
 const { canEdit, isManager } = require("../lib/authz");
+const Vis = require("../lib/visibility");
 
 const cairoDay = (d = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
 
@@ -27,7 +28,7 @@ async function save(db, actor, listing, form) {
   let tenantLeadId = null;
   const ref = f.tenant_name ? Card.parseRef(f.tenant_name.split(/\s/)[0]) : null;
   if (ref) {
-    const lead = (await db.query("SELECT id, name, ref FROM leads WHERE agency_id = $1 AND ref = $2", [actor.agency_id, ref])).rows[0];
+    const lead = (await db.query("SELECT id, name, ref FROM leads WHERE " + Vis.leads("leads") + " AND agency_id = $1 AND ref = $2", [actor.agency_id, ref])).rows[0];
     if (!lead) return { error: "bad_tenant" };
     tenantLeadId = lead.id;
     f.tenant_name = `${Card.refLabel(lead.ref)}${lead.name ? ` ${lead.name}` : ""}`.slice(0, 120);
@@ -50,7 +51,7 @@ async function save(db, actor, listing, form) {
 async function tenantChoices(db, broker) {
   const mgr = isManager(broker);
   const { rows } = await db.query(
-    `SELECT ref, name FROM leads WHERE agency_id = $1 ${mgr ? "" : "AND assigned_broker_id = $2"}
+    `SELECT ref, name FROM leads WHERE ${Vis.leads("leads")} AND agency_id = $1 ${mgr ? "" : "AND assigned_broker_id = $2"}
       ORDER BY (kind = 'tenant') DESC, last_activity_at DESC LIMIT 200`,
     mgr ? [broker.agency_id] : [broker.agency_id, broker.id]
   );
@@ -59,7 +60,7 @@ async function tenantChoices(db, broker) {
 
 async function forTenant(db, agencyId, leadId) {
   const { rows } = await db.query(
-    `SELECT z.*, l.code FROM leases z JOIN listings l ON l.id = z.listing_id WHERE z.agency_id = $1 AND z.tenant_lead_id = $2 ORDER BY z.start_date DESC`,
+    `SELECT z.*, l.code FROM leases z JOIN listings l ON l.id = z.listing_id WHERE ${Vis.units("l")} AND z.agency_id = $1 AND z.tenant_lead_id = $2 ORDER BY z.start_date DESC`,
     [agencyId, leadId]
   );
   return rows.map((r) => ({ ...r, end: Lz.endDate(r) }));
@@ -76,7 +77,7 @@ async function upcoming(db, manager, { days = 90, now = new Date() } = {}) {
   if (!isManager(manager)) return null;
   const { rows } = await db.query(
     `SELECT z.*, l.code, b.name AS broker_name FROM leases z JOIN listings l ON l.id = z.listing_id LEFT JOIN brokers b ON b.id = z.broker_id
-      WHERE z.agency_id = $1`,
+      WHERE ${Vis.units("l")} AND z.agency_id = $1`,
     [manager.agency_id]
   );
   const today = Date.parse(`${cairoDay(now)}T00:00:00Z`);
@@ -114,7 +115,7 @@ async function remindDue(db, { now = new Date() } = {}) {
   const { rows } = await db.query(
     `SELECT z.*, l.code, l.status, b.id AS b_id, b.agency_id AS b_agency, b.name AS b_name, b.role, b.preferred_lang, b.phone_number, b.phone_normalized, b.notify_prefs, b.telegram_chat_id, b.is_active
        FROM leases z JOIN listings l ON l.id = z.listing_id JOIN brokers b ON b.id = z.broker_id
-      WHERE z.remind AND b.is_active`
+      WHERE ${Vis.units("l")} AND z.remind AND b.is_active`
   );
   const today = cairoDay(now);
   let sent = 0;

@@ -12,6 +12,7 @@ const T = require("../lib/text");
 const Sheet = require("../domain/priceSheet");
 const Stages = require("../domain/leadStages");
 const Catalogue = require("./catalogue");
+const Vis = require("../lib/visibility");
 
 const STALE_DAYS = 30;
 const DAY = 24 * 3600 * 1000;
@@ -29,7 +30,7 @@ async function projectOf(db, actor, projectId) {
 async function projectUnits(db, projectId) {
   const { rows } = await db.query(
     `SELECT id, code, developer_unit_code, inventory_type, status, price_value, property_type, bedrooms, area_value, details, phase_id
-     FROM listings WHERE project_id = $1`,
+     FROM listings WHERE ${Vis.units("listings")} AND project_id = $1`,
     [projectId]
   );
   return rows;
@@ -292,7 +293,7 @@ async function applyIncrease(pool, inc, { now = new Date() } = {}) {
       return null;
     }
     const { rows: units } = await client.query(
-      "SELECT id, agency_id, price_value FROM listings WHERE project_id = $1 AND status = 'active' AND price_value > 0 AND details->>'catalogue' = 'true' AND ($2::uuid IS NULL OR phase_id = $2) FOR UPDATE",
+      "SELECT id, agency_id, price_value FROM listings WHERE " + Vis.units("listings") + " AND project_id = $1 AND status = 'active' AND price_value > 0 AND details->>'catalogue' = 'true' AND ($2::uuid IS NULL OR phase_id = $2) FOR UPDATE",
       [inc.project_id, inc.phase_id]
     );
     for (const u of units) {

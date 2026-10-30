@@ -10,6 +10,7 @@ const Card = require("../domain/leadCard");
 const Stages = require("../domain/leadStages");
 const { withTransaction } = require("../lib/db");
 const { isManager } = require("../lib/authz");
+const Vis = require("../lib/visibility");
 
 const MAX_PHONES = 3;
 const MOVE = ["lead_events", "saved_searches", "lead_matches", "share_links", "viewings", "deals", "notifications"];
@@ -51,7 +52,7 @@ async function merge(pool, manager, keepKey, dropKey, { confirm = "", now = new 
       const ref = Card.parseRef(key) || (/^\d+$/.test(String(key)) ? Number(key) : null);
       const byId = /^[0-9a-f-]{36}$/i.test(String(key));
       if (!ref && !byId) return null;
-      const { rows } = await client.query(`SELECT * FROM leads WHERE agency_id = $1 AND ${byId ? "id = $2" : "ref = $2"} FOR UPDATE`, [manager.agency_id, byId ? key : ref]);
+      const { rows } = await client.query(`SELECT * FROM leads WHERE ${Vis.leads("leads")} AND agency_id = $1 AND ${byId ? "id = $2" : "ref = $2"} FOR UPDATE`, [manager.agency_id, byId ? key : ref]);
       return rows[0] || null;
     };
     const keep = await load(keepKey);
@@ -67,7 +68,7 @@ async function merge(pool, manager, keepKey, dropKey, { confirm = "", now = new 
       moved[t] = r.rowCount;
     }
     // The other record goes before the kept one takes its numbers (one primary number per agency).
-    await client.query("DELETE FROM leads WHERE id = $1", [drop.id]);
+    await client.query("DELETE FROM leads WHERE " + Vis.leads("leads") + " AND id = $1", [drop.id]);
     const fu = f.follow_up || {};
     const { rows } = await client.query(
       `UPDATE leads SET phones = $2, name = $3, source = $4, lang = $5, notes = $6, stage = $7, lost_reason = $8, assigned_broker_id = $9,

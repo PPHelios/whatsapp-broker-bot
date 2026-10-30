@@ -252,6 +252,10 @@
       "startLink": ["botPhone", "lang"],
       "startLines": ["plan", "botPhone"]
     },
+    "lib/visibility.js": {
+      "units": ["_alias"],
+      "leads": ["_alias"]
+    },
     "lib/authz.js": {
       "MANAGER_ROLES": "Array",
       "isManager": ["broker"],

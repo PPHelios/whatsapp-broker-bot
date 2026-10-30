@@ -31,6 +31,7 @@ const { icon } = require("../icons");
 const UnitPrivacy = require("../../services/unitPrivacy");
 const V = require("../views/leads");
 const { refineForm } = require("../views/searchForm");
+const Vis = require("../../lib/visibility");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
@@ -333,7 +334,7 @@ ${rows.length
     const brokers = manager ? await activeBrokers(pool, broker.agency_id) : [];
     const viewing = await Viewings.latestFor(pool, broker.agency_id, lead.id);
     const leases = await Leases.forTenant(pool, broker.agency_id, lead.id);
-    const unit = lead.follow_up_listing_id ? (await pool.query("SELECT * FROM listings WHERE id = $1 AND agency_id = $2", [lead.follow_up_listing_id, broker.agency_id])).rows[0] : null;
+    const unit = lead.follow_up_listing_id ? (await pool.query("SELECT * FROM listings WHERE " + Vis.units("listings") + " AND id = $1 AND agency_id = $2", [lead.follow_up_listing_id, broker.agency_id])).rows[0] : null;
     // The viewing place starts from the unit's agency-only pin when this broker may see it.
     if (unit && (await UnitPrivacy.canSee(pool, broker, unit))) unit.mapsUrl = UnitPrivacy.mapsUrl(await UnitPrivacy.pinOf(pool, unit));
     const path = V.leadPath(lead);

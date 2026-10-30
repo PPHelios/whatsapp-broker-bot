@@ -2,6 +2,7 @@
 // when a unit has no compound), sale and rent apart: how many active units, the median, lowest and highest price per
 // m². A group is shown only with at least MIN_UNITS units, so one odd listing never reads as "the market". Agency only.
 "use strict";
+const Vis = require("../lib/visibility");
 
 const MIN_UNITS = 5;
 
@@ -14,7 +15,7 @@ async function byPlace(db, agencyId, { minUnits = MIN_UNITS } = {}) {
     `SELECT ${PLACE} AS place, listing_type, count(*)::int AS units,
             round(percentile_cont(0.5) WITHIN GROUP (ORDER BY price_value / area_value))::bigint AS median,
             round(min(price_value / area_value))::bigint AS low, round(max(price_value / area_value))::bigint AS high
-       FROM listings WHERE ${BASE} AND ${PLACE} IS NOT NULL
+       FROM listings WHERE ${Vis.units("listings")} AND ${BASE} AND ${PLACE} IS NOT NULL
       GROUP BY 1, 2 HAVING count(*) >= $2
       ORDER BY count(*) DESC, 1, 2`,
     [agencyId, minUnits]
@@ -54,7 +55,7 @@ async function forUnit(db, listing, { minUnits = MIN_UNITS } = {}) {
   for (const like of tiers) {
     const { rows } = await db.query(
       `SELECT count(*)::int AS units, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY price_value / area_value))::bigint AS median
-         FROM listings WHERE ${BASE} AND ${PLACE} = $2 AND listing_type = $3 AND id IS DISTINCT FROM $4
+         FROM listings WHERE ${Vis.units("listings")} AND ${BASE} AND ${PLACE} = $2 AND listing_type = $3 AND id IS DISTINCT FROM $4
           AND ($5::text IS NULL OR finishing = $5) AND ($6::text IS NULL OR ${EXTRAS} = $6)`,
       [listing.agency_id, place, listing.listing_type, listing.id || null, like.finishing, like.extras]
     );

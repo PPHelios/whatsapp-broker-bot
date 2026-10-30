@@ -197,8 +197,8 @@ describe("WehdatHub Master Safeguards & Regression Guard Suite", () => {
     });
 
     test("Multi-tenancy isolation: mutations must always scope to agency_id", () => {
-      expect(commandsSrc).toMatch(/WHERE\s+agency_id\s*=\s*\$1/i);
-      expect(interactiveSrc).toMatch(/WHERE\s+agency_id\s*=\s*\$1/i);
+      expect(commandsSrc).toMatch(/WHERE\s+(?:\$\{Vis\.\w+\([^)]*\)\}\s+AND\s+)?agency_id\s*=\s*\$1/i);
+      expect(interactiveSrc).toMatch(/WHERE\s+(?:\$\{Vis\.\w+\([^)]*\)\}\s+AND\s+)?agency_id\s*=\s*\$1/i);
     });
 
     test("SCHEMA_REFERENCE.sql must contain all required operational and recovery tables", () => {

@@ -11,6 +11,7 @@ const Card = require("../domain/leadCard");
 const Notifications = require("../lib/notifications");
 const { MANAGER_ROLES } = require("../lib/authz");
 const { withTransaction } = require("../lib/db");
+const Vis = require("../lib/visibility");
 
 const BATCH = 100;
 const DAY = 24 * 3600 * 1000;
@@ -105,7 +106,7 @@ async function routingList(db, agencyId) {
   const routing = await routingOf(db, agencyId);
   const { rows } = await db.query(
     `SELECT b.id, b.name, b.role, b.away_until,
-            (SELECT count(*)::int FROM leads l WHERE l.assigned_broker_id = b.id AND l.agency_id = b.agency_id AND l.stage NOT IN ('won', 'lost')) AS open_leads
+            (SELECT count(*)::int FROM leads l WHERE ${Vis.leads("l")} AND l.assigned_broker_id = b.id AND l.agency_id = b.agency_id AND l.stage NOT IN ('won', 'lost')) AS open_leads
        FROM brokers b WHERE b.agency_id = $1 AND b.is_active
       ORDER BY (lower(b.role) = 'broker') DESC, b.name, b.id`,
     [agencyId]
@@ -154,7 +155,7 @@ async function moveOverdue(pool, { now = new Date(), limit = BATCH } = {}) {
   const out = await withTransaction(pool, async (client) => {
     const { rows } = await client.query(
       `SELECT * FROM leads
-        WHERE response_due_at IS NOT NULL AND response_due_at <= $1
+        WHERE ${Vis.leads("leads")} AND response_due_at IS NOT NULL AND response_due_at <= $1
         ORDER BY response_due_at, id LIMIT $2 FOR UPDATE SKIP LOCKED`,
       [now.toISOString(), limit]
     );
