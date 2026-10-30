@@ -13,6 +13,8 @@ const COLUMNS = [
   ["code", /^(code|unit code|unit id|ref|كود|الكود|كود الوحده|الكود الداخلي)$/],
   ["owner_phone", /(owner phone|owner mobile|تليفون المالك|رقم المالك|موبايل المالك)/],
   ["owner_name", /^(owner|owner name|المالك|اسم المالك)$/],
+  ["unit_no", /^(unit no|unit number|unit num|apartment no|رقم الوحده|رقم الوحدة|رقم الشقه|رقم الشقة)$/],
+  ["address", /^(address|full address|العنوان بالكامل|العنوان التفصيلي|العنوان بالتفصيل)$/],
   ["summary_en", /^summary/],
   ["description", /(description|الوصف|وصف)/],
   ["title", /^(title|العنوان)$/],
@@ -179,6 +181,8 @@ function rowToDraft(input = {}) {
   if (has("description")) draft.details.clean_summary = text(cells.description, 600);
   if (has("summary_en")) draft.details.summary_en = text(cells.summary_en, 600);
   if (has("owner_name")) draft.details.owner_name = text(cells.owner_name, 120);
+  if (has("unit_no")) draft.details.unit_no = text(cells.unit_no, 40);
+  if (has("address")) draft.details.address = text(cells.address, 200);
   if (has("owner_phone")) draft.details.owner_phone = text(digits(cells.owner_phone), 40);
   if (has("notes")) draft.details.notes = text(cells.notes, 1000);
   for (const k of Object.keys(draft)) if (draft[k] === null || draft[k] === undefined) delete draft[k];
