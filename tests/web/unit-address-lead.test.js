@@ -64,3 +64,10 @@ test("an unclear pin is refused and nothing is saved", async () => {
   expect(await unit("WEB-4")).toBeUndefined();
   expect(await h.query("SELECT 1 FROM leads")).toHaveLength(0);
 });
+
+test("a new owner number without a name is not made into a lead", async () => {
+  const { agent, csrf } = await signIn(h, "broker");
+  await post(agent, csrf, "WEB-5", { pin: "" }).field("owner_name", "");
+  expect((await unit("WEB-5")).details).not.toHaveProperty("owner_lead");
+  expect(await h.query("SELECT 1 FROM leads")).toHaveLength(0);
+});
