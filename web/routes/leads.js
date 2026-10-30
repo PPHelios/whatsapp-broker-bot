@@ -403,6 +403,8 @@ ${draft
   <form method="post" action="${path}/stage" class="stack">${hidden}
     <div class="pills" role="radiogroup" aria-label="${L(lang, "المرحلة", "Stage")}">${Stages.STAGES.map((s) => html`<label class="pill"><input type="radio" name="stage" value="${s}"${s === lead.stage ? html` checked` : ""}><span>${Stages.stageLabel(s, lang)}</span></label>`)}</div>
     <label class="lost-reason">${L(lang, "سبب الضياع", "Why lost")}<input name="lost_reason" maxlength="200" placeholder="${L(lang, "سبب الضياع (لو ضاع)", "Why lost (if lost)")}" value="${lead.lost_reason || ""}"></label>
+    ${lead.flagged_at || !canEditLead(broker, lead) ? "" : html`<label class="row"><input type="checkbox" name="needs_manager" value="1"> 🙋 ${L(lang, "محتاج مدير", "Needs manager")}</label>
+    <label>${L(lang, "محتاج إيه من المدير؟", "What do you need from the manager?")}<input name="flag_text" maxlength="1000"></label>`}
     <button type="submit">${L(lang, "حفظ", "Save")}</button>
   </form>
 </section>
@@ -578,7 +580,18 @@ ${V.bottomBar(lead, lang, broker.name)}`
   const actor = (req) => req.session.broker;
   write("flag", (req, lead, version) => Leads.flagForManager(pool, actor(req), lead.id, req.body.text, { version }), "flag");
   write("flag/handle", (req, lead, version) => Leads.handleFlag(pool, actor(req), lead.id, req.body.reply, { version }), "flag_handled");
-  write("stage", (req, lead, version) => Leads.setStage(pool, actor(req), lead.id, { stage: req.body.stage, lostReason: req.body.lost_reason, version }), "stage");
+  write(
+    "stage",
+    async (req, lead, version) => {
+      const r = await Leads.setStage(pool, actor(req), lead.id, { stage: req.body.stage, lostReason: req.body.lost_reason, version });
+      // "Needs a manager" rides on the same save; the flag is its own step on the timeline.
+      if ((r.ok || r.unchanged) && req.body.needs_manager === "1" && !lead.flagged_at) {
+        return Leads.flagForManager(pool, actor(req), lead.id, req.body.flag_text || L(langOf(req), "محتاج مدير يساعد", "Needs a manager's help"));
+      }
+      return r;
+    },
+    "stage"
+  );
   write(
     "follow-up",
     async (req, lead, version) => {

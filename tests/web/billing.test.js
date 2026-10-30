@@ -171,7 +171,7 @@ test("sign-up: closed by default; open → waiting request (inactive admin) → 
   expect(sent.status).toBe(303);
   const [ag] = await h.query("SELECT id, approval, pilot FROM agencies WHERE name = 'Delta Homes'");
   expect(ag).toMatchObject({ approval: "pending", pilot: false });
-  expect((await h.query("SELECT is_active, role FROM brokers WHERE agency_id = $1", [ag.id]))[0]).toEqual({ is_active: false, role: "admin" });
+  expect((await h.query("SELECT is_active, role FROM brokers WHERE agency_id = $1", [ag.id]))[0]).toEqual({ is_active: false, role: "owner" });
 
   const approved = await a.agent.post(`/app/owner/signups/${ag.id}/approve`).type("form").send({ _csrf: a.csrf });
   expect(approved.status).toBe(200);

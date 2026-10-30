@@ -9,7 +9,7 @@ const stripMarkdown = (s) => String(s || "").replace(/[*`_]/g, "");
 
 /** A unit card (search results, My units): code and price first, then size, payment and delivery as chips, and the
  * features on a copper strip. `selectable` adds a tick box for the bulk bar. */
-function resultItem(l, lang = "ar", { selectable = false } = {}) {
+function resultItem(l, lang = "ar", { selectable = false, ask = null, back = "" } = {}) {
   const en = lang === "en";
   const loc = en ? l.compound_en || l.details?.compound_en || l.compound || l.district : l.compound || l.compound_en || l.district;
   const size = [Describe.areaLabel(l, lang), Describe.bedsLabel(l, lang), Describe.bathsLabel(l, lang)].filter(Boolean).join(" · ");
@@ -26,6 +26,11 @@ function resultItem(l, lang = "ar", { selectable = false } = {}) {
   </a>
   ${pay || delivery ? html`<ul class="tags">${pay ? html`<li>${stripMarkdown(pay)}</li>` : ""}${delivery ? html`<li class="chip good">${stripMarkdown(delivery)}</li>` : ""}</ul>` : ""}
   ${tags.length ? html`<ul class="uc-feat">${tags.map((t) => html`<li>${t}</li>`)}</ul>` : ""}
+  ${ask === "ask"
+    ? html`<form method="post" action="${href}/access" class="row"><input type="hidden" name="back" value="${back}"><button type="submit" class="secondary small" data-ask-details>🔒 ${en ? "Ask for private details" : "اطلب البيانات الخاصة"}</button></form>`
+    : ask === "pending"
+      ? html`<p class="muted small" data-ask-pending>🔒 ${en ? "Requested. A manager will answer." : "اتطلبت. المدير هيرد."}</p>`
+      : ""}
 </li>`;
 }
 

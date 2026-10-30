@@ -355,6 +355,8 @@ ${rows.length
     const listing = await Store.findByCode(pool, broker.agency_id, req.params.code);
     if (!listing || !Authz.canView(broker, listing)) return next();
     await Privacy.requestAccess(pool, broker, listing);
+    const back = String(req.body.back || "");
+    if (/^\/app\/(search|units)[?/\w=&%.-]*$/.test(back) && !back.includes("//")) return res.redirect(303, back);
     return res.redirect(303, `/app/units/${encodeURIComponent(listing.code)}?private=asked#private`);
   });
 

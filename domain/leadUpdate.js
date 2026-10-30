@@ -9,8 +9,8 @@ const Card = require("./leadCard");
 
 // What a broker says after talking to a client. Search wording ("عايز شقة") never matches.
 const OUTCOME_AR =
-  /(^|[\s،,.])(كلمت|كلمته|كلمتها|كلمتهم|اتكلمت|اتكلمنا|اتصلت|رنيت|رنّيت|كلمني|كلموني|مردش|مبيردش|مابيردش|مش بيرد|مش بترد|عاين|عاينت|عاينوا|يعاين|تعاين|يعاينوا|هيعاين|هتعاين|معاينة|المعاينة|اتفقنا|قابلت|قابلته|قابلتها|مش مهتم|مش مهتمة|مهتم|مهتمة|اشترى|اشترت|اشتروا|قفلنا|اتقفلت|هكلمه|هكلمها|اكلمه|اكلمها|نكلمه|بعتله|بعتلها|ابعتله|ابعتلها|ألغى|لغى|اتراجع)(?=$|[\s،,.؟?!])/;
-const OUTCOME_EN = /\b(called|calling|spoke|talked|met|meeting|viewing|view|visit|interested|no answer|not answering|bought|closed|cancelled|follow[- ]?up|call (?:him|her|them) back)\b/i;
+  /(^|[\s،,.])(كلمت|كلمته|كلمتها|كلمتهم|اتكلمت|اتكلمنا|اتصلت|رنيت|رنّيت|كلمني|كلموني|مردش|مبيردش|مابيردش|مش بيرد|مش بترد|عاين|عاينت|عاينوا|يعاين|تعاين|يعاينوا|هيعاين|هتعاين|معاينة|المعاينة|اتفقنا|قابلت|قابلته|قابلتها|مش مهتم|مش مهتمة|مهتم|مهتمة|اشترى|اشترت|اشتروا|قفلنا|اتقفلت|هكلمه|هكلمها|اكلمه|اكلمها|نكلمه|بعتله|بعتلها|ابعتله|ابعتلها|ألغى|لغى|اتراجع|محتاج المدير|محتاجة المدير|محتاج مدير|عايز المدير|عايز مدير|اسأل المدير|اسال المدير|ابلغ المدير|بلغ المدير)(?=$|[\s،,.؟?!])/;
+const OUTCOME_EN = /\b(called|calling|spoke|talked|met|meeting|viewing|view|visit|interested|no answer|not answering|bought|closed|cancelled|follow[- ]?up|call (?:him|her|them) back|need(?:s)? (?:a |the |my )?manager|ask (?:the |my )?manager|tell (?:the |my )?manager)\b/i;
 
 /** Does the text describe an outcome with a client (cheap, no AI)? */
 const looksLikeUpdate = (text) => {
@@ -90,7 +90,8 @@ Today in Cairo is ${today.weekday} ${today.date}, ${today.time}.${focusName ? ` 
     "kind": "viewing" if they will view a unit, else "call",
     "unit_code": "the unit code if said (like VIL-08, NH-V12), else null"
   },
-  "note": "anything else worth keeping, short, else null"
+  "needs_manager": true if the broker says they need their manager's help, input or decision on this client (like "محتاج المدير", "ask my manager"), else false,
+  "note": "anything else worth keeping, short, else null (when needs_manager, what they need from the manager)"
 }
 
 RULES:
@@ -98,6 +99,7 @@ RULES:
 - "مش مهتم" / "اشترى من مكان تاني" → stage "lost" with the reason. "اتقفلت" / "اشترى مننا" → "won".
 - "مردش" / "no answer" → contacted false; a "call again" day is a call follow-up.
 - A weekday, with or without "الجاية" / "next", is the first such day after today; "اللي بعد الجاية" adds a week. A time of 1 to 7 with no "الصبح" is in the afternoon or evening.
+- "محتاج المدير يكلمه" / "I need my manager on this" → needs_manager true and the note says what is needed.
 - Spoken numbers become digits ("الساعة خمسة ونص" = 17:30).
 Write the note in ${lang === "en" ? "English" : "Arabic"}; keep names and codes as said.`;
 }
@@ -121,6 +123,7 @@ function normalizeUpdate(raw) {
     stage: UPDATE_STAGES.includes(r.stage) ? r.stage : null,
     lostReason: str(r.lost_reason, 200),
     followUp: date ? { date, time, kind: f.kind === "viewing" ? "viewing" : "call", unitCode: code ? code.toUpperCase().replace(/\s+/g, "") : null } : null,
+    needsManager: r.needs_manager === true,
     note: str(r.note, 300)
   };
 }
@@ -128,7 +131,7 @@ function normalizeUpdate(raw) {
 /** The follow-up's instant (a date with no time is 10:00 Cairo), or null. */
 const followUpAt = (fu) => (fu ? Stages.fromCairoLocal(fu.time ? `${fu.date}T${fu.time}` : fu.date) : null);
 
-const hasChange = (u) => Boolean(u.contacted || u.stage || u.followUp || u.note);
+const hasChange = (u) => Boolean(u.contacted || u.stage || u.followUp || u.note || u.needsManager);
 
 /**
  * Checks an update before it is shown.
@@ -161,6 +164,7 @@ function summaryLines(u, lead, lang = "ar", { unitCode = null } = {}) {
     const kind = u.followUp.kind === "viewing" ? (en ? "🏠 Viewing" : "🏠 معاينة") : en ? "📅 Follow-up" : "📅 متابعة";
     lines.push(`${kind} ${when(followUpAt(u.followUp), lang)}${unitCode ? ` · ${unitCode}` : ""}`);
   }
+  if (u.needsManager) lines.push(en ? "🙋 Tell the manager" : "🙋 تبلّغ المدير");
   if (u.note) lines.push(`📝 ${u.note}`);
   return lines.join("\n");
 }

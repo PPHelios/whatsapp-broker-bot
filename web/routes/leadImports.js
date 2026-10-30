@@ -3,7 +3,6 @@
 // runs in the background with a progress bar, and the template. Nothing is written before the apply.
 "use strict";
 
-const ExcelJS = require("exceljs");
 const RateLimit = require("../../lib/rateLimit");
 const Sheets = require("../../lib/sheets");
 const LeadImports = require("../../services/leadImports");
@@ -26,6 +25,7 @@ const FILE = { name: "file", maxCount: 1, accept: /^(text\/(csv|plain|comma-sepa
 const upload = uploads([FILE], { maxMb: 5 });
 Session.allowMultipart(/^\/leads\/import$/);
 
+const ImportTemplate = require("../../lib/importTemplate");
 const TEMPLATE_HEADERS = [
   "Name / الاسم",
   "Phone / الموبايل",
@@ -140,16 +140,24 @@ function register(web, { pool, page }) {
   web.get("/leads/import", (req, res) => importPage(req, res, formBody(req)));
 
   web.get("/leads/import/template.xlsx", async (_req, res) => {
-    const wb = new ExcelJS.Workbook();
-    const sheet = wb.addWorksheet("Leads");
-    sheet.addRow(TEMPLATE_HEADERS).font = { bold: true };
-    sheet.addRow(["أحمد علي", "01012345678", "", "مشتري", "فيسبوك", "7-9 مليون", "التجمع الخامس", "شقة", 3, "بيع", "عايز تسليم قريب", "جديد", "", "العميل طلب التواصل"]);
-    sheet.getColumn(2).numFmt = "@";
-    sheet.getColumn(3).numFmt = "@";
-    sheet.columns.forEach((c) => (c.width = 20));
+    const buf = await ImportTemplate.build({
+      sheetName: "Leads",
+      headers: TEMPLATE_HEADERS,
+      required: [1],
+      samples: [
+        ["أحمد علي (مثال)", "01012345678", "", "مشتري", "فيسبوك", "7-9 مليون", "التجمع الخامس", "شقة", 3, "بيع", "عايز تسليم قريب", "جديد", "", "صف تجريبي، امسحه"],
+        ["منى حسن (مثال)", "01112345678", "", "مستأجر", "إعلان", "25 ألف", "الشيخ زايد", "شقة", 2, "إيجار", "", "جديد", "", "صف تجريبي، امسحه"]
+      ],
+      text: [2, 3],
+      readme: [
+        ["الموبايل هو العمود الوحيد المطلوب.", "The phone is the only mandatory column."],
+        ["الصف اللي رقمه غلط بيتخطى ويظهرلك السبب.", "A row with a bad number is skipped and you see why."],
+        ["أعمدة فيسبوك (platform, campaign_name) بتتقرأ تلقائياً.", "Meta export columns (platform, campaign_name) are read automatically."]
+      ]
+    });
     res.type("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.set("Content-Disposition", 'attachment; filename="wehdathub-leads-template.xlsx"');
-    return res.send(Buffer.from(await wb.xlsx.writeBuffer()));
+    return res.send(buf);
   });
 
   web.post("/leads/import", upload, async (req, res) => {

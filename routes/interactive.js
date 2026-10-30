@@ -714,6 +714,22 @@ async function handleInteractive(broker, message, ctx) {
     }
   }
 
+  // Secret-details ask from a unit card (same rule and alerts as the website's button).
+  if (replyId.startsWith("unitask:")) {
+    const code = T.extractCleanCode(replyId.slice(8)).toUpperCase();
+    const { rows } = await pool.query("SELECT * FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND code_norm = $2 LIMIT 1", [broker.agency_id, code]);
+    if (rows.length) {
+      const out = await require("../services/unitPrivacy").requestAccess(pool, broker, rows[0]);
+      await reply(
+        broker,
+        out.already
+          ? lang === "en" ? "You can already see this unit's private details." : "تقدر تشوف البيانات الخاصة بالوحدة دي بالفعل."
+          : lang === "en" ? `🔒 Request sent for #${rows[0].code}. You'll hear when a manager answers.` : `🔒 اتبعت الطلب للوحدة #${rows[0].code}. هيوصلك الرد لما المدير يرد.`
+      );
+      return "done";
+    }
+  }
+
   // 17. Unrecognized or Stale Button ID
   await reply(
     broker,

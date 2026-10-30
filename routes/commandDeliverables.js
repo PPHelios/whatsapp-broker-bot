@@ -133,8 +133,9 @@ async function deliverCollateral(listing, broker, lang, pool = null) {
 async function deliverUnitInspectionCard(listing, broker, lang, pool = null) {
   // Secret details (owner, commission, address, pin) only for whoever the agency allows (services/unitPrivacy.js).
   const view = pool ? await require("../services/unitPrivacy").forBroker(pool, broker, listing) : { listing: require("../services/unitPrivacy").redact(listing), hidden: false };
-  const detailsCard = T.formatInternalListingDetails(view.listing, lang) + (view.hidden ? (lang === "en" ? "\n🔒 Private details: ask on the website (unit page)." : "\n🔒 البيانات الخاصة: اطلبها من صفحة الوحدة على الموقع.") : "");
+  const detailsCard = T.formatInternalListingDetails(view.listing, lang) + (view.hidden ? (lang === "en" ? "\n🔒 Private details: tap Ask details." : "\n🔒 البيانات الخاصة: اضغط اطلب البيانات.") : "");
   const buttons = cardButtons(listing, lang);
+  if (view.hidden) buttons[2] = require("../lib/buttons").BUTTONS.askDetails(listing.code)(lang);
 
   // Telegram (6.4): the unit's photos as an album above the card (free there; WhatsApp keeps text only).
   if (pool && broker.channel === "telegram") {
