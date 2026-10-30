@@ -5,7 +5,6 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const crypto = require("crypto");
-const ExcelJS = require("exceljs");
 const Supabase = require("../../lib/supabase");
 const AI = require("../../lib/ai");
 const RateLimit = require("../../lib/rateLimit");
@@ -31,6 +30,7 @@ const uploadSheet = uploads([SHEET], { maxMb: 5 });
 const uploadChat = uploads([CHAT], { maxMb: 10, fieldSizeKb: 512 });
 for (const re of [/^\/import\/excel$/, /^\/import\/group$/]) Session.allowMultipart(re);
 
+const ImportTemplate = require("../../lib/importTemplate");
 const TEMPLATE_HEADERS = ["Code / الكود", "Compound / الكمبوند", "Property Type / النوع", "Purpose / بيع او ايجار", "Price / السعر", "Area (sqm) / المساحة", "Bedrooms / الغرف", "Bathrooms / الحمامات", "Floor / الدور", "Finishing / التشطيب", "Delivery / التسليم", "Paid / المدفوع", "Remaining / المتبقي", "Installment / القسط", "Frequency / دورية القسط", "Features / المميزات", "District / المنطقة", "Status / الحالة", "Owner / المالك", "Owner phone / تليفون المالك", "Notes / ملاحظات"];
 
 /** A chat export uploaded as .txt → its text (a .zip goes through services/chatPhotos.js, photos included). */
@@ -201,14 +201,25 @@ ${tabs("import_tab", [
   web.get("/import", (req, res) => importPage(req, res, importHub(req)));
 
   web.get("/import/template.xlsx", async (_req, res) => {
-    const wb = new ExcelJS.Workbook();
-    const sheet = wb.addWorksheet("Inventory");
-    sheet.addRow(TEMPLATE_HEADERS).font = { bold: true };
-    sheet.addRow(["HP-101", "Hyde Park", "شقة", "بيع", "8.5 مليون", 150, 3, 2, 4, "تشطيب كامل", "2027 Q3", "3 مليون", "5.5 مليون", 250000, "ربع سنوي", "بحري، ناصية", "التجمع الخامس", "متاحة", "", "", ""]);
-    sheet.columns.forEach((c) => (c.width = 18));
+    const buf = await ImportTemplate.build({
+      sheetName: "Inventory",
+      headers: TEMPLATE_HEADERS,
+      required: [1, 2, 3, 4, 5],
+      samples: [
+        ["SAMPLE-1", "Hyde Park", "شقة", "بيع", "8.5 مليون", 150, 3, 2, 4, "تشطيب كامل", "2027 Q3", "3 مليون", "5.5 مليون", 250000, "ربع سنوي", "بحري، ناصية", "التجمع الخامس", "متاحة", "مثال: أحمد", "01000000000", "صف تجريبي، امسحه"],
+        ["SAMPLE-2", "Mountain View", "فيلا", "بيع", "21 مليون", 320, 4, 4, "", "سوبر لوكس", "جاهز", "", "", "", "", "حديقة، مسبح", "الشيخ زايد", "متاحة", "مثال: منى", "01100000000", "صف تجريبي، امسحه"]
+      ],
+      text: [20],
+      readme: [
+        ["الكود اختياري: لو فاضي النظام يعمله.", "Code is optional: left empty, the system makes one."],
+        ["لازم الكمبوند، النوع، بيع/إيجار، السعر والمساحة.", "Compound, property type, sale/rent, price and area are needed."],
+        ["السعر يقبل «8.5 مليون» أو 8500000.", "Price accepts '8.5 million' or 8500000."],
+        ["الاستيراد للمديرين بس، وبتشوف كل صف هيعمل إيه قبل الحفظ.", "Import is for managers; you see what every row will do before anything is saved."]
+      ]
+    });
     res.type("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.set("Content-Disposition", 'attachment; filename="wehdathub-inventory-template.xlsx"');
-    return res.send(Buffer.from(await wb.xlsx.writeBuffer()));
+    return res.send(buf);
   });
 
   // Imports (Excel, group posts, chat with photos) are for managers. Brokers add single units by form, voice and text.

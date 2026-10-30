@@ -159,6 +159,9 @@
       "buildBulkIngestionReport": ["params"],
       "sanitizeCellValue": ["val"]
     },
+    "lib/importTemplate.js": {
+      "build": ["params"]
+    },
     "lib/supabase.js": {
       "supabase": "Object",
       "downloadListingImage": ["url"],
@@ -1847,6 +1850,7 @@
       "canSee": ["pool", "broker", "listing", "params"],
       "redact": ["listing"],
       "forBroker": ["pool", "broker", "listing"],
+      "askStates": ["pool", "broker", "rows"],
       "pinOf": ["pool", "listing"],
       "mapsUrl": ["pin"],
       "parsePin": ["text"],

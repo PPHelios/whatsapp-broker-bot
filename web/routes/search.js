@@ -13,6 +13,7 @@ const { uploads, VOICE } = require("../uploads");
 const { html, raw } = require("../html");
 const { icon } = require("../icons");
 const { resultItem } = require("../views/units");
+const Privacy = require("../../services/unitPrivacy");
 const { refineForm } = require("../views/searchForm");
 
 const WEB_PAGE_SIZE = 20;
@@ -52,7 +53,7 @@ function pager(token, page, total, lang) {
 </nav>`;
 }
 
-function resultsSection({ res, filters, token, page, lang, savedId = null }) {
+function resultsSection({ res, filters, token, page, lang, savedId = null, asks = new Map() }) {
   const interp = stripStars(formatInterpretation({ filters }, lang));
   const total = Math.min(res.total, Search.SNAPSHOT_MAX);
   if (!res.rows.length) {
@@ -70,7 +71,7 @@ ${filters.code ? "" : html`<p><a class="btn secondary" href="/app/leads/new?requ
     <label>${L(lang, "اسم البحث", "Name")}<input name="name" required maxlength="80" value="${interp.slice(0, 80)}"></label>
     <button type="submit">${L(lang, "حفظ", "Save")}</button>
   </form></details>`}</div>
-  <ol class="results" start="${res.offset + 1}">${res.rows.map((r) => resultItem(r, lang))}</ol>
+  <ol class="results" start="${res.offset + 1}">${res.rows.map((r) => resultItem(r, lang, { ask: asks.get(r.id) || null, back: `/app/search?f=${token}${page > 1 ? `&page=${page}` : ""}` }))}</ol>
   ${pager(token, page, res.total, lang)}
 </section>`;
 }
@@ -117,7 +118,7 @@ function register(web, { pool, page }) {
     if (filters) {
       const token = SearchLink.encodeFilters(filters);
       const out = await runFilters(pool, broker.agency_id, filters, pageNo);
-      results = resultsSection({ res: out, filters, token, page: pageNo, lang });
+      results = resultsSection({ res: out, filters, token, page: pageNo, lang, asks: await Privacy.askStates(pool, broker, out.rows) });
       searchUrl = `/app/search?f=${token}${pageNo > 1 ? `&page=${pageNo}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}`;
       logOperation(pool, {
         agency_id: broker.agency_id,

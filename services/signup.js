@@ -46,7 +46,7 @@ async function submit(pool, input = {}, { now = new Date() } = {}) {
       [agencyName, Plans.TRIAL.plan, now.toISOString(), referrer ? referrer.id : null]
     );
     const { rows: b } = await client.query(
-      `INSERT INTO brokers (agency_id, phone_number, name, role, preferred_lang, is_active) VALUES ($1, $2, $3, 'admin', $4, false)
+      `INSERT INTO brokers (agency_id, phone_number, name, role, preferred_lang, is_active) VALUES ($1, $2, $3, 'owner', $4, false)
        RETURNING id, agency_id, name, phone_number, preferred_lang`,
       [a[0].id, digits, name, lang]
     );

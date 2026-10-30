@@ -52,6 +52,30 @@ function redact(listing) {
   return { ...listing, details, lat: null, lng: null };
 }
 
+/**
+ * For a page of unit cards: which hide secret details from this broker, and whether an ask is already open.
+ * Returns Map(listing id -> "ask" | "pending"); units the broker may see (or that have nothing hidden) are absent.
+ */
+async function askStates(pool, broker, rows) {
+  const out = new Map();
+  if (!broker || isManager(broker) || !rows.length) return out;
+  if ((await scopeOf(pool, broker.agency_id)) === "all") return out;
+  const hidden = rows.filter((l) => l.broker_id !== broker.id && (SECRET_DETAILS.some((k) => (l.details || {})[k]) || l.lat != null));
+  if (!hidden.length) return out;
+  const ids = hidden.map((l) => l.id);
+  const { rows: reqs } = await pool.query(
+    `SELECT listing_id, status, decided_at FROM unit_access_requests WHERE agency_id = $1 AND broker_id = $2 AND listing_id = ANY($3::uuid[]) AND (status = 'pending' OR (status = 'approved' AND decided_at > now() - make_interval(days => $4)))`,
+    [broker.agency_id, broker.id, ids, GRANT_DAYS]
+  );
+  const state = new Map();
+  for (const r of reqs) state.set(r.listing_id, r.status === "approved" ? "granted" : state.get(r.listing_id) === "granted" ? "granted" : "pending");
+  for (const l of hidden) {
+    const s = state.get(l.id);
+    if (s !== "granted") out.set(l.id, s === "pending" ? "pending" : "ask");
+  }
+  return out;
+}
+
 /** The unit as this broker may see it, and whether anything was hidden. */
 async function forBroker(pool, broker, listing) {
   if (await canSee(pool, broker, listing)) return { listing, hidden: false };
@@ -174,4 +198,4 @@ async function decide(pool, actor, listing, requestId, approve) {
   return { ok: true };
 }
 
-module.exports = { SCOPES, SECRET_DETAILS, GRANT_DAYS, scopeOf, setScope, canSee, redact, forBroker, pinOf, mapsUrl, parsePin, setPin, requestAccess, pendingFor, hasPending, decide };
+module.exports = { SCOPES, SECRET_DETAILS, GRANT_DAYS, scopeOf, setScope, canSee, redact, forBroker, askStates, pinOf, mapsUrl, parsePin, setPin, requestAccess, pendingFor, hasPending, decide };

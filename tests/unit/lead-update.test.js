@@ -37,10 +37,11 @@ test("the AI answer is normalized; nothing is invented", () => {
     contacted: true,
     stage: "viewing",
     lostReason: null,
+    needsManager: false,
     followUp: { date: "2026-10-30", time: "05:00", kind: "viewing", unitCode: "VIL-08" },
     note: "عايز دور أرضي"
   });
-  expect(U.normalizeUpdate({ contacted: "yes", stage: "new", follow_up: { date: "Friday" }, note: "null" })).toEqual({ leadName: null, contacted: false, stage: null, lostReason: null, followUp: null, note: null });
+  expect(U.normalizeUpdate({ contacted: "yes", stage: "new", follow_up: { date: "Friday" }, note: "null" })).toEqual({ leadName: null, contacted: false, stage: null, lostReason: null, needsManager: false, followUp: null, note: null });
 });
 
 test("checks: something must change, the time must be ahead, a named unit must exist; a date alone means 10:00", () => {
