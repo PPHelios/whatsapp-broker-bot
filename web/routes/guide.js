@@ -78,10 +78,24 @@ const SECTIONS = [
       ["«لوحة الوكالة»: العملاء والصفقات والعمولة وترتيب البروكرز لآخر ٧ أو ٣٠ أو ٩٠ يوم.", "\"Agency dashboard\": leads, deals, commission and the broker leaderboard for the last 7, 30 or 90 days."],
       ["حوّل عميل لبروكر: «حول L-0042 لـ سارة».", "Hand a client to a broker: \"assign L-0042 to Sara\"."]
     ]
-  }
+  },
+
+  {
+    id: "voice",
+    title: ["🎙️ البحث بالصوت", "🎙️ Voice search"],
+    items: [
+      ["اضغط المايك جنب خانة البحث مرة عشان يبدأ، واتكلم، واضغط تاني عشان يقف ويدور. الصوت بيتكتب بالذكاء الاصطناعي ويتحسب من رصيد الفويس بتاع وكالتك.", "Tap the mic beside the search box once to start, speak, then tap again to stop and search. The AI writes the speech down and it counts against your agency's voice allowance."],
+      ["Enter على الكيبورد (أو زرار «بحث» على الآيفون) بيدور على الكلام المكتوب بس، ومبيفتحش المايك.", "Enter on the keyboard (or the Go key on iPhone) searches what you typed and never starts the mic."],
+      ["لو مسمعناش حاجة بيقولك «مسمعناش كويس». لو الصوت فيه دوشة، الذكاء بيكتب أحسن تخمين وممكن يغلط، فراجع الكلام قبل ما تفتح النتايج.", "If nothing is heard, it says \"Couldn't hear you\". With noise, the AI writes its best guess, which can be wrong, so check the search before you act on the results."],
+      ["لو الذكاء الاصطناعي مش متاح أو رصيد الوكالة خلص، اضغط المايك تاني وهيستخدم صوت التليفون بتاعك بدل الذكاء. صوت التليفون بيقف لوحده بعد سكتة ويدور على اللي اتسمع.", "If the AI is down or your agency is out of credits, tap the mic again and your phone's own voice is used instead. The phone's voice stops by itself after a pause and searches what it heard."],
+      ["المايك بيطلب إذن الميكروفون أول مرة بس؛ لو كل مرة بيطلبه، اسمح له من إعدادات المتصفح أو التليجرام.", "The microphone asks for permission the first time only; if it asks every time, allow it in your browser or Telegram settings."]
+    ]
+  },
 ];
 
 const FAQ = [
+  [["البحث بالصوت بيوقف لوحده؟", "Does voice search stop by itself?"], ["صوت التليفون بيوقف بعد سكتة. الذكاء بيسجّل لحد ما تضغط المايك تاني، فاضغط عشان يبدأ يدور.", "The phone's voice stops after a pause. The AI records until you tap the mic again, so tap it to start the search."]],
+  [["إيه اللي بيحصل لو الرصيد خلص؟", "What happens when credits run out?"], ["المايك بيرجع يستخدم صوت التليفون، والبحث بالكتابة شغال زي ما هو.", "The mic falls back to your phone's voice, and typed search keeps working."]],
   [["هل بياناتي بيشوفها حد من وكالة تانية؟", "Can another agency see my data?"], ["لأ. كل وكالة شايفة وحداتها وعملاءها بس.", "No. Every agency sees only its own units and clients."]],
   [["العميل بيشوف إيه لما أبعتله لينك وحدة؟", "What does a client see when I send a unit link?"], ["صفحة فيها الصور والتفاصيل ورقم تواصل الوكالة، من غير أي بيانات داخلية. لو الوحدة اتباعت اللينك بيقول إنها مبقتش متاحة.", "A page with the photos, the details and the agency's contact number, with no internal data. If the unit is sold the link says it's no longer available."]],
   [["العميل طلب يمسح بياناته؛ أعمل إيه؟", "A client asked us to delete their data. What do I do?"], ["المدير يفتح العميل على الموقع ويختار «مسح نهائي» ويكتب آخر ٤ أرقام من رقمه. وتقدر تصدّر بياناته الأول لو طلبها.", "A manager opens the client on the website, chooses \"Erase for good\" and types the last 4 digits of their number. You can export their data first if they ask for it."]],

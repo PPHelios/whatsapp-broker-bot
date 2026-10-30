@@ -164,6 +164,14 @@ async function forms(pg, who, name, path) {
   }
 }
 
+// One tap starts the mic and a second tap stops it. The AI path records on the first tap and sends the note on the second;
+// the phone's own speech stops by itself, so the second tap is only needed when it is still listening.
+async function hear(pg, btn) {
+  await btn.tap();
+  const recording = await pg.waitForSelector(".mic.recording", { timeout: 3000 }).then(() => true, () => false);
+  if (recording) await btn.tap();
+}
+
 // Voice buttons: the search mic must hear, search and navigate; a recording button must send the note once it stops.
 async function voice(pg, who, name, path) {
   await open(pg, path);
@@ -173,7 +181,7 @@ async function voice(pg, who, name, path) {
     const btn = (await pg.$$("[data-mic]"))[i];
     if (!(await btn.isVisible())) continue;
     const where = `${who} ${name} voice search ${i + 1}`;
-    await btn.tap();
+    await hear(pg, btn);
     const moved = await pg.waitForURL(/[?&]q=/, { timeout: 8000 }).then(() => true, () => false);
     if (!moved) note(where, "tapping the mic did not search");
     else await checkBody(pg, where);
@@ -260,8 +268,12 @@ test("voice search from the URL (?voice=1) hears, searches and lands on the resu
   const { ctx, pg } = await session("broker");
   try {
     await open(pg, "/app/search?voice=1");
+    // Listening never starts on page load: nothing searches until the mic is tapped.
+    const auto = await pg.waitForURL(/[?&]q=/, { timeout: 3000 }).then(() => true, () => false);
+    if (auto) note("broker search ?voice=1", "listened on page load");
+    await hear(pg, await pg.$("[data-mic]"));
     const moved = await pg.waitForURL(/[?&]q=/, { timeout: 8000 }).then(() => true, () => false);
-    if (!moved) note("broker search ?voice=1", "auto-listen did not search");
+    if (!moved) note("broker search ?voice=1", "tapping the mic did not search");
     await checkBody(pg, "broker search ?voice=1");
   } finally {
     await ctx.close();
