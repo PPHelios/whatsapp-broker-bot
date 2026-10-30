@@ -741,6 +741,15 @@
       "name": "String",
       "send": ["broker", "message", "params"]
     },
+    "web/routes/activityLog.js": {
+      "register": ["web", "params"]
+    },
+    "services/activityLog.js": {
+      "KEEP_DAYS": "Number",
+      "PAGE": "Number",
+      "list": ["pool", "viewer", "params"],
+      "describe": ["row", "lang"]
+    },
     "web/routes/notifications.js": {
       "register": ["web", "params"]
     },
@@ -792,6 +801,10 @@
       "assignLead": ["pool", "actor", "key", "toBrokerId", "params"],
       "setStage": ["pool", "actor", "key", "params"],
       "addNote": ["pool", "actor", "key", "text", "params"],
+      "flagForManager": ["pool", "actor", "key", "text", "params"],
+      "handleFlag": ["pool", "actor", "key", "reply", "params"],
+      "openFlags": ["pool", "actor"],
+      "flagCount": ["pool", "actor"],
       "markContacted": ["pool", "actor", "key", "params"],
       "setFollowUp": ["pool", "actor", "key", "params"],
       "completeFollowUp": ["pool", "actor", "key", "params"],

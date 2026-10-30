@@ -1,7 +1,8 @@
 // services/unitPrivacy.js — Who sees a unit's secret details (owner, owner phone, commission, co-broker, notes, unit
 // number, address and the map pin). The agency chooses: 'restricted' (default: the unit's broker and managers) or
-// 'all' (every broker in the agency). A broker who may not see them asks once; the unit's broker or a manager says
-// yes or no. Every switch, ask, answer and managers' Excel export is logged. Nothing here ever reaches client pages.
+// 'all' (every broker in the agency). A broker who may not see them asks once; the managers answer (the agency owner
+// only when there is no manager). Every switch, ask, answer and managers' Excel export is logged and each
+// step is notified; the agency owner reads the trail in the activity log. Nothing here ever reaches client pages.
 "use strict";
 
 const { isManager, isAgencyOwner } = require("../lib/authz");
@@ -97,19 +98,21 @@ async function setPin(pool, actor, listing, pin, { source = "web" } = {}) {
   return { ok: true };
 }
 
-/** A broker asks to see a unit's secret details: its broker and the managers hear (once a day per asker). */
+/** Who answers asks: the agency's managers; the agency owner only when it has no other active manager. */
+async function deciders(pool, agencyId) {
+  const all = await Notifications.managersOf(pool, agencyId);
+  const managers = all.filter((m) => !isAgencyOwner(m));
+  return managers.length ? managers : all.filter(isAgencyOwner);
+}
+
+/** A broker asks to see a unit's secret details; the deciders hear (once a day per ask) and every step is logged. */
 async function requestAccess(pool, broker, listing) {
   if (await canSee(pool, broker, listing)) return { ok: true, already: true };
   const open = await pool.query("SELECT id FROM unit_access_requests WHERE agency_id = $1 AND listing_id = $2 AND broker_id = $3 AND status = 'pending' LIMIT 1", [broker.agency_id, listing.id, broker.id]);
   const id = open.rows[0]?.id || (await pool.query("INSERT INTO unit_access_requests (agency_id, listing_id, broker_id) VALUES ($1, $2, $3) RETURNING id", [broker.agency_id, listing.id, broker.id])).rows[0].id;
   logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "secret_details_request", status: "success", metadata: { code: listing.code, request_id: id } });
   const day = new Date().toISOString().slice(0, 10);
-  const deciders = await Notifications.managersOf(pool, broker.agency_id);
-  if (listing.broker_id && !deciders.some((m) => m.id === listing.broker_id)) {
-    const { rows } = await pool.query("SELECT * FROM brokers WHERE id = $1 AND agency_id = $2 AND is_active", [listing.broker_id, broker.agency_id]);
-    deciders.push(...rows);
-  }
-  for (const d of deciders) {
+  for (const d of await deciders(pool, broker.agency_id)) {
     if (d.id === broker.id) continue;
     const en = d.preferred_lang === "en";
     await Notifications.notifyBroker(pool, d, {
@@ -124,9 +127,15 @@ async function requestAccess(pool, broker, listing) {
   return { ok: true, id };
 }
 
-/** Open asks for one unit (for its broker or a manager). */
+/** May this person answer asks now? Managers; the agency owner only when there is no other manager. */
+async function mayDecide(pool, actor) {
+  if (!isManager(actor)) return false;
+  return !isAgencyOwner(actor) || (await deciders(pool, actor.agency_id)).some((d) => d.id === actor.id);
+}
+
+/** Open asks for one unit, for whoever may answer them. */
 async function pendingFor(pool, actor, listing) {
-  if (!(isManager(actor) || listing.broker_id === actor.id) || listing.agency_id !== actor.agency_id) return [];
+  if (listing.agency_id !== actor.agency_id || !(await mayDecide(pool, actor))) return [];
   const { rows } = await pool.query(
     `SELECT r.id, r.created_at, b.name FROM unit_access_requests r JOIN brokers b ON b.id = r.broker_id
       WHERE r.agency_id = $1 AND r.listing_id = $2 AND r.status = 'pending' ORDER BY r.created_at`,
@@ -141,23 +150,23 @@ async function hasPending(pool, broker, listing) {
   return rows.length > 0;
 }
 
-/** The unit's broker or a manager says yes or no; the asker hears. */
+/** A manager (or the owner, when there is no manager) says yes or no; the asker hears and the step is logged. */
 async function decide(pool, actor, listing, requestId, approve) {
-  if (!(isManager(actor) || listing.broker_id === actor.id) || listing.agency_id !== actor.agency_id) return { ok: false, reason: "not_allowed" };
+  if (listing.agency_id !== actor.agency_id || !(await mayDecide(pool, actor))) return { ok: false, reason: "not_allowed" };
   const { rows } = await pool.query(
     `UPDATE unit_access_requests SET status = $4, decided_by = $3, decided_at = now()
       WHERE id = $1 AND agency_id = $2 AND listing_id = $5 AND status = 'pending' RETURNING broker_id`,
     [requestId, actor.agency_id, actor.id, approve ? "approved" : "declined", listing.id]
   );
   if (!rows[0]) return { ok: false, reason: "not_found" };
-  logOperation(pool, { agency_id: actor.agency_id, broker_id: actor.id, operation_type: "secret_details_decision", status: "success", metadata: { code: listing.code, request_id: requestId, approved: Boolean(approve) } });
+  logOperation(pool, { agency_id: actor.agency_id, broker_id: actor.id, operation_type: "secret_details_decision", status: "success", metadata: { code: listing.code, request_id: requestId, approved: Boolean(approve), asker_id: rows[0].broker_id } });
   const asker = (await pool.query("SELECT * FROM brokers WHERE id = $1 AND agency_id = $2", [rows[0].broker_id, actor.agency_id])).rows[0];
   if (asker) {
     const en = asker.preferred_lang === "en";
     await Notifications.notifyBroker(pool, asker, {
       kind: "manager_alert",
       dedupeKey: `unit_access_answer:${requestId}`,
-      title: approve ? (en ? `✅ You can see ${listing.code}'s private details` : `✅ تقدر تشوف بيانات ${listing.code} الخاصة`) : en ? `${listing.code}: access not given` : `${listing.code}: الطلب اترفض`,
+      title: approve ? (en ? `✅ You can see ${listing.code}'s private details` : `✅ تقدر تشوف بيانات ${listing.code} الخاصة`) : en ? `${listing.code}: access not given` : `${listing.code}: الطلب اتقفل من غير موافقة`,
       url: `/app/units/${encodeURIComponent(listing.code)}`,
       listingId: listing.id
     }).catch(() => {});

@@ -44,7 +44,7 @@ function register(web, { pool, page }) {
 <div class="row">
   <form method="post" action="/app/notifications/read-all"><button type="submit" class="secondary">${L(lang, "✓ علّم الكل مقروء", "✓ Mark all read")}</button></form>
   <a class="btn secondary" href="/app/settings">${L(lang, "⚙️ اختار القناة لكل تنبيه", "⚙️ Choose the channel per alert")}</a>
-  ${isManager(broker) ? html`<a class="btn secondary" href="/app/notifications/log">${L(lang, "📋 سجل التنبيهات", "📋 Notification log")}</a>` : ""}
+  ${isManager(broker) ? html`<a class="btn secondary" href="/app/notifications/log">${L(lang, "📋 سجل التنبيهات", "📋 Notification log")}</a> <a class="btn secondary" href="/app/activity-log">${L(lang, "🗂️ سجل النشاط", "🗂️ Activity log")}</a>` : ""}
 </div>
 ${rows.length
   ? html`<ul class="inbox">${rows.map(
