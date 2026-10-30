@@ -13,6 +13,7 @@ const Credits = require("./credits");
 const { withTransaction } = require("../lib/db");
 const { MANAGER_ROLES, isAgencyOwner } = require("../lib/authz");
 const Referrals = require("./referrals");
+const Vis = require("../lib/visibility");
 
 const DAY = 24 * 3600 * 1000;
 const MONTHS = [1, 3, 6, 12];
@@ -40,7 +41,7 @@ async function monthUsage(db, agencyId) {
   const { rows } = await db.query(
     `SELECT
        (SELECT count(*)::int FROM brokers WHERE agency_id = $1 AND is_active) AS seats,
-       (SELECT count(*)::int FROM listings WHERE agency_id = $1 AND status = 'active') AS units`,
+       (SELECT count(*)::int FROM listings WHERE ${Vis.units("listings")} AND agency_id = $1 AND status = 'active') AS units`,
     [agencyId]
   );
   return rows[0];
@@ -83,7 +84,7 @@ async function unitLimit(db, plan) {
 async function unitCapacity(db, agencyId, { adding = 1, now = new Date() } = {}) {
   const agency = await agencyRow(db, agencyId);
   const { plan } = effectivePlan(agency, now);
-  const { rows } = await db.query("SELECT count(*)::int AS n FROM listings WHERE agency_id = $1 AND status = 'active'", [agencyId]);
+  const { rows } = await db.query("SELECT count(*)::int AS n FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND status = 'active'", [agencyId]);
   const limit = await unitLimit(db, plan);
   return { ok: rows[0].n + adding <= limit, used: rows[0].n, limit, plan };
 }

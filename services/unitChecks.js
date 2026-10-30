@@ -10,6 +10,7 @@ const crypto = require("crypto");
 const Notifications = require("../lib/notifications");
 const Describe = require("../domain/describe");
 const { withTransaction } = require("../lib/db");
+const Vis = require("../lib/visibility");
 
 const ASK_AFTER_DAYS = 21;
 const HIDE_AFTER_DAYS = 30;
@@ -93,7 +94,7 @@ async function askStale(pool, { now = new Date(), limit = BATCH } = {}) {
   const units = await withTransaction(pool, async (client) => {
     const { rows } = await client.query(
       `SELECT id FROM listings
-        WHERE status = 'active' AND inventory_type IS DISTINCT FROM 'developer_model' AND broker_id IS NOT NULL
+        WHERE ${Vis.units("listings")} AND status = 'active' AND inventory_type IS DISTINCT FROM 'developer_model' AND broker_id IS NOT NULL
           AND ${VOUCHED} < $1 AND (stale_asked_at IS NULL OR stale_asked_at < ${VOUCHED})
         ORDER BY ${VOUCHED}, id LIMIT $2 FOR UPDATE SKIP LOCKED`,
       [new Date(now.getTime() - ASK_AFTER_DAYS * DAY).toISOString(), limit]
@@ -112,7 +113,7 @@ async function hideStale(pool, { now = new Date(), limit = BATCH } = {}) {
   const units = await withTransaction(pool, async (client) => {
     const { rows } = await client.query(
       `SELECT id FROM listings
-        WHERE status = 'active' AND inventory_type IS DISTINCT FROM 'developer_model'
+        WHERE ${Vis.units("listings")} AND status = 'active' AND inventory_type IS DISTINCT FROM 'developer_model'
           AND ${VOUCHED} < $1 AND stale_asked_at IS NOT NULL AND stale_asked_at >= ${VOUCHED} AND stale_asked_at < $2
         ORDER BY ${VOUCHED}, id LIMIT $3 FOR UPDATE SKIP LOCKED`,
       [new Date(now.getTime() - HIDE_AFTER_DAYS * DAY).toISOString(), new Date(now.getTime() - 2 * DAY).toISOString(), limit]
@@ -134,7 +135,7 @@ async function hideStale(pool, { now = new Date(), limit = BATCH } = {}) {
 async function pendingFor(pool, broker, { limit = 10 } = {}) {
   const { rows } = await pool.query(
     `SELECT * FROM listings
-      WHERE agency_id = $1 AND broker_id = $2 AND stale_asked_at IS NOT NULL AND stale_asked_at >= ${VOUCHED}
+      WHERE ${Vis.units("listings")} AND agency_id = $1 AND broker_id = $2 AND stale_asked_at IS NOT NULL AND stale_asked_at >= ${VOUCHED}
         AND (status = 'active' OR (status = 'archived' AND stale_hidden_at IS NOT NULL))
       ORDER BY stale_asked_at DESC, code LIMIT $3`,
     [broker.agency_id, broker.id, limit]

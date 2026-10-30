@@ -14,6 +14,7 @@ const T = require("../../lib/text");
 const { isManager, canEditDeal } = require("../../lib/authz");
 const { html } = require("../html");
 const { dealsSwitch } = require("../views/tabs");
+const Vis = require("../../lib/visibility");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
@@ -119,7 +120,7 @@ ${rows.length
     const units = (
       await db.query(
         `SELECT code, title, compound, location, price_display FROM listings
-          WHERE agency_id = $1 AND status = 'active' AND ($2::uuid IS NULL OR broker_id = $2) ORDER BY updated_at DESC LIMIT 200`,
+          WHERE ${Vis.units("listings")} AND agency_id = $1 AND status = 'active' AND ($2::uuid IS NULL OR broker_id = $2) ORDER BY updated_at DESC LIMIT 200`,
         [broker.agency_id, isManager(broker) ? null : broker.id]
       )
     ).rows;

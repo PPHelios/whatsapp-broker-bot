@@ -10,6 +10,7 @@ const Notifications = require("../lib/notifications");
 const Stages = require("../domain/leadStages");
 const Card = require("../domain/leadCard");
 const { MANAGER_ROLES } = require("../lib/authz");
+const Vis = require("../lib/visibility");
 
 const BRIEF_HOURS = [9, 12];
 const DIGEST_HOURS = [19, 22];
@@ -44,7 +45,7 @@ async function briefData(pool, broker, now) {
   const due = await pool.query(
     `SELECT l.ref, l.name, l.lang, l.phone_e164, l.next_follow_up_at, l.follow_up_kind, u.code AS unit_code
        FROM leads l LEFT JOIN listings u ON u.id = l.follow_up_listing_id AND u.agency_id = l.agency_id
-      WHERE l.agency_id = $1 AND l.assigned_broker_id = $2 AND l.follow_up_status = 'open' AND l.next_follow_up_at < $3
+      WHERE ${Vis.leads("l")} AND ${Vis.units("u")} AND l.agency_id = $1 AND l.assigned_broker_id = $2 AND l.follow_up_status = 'open' AND l.next_follow_up_at < $3
         AND l.stage NOT IN ('won', 'lost')
       ORDER BY l.next_follow_up_at`,
     [...args, dayEnd.toISOString()]
@@ -54,19 +55,19 @@ async function briefData(pool, broker, now) {
   const matches = await pool.query(
     `SELECT l.ref, l.name, l.lang, l.phone_e164, count(*)::int AS n
        FROM lead_matches m JOIN leads l ON l.id = m.lead_id AND l.agency_id = m.agency_id
-      WHERE m.agency_id = $1 AND l.assigned_broker_id = $2 AND m.status IN ('new', 'alerted') AND m.created_at > $3
+      WHERE ${Vis.leads("l")} AND m.agency_id = $1 AND l.assigned_broker_id = $2 AND m.status IN ('new', 'alerted') AND m.created_at > $3
         AND l.stage NOT IN ('won', 'lost')
       GROUP BY l.ref, l.name, l.lang, l.phone_e164 ORDER BY n DESC, l.ref`,
     [...args, new Date(now.getTime() - 24 * 3600 * 1000).toISOString()]
   );
   const hot = await pool.query(
     `SELECT ref, name, lang, phone_e164 FROM leads
-      WHERE agency_id = $1 AND assigned_broker_id = $2 AND hot_at > $3 AND stage NOT IN ('won', 'lost')
+      WHERE ${Vis.leads("leads")} AND agency_id = $1 AND assigned_broker_id = $2 AND hot_at > $3 AND stage NOT IN ('won', 'lost')
       ORDER BY hot_at DESC`,
     [...args, new Date(now.getTime() - HOT_DAYS * 24 * 3600 * 1000).toISOString()]
   );
   const fresh = await pool.query(
-    `SELECT count(*)::int AS n FROM leads WHERE agency_id = $1 AND assigned_broker_id = $2 AND stage = 'new' AND last_contact_at IS NULL`,
+    `SELECT count(*)::int AS n FROM leads WHERE ${Vis.leads("leads")} AND agency_id = $1 AND assigned_broker_id = $2 AND stage = 'new' AND last_contact_at IS NULL`,
     args
   );
   // C8: managers also hear about overdue developer commissions (every 7 days) and client registrations about to lapse.
@@ -130,12 +131,12 @@ async function digestData(pool, agencyId, now) {
   const since = Stages.cairoDayAt(now, 0, 0).toISOString();
   const leads = await pool.query(
     `SELECT assigned_broker_id AS broker_id, source, count(*)::int AS n FROM leads
-      WHERE agency_id = $1 AND created_at >= $2 GROUP BY assigned_broker_id, source`,
+      WHERE ${Vis.leads("leads")} AND agency_id = $1 AND created_at >= $2 GROUP BY assigned_broker_id, source`,
     [agencyId, since]
   );
   const untouched = await pool.query(
     `SELECT count(*)::int AS n, count(*) FILTER (WHERE created_at < $2)::int AS old FROM leads
-      WHERE agency_id = $1 AND stage = 'new' AND last_contact_at IS NULL`,
+      WHERE ${Vis.leads("leads")} AND agency_id = $1 AND stage = 'new' AND last_contact_at IS NULL`,
     [agencyId, new Date(now.getTime() - 24 * 3600 * 1000).toISOString()]
   );
   const events = await pool.query(

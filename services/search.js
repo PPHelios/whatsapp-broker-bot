@@ -3,6 +3,7 @@
 "use strict";
 
 const Q = require("../domain/searchQuery");
+const Vis = require("../lib/visibility");
 
 const PAGE_SIZE = 5;
 // Telegram messages are free, so a Telegram search shows twice as many units per message.
@@ -183,7 +184,7 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
   const sql = `
     SELECT l.*, COUNT(*) OVER() AS total_count
     FROM listings l
-    WHERE ${where.join("\n      AND ")}
+    WHERE ${Vis.units("l")} AND ${where.join("\n      AND ")}
     ORDER BY ${rank} l.confirmed_at DESC NULLS LAST, l.created_at DESC, l.id DESC
     LIMIT ${add(limit)} OFFSET ${add(offset)}`;
   return { sql, params };
@@ -216,7 +217,7 @@ async function pageByIds(pool, agencyId, ids, offset, pageSize = PAGE_SIZE) {
   if (!slice.length) return [];
   const { rows } = await pool.query(
     `SELECT l.* FROM listings l
-     WHERE l.agency_id = $1 AND l.status = 'active' AND l.id = ANY($2::uuid[])
+     WHERE ${Vis.units("l")} AND l.agency_id = $1 AND l.status = 'active' AND l.id = ANY($2::uuid[])
      ORDER BY array_position($2::uuid[], l.id)`,
     [agencyId, slice]
   );

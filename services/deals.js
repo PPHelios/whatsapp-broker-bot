@@ -10,6 +10,7 @@ const Authz = require("../lib/authz");
 const Commission = require("../domain/commission");
 const Stages = require("../domain/leadStages");
 const { withTransaction } = require("../lib/db");
+const Vis = require("../lib/visibility");
 
 const STATUSES = ["pending", "signed", "paid", "cancelled"];
 const STATUS_LABELS = {
@@ -122,7 +123,7 @@ async function createDeal(pool, actor, input, { idemKey = null, unitVersion = nu
   try {
     return await withTransaction(pool, async (client) => {
       // One writer per lead: a second tap waits here, then finds the first deal.
-      const locked = await client.query("SELECT id, stage FROM leads WHERE id = $1 AND agency_id = $2 FOR UPDATE", [d.leadId, actor.agency_id]);
+      const locked = await client.query("SELECT id, stage FROM leads WHERE " + Vis.leads("leads") + " AND id = $1 AND agency_id = $2 FOR UPDATE", [d.leadId, actor.agency_id]);
       if (!locked.rows.length) return { error: "lead_not_found" };
       if (idemKey) {
         const dup = await client.query("SELECT * FROM deals WHERE agency_id = $1 AND idem_key = $2", [actor.agency_id, idemKey]);
@@ -187,7 +188,7 @@ async function getDeal(pool, actor, key) {
     `SELECT d.*, l.ref AS lead_ref, b.name AS closing_broker_name FROM deals d
        LEFT JOIN leads l ON l.id = d.lead_id AND l.agency_id = d.agency_id
        LEFT JOIN brokers b ON b.id = d.closing_broker_id AND b.agency_id = d.agency_id
-      WHERE d.agency_id = $1 AND ${where}`,
+      WHERE ${Vis.leads("l")} AND d.agency_id = $1 AND ${where}`,
     [actor.agency_id, ref || key]
   );
   const deal = rows[0];
@@ -218,7 +219,7 @@ async function listDeals(pool, actor, { status = null, limit = PAGE, offset = 0 
             (SELECT amount FROM deal_splits s WHERE s.deal_id = d.id AND s.broker_id = $2) AS my_share
        FROM deals d LEFT JOIN brokers b ON b.id = d.closing_broker_id AND b.agency_id = d.agency_id
        LEFT JOIN leads l ON l.id = d.lead_id AND l.agency_id = d.agency_id
-      WHERE ${where.join(" AND ")} ORDER BY d.closed_at DESC, d.ref DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      WHERE ${Vis.leads("l")} AND ${where.join(" AND ")} ORDER BY d.closed_at DESC, d.ref DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
   return { rows: rows.slice(0, limit).map((r) => ({ ...r, my_share: r.my_share == null ? null : Number(r.my_share) })), more: rows.length > limit };

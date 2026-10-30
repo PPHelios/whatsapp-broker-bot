@@ -9,6 +9,7 @@ const { cardButtons } = require("../lib/buttons");
 const { reply, replyForClient, replyButtons, replyAlbum } = require("../lib/dispatcher");
 const Catalogue = require("../services/catalogue");
 const { logCommandOp, setRecentBrokerListing } = require("./commandState");
+const Vis = require("../lib/visibility");
 
 /**
  * Reusable Deliverable Handler: Payment Matrix / Plans (DEL-03)
@@ -160,7 +161,7 @@ async function handlePastedCard(broker, raw, ctx) {
     const extractedCode = T.extractCleanCode(codeMatch[1]);
     const { rows: matchedUnits } = await pool.query(
       `SELECT * FROM listings
-       WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
+       WHERE ${Vis.units("listings")} AND agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
        LIMIT 1`,
       [broker.agency_id, extractedCode]
     );
@@ -235,7 +236,7 @@ async function handleDeliverableCommand(broker, raw, ctx, { resolveTargetCode, s
 
     const { rows } = await pool.query(
       `SELECT * FROM listings
-       WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
+       WHERE ${Vis.units("listings")} AND agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
        LIMIT 1`,
       [broker.agency_id, targetCode.toUpperCase()]
     );
@@ -280,7 +281,7 @@ async function handleDeliverableCommand(broker, raw, ctx, { resolveTargetCode, s
 
     const { rows } = await pool.query(
       `SELECT * FROM listings
-       WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
+       WHERE ${Vis.units("listings")} AND agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
        LIMIT 1`,
       [broker.agency_id, targetCode.toUpperCase()]
     );
@@ -342,7 +343,7 @@ async function handleDeliverableCommand(broker, raw, ctx, { resolveTargetCode, s
 
     const { rows } = await pool.query(
       `SELECT * FROM listings
-       WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
+       WHERE ${Vis.units("listings")} AND agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
        LIMIT 1`,
       [broker.agency_id, targetCode.toUpperCase()]
     );
@@ -386,7 +387,7 @@ async function handleDeliverableCommand(broker, raw, ctx, { resolveTargetCode, s
 
     const { rows } = await pool.query(
       `SELECT * FROM listings
-       WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
+       WHERE ${Vis.units("listings")} AND agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
        LIMIT 1`,
       [broker.agency_id, targetCode.toUpperCase()]
     );

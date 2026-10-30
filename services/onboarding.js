@@ -8,6 +8,7 @@ const TgLink = require("../lib/tgLink");
 const Notifications = require("../lib/notifications");
 const { MANAGER_ROLES } = require("../lib/authz");
 const { getConfig } = require("../config");
+const Vis = require("../lib/visibility");
 
 const DAY = 86400000;
 const isManager = (b) => MANAGER_ROLES.includes(String(b?.role || "").toLowerCase());
@@ -61,8 +62,8 @@ function supportUrl(broker = null, lang = "ar") {
 async function progressOf(db, broker) {
   const { rows } = await db.query(
     `SELECT (b.telegram_chat_id IS NOT NULL) AS telegram,
-            (SELECT count(*)::int FROM listings l WHERE l.broker_id = b.id) AS units,
-            (SELECT count(*)::int FROM leads d WHERE d.created_by_broker_id = b.id OR d.assigned_broker_id = b.id) AS leads,
+            (SELECT count(*)::int FROM listings l WHERE ${Vis.units("l")} AND l.broker_id = b.id) AS units,
+            (SELECT count(*)::int FROM leads d WHERE ${Vis.leads("d")} AND d.created_by_broker_id = b.id OR d.assigned_broker_id = b.id) AS leads,
             (SELECT count(*)::int FROM operation_logs o WHERE o.broker_id = b.id AND o.operation_type LIKE '%search%') AS searches
        FROM brokers b WHERE b.id = $1`,
     [broker.id]
@@ -103,8 +104,8 @@ const nudgeJob = () => ({ name: "onboarding_nudges", everyMs: 60 * 60 * 1000, ru
 async function stuckList(db, { now = new Date(), limit = 100 } = {}) {
   const { rows } = await db.query(
     `SELECT b.id, b.name, b.phone_number, b.role, b.created_at, b.last_active_at, b.telegram_chat_id IS NOT NULL AS telegram, a.name AS agency_name,
-            (SELECT count(*)::int FROM listings l WHERE l.broker_id = b.id) AS units,
-            (SELECT count(*)::int FROM leads d WHERE d.created_by_broker_id = b.id OR d.assigned_broker_id = b.id) AS leads
+            (SELECT count(*)::int FROM listings l WHERE ${Vis.units("l")} AND l.broker_id = b.id) AS units,
+            (SELECT count(*)::int FROM leads d WHERE ${Vis.leads("d")} AND d.created_by_broker_id = b.id OR d.assigned_broker_id = b.id) AS leads
        FROM brokers b JOIN agencies a ON a.id = b.agency_id
       WHERE b.is_active AND b.created_at <= $1
       ORDER BY b.created_at DESC LIMIT 500`,

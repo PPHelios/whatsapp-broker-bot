@@ -12,6 +12,7 @@ const Phone = require("../domain/phone");
 const Q = require("../domain/searchQuery");
 const SearchLink = require("../domain/searchLink");
 const { withTransaction } = require("../lib/db");
+const Vis = require("../lib/visibility");
 
 const MAX_REQUESTS = 3;
 const SHOWN = 5;
@@ -51,7 +52,7 @@ async function saveRequest(pool, actor, leadKey, rawFilters, { requestId = null,
 
   const out = await withTransaction(pool, async (client) => {
     // One writer per lead, so two taps can't make a fourth request.
-    await client.query("SELECT 1 FROM leads WHERE id = $1 AND agency_id = $2 FOR UPDATE", [lead.id, actor.agency_id]);
+    await client.query("SELECT 1 FROM leads WHERE " + Vis.leads("leads") + " AND id = $1 AND agency_id = $2 FOR UPDATE", [lead.id, actor.agency_id]);
     let request;
     if (requestId) {
       const { rows } = await client.query(
@@ -112,7 +113,7 @@ async function whoWants(pool, actor, listing) {
   const { rows } = await pool.query(
     `SELECT s.filters, l.id, l.ref, l.name, l.phone_e164, l.agency_id, l.assigned_broker_id
        FROM saved_searches s JOIN leads l ON l.id = s.lead_id AND l.agency_id = s.agency_id
-      WHERE s.agency_id = $1 AND s.alerts_enabled AND l.stage NOT IN ('won', 'lost')
+      WHERE ${Vis.leads("l")} AND s.agency_id = $1 AND s.alerts_enabled AND l.stage NOT IN ('won', 'lost')
       ORDER BY l.last_activity_at DESC`,
     [actor.agency_id]
   );

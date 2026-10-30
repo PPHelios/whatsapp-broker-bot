@@ -14,6 +14,7 @@ const Stages = require("../domain/leadStages");
 const Commission = require("../domain/commission");
 const Catalogue = require("./catalogue");
 const PriceSheets = require("./priceSheets");
+const Vis = require("../lib/visibility");
 
 const UNDO_HOURS = 24;
 const PREVIEW_HOURS = 24;
@@ -55,7 +56,7 @@ const UNIT_COLS = "id, code, developer_unit_code, status, price_value, project_i
 async function unitsByCode(db, actor, codes, projectId) {
   const { rows } = await db.query(
     `SELECT ${UNIT_COLS}, upper(code) AS c1, upper(btrim(developer_unit_code)) AS c2 FROM listings
-      WHERE agency_id = $1 AND status IN ('active', 'sold')
+      WHERE ${Vis.units("listings")} AND agency_id = $1 AND status IN ('active', 'sold')
         AND (upper(code) = ANY($2::text[])
              OR (details->>'catalogue' = 'true' AND upper(btrim(developer_unit_code)) = ANY($2::text[]) AND ($3::uuid IS NULL OR project_id = $3)))`,
     [actor.agency_id, codes, projectId]
@@ -77,7 +78,7 @@ async function unitsByCode(db, actor, codes, projectId) {
 /** Active priced catalogue units an increase would move (the same rule as PriceSheets.applyIncrease). */
 async function increaseUnits(db, projectId, phaseId) {
   const { rows } = await db.query(
-    `SELECT ${UNIT_COLS} FROM listings WHERE project_id = $1 AND status = 'active' AND price_value > 0 AND details->>'catalogue' = 'true'
+    `SELECT ${UNIT_COLS} FROM listings WHERE ${Vis.units("listings")} AND project_id = $1 AND status = 'active' AND price_value > 0 AND details->>'catalogue' = 'true'
        AND ($2::uuid IS NULL OR phase_id = $2) ORDER BY code`,
     [projectId, phaseId]
   );
@@ -152,7 +153,7 @@ async function buildPlan(pool, { project, phase }, said) {
   const v = Catalogue.planFields({ name: p.name || U.planName(p), down_payment_pct: p.down_payment_pct, years: p.years, frequency: p.frequency || "quarterly" });
   if (v.error) return v;
   const { rows } = await pool.query(
-    `SELECT code, price_value FROM listings WHERE project_id = $1 AND status = 'active' AND NOT COALESCE((payment_terms->>'plans_own')::boolean, false)
+    `SELECT code, price_value FROM listings WHERE ${Vis.units("listings")} AND project_id = $1 AND status = 'active' AND NOT COALESCE((payment_terms->>'plans_own')::boolean, false)
        AND ($2::uuid IS NULL OR phase_id = $2) ORDER BY price_value IS NULL, code`,
     [project.id, phase?.id || null]
   );
@@ -240,7 +241,7 @@ async function run(pool, actor, u, now) {
     if (r.error) throw Object.assign(new Error(r.error), { userError: r.error === "forbidden" ? "forbidden" : "invalid" });
     let prices = [];
     if (r.applied) {
-      const { rows } = await pool.query("SELECT id, price_value FROM listings WHERE id = ANY($1::uuid[])", [before.map((x) => x.id)]);
+      const { rows } = await pool.query("SELECT id, price_value FROM listings WHERE " + Vis.units("listings") + " AND id = ANY($1::uuid[])", [before.map((x) => x.id)]);
       const after = new Map(rows.map((x) => [x.id, Number(x.price_value)]));
       prices = before.map((x) => ({ id: x.id, before: Number(x.price_value), after: after.get(x.id) })).filter((x) => x.after !== x.before);
     }
@@ -258,7 +259,7 @@ async function run(pool, actor, u, now) {
   try {
     await client.query("BEGIN");
     for (const id of p.unit_ids || []) {
-      const { rows } = await client.query("SELECT * FROM listings WHERE id = $1 AND agency_id = $2 FOR UPDATE", [id, actor.agency_id]);
+      const { rows } = await client.query("SELECT * FROM listings WHERE " + Vis.units("listings") + " AND id = $1 AND agency_id = $2 FOR UPDATE", [id, actor.agency_id]);
       const listing = rows[0];
       if (!listing || String(listing[field]) === String(target)) continue;
       const res = await Store.applyListingPatch(client, actor, { listing, patch: { [field]: target }, priceSource: "quick" });
@@ -311,7 +312,7 @@ async function restore(pool, actor, field, entries) {
   try {
     await client.query("BEGIN");
     for (const e of entries) {
-      const { rows } = await client.query("SELECT * FROM listings WHERE id = $1 AND agency_id = $2 FOR UPDATE", [e.id, actor.agency_id]);
+      const { rows } = await client.query("SELECT * FROM listings WHERE " + Vis.units("listings") + " AND id = $1 AND agency_id = $2 FOR UPDATE", [e.id, actor.agency_id]);
       const listing = rows[0];
       const now = listing ? (field === "price_value" ? Number(listing.price_value) : listing.status) : null;
       if (!listing || String(now) !== String(e.after) || e.before === null) {

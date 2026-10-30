@@ -23,6 +23,7 @@ const LeadIntake = require("../lib/leadIntake");
 const CatalogueBot = require("../lib/catalogueBot");
 const DealsWA = require("../lib/deals");
 const Describe = require("../domain/describe");
+const Vis = require("../lib/visibility");
 
 /**
  * Non-blocking operational telemetry logging helper.
@@ -231,7 +232,7 @@ async function handleInteractive(broker, message, ctx) {
 
       // Verify row lock & ownership
       const { rows } = await client.query(
-        "SELECT id, broker_id, code FROM listings WHERE id = $1 AND agency_id = $2 FOR UPDATE",
+        "SELECT id, broker_id, code FROM listings WHERE " + Vis.units("listings") + " AND id = $1 AND agency_id = $2 FOR UPDATE",
         [listingId, broker.agency_id]
       );
 
@@ -266,7 +267,7 @@ async function handleInteractive(broker, message, ctx) {
       imagesToPurge = imgRows.map((r) => r.url);
 
       // Cascading row deletion
-      await client.query("DELETE FROM listings WHERE id = $1", [listingId]);
+      await client.query("DELETE FROM listings WHERE " + Vis.units("listings") + " AND id = $1", [listingId]);
       await client.query("COMMIT");
 
       // Asynchronous, non-blocking storage cleanup (SEC-04)
@@ -310,7 +311,7 @@ async function handleInteractive(broker, message, ctx) {
     const code = T.extractCleanCode(replyId.split(":")[1]);
     const { rows } = await pool.query(
       `SELECT * FROM listings
-       WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
+       WHERE ${Vis.units("listings")} AND agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
        LIMIT 1`,
       [broker.agency_id, code]
     );
@@ -358,7 +359,7 @@ async function handleInteractive(broker, message, ctx) {
     const code = T.extractCleanCode(replyId.split(":")[1]);
     const { rows } = await pool.query(
       `SELECT * FROM listings
-       WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
+       WHERE ${Vis.units("listings")} AND agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
        LIMIT 1`,
       [broker.agency_id, code]
     );
@@ -424,7 +425,7 @@ async function handleInteractive(broker, message, ctx) {
 
     const { rows } = await pool.query(
       `SELECT * FROM listings
-       WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
+       WHERE ${Vis.units("listings")} AND agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
        LIMIT 1`,
       [broker.agency_id, code]
     );
@@ -464,7 +465,7 @@ async function handleInteractive(broker, message, ctx) {
     const code = T.extractCleanCode(replyId.split(":")[1]);
     const { rows: listings } = await pool.query(
       `SELECT * FROM listings
-       WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
+       WHERE ${Vis.units("listings")} AND agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
        LIMIT 1`,
       [broker.agency_id, code]
     );
@@ -640,7 +641,7 @@ async function handleInteractive(broker, message, ctx) {
     setImmediate(async () => {
       try {
         const { rows: listings } = await pool.query(
-          "SELECT * FROM listings WHERE agency_id = $1 AND status = 'active' ORDER BY created_at DESC",
+          "SELECT * FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND status = 'active' ORDER BY created_at DESC",
           [broker.agency_id]
         );
         const { rows: agencies } = await pool.query(
@@ -706,7 +707,7 @@ async function handleInteractive(broker, message, ctx) {
   // F5: a numbered search result → that unit's album and card (as sending its code does).
   if (replyId.startsWith("open:")) {
     const code = T.extractCleanCode(replyId.slice(5)).toUpperCase();
-    const { rows } = await pool.query("SELECT * FROM listings WHERE agency_id = $1 AND code_norm = $2 LIMIT 1", [broker.agency_id, code]);
+    const { rows } = await pool.query("SELECT * FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND code_norm = $2 LIMIT 1", [broker.agency_id, code]);
     if (rows.length) {
       await require("./commandState").setRecentBrokerListing(pool, broker.id, rows[0].code, ctx.recentBrokerListings);
       return await require("./commandDeliverables").deliverUnitInspectionCard(rows[0], broker, lang, pool);

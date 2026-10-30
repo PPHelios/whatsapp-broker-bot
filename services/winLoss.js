@@ -5,6 +5,7 @@
 
 const W = require("../domain/winLoss");
 const { isManager } = require("../lib/authz");
+const Vis = require("../lib/visibility");
 
 const PERIODS = [30, 90, 365];
 const NONE = "__none__";
@@ -20,7 +21,7 @@ async function report(db, manager, { days = 90, now = new Date() } = {}) {
                       WHERE e.lead_id = l.id AND e.agency_id = l.agency_id AND e.undone_at IS NULL
                         AND (e.kind = 'deal' OR (e.kind = 'stage' AND e.data->>'to' = l.stage))) c ON true
        LEFT JOIN brokers b ON b.id = l.assigned_broker_id
-      WHERE l.agency_id = $1 AND l.stage IN ('won', 'lost') AND c.closed_at >= $2 AND c.closed_at <= $3`,
+      WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.stage IN ('won', 'lost') AND c.closed_at >= $2 AND c.closed_at <= $3`,
     [manager.agency_id, since.toISOString(), now.toISOString()]
   );
   const reasons = {};

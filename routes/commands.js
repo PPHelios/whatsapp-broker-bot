@@ -12,6 +12,7 @@ const { canEdit } = require("../lib/authz");
 const { logCommandOp, getRecentBrokerListing, setRecentBrokerListing } = require("./commandState");
 const Deliver = require("./commandDeliverables");
 const Inventory = require("./commandInventory");
+const Vis = require("../lib/visibility");
 
 /**
  * Text Commands Controller
@@ -232,7 +233,7 @@ async function handleCommand(broker, text, ctx) {
 
       const { rows } = await client.query(
         `SELECT id, broker_id, code FROM listings
-         WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
+         WHERE ${Vis.units("listings")} AND agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
          FOR UPDATE`,
         [broker.agency_id, targetCode.toUpperCase()]
       );
@@ -300,7 +301,7 @@ async function handleCommand(broker, text, ctx) {
 
     const { rows } = await pool.query(
       `SELECT * FROM listings
-       WHERE agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
+       WHERE ${Vis.units("listings")} AND agency_id = $1 AND (code_norm = $2 OR upper(developer_unit_code) = $2)
        LIMIT 1`,
       [broker.agency_id, targetCode.toUpperCase()]
     );

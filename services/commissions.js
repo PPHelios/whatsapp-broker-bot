@@ -8,6 +8,7 @@ const ExcelJS = require("exceljs");
 const { isManager } = require("../lib/authz");
 const C = require("../domain/commissionTracker");
 const Stages = require("../domain/leadStages");
+const Vis = require("../lib/visibility");
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isId = (v) => UUID_RE.test(String(v || ""));
@@ -55,7 +56,7 @@ async function ensureForDeal(db, deal) {
   if (!deal?.listing_id || deal.status === "cancelled") return null;
   const { rows } = await db.query(
     `SELECT l.project_id, p.developer_id, (l.details->>'catalogue' = 'true' OR l.market = 'primary') AS developer_unit
-       FROM listings l JOIN projects p ON p.id = l.project_id WHERE l.id = $1 AND l.agency_id = $2`,
+       FROM listings l JOIN projects p ON p.id = l.project_id WHERE ${Vis.units("l")} AND l.id = $1 AND l.agency_id = $2`,
     [deal.listing_id, deal.agency_id]
   );
   const unit = rows[0];
@@ -63,7 +64,7 @@ async function ensureForDeal(db, deal) {
   const terms = (await db.query("SELECT * FROM commission_terms WHERE project_id = $1", [unit.project_id])).rows[0] || null;
   const { rows: n } = await db.query(
     `SELECT count(*)::int AS n FROM deals d JOIN listings l ON l.id = d.listing_id
-      WHERE d.agency_id = $1 AND l.project_id = $2 AND d.status <> 'cancelled' AND d.closed_at <= $3
+      WHERE ${Vis.units("l")} AND d.agency_id = $1 AND l.project_id = $2 AND d.status <> 'cancelled' AND d.closed_at <= $3
         AND date_trunc('year', d.closed_at AT TIME ZONE 'Africa/Cairo') = date_trunc('year', $3::timestamptz AT TIME ZONE 'Africa/Cairo')`,
     [deal.agency_id, unit.project_id, deal.closed_at]
   );
@@ -101,7 +102,7 @@ async function onDealChanged(db, deal) {
 async function syncAgency(db, agencyId) {
   const { rows } = await db.query(
     `SELECT d.* FROM deals d JOIN listings l ON l.id = d.listing_id
-      WHERE d.agency_id = $1 AND l.project_id IS NOT NULL AND d.status <> 'cancelled'
+      WHERE ${Vis.units("l")} AND d.agency_id = $1 AND l.project_id IS NOT NULL AND d.status <> 'cancelled'
         AND NOT EXISTS (SELECT 1 FROM commissions c WHERE c.deal_id = d.id) ORDER BY d.closed_at LIMIT 200`,
     [agencyId]
   );

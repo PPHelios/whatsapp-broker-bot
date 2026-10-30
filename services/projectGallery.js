@@ -10,6 +10,7 @@ const G = require("../domain/gallery");
 const PriceReading = require("./priceReading");
 const Storage = require("../lib/supabase");
 const { isManager } = require("../lib/authz");
+const Vis = require("../lib/visibility");
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 const EXT = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "application/pdf": "pdf" };
@@ -21,7 +22,7 @@ async function projectOf(db, actor, projectId) {
 }
 
 const projectUnits = async (db, projectId) =>
-  (await db.query("SELECT id, code, property_type, bedrooms, area_value, details, status FROM listings WHERE project_id = $1 AND status <> 'deleted' ORDER BY code", [projectId])).rows;
+  (await db.query("SELECT id, code, property_type, bedrooms, area_value, details, status FROM listings WHERE " + Vis.units("listings") + " AND project_id = $1 AND status <> 'deleted' ORDER BY code", [projectId])).rows;
 
 async function store(actor, project, data, mime) {
   const path = `${actor.agency_id}/projects/${project.id}/gallery/${crypto.randomBytes(12).toString("hex")}.${EXT[mime]}`;

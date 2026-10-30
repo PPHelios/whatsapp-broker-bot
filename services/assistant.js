@@ -13,6 +13,7 @@ const Card = require("../domain/leadCard");
 const Describe = require("../domain/describe");
 const ProjectContext = require("./projectContext");
 const { isManager } = require("../lib/authz");
+const Vis = require("../lib/visibility");
 
 const MAX_PROJECTS = 3;
 const MAX_LEADS = 60;
@@ -61,7 +62,7 @@ async function leadBlock(pool, broker, question, scopes) {
     `SELECT l.id, l.ref, l.name, l.stage, l.kind, l.notes, l.next_follow_up_at, l.follow_up_status, l.last_contact_at, l.source, b.name AS broker_name,
             (SELECT array_agg(s.filters) FROM saved_searches s WHERE s.lead_id = l.id AND s.agency_id = l.agency_id) AS requests
        FROM leads l LEFT JOIN brokers b ON b.id = l.assigned_broker_id
-      WHERE l.agency_id = $1 AND ($2 OR l.assigned_broker_id = $3) AND l.stage NOT IN ('won', 'lost')
+      WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND ($2 OR l.assigned_broker_id = $3) AND l.stage NOT IN ('won', 'lost')
       ORDER BY l.last_activity_at DESC LIMIT 400`,
     [broker.agency_id, manager, broker.id]
   );
@@ -91,7 +92,7 @@ async function leadBlock(pool, broker, question, scopes) {
 async function followUpBlock(pool, broker, now) {
   const { rows } = await pool.query(
     `SELECT l.ref, l.name, l.next_follow_up_at, l.follow_up_kind, l.follow_up_note FROM leads l
-      WHERE l.agency_id = $1 AND l.assigned_broker_id = $2 AND l.follow_up_status = 'open' AND l.next_follow_up_at <= $3
+      WHERE ${Vis.leads("l")} AND l.agency_id = $1 AND l.assigned_broker_id = $2 AND l.follow_up_status = 'open' AND l.next_follow_up_at <= $3
       ORDER BY l.next_follow_up_at LIMIT $4`,
     [broker.agency_id, broker.id, new Date(now.getTime() + 7 * 24 * 3600 * 1000).toISOString(), MAX_FOLLOW_UPS]
   );
@@ -107,7 +108,7 @@ async function unitBlock(pool, broker, projectIds) {
   const { rows } = await pool.query(
     `SELECT l.code, l.property_type, l.listing_type, l.price_value, l.area_value, l.bedrooms, l.compound, l.district, l.city, l.finishing, l.delivery_year, l.is_ready, l.details->>'notes' AS note, p.name AS project
        FROM listings l LEFT JOIN projects p ON p.id = l.project_id
-      WHERE l.agency_id = $1 AND l.status = 'active' AND (cardinality($2::uuid[]) = 0 OR l.project_id = ANY($2::uuid[]))
+      WHERE ${Vis.units("l")} AND l.agency_id = $1 AND l.status = 'active' AND (cardinality($2::uuid[]) = 0 OR l.project_id = ANY($2::uuid[]))
       ORDER BY l.updated_at DESC LIMIT $3`,
     [broker.agency_id, projectIds, MAX_UNITS]
   );

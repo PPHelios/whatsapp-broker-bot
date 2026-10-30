@@ -15,6 +15,7 @@ const Authz = require("../lib/authz");
 const LeadImport = require("../domain/leadImport");
 const Stages = require("../domain/leadStages");
 const { logOperation } = require("../lib/db");
+const Vis = require("../lib/visibility");
 
 const PROGRESS_EVERY = 25;
 const jobs = new Map(); // import id → promise (tests and graceful shutdown can wait for it)
@@ -44,7 +45,7 @@ async function planLeads(pool, broker, table, { basis = "client_request", roundR
 
   const allPhones = [...new Set(parsed.flatMap((p) => p.phones))];
   const { rows: found } = allPhones.length
-    ? await pool.query("SELECT id, ref, name, phones, assigned_broker_id, source, notes FROM leads WHERE agency_id = $1 AND phones && $2::text[]", [broker.agency_id, allPhones])
+    ? await pool.query("SELECT id, ref, name, phones, assigned_broker_id, source, notes FROM leads WHERE " + Vis.leads("leads") + " AND agency_id = $1 AND phones && $2::text[]", [broker.agency_id, allPhones])
     : { rows: [] };
   const byPhone = new Map(found.flatMap((l) => l.phones.map((p) => [p, l])));
   const hashes = allPhones.map((p) => [p, Leads.phoneHash(p)]);

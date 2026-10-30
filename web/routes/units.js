@@ -21,6 +21,7 @@ const Bulk = require("../../services/bulk");
 const { logOperation } = require("../../lib/db");
 const { html } = require("../html");
 const { resultItem, factList } = require("../views/units");
+const Vis = require("../../lib/visibility");
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
@@ -116,7 +117,7 @@ function register(web, { pool, page }) {
     const status = STATUSES.includes(req.query.status) ? req.query.status : "active";
     const mine = req.query.mine === "1";
     const { rows } = await pool.query(
-      `SELECT * FROM listings WHERE agency_id = $1 AND status = $2 ${mine ? "AND broker_id = $3" : ""}
+      `SELECT * FROM listings WHERE ${Vis.units("listings")} AND agency_id = $1 AND status = $2 ${mine ? "AND broker_id = $3" : ""}
        ORDER BY confirmed_at DESC NULLS LAST, created_at DESC, id DESC LIMIT 200`,
       mine ? [broker.agency_id, status, broker.id] : [broker.agency_id, status]
     );

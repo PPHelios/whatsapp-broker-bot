@@ -14,6 +14,7 @@ const Phone = require("../domain/phone");
 const Describe = require("../domain/describe");
 const Rules = require("../domain/leadRules");
 const { withTransaction } = require("../lib/db");
+const Vis = require("../lib/visibility");
 
 const BATCH = 200;
 const LINES = 5;
@@ -122,7 +123,7 @@ async function remindDue(pool, { now = new Date(), limit = BATCH } = {}) {
   const claimed = await withTransaction(pool, async (client) => {
     const { rows } = await client.query(
       `SELECT id FROM leads
-        WHERE follow_up_status = 'open' AND next_follow_up_at <= $1 AND follow_up_reminded_at IS NULL
+        WHERE ${Vis.leads("leads")} AND follow_up_status = 'open' AND next_follow_up_at <= $1 AND follow_up_reminded_at IS NULL
           AND assigned_broker_id IS NOT NULL AND stage NOT IN ('won', 'lost')
         ORDER BY next_follow_up_at, id LIMIT $2 FOR UPDATE SKIP LOCKED`,
       [now.toISOString(), limit]
@@ -134,7 +135,7 @@ async function remindDue(pool, { now = new Date(), limit = BATCH } = {}) {
   });
   if (!claimed.length) return { reminded: 0, brokers: 0 };
   const unitIds = [...new Set(claimed.map((l) => l.follow_up_listing_id).filter(Boolean))];
-  const units = unitIds.length ? (await pool.query("SELECT * FROM listings WHERE id = ANY($1::uuid[])", [unitIds])).rows : [];
+  const units = unitIds.length ? (await pool.query("SELECT * FROM listings WHERE " + Vis.units("listings") + " AND id = ANY($1::uuid[])", [unitIds])).rows : [];
   const byId = new Map(units.map((u) => [u.id, u]));
   for (const l of claimed) l.listing = byId.get(l.follow_up_listing_id) || null;
   claimed.sort((a, b) => new Date(a.next_follow_up_at) - new Date(b.next_follow_up_at));
@@ -174,7 +175,7 @@ async function nudgeUntouched(pool, { now = new Date(), limit = BATCH } = {}) {
   const claimed = await withTransaction(pool, async (client) => {
     const { rows } = await client.query(
       `SELECT id FROM leads
-        WHERE stage = 'new' AND last_contact_at IS NULL AND nudged_at IS NULL AND assigned_broker_id IS NOT NULL
+        WHERE ${Vis.leads("leads")} AND stage = 'new' AND last_contact_at IS NULL AND nudged_at IS NULL AND assigned_broker_id IS NOT NULL
           AND follow_up_status IS DISTINCT FROM 'open' AND created_at <= $1 AND created_at > $2
         ORDER BY created_at, id LIMIT $3 FOR UPDATE SKIP LOCKED`,
       [new Date(now.getTime() - NUDGE_AFTER_MS).toISOString(), new Date(now.getTime() - NUDGE_WINDOW_MS).toISOString(), limit]
@@ -222,7 +223,7 @@ async function nudgeInterested(pool, { now = new Date(), limit = BATCH } = {}) {
   const claimed = await withTransaction(pool, async (client) => {
     const { rows } = await client.query(
       `SELECT id FROM leads
-        WHERE stage = 'interested' AND assigned_broker_id IS NOT NULL AND follow_up_status IS DISTINCT FROM 'open'
+        WHERE ${Vis.leads("leads")} AND stage = 'interested' AND assigned_broker_id IS NOT NULL AND follow_up_status IS DISTINCT FROM 'open'
           AND last_activity_at <= $1 AND (interest_nudged_at IS NULL OR interest_nudged_at < last_activity_at)
         ORDER BY last_activity_at, id LIMIT $2 FOR UPDATE SKIP LOCKED`,
       [new Date(now.getTime() - INTEREST_QUIET_MS).toISOString(), limit]

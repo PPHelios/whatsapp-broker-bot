@@ -8,6 +8,7 @@ const Plans = require("../domain/plans");
 const Billing = require("./billing");
 const Notifications = require("../lib/notifications");
 const { withTransaction, logOperation } = require("../lib/db");
+const Vis = require("../lib/visibility");
 
 const DAY = 86400000;
 const ACTIONS = ["owner_plan", "owner_suspend", "owner_resume", "owner_announcement"];
@@ -18,8 +19,8 @@ async function list(db, { now = new Date() } = {}) {
     `SELECT a.id, a.name, a.plan, a.paid_until, a.trial_ends_at, a.pilot, a.approval, a.created_at,
             a.crm_settings->>'suspended_at' AS suspended_at,
             (SELECT count(*)::int FROM brokers b WHERE b.agency_id = a.id AND b.is_active) AS brokers,
-            (SELECT count(*)::int FROM listings l WHERE l.agency_id = a.id AND l.status = 'active') AS units,
-            (SELECT count(*)::int FROM leads x WHERE x.agency_id = a.id AND x.created_at > $1::timestamptz - interval '30 days') AS leads30,
+            (SELECT count(*)::int FROM listings l WHERE ${Vis.units("l")} AND l.agency_id = a.id AND l.status = 'active') AS units,
+            (SELECT count(*)::int FROM leads x WHERE ${Vis.leads("x")} AND x.agency_id = a.id AND x.created_at > $1::timestamptz - interval '30 days') AS leads30,
             (SELECT max(o.created_at) FROM operation_logs o WHERE o.agency_id = a.id) AS last_seen
        FROM agencies a WHERE a.approval <> 'rejected' ORDER BY a.name`,
     [now.toISOString()]
