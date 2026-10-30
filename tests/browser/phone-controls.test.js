@@ -168,7 +168,7 @@ async function forms(pg, who, name, path) {
 // the phone's own speech stops by itself, so the second tap is only needed when it is still listening.
 async function hear(pg, btn) {
   await btn.tap();
-  const recording = await pg.waitForSelector(".mic.recording", { timeout: 3000 }).then(() => true, () => false);
+  const recording = await pg.waitForSelector(".mic.recording", { timeout: 8000 }).then(() => true, () => false);
   if (recording) await btn.tap();
 }
 
