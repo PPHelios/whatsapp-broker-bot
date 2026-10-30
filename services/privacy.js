@@ -52,7 +52,7 @@ async function exportLead(pool, actor, key, { now = new Date() } = {}) {
   const requests = await pool.query("SELECT filters, created_at FROM saved_searches WHERE lead_id = $1 AND agency_id = $2 ORDER BY created_at", [lead.id, actor.agency_id]);
   const sent = await pool.query(
     `SELECT l.code, s.created_at, s.open_count FROM share_links s JOIN listings l ON l.id = s.listing_id
-      WHERE ${Vis.units("l")} AND s.lead_id = $1 AND s.agency_id = $2 ORDER BY s.created_at`,
+      WHERE ${Vis.allUnits()} AND s.lead_id = $1 AND s.agency_id = $2 ORDER BY s.created_at`,
     [lead.id, actor.agency_id]
   );
   const deals = await pool.query("SELECT ref, unit_code, deal_type, price, status, closed_at FROM deals WHERE lead_id = $1 AND agency_id = $2 ORDER BY ref", [lead.id, actor.agency_id]);
@@ -135,7 +135,7 @@ async function eraseInTx(client, agencyId, lead, { byBrokerId = null, now = new 
     [agencyId, label, lead.name || null]
   );
   await client.query("DELETE FROM broker_sessions WHERE strpos(session_data::text, $1) > 0", [lead.id]);
-  await client.query("DELETE FROM leads WHERE " + Vis.leads("leads") + " AND id = $1 AND agency_id = $2", [lead.id, agencyId]);
+  await client.query("DELETE FROM leads WHERE " + Vis.allLeads() + " AND id = $1 AND agency_id = $2", [lead.id, agencyId]);
 }
 
 /**
@@ -149,7 +149,7 @@ async function eraseLead(pool, actor, key, { confirm = "", now = new Date() } = 
     if (!lead) return { error: "not_found" };
     const digits = String(confirm || "").replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/\D/g, "");
     if (digits.length !== 4 || !String(lead.phone_e164).endsWith(digits)) return { error: "confirm" };
-    await client.query("SELECT 1 FROM leads WHERE " + Vis.leads("leads") + " AND id = $1 FOR UPDATE", [lead.id]);
+    await client.query("SELECT 1 FROM leads WHERE " + Vis.allLeads() + " AND id = $1 FOR UPDATE", [lead.id]);
     await eraseInTx(client, actor.agency_id, lead, { byBrokerId: actor.id, now });
     return { ok: true, ref: lead.ref };
   });
@@ -161,18 +161,18 @@ async function eraseLead(pool, actor, key, { confirm = "", now = new Date() } = 
  */
 async function retentionSweep(pool, { now = new Date(), batch = BATCH } = {}) {
   const cutoff = monthsAgo(now, RETENTION_MONTHS);
-  const { rows } = await pool.query("SELECT * FROM leads WHERE " + Vis.leads("leads") + " AND last_activity_at < $1 ORDER BY last_activity_at LIMIT $2", [cutoff.toISOString(), batch]);
+  const { rows } = await pool.query("SELECT * FROM leads WHERE " + Vis.allLeads() + " AND last_activity_at < $1 ORDER BY last_activity_at LIMIT $2", [cutoff.toISOString(), batch]);
   let erased = 0;
   for (const lead of rows) {
     await withTransaction(pool, async (client) => {
-      const locked = await client.query("SELECT 1 FROM leads WHERE " + Vis.leads("leads") + " AND id = $1 AND last_activity_at < $2 FOR UPDATE SKIP LOCKED", [lead.id, cutoff.toISOString()]);
+      const locked = await client.query("SELECT 1 FROM leads WHERE " + Vis.allLeads() + " AND id = $1 AND last_activity_at < $2 FOR UPDATE SKIP LOCKED", [lead.id, cutoff.toISOString()]);
       if (!locked.rows.length) return;
       await eraseInTx(client, lead.agency_id, lead, { now });
       erased++;
     });
   }
   const soon = await pool.query(
-    "SELECT agency_id, count(*)::int AS n FROM leads WHERE " + Vis.leads("leads") + " AND last_activity_at < $1 AND last_activity_at >= $2 GROUP BY agency_id",
+    "SELECT agency_id, count(*)::int AS n FROM leads WHERE " + Vis.allLeads() + " AND last_activity_at < $1 AND last_activity_at >= $2 GROUP BY agency_id",
     [new Date(cutoff.getTime() + WARN_DAYS * DAY_MS).toISOString(), cutoff.toISOString()]
   );
   const day = Stages.toCairoLocal(now).slice(0, 10);

@@ -157,4 +157,17 @@ describe("agency owner: managers and role changes", () => {
     expect(await Team.changeRole(h.pool, owner, h.BROKERS.admin.id, "broker")).toEqual({ error: "rank" });
     expect(await Team.changeRole(h.pool, owner, h.BROKERS.colleague.id, "boss")).toEqual({ error: "role" });
   });
+
+  test("the team page offers Manager and the change-role button only to the agency owner", async () => {
+    await h.seedBroker("manager");
+    await h.seedBroker("owner");
+    const owner = await signIn(h, "owner");
+    const ownerPage = (await owner.agent.get("/app/team")).text;
+    expect(ownerPage).toContain('<option value="manager">');
+    expect(ownerPage).toContain(`/app/team/${h.BROKERS.colleague.id}/role`);
+    const manager = await signIn(h, "manager");
+    const managerPage = (await manager.agent.get("/app/team")).text;
+    expect(managerPage).not.toContain('<option value="manager">');
+    expect(managerPage).not.toContain("/role");
+  });
 });

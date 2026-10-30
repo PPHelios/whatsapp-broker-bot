@@ -4,7 +4,7 @@
 // yes or no. Every switch, ask, answer and managers' Excel export is logged. Nothing here ever reaches client pages.
 "use strict";
 
-const { isManager } = require("../lib/authz");
+const { isManager, isAgencyOwner } = require("../lib/authz");
 const { logOperation } = require("../lib/db");
 const Notifications = require("../lib/notifications");
 
@@ -18,9 +18,9 @@ async function scopeOf(pool, agencyId) {
   return rows[0]?.s === "all" ? "all" : "restricted";
 }
 
-/** A manager switches who sees secret details. */
+/** Only the agency owner switches who sees secret details. */
 async function setScope(pool, manager, scope) {
-  if (!isManager(manager) || !SCOPES.includes(scope)) return { ok: false, reason: "not_allowed" };
+  if (!isAgencyOwner(manager) || !SCOPES.includes(scope)) return { ok: false, reason: "not_allowed" };
   await pool.query("UPDATE agencies SET crm_settings = crm_settings || jsonb_build_object('secret_details', $2::text) WHERE id = $1", [manager.agency_id, scope]);
   logOperation(pool, { agency_id: manager.agency_id, broker_id: manager.id, operation_type: "secret_details_scope", status: "success", metadata: { scope } });
   return { ok: true, scope };

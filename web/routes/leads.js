@@ -22,13 +22,14 @@ const Intake = require("../../domain/leadIntake");
 const Phone = require("../../domain/phone");
 const SearchLink = require("../../domain/searchLink");
 const Q = require("../../domain/searchQuery");
-const { isManager } = require("../../lib/authz");
+const { isManager, isAgencyOwner } = require("../../lib/authz");
 const { logOperation } = require("../../lib/db");
 const Session = require("../session");
 const { uploads, VOICE } = require("../uploads");
 const { html } = require("../html");
 const { icon } = require("../icons");
 const UnitPrivacy = require("../../services/unitPrivacy");
+const Portfolio = require("../../services/privatePortfolio");
 const V = require("../views/leads");
 const { refineForm } = require("../views/searchForm");
 const Vis = require("../../lib/visibility");
@@ -36,7 +37,7 @@ const Vis = require("../../lib/visibility");
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
 const langOf = (req) => (req.session.broker.preferred_lang === "en" ? "en" : "ar");
 const PAGE = 20;
-const TABS = ["all", ...Stages.STAGES, "due_today", "overdue", "no_next_step"];
+const TABS = ["all", ...Stages.STAGES, "due_today", "overdue", "no_next_step", "private"];
 const upload = uploads([VOICE]);
 
 Session.allowMultipart(/^\/leads\/extract$/);
@@ -125,7 +126,7 @@ function register(web, { pool, page }) {
     const lang = langOf(req);
     const { broker } = req.session;
     const manager = isManager(broker);
-    const brokerId = manager && req.query.broker ? String(req.query.broker) : null;
+    const brokerId = manager && req.query.broker ? (req.query.broker === "me" && isAgencyOwner(broker) ? broker.id : String(req.query.broker)) : null;
     const open = Stages.STAGES.filter((s) => !Stages.isClosed(s));
     const cols = await Promise.all(Stages.STAGES.map(async (s) => [s, await Leads.listLeads(pool, broker, { stage: s, brokerId, limit: Stages.isClosed(s) ? 10 : 40, offset: 0 })]));
     const brokers = manager ? await activeBrokers(pool, broker.agency_id) : [];
@@ -142,7 +143,7 @@ function register(web, { pool, page }) {
       body: html`<div class="row between"><h1>${L(lang, "لوحة العملاء", "Lead board")}</h1><a class="btn secondary small" href="/app/leads">${L(lang, "القايمة", "List")}</a></div>
 ${moved ? html`<p class="card notice ok" role="status">✅ ${L(lang, `${moved} اتنقل.`, `${moved} moved.`)}${req.query.undo ? html` <a href="/app/leads/${moved}">${L(lang, "افتحه للتراجع", "Open it to undo")}</a>` : ""}</p>` : ""}
 ${manager
-  ? html`<form method="get" action="/app/leads/board"><select name="broker" data-autosubmit aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل الفريق", "Whole team")}</option><option value="none"${brokerId === "none" ? html` selected` : ""}>${L(lang, "مش متسلم", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${b.id === brokerId ? html` selected` : ""}>${b.name}</option>`)}</select><noscript><button type="submit">${L(lang, "تطبيق", "Apply")}</button></noscript></form>`
+  ? html`<form method="get" action="/app/leads/board"><select name="broker" data-autosubmit aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل الفريق", "Whole team")}</option>${isAgencyOwner(broker) ? html`<option value="me"${req.query.broker === "me" ? html` selected` : ""}>${L(lang, "المسلّمة ليّ", "Assigned to me")}</option>` : ""}<option value="none"${brokerId === "none" ? html` selected` : ""}>${L(lang, "مش متسلم", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${b.id === brokerId && req.query.broker !== "me" ? html` selected` : ""}>${b.name}</option>`)}</select><noscript><button type="submit">${L(lang, "تطبيق", "Apply")}</button></noscript></form>`
   : ""}
 <p class="muted small">${L(lang, "اسحب العميل لعمود تاني، أو اختار المرحلة واضغط «انقل». «ضاع» من صفحة العميل عشان سبب الضياع.", "Drag a lead to another column, or pick a stage and tap Move. Mark Lost from the lead page (it needs a reason).")}</p>
 <div class="board-cols" data-board>${cols.map(([s, r]) => html`<section class="bcol" id="col-${s}" data-stage="${s}"><h2>${Stages.stageLabel(s, lang)} <b>${r.rows.length}${r.more ? "+" : ""}</b></h2><ol>${r.rows.map(card)}</ol></section>`)}</div>`
@@ -153,17 +154,18 @@ ${manager
     const lang = langOf(req);
     const { broker } = req.session;
     const manager = isManager(broker);
-    const tab = TABS.includes(req.query.tab) ? req.query.tab : req.query.overdue === "1" ? "overdue" : "all";
+    const tab = TABS.includes(req.query.tab) && (req.query.tab !== "private" || isAgencyOwner(broker)) ? req.query.tab : req.query.overdue === "1" ? "overdue" : "all";
     const n = Math.max(0, parseInt(req.query.page, 10) || 0);
     const f = {
       q: String(req.query.q || "").slice(0, 80),
       kind: req.query.kind,
       source: req.query.source ? String(req.query.source).slice(0, 60) : null,
-      brokerId: manager ? req.query.broker : null,
+      brokerId: manager ? (req.query.broker === "me" && isAgencyOwner(broker) ? broker.id : req.query.broker) : null,
       stage: Stages.STAGES.includes(tab) ? tab : null,
       dueToday: tab === "due_today",
       overdue: tab === "overdue",
       noNextStep: tab === "no_next_step",
+      private: tab === "private",
       limit: PAGE,
       offset: n * PAGE
     };
@@ -179,7 +181,7 @@ ${manager
       return `/app/leads${s ? `?${s}` : ""}`;
     };
     const tabLabel = (t) =>
-      t === "all" ? L(lang, "الكل", "All") : t === "due_today" ? L(lang, "النهارده", "Due today") : t === "overdue" ? L(lang, "متأخرة", "Overdue") : t === "no_next_step" ? L(lang, "من غير خطوة", "No next step") : Stages.stageLabel(t, lang);
+      t === "all" ? L(lang, "الكل", "All") : t === "due_today" ? L(lang, "النهارده", "Due today") : t === "overdue" ? L(lang, "متأخرة", "Overdue") : t === "no_next_step" ? L(lang, "من غير خطوة", "No next step") : t === "private" ? L(lang, "🔒 الخاصة", "🔒 Private") : Stages.stageLabel(t, lang);
     return page(req, res, {
       title: L(lang, "العملاء", "Leads"),
       nav: "leads",
@@ -193,13 +195,13 @@ ${/^L-\d{4,6}$/.test(String(req.query.erased || "")) ? html`<p class="card notic
   <select name="kind" aria-label="${L(lang, "النوع", "Type")}"><option value="">${L(lang, "كل الأنواع", "All types")}</option>${Stages.KINDS.map((k) => html`<option value="${k}"${req.query.kind === k ? html` selected` : ""}>${Stages.kindLabel(k, lang)}</option>`)}</select>
   <select name="source" aria-label="${L(lang, "المصدر", "Source")}"><option value="">${L(lang, "كل المصادر", "All sources")}</option>${Stages.SOURCES.map(([en, ar]) => html`<option value="${en}"${f.source === en ? html` selected` : ""}>${lang === "en" ? en : ar}</option>`)}${extraSources.map((x) => html`<option value="${x}"${f.source === x ? html` selected` : ""}>${x}</option>`)}</select>
   ${manager
-    ? html`<select name="broker" aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل الوسطاء", "All brokers")}</option><option value="none"${req.query.broker === "none" ? html` selected` : ""}>${L(lang, "مش متسلم", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${req.query.broker === b.id ? html` selected` : ""}>${b.name}</option>`)}</select>`
+    ? html`<select name="broker" aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل الوسطاء", "All brokers")}</option>${isAgencyOwner(broker) ? html`<option value="me"${req.query.broker === "me" ? html` selected` : ""}>${L(lang, "المسلّمة ليّ", "Assigned to me")}</option>` : ""}<option value="none"${req.query.broker === "none" ? html` selected` : ""}>${L(lang, "مش متسلم", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${req.query.broker === b.id ? html` selected` : ""}>${b.name}</option>`)}</select>`
     : ""}
   </div>
   <div class="row sheet-actions"><button type="submit">${L(lang, "تطبيق", "Apply")}</button><a class="btn secondary" href="/app/leads">${L(lang, "مسح", "Clear")}</a></div>
   </details>
 </form>
-<ul class="chipbar"${pipe ? html` id="pipeline"` : ""} aria-label="${L(lang, "المراحل", "Stages")}">${TABS.map((t) => html`<li${Stages.STAGES.includes(t) ? html` data-stage="${t}"` : ""}><a href="${qs({ tab: t, page: "" })}"${t === tab ? html` aria-current="page"` : ""}>${tabLabel(t)}${pipe && Stages.STAGES.includes(t) ? html` <b>${pipe.stages[t]}</b>` : ""}</a></li>`)}</ul>
+<ul class="chipbar"${pipe ? html` id="pipeline"` : ""} aria-label="${L(lang, "المراحل", "Stages")}">${TABS.filter((t) => t !== "private" || isAgencyOwner(broker)).map((t) => html`<li${Stages.STAGES.includes(t) ? html` data-stage="${t}"` : ""}><a href="${qs({ tab: t, page: "" })}"${t === tab ? html` aria-current="page"` : ""}>${tabLabel(t)}${pipe && Stages.STAGES.includes(t) ? html` <b>${pipe.stages[t]}</b>` : ""}</a></li>`)}</ul>
 ${pipe && pipe.overdue.length
   ? html`<details class="card notice warn"><summary>${L(lang, "متابعات متأخرة لكل وسيط", "Overdue follow-ups per broker")}: ${pipe.overdue.reduce((a, o) => a + Number(o.n), 0)}</summary><ul class="rows">${pipe.overdue.map(
       (o) => html`<li data-overdue-broker="${o.broker_id || "none"}"><a class="listrow" href="${qs({ tab: "overdue", broker: o.broker_id || "none" })}">${o.name || L(lang, "مش متسلم", "Unassigned")}<b>${o.n}</b></a></li>`
@@ -349,6 +351,7 @@ ${rows.length
           ? html` <form method="post" action="${path}/undo" class="inline"><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="event" value="${undoEvent}"><button type="submit" class="link">↩️ ${L(lang, "تراجع", "Undo")}</button></form>`
           : ""}</div>` : ""}
 ${V.leadHeader(lead, lang)}
+${isAgencyOwner(broker) ? html`<form method="post" action="${path}/portfolio" class="row" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${lead.is_private ? "0" : "1"}"><button type="submit" class="secondary">${lead.is_private ? L(lang, "🔓 رجّعه لكل الفريق", "🔓 Make visible to the team") : L(lang, "🔒 خليه خاص بالمالك", "🔒 Keep private to the owner")}</button>${lead.is_private ? html`<span class="badge">🔒 ${L(lang, "خاص", "Private")}</span>` : ""}</form>` : ""}
 ${manager ? html`<p class="muted" data-merge-hint>🔗 ${L(lang, "نفس العميل متسجل برقم تاني؟", "Same client saved under another number?")} <a href="#merge">${L(lang, "ادمج السجلين", "Merge the two records")}</a></p>` : ""}
 <div class="actions3"><form method="post" action="${path}/contacted">${hidden}<button type="submit" class="secondary">${icon("check", 20)} ${L(lang, "كلمته", "I called")}</button></form>
   <form method="post" action="${path}/draft">${hidden}<button type="submit" class="secondary">${icon("chat", 20)} ${L(lang, "اكتبلي رسالة متابعة", "Draft a follow-up message")}</button></form>
@@ -460,6 +463,15 @@ ${V.bottomBar(lead, lang, broker.name)}`
     if (!lead) next();
     return lead;
   };
+
+  // The agency owner moves a lead in or out of the private portfolio.
+  web.post("/leads/:ref/portfolio", async (req, res, next) => {
+    const lead = await loadOr404(req, next);
+    if (!lead) return;
+    if (!isAgencyOwner(req.session.broker)) return next();
+    await Portfolio.setPrivate(pool, req.session.broker, "lead", lead.id, req.body.value === "1");
+    return res.redirect(303, `/app/leads/${encodeURIComponent(req.params.ref)}`);
+  });
 
   web.get("/leads/:ref", async (req, res, next) => {
     const lead = await loadOr404(req, next);

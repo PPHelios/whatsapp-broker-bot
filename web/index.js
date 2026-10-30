@@ -2,6 +2,7 @@
 // (Release 2). Server-rendered HTML + htmx; PWA with a service worker scoped to /app/.
 "use strict";
 
+const Vis = require("../lib/visibility");
 const express = require("express");
 const { loadAssets } = require("./assets");
 const { securityHeaders, sameOrigin } = require("./security");
@@ -111,6 +112,8 @@ function mountWeb(app, { pool, config }) {
   for (const p of pages.PUBLIC) p.register(web, ctx);
   const priv = express.Router();
   priv.use(Session.noStore, Session.requireBroker, Session.verifyCsrf);
+  // Who is looking travels with the request, so the agency owner (and nobody else) sees private items.
+  priv.use((req, _res, next) => Vis.run(req.session.broker, next));
   // The 🔔 count in the top bar (pages only; htmx partials don't render the bar).
   priv.use(async (req, _res, next) => {
     if (req.method === "GET" && !req.get("HX-Request")) {
