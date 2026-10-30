@@ -36,3 +36,17 @@ test("brokers see their own leads in stage columns and move one; managers see ev
   const admin = await signIn(h, "admin");
   expect((await admin.agent.get("/app/leads/board")).text).toContain("Omar Other");
 });
+
+test("a manager can filter the board and the list to the leads assigned to them", async () => {
+  await Leads.captureLead(h.pool, await broker("admin"), { phones: "01212345678", name: "Mine Manager" });
+  await h.query("UPDATE leads SET assigned_broker_id = $1 WHERE name = 'Mine Manager'", [h.BROKERS.admin.id]);
+  await Leads.captureLead(h.pool, await broker("colleague"), { phones: "01112345678", name: "Omar Other" });
+  const { agent } = await signIn(h, "admin");
+  const board = await agent.get("/app/leads/board?broker=me");
+  expect(board.text).toContain("Mine Manager");
+  expect(board.text).not.toContain("Omar Other");
+  expect(board.text).toMatch(/<option value="me" selected>/);
+  const list = await agent.get("/app/leads?broker=me");
+  expect(list.text).toContain("Mine Manager");
+  expect(list.text).not.toContain("Omar Other");
+});
