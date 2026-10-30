@@ -11,6 +11,7 @@ const AI = require("../../lib/ai");
 const RateLimit = require("../../lib/rateLimit");
 const Sheets = require("../../lib/sheets");
 const { logOperation } = require("../../lib/db");
+const { isManager } = require("../../lib/authz");
 const Imports = require("../../services/imports");
 const Plans = require("../../domain/plans");
 const ChatPhotos = require("../../services/chatPhotos");
@@ -210,7 +211,11 @@ ${tabs("import_tab", [
     return res.send(Buffer.from(await wb.xlsx.writeBuffer()));
   });
 
-  web.post("/import/excel", uploadSheet, async (req, res) => {
+  // Imports (Excel, group posts, chat with photos) are for managers. Brokers add single units by form, voice and text.
+  const managersOnly = (req, res, next) =>
+    isManager(req.session.broker) ? next() : res.status(403).type("text/plain").send(L(langOf(req), "للمديرين بس", "Managers only"));
+
+  web.post("/import/excel", managersOnly, uploadSheet, async (req, res) => {
     const lang = langOf(req);
     const { broker } = req.session;
     const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
@@ -235,7 +240,7 @@ ${tabs("import_tab", [
     return res.redirect(303, `/app/import/${id}`);
   });
 
-  web.post("/import/group", uploadChat, async (req, res) => {
+  web.post("/import/group", managersOnly, uploadChat, async (req, res) => {
     const lang = langOf(req);
     const { broker } = req.session;
     const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
@@ -270,7 +275,7 @@ ${tabs("import_tab", [
 
   // A chat export zip with photos goes from the browser straight to Storage (a signed upload URL), so a 100 MB file
   // never passes through this server's memory; the server then streams it to a temp file and reads it from there.
-  web.post("/import/zip/start", async (req, res) => {
+  web.post("/import/zip/start", managersOnly, async (req, res) => {
     const { broker } = req.session;
     const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
     if (!gate.allowed) return res.status(429).json({ error: "rate" });
@@ -280,7 +285,7 @@ ${tabs("import_tab", [
     return res.json({ url: signed.url, path: target });
   });
 
-  web.post("/import/zip", async (req, res) => {
+  web.post("/import/zip", managersOnly, async (req, res) => {
     const lang = langOf(req);
     const { broker } = req.session;
     const target = String(req.body.path || "");
@@ -320,7 +325,7 @@ ${tabs("import_tab", [
     return importPage(req, res, imp.kind === "excel" ? excelPlanPage(imp, lang) : groupPage(imp, lang));
   });
 
-  web.post("/import/:id/apply", async (req, res, next) => {
+  web.post("/import/:id/apply", managersOnly, async (req, res, next) => {
     const lang = langOf(req);
     const { broker } = req.session;
     const imp = await Imports.loadImport(pool, broker, req.params.id);

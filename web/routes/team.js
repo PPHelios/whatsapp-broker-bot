@@ -13,7 +13,8 @@ const Rules = require("../../domain/leadRules");
 const Notifications = require("../../lib/notifications");
 const Phone = require("../../domain/phone");
 const RateLimit = require("../../lib/rateLimit");
-const { MANAGER_ROLES } = require("../../lib/authz");
+const { MANAGER_ROLES, isAgencyOwner } = require("../../lib/authz");
+const { logOperation } = require("../../lib/db");
 const { html } = require("../html");
 const { tabs } = require("../views/tabs");
 
@@ -204,6 +205,18 @@ function register(web, { pool, page }) {
     if (r.error) return render(req, res, { notice: bad(r.error, lang) }, ["forbidden", "rank"].includes(r.error) ? 403 : 400);
     const notice = html`<p class="card notice ok" role="status">✅ ${r.created ? L(lang, `اتضاف ${r.broker.name}.`, `${r.broker.name} added.`) : L(lang, `${r.broker.name} رجع للفريق.`, `${r.broker.name} is back on the team.`)}${r.noBot ? html` ${errorText("no_bot", lang)}` : ""}</p>`;
     return render(req, res, { notice, link: r.url ? linkCard(r.broker, r.url, req.session.agency.name, lang) : null });
+  });
+
+  // Owner only: move a broker to manager, or a manager back to broker. Logged for the agency.
+  web.post("/team/:id/role", async (req, res) => {
+    const lang = langOf(req);
+    const owner = req.session.broker;
+    if (!isAgencyOwner(owner)) return forbidden(req, res);
+    const r = await Team.changeRole(pool, owner, req.params.id, String(req.body.role || ""));
+    if (r.error) return render(req, res, { notice: bad(r.error, lang) }, r.error === "forbidden" ? 403 : 400);
+    logOperation(pool, { agency_id: owner.agency_id, broker_id: owner.id, operation_type: "team_role_change", metadata: { broker_id: r.broker.id, from: r.from, to: r.to } });
+    const notice = html`<p class="card notice ok" role="status">✅ ${L(lang, `${r.broker.name} بقى ${r.to === "manager" ? "مدير" : "بروكر"}.`, `${r.broker.name} is now a ${r.to}.`)}</p>`;
+    return render(req, res, { notice });
   });
 
   web.post("/team/:id/link", async (req, res) => {
