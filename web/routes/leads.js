@@ -30,6 +30,7 @@ const { html } = require("../html");
 const { icon } = require("../icons");
 const UnitPrivacy = require("../../services/unitPrivacy");
 const Portfolio = require("../../services/privatePortfolio");
+const UnitOwners = require("../../services/unitOwners");
 const V = require("../views/leads");
 const { refineForm } = require("../views/searchForm");
 const Vis = require("../../lib/visibility");
@@ -151,6 +152,10 @@ ${manager
     });
   });
 
+  const ownerLine = async (lead, broker, lang) => {
+    const owner = await UnitOwners.forLead(pool, broker, lead);
+    return owner ? html`<p class="muted" data-lead-owner>🏠 ${L(lang, "هو كمان مالك وحدات", "Also a unit owner")}: <a href="/app/owners/${owner.id}">${owner.name || ""}</a> (${owner.units.length})</p>` : "";
+  };
   const flagButton = (n, lang) => (n === null ? "" : html`<a class="btn secondary small" href="/app/leads/needs-action" data-flag-count="${n}">🙋 ${n}<span class="sr-only"> ${L(lang, "محتاجين مدير", "Needs my action")}</span></a>`);
   const flagBox = (lead, broker, manager, lang, csrf, path) =>
     lead.flagged_at
@@ -380,6 +385,7 @@ ${rows.length
           : ""}</div>` : ""}
 ${V.leadHeader(lead, lang)}
 ${flagBox(lead, broker, manager, lang, req.session.csrf, path)}
+${await ownerLine(lead, broker, lang)}
 ${isAgencyOwner(broker) ? html`<form method="post" action="${path}/portfolio" class="row" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${lead.is_private ? "0" : "1"}"><button type="submit" class="secondary">${lead.is_private ? L(lang, "🔓 رجّعه لكل الفريق", "🔓 Make visible to the team") : L(lang, "🔒 خليه خاص بالمالك", "🔒 Keep private to the owner")}</button>${lead.is_private ? html`<span class="badge">🔒 ${L(lang, "خاص", "Private")}</span>` : ""}</form>` : ""}
 ${manager ? html`<p class="muted" data-merge-hint>🔗 ${L(lang, "نفس العميل متسجل برقم تاني؟", "Same client saved under another number?")} <a href="#merge">${L(lang, "ادمج السجلين", "Merge the two records")}</a></p>` : ""}
 <div class="actions3"><form method="post" action="${path}/contacted">${hidden}<button type="submit" class="secondary">${icon("check", 20)} ${L(lang, "كلمته", "I called")}</button></form>

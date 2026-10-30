@@ -23,6 +23,7 @@ CREATE SEQUENCE IF NOT EXISTS public.payments_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.price_read_log_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.push_subscriptions_id_seq;
 CREATE SEQUENCE IF NOT EXISTS public.unit_access_requests_id_seq;
+CREATE SEQUENCE IF NOT EXISTS public.unit_owner_events_id_seq;
 
 CREATE OR REPLACE FUNCTION public.agencies_set_slug()
  RETURNS trigger
@@ -395,7 +396,8 @@ CREATE TABLE IF NOT EXISTS public.listings (
   stale_asked_at timestamp with time zone,
   stale_hidden_at timestamp with time zone,
   phase_id uuid,
-  is_private boolean DEFAULT false NOT NULL
+  is_private boolean DEFAULT false NOT NULL,
+  owner_id uuid
 );
 
 CREATE TABLE IF NOT EXISTS public.listing_images (
@@ -1222,6 +1224,28 @@ CREATE TABLE IF NOT EXISTS public.credit_grants (
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.unit_owners (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  agency_id uuid NOT NULL,
+  name text,
+  phones text[] DEFAULT '{}'::text[] NOT NULL,
+  notes text,
+  flag text,
+  created_by uuid,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.unit_owner_events (
+  id bigint DEFAULT nextval('unit_owner_events_id_seq'::regclass) NOT NULL,
+  agency_id uuid NOT NULL,
+  owner_id uuid NOT NULL,
+  broker_id uuid,
+  kind text NOT NULL,
+  data jsonb DEFAULT '{}'::jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ad_spend ADD CONSTRAINT ad_spend_pkey PRIMARY KEY (agency_id, month, source);
 ALTER TABLE agencies ADD CONSTRAINT agencies_pkey PRIMARY KEY (id);
 ALTER TABLE app_settings ADD CONSTRAINT app_settings_pkey PRIMARY KEY (key);
@@ -1284,6 +1308,8 @@ ALTER TABLE share_links ADD CONSTRAINT share_links_pkey PRIMARY KEY (token_hash)
 ALTER TABLE telegram_callbacks ADD CONSTRAINT telegram_callbacks_pkey PRIMARY KEY (token);
 ALTER TABLE telegram_link_tokens ADD CONSTRAINT telegram_link_tokens_pkey PRIMARY KEY (token_hash);
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_pkey PRIMARY KEY (id);
+ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_pkey PRIMARY KEY (id);
+ALTER TABLE unit_owners ADD CONSTRAINT unit_owners_pkey PRIMARY KEY (id);
 ALTER TABLE viewings ADD CONSTRAINT viewings_pkey PRIMARY KEY (id);
 ALTER TABLE web_imports ADD CONSTRAINT web_imports_pkey PRIMARY KEY (id);
 ALTER TABLE web_login_tokens ADD CONSTRAINT web_login_tokens_pkey PRIMARY KEY (token_hash);
@@ -1456,6 +1482,7 @@ ALTER TABLE search_vocabulary ADD CONSTRAINT search_vocabulary_kind_check CHECK 
 ALTER TABLE share_links ADD CONSTRAINT share_links_channel_check CHECK ((channel = ANY (ARRAY['whatsapp'::text, 'web'::text])));
 ALTER TABLE share_links ADD CONSTRAINT share_links_lang_check CHECK ((lang = ANY (ARRAY['ar'::text, 'en'::text])));
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'declined'::text])));
+ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_kind_check CHECK ((kind = ANY (ARRAY['created'::text, 'edited'::text, 'note'::text, 'flag'::text, 'unit_linked'::text, 'unit_moved_in'::text, 'unit_moved_out'::text])));
 ALTER TABLE viewings ADD CONSTRAINT viewings_client_note_check CHECK (((client_note IS NULL) OR (length(client_note) <= 300)));
 ALTER TABLE viewings ADD CONSTRAINT viewings_lang_check CHECK ((lang = ANY (ARRAY['ar'::text, 'en'::text])));
 ALTER TABLE viewings ADD CONSTRAINT viewings_place_check CHECK (((place IS NULL) OR (length(place) <= 200)));
@@ -1530,6 +1557,7 @@ ALTER TABLE listings ADD CONSTRAINT fk_listings_agency FOREIGN KEY (agency_id) R
 ALTER TABLE listings ADD CONSTRAINT fk_listings_broker FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE listings ADD CONSTRAINT listings_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE listings ADD CONSTRAINT listings_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id);
+ALTER TABLE listings ADD CONSTRAINT listings_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES unit_owners(id) ON DELETE SET NULL;
 ALTER TABLE listings ADD CONSTRAINT listings_phase_id_fkey FOREIGN KEY (phase_id) REFERENCES project_phases(id) ON DELETE SET NULL;
 ALTER TABLE listings ADD CONSTRAINT listings_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL;
 ALTER TABLE notifications ADD CONSTRAINT notifications_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
@@ -1578,6 +1606,11 @@ ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_agency_id_f
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE CASCADE;
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_decided_by_fkey FOREIGN KEY (decided_by) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE unit_access_requests ADD CONSTRAINT unit_access_requests_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
+ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
+ALTER TABLE unit_owner_events ADD CONSTRAINT unit_owner_events_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES unit_owners(id) ON DELETE CASCADE;
+ALTER TABLE unit_owners ADD CONSTRAINT unit_owners_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
+ALTER TABLE unit_owners ADD CONSTRAINT unit_owners_created_by_fkey FOREIGN KEY (created_by) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE viewings ADD CONSTRAINT viewings_agency_id_fkey FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
 ALTER TABLE viewings ADD CONSTRAINT viewings_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES brokers(id) ON DELETE SET NULL;
 ALTER TABLE viewings ADD CONSTRAINT viewings_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE;
@@ -1652,6 +1685,7 @@ CREATE INDEX listings_agency_code_idx ON public.listings USING btree (agency_id,
 CREATE INDEX listings_agency_status_created_idx ON public.listings USING btree (agency_id, status, created_at DESC);
 CREATE INDEX listings_agency_status_idx ON public.listings USING btree (agency_id, status);
 CREATE INDEX listings_location_keywords_gin ON public.listings USING gin (location_keywords);
+CREATE INDEX listings_owner ON public.listings USING btree (owner_id) WHERE (owner_id IS NOT NULL);
 CREATE INDEX listings_private ON public.listings USING btree (agency_id) WHERE is_private;
 CREATE INDEX listings_search_trgm ON public.listings USING gin (search_text_normalized gin_trgm_ops);
 CREATE INDEX listings_search_trgm_idx ON public.listings USING gin (search_text gin_trgm_ops);
@@ -1692,6 +1726,9 @@ CREATE INDEX idx_share_links_listing ON public.share_links USING btree (agency_i
 CREATE INDEX telegram_callbacks_created_idx ON public.telegram_callbacks USING btree (created_at);
 CREATE INDEX telegram_link_tokens_broker_idx ON public.telegram_link_tokens USING btree (broker_id);
 CREATE INDEX unit_access_requests_listing ON public.unit_access_requests USING btree (agency_id, listing_id, broker_id, created_at DESC);
+CREATE INDEX unit_owner_events_owner ON public.unit_owner_events USING btree (owner_id, created_at DESC, id DESC);
+CREATE INDEX unit_owners_agency ON public.unit_owners USING btree (agency_id, created_at DESC);
+CREATE INDEX unit_owners_phones ON public.unit_owners USING gin (phones);
 CREATE INDEX idx_viewings_lead ON public.viewings USING btree (agency_id, lead_id, created_at DESC);
 CREATE INDEX idx_web_imports_broker ON public.web_imports USING btree (agency_id, broker_id, created_at DESC);
 CREATE INDEX idx_web_login_tokens_broker ON public.web_login_tokens USING btree (broker_id, created_at DESC);
