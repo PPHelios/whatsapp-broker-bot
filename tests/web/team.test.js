@@ -114,3 +114,47 @@ test("4.7: a manager can't deactivate, re-invite or take a link for an admin; no
   for (let i = 0; i < 28; i++) expect((await send(`/app/team/${h.BROKERS.broker.id}/link`)).status).toBe(200);
   expect((await send(`/app/team/${h.BROKERS.broker.id}/link`)).status).toBe(429);
 });
+
+describe("agency owner: managers and role changes", () => {
+  const Team = require("../../services/team");
+  const role = async (id) => (await h.pool.query("SELECT role FROM brokers WHERE id = $1", [id])).rows[0].role;
+
+  test("only the agency owner invites a manager; a manager can still invite a broker", async () => {
+    await h.seedBroker("manager");
+    await h.seedBroker("owner");
+    await h.pool.query("UPDATE brokers SET is_active = false WHERE id = ANY($1)", [[h.BROKERS.colleague.id, h.BROKERS.admin.id]]); // frees seats on the Office plan
+    const manager = await signIn(h, "manager");
+    const asManager = (role) => manager.agent.post("/app/team/invite").set("X-CSRF-Token", manager.csrf).type("form").send({ name: "New One", phone: "01011112222", role });
+    expect((await asManager("manager")).status).toBe(403);
+    expect((await asManager("broker")).status).toBe(200);
+    const owner = await signIn(h, "owner");
+    const res = await owner.agent.post("/app/team/invite").set("X-CSRF-Token", owner.csrf).type("form").send({ name: "Other One", phone: "01033334444", role: "manager" });
+    expect(res.status).toBe(200);
+  });
+
+  test("the agency owner moves a broker to manager and back; managers and brokers cannot; never their own role", async () => {
+    await h.seedBroker("manager");
+    await h.seedBroker("owner");
+    const change = (who, id, to) => who.agent.post(`/app/team/${id}/role`).set("X-CSRF-Token", who.csrf).type("form").send({ role: to });
+    const owner = await signIn(h, "owner");
+    expect((await change(owner, h.BROKERS.colleague.id, "manager")).status).toBe(200);
+    expect(await role(h.BROKERS.colleague.id)).toBe("manager");
+    expect((await change(owner, h.BROKERS.colleague.id, "broker")).status).toBe(200);
+    expect(await role(h.BROKERS.colleague.id)).toBe("broker");
+    expect((await change(owner, h.BROKERS.owner.id, "broker")).status).toBe(400);
+    expect(await role(h.BROKERS.owner.id)).toBe("owner");
+    const manager = await signIn(h, "manager");
+    expect((await change(manager, h.BROKERS.colleague.id, "manager")).status).toBe(403);
+    const broker = await signIn(h, "broker");
+    expect((await change(broker, h.BROKERS.colleague.id, "manager")).status).toBe(403);
+    expect(await role(h.BROKERS.colleague.id)).toBe("broker");
+  });
+
+  test("changeRole refuses other agencies' people and the admin/owner roles", async () => {
+    await h.seedBroker("owner");
+    const owner = h.BROKERS.owner;
+    expect(await Team.changeRole(h.pool, owner, h.BROKERS.rival.id, "manager")).toEqual({ error: "not_found" });
+    expect(await Team.changeRole(h.pool, owner, h.BROKERS.admin.id, "broker")).toEqual({ error: "rank" });
+    expect(await Team.changeRole(h.pool, owner, h.BROKERS.colleague.id, "boss")).toEqual({ error: "role" });
+  });
+});

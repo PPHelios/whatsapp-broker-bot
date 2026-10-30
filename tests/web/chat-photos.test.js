@@ -18,6 +18,7 @@ jest.setTimeout(90000);
 let h;
 beforeEach(async () => {
   h = await createHarness();
+  await h.seedBroker("manager");
   h.Storage.reset();
   h.AI.respond((c) => {
     if (c.operation !== "listing_extraction") return null;
@@ -114,7 +115,7 @@ describe("matching photos to posts", () => {
 describe("chat export zip with photos", () => {
   test("photos are stored with their posts, shown on the review, attached to the new unit with their hash; unused ones are deleted", async () => {
     const zip = await exportZip({ "IMG-20261024-WA0001.jpg": await picture(0.2), "IMG-20261024-WA0002.jpg": await picture(0.5), "IMG-20261024-WA0003.jpg": await picture(0.8) });
-    const { agent, csrf } = await signIn(h, "broker");
+    const { agent, csrf } = await signIn(h, "manager");
     const r = await agent.post("/app/import/group").field("_csrf", csrf).attach("chat", zip, { filename: "chat.zip", contentType: "application/zip" });
     expect(r.status).toBe(303);
     const id = importId(r);
@@ -141,7 +142,7 @@ describe("chat export zip with photos", () => {
     const rival = await h.insertListing({ code: "RIV-1", agency_id: h.AGENCY_B, broker_id: h.BROKERS.rival.id });
     await h.query("INSERT INTO listing_images (listing_id, agency_id, position, url, phash) VALUES ($1, $2, 0, $3, $4::bit(64))", [rival.id, h.AGENCY_B, `${h.Storage.BASE}y.jpg`, await PhotoHash.hashImage(await picture(0.8))]);
     const zip = await exportZip({ "IMG-20261024-WA0001.jpg": await sharp(same).resize(200).jpeg({ quality: 50 }).toBuffer(), "IMG-20261024-WA0003.jpg": await picture(0.8) });
-    const { agent, csrf } = await signIn(h, "broker");
+    const { agent, csrf } = await signIn(h, "manager");
     const id = importId(await agent.post("/app/import/group").field("_csrf", csrf).attach("chat", zip, { filename: "chat.zip", contentType: "application/zip" }));
     await Imports.waitForGroupImport(id);
     const page = (await agent.get(`/app/import/${id}`)).text;
@@ -152,10 +153,10 @@ describe("chat export zip with photos", () => {
   });
 
   test("big exports: the browser uploads to a signed URL under the broker's own path, then the server reads it from storage", async () => {
-    const { agent, csrf } = await signIn(h, "broker");
+    const { agent, csrf } = await signIn(h, "manager");
     const start = await agent.post("/app/import/zip/start").set("X-CSRF-Token", csrf);
     expect(start.status).toBe(200);
-    expect(start.body.path.startsWith(`${h.AGENCY_A}/${h.BROKERS.broker.id}/`)).toBe(true);
+    expect(start.body.path.startsWith(`${h.AGENCY_A}/${h.BROKERS.manager.id}/`)).toBe(true);
     expect(start.body.url).toMatch(/^https:\/\/storage\.test\/upload\//);
     h.Storage.chats.set(start.body.path, await exportZip({ "IMG-20261024-WA0003.jpg": await picture(0.8) }));
 
@@ -169,11 +170,11 @@ describe("chat export zip with photos", () => {
   });
 
   test("someone else's upload path is refused; a file that never arrived or isn't a chat export is reported", async () => {
-    const { agent, csrf } = await signIn(h, "broker");
+    const { agent, csrf } = await signIn(h, "manager");
     const foreign = `${h.AGENCY_B}/${h.BROKERS.rival.id}/1761300000000-0123456789ab.zip`;
     expect((await agent.post("/app/import/zip").set("X-CSRF-Token", csrf).type("form").send({ path: foreign })).status).toBe(400);
 
-    const mine = `${h.AGENCY_A}/${h.BROKERS.broker.id}/1761300000000-0123456789ab.zip`;
+    const mine = `${h.AGENCY_A}/${h.BROKERS.manager.id}/1761300000000-0123456789ab.zip`;
     const missing = importId(await agent.post("/app/import/zip").set("X-CSRF-Token", csrf).type("form").send({ path: mine }));
     await Imports.waitForGroupImport(missing);
     expect((await agent.get(`/app/import/${missing}`)).text).toMatch(/data-import-error="not_found"/);
@@ -187,7 +188,7 @@ describe("chat export zip with photos", () => {
   });
 
   test("the import page offers the zip upload; the CSP has no inline script", async () => {
-    const { agent } = await signIn(h, "broker");
+    const { agent } = await signIn(h, "manager");
     const page = await agent.get("/app/import");
     expect(page.text).toMatch(/data-zip-upload/);
     expect(page.text).not.toMatch(/<script>(?!<\/script>)/);

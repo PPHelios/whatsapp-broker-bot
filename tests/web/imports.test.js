@@ -18,6 +18,7 @@ jest.setTimeout(90000);
 let h;
 beforeEach(async () => {
   h = await createHarness();
+  await h.seedBroker("manager");
 });
 afterAll(closeHarness);
 
@@ -51,9 +52,9 @@ describe("Excel diff import", () => {
     ["NEW-9", "ميفيدا", "فيلا", "بيع", "21 مليون", 300, 4, 4, "", ""] // repeated code
   ];
 
-  test("the preview shows new, changed (from → to), unchanged, invalid and forbidden rows; nothing is written yet", async () => {
+  test("the preview shows new, changed (from → to), unchanged and invalid rows; a manager can change a colleague's unit; nothing is written yet", async () => {
     await seed();
-    const { agent, csrf } = await signIn(h, "broker");
+    const { agent, csrf } = await signIn(h, "manager");
     const r = await upload(agent, csrf, await workbook(rows));
     expect(r.status).toBe(303);
     const page = await agent.get(r.headers.location);
@@ -63,7 +64,8 @@ describe("Excel diff import", () => {
     expect(page.text).toMatch(/data-change="feature_keys"/);
     expect(page.text).toMatch(/data-kind="unchanged"[\s\S]*HP-2/);
     expect(page.text).toMatch(/صف 5[^<]*(الكمبوند|السعر)/);
-    expect(page.text).toMatch(/data-kind="forbidden"[\s\S]*COL-1/);
+    expect(page.text).not.toMatch(/data-kind="forbidden"/);
+    expect(page.text).toMatch(/COL-1/);
     expect(page.text).toMatch(/الكود مكرر في الشيت/);
     expect((await unit("HP-1")).price_value).toBe(8e6);
     expect(await unit("NEW-9")).toBeUndefined();
@@ -72,14 +74,14 @@ describe("Excel diff import", () => {
   test("applying the selected rows creates and updates through the same write path; a plan applies once", async () => {
     await seed();
     const before = await unit("HP-1");
-    const { agent, csrf } = await signIn(h, "broker");
+    const { agent, csrf } = await signIn(h, "manager");
     const id = importId(await upload(agent, csrf, await workbook(rows)));
     const apply = await agent.post(`/app/import/${id}/apply`).set("X-CSRF-Token", csrf).type("form").send("rows=2&rows=4");
     expect(apply.status).toBe(303);
     const hp1 = await unit("HP-1");
     expect(hp1).toMatchObject({ price_value: 8.5e6, feature_keys: ["north_facing", "corner"], version: before.version + 1 });
     expect(new Date(hp1.confirmed_at) >= new Date(before.confirmed_at)).toBe(true);
-    expect(await unit("NEW-9")).toMatchObject({ property_type: "villa", broker_id: h.BROKERS.broker.id, feature_keys: ["roof"] });
+    expect(await unit("NEW-9")).toMatchObject({ property_type: "villa", broker_id: h.BROKERS.manager.id, feature_keys: ["roof"] });
     expect((await unit("COL-1")).price_value).toBe(8.5e6); // untouched
     const view = await agent.get(`/app/import/${id}`);
     expect(view.text).toMatch(/data-result/);
@@ -94,7 +96,7 @@ describe("Excel diff import", () => {
 
   test("a unit changed after the preview is not overwritten (reported as a conflict)", async () => {
     await seed();
-    const { agent, csrf } = await signIn(h, "broker");
+    const { agent, csrf } = await signIn(h, "manager");
     const id = importId(await upload(agent, csrf, await workbook(rows)));
     await h.text("broker", "سعر HP-1 11 مليون");
     await agent.post(`/app/import/${id}/apply`).set("X-CSRF-Token", csrf).type("form").send("rows=2");
@@ -108,7 +110,7 @@ describe("Excel diff import", () => {
     await h.insertListing({ code: "EX-2", property_type: "villa", compound: "Villette", price_value: 2e7, area_value: 300, bedrooms: 4 });
     const listings = await h.query("SELECT * FROM listings WHERE agency_id = $1", [h.AGENCY_A]);
     const exported = await Excel.buildAgencyInventoryWorkbook({ listings, agency: { name: "Agency Alpha" }, broker: { name: "B" } });
-    const { agent, csrf } = await signIn(h, "broker");
+    const { agent, csrf } = await signIn(h, "manager");
     const page = await agent.get((await upload(agent, csrf, exported, "Inventory.xlsx")).headers.location);
     const [{ payload }] = await h.query("SELECT payload FROM web_imports ORDER BY created_at DESC LIMIT 1");
     expect(payload.items.map((i) => [i.code, i.kind])).toEqual([["EX-1", "unchanged"], ["EX-2", "unchanged"]]);
@@ -119,14 +121,14 @@ describe("Excel diff import", () => {
   test("units missing from a full inventory sheet are offered for archiving, never archived on their own", async () => {
     await seed();
     await h.insertListing({ code: "GONE-1" });
-    const { agent, csrf } = await signIn(h, "broker");
+    const { agent, csrf } = await signIn(h, "manager");
     const res = await upload(agent, csrf, await workbook(rows.slice(0, 3)));
     const page = await agent.get(res.headers.location);
     expect(page.text).toMatch(/data-kind="missing"[\s\S]*GONE-1/);
-    expect(page.text).not.toMatch(/value="COL-1"/); // a colleague's unit is not offered
+    expect(page.text).toMatch(/value="COL-1"/); // a manager may archive a colleague's unit too
     await agent.post(`/app/import/${importId(res)}/apply`).set("X-CSRF-Token", csrf).type("form").send("archive=GONE-1&archive=COL-1");
     expect((await unit("GONE-1")).status).toBe("archived");
-    expect((await unit("COL-1")).status).toBe("active");
+    expect((await unit("COL-1")).status).toBe("archived"); // ticked, and a manager may archive it
     expect((await unit("HP-2")).status).toBe("active");
   });
 
@@ -137,14 +139,14 @@ describe("Excel diff import", () => {
     s.addRow([]);
     s.addRow(["Code", "Compound", "Property Type", "Purpose", "Price", "Area (sqm)", "Bedrooms"]);
     s.addRow(["F-1", "Hyde Park", "Apartment", "Sale", { formula: "4000000*2", result: 8000000 }, 150, 3]);
-    const { agent, csrf } = await signIn(h, "broker");
+    const { agent, csrf } = await signIn(h, "manager");
     const res = await upload(agent, csrf, Buffer.from(await wb.xlsx.writeBuffer()));
     const [{ payload }] = await h.query("SELECT payload FROM web_imports WHERE id = $1", [importId(res)]);
     expect(payload.items).toEqual([expect.objectContaining({ row: 4, kind: "new", code: "F-1", fields: expect.objectContaining({ price_value: 8000000 }) })]);
   });
 
   test("files that are not inventory workbooks are refused with a reason", async () => {
-    const { agent, csrf } = await signIn(h, "broker");
+    const { agent, csrf } = await signIn(h, "manager");
     const notXlsx = await upload(agent, csrf, Buffer.from("PK\x03\x04garbage"));
     expect(notXlsx.status).toBe(422);
     expect(notXlsx.text).toMatch(/xlsx/);
@@ -156,11 +158,11 @@ describe("Excel diff import", () => {
 
   test("another broker cannot open or apply my import", async () => {
     await seed();
-    const me = await signIn(h, "broker");
+    const me = await signIn(h, "manager");
     const id = importId(await upload(me.agent, me.csrf, await workbook(rows)));
     const other = await signIn(h, "colleague");
     expect((await other.agent.get(`/app/import/${id}`)).status).toBe(404);
-    expect((await other.agent.post(`/app/import/${id}/apply`).set("X-CSRF-Token", other.csrf).type("form").send("rows=4")).status).toBe(404);
+    expect((await other.agent.post(`/app/import/${id}/apply`).set("X-CSRF-Token", other.csrf).type("form").send("rows=4")).status).toBe(403);
     expect(await unit("NEW-9")).toBeUndefined();
   });
 });
@@ -181,7 +183,7 @@ describe("group import (forwarded posts and chat exports)", () => {
 
   test("P13: two posts of the same unit inside one paste: the later one points at the first and is not ticked", async () => {
     scripted();
-    const { agent, csrf } = await signIn(h, "broker");
+    const { agent, csrf } = await signIn(h, "manager");
     const text = ["شقة للبيع في ميفيدا 200 متر 3 غرف بحري السعر 12 مليون", "ميفيدا شقة 3 غرف 200م بحري 12 مليون للبيع"].join("\n\n\n");
     const id = importId(await agent.post("/app/import/group").field("_csrf", csrf).field("text", text));
     await Imports.waitForGroupImport(id);
@@ -194,7 +196,7 @@ describe("group import (forwarded posts and chat exports)", () => {
   test("pasted posts: listings are read, chatter skipped, duplicates of existing units flagged; selected ones are added", async () => {
     await h.insertListing({ code: "HP-OLD", compound: "Hyde Park", area_value: 152, bedrooms: 3, price_value: 8.4e6 });
     scripted();
-    const { agent, csrf } = await signIn(h, "broker");
+    const { agent, csrf } = await signIn(h, "manager");
     const text = ["شقة للبيع في ميفيدا 200 متر 3 غرف بحري السعر 12 مليون", "شقة في هايد بارك 150م 3 غرف السعر 8.5 مليون", "صباح الخير يا جماعة", "شقة في الرحاب 120 متر غرفتين مقدم مليون"].join("\n\n\n");
     const r = await agent.post("/app/import/group").field("_csrf", csrf).field("text", text);
     expect(r.status).toBe(303);
@@ -212,7 +214,7 @@ describe("group import (forwarded posts and chat exports)", () => {
     await agent.post(`/app/import/${id}/apply`).set("X-CSRF-Token", csrf).type("form").send("rows=0&rows=2");
     const created = await h.query("SELECT * FROM listings WHERE details->>'source' = 'group_import'");
     expect(created).toHaveLength(1);
-    expect(created[0]).toMatchObject({ compound: "ميفيدا", price_value: 12e6, feature_keys: ["north_facing"], broker_id: h.BROKERS.broker.id });
+    expect(created[0]).toMatchObject({ compound: "ميفيدا", price_value: 12e6, feature_keys: ["north_facing"], broker_id: h.BROKERS.manager.id });
   });
 
   test("a zipped WhatsApp chat export: the poster is kept as internal co-broker, never in client copy", async () => {
@@ -220,7 +222,7 @@ describe("group import (forwarded posts and chat exports)", () => {
     const zip = new JSZip();
     zip.file("WhatsApp Chat with Brokers.txt", "[24/10/2026, 10:15:32] Ahmed Broker: شقة للبيع في ميفيدا 200 متر 3 غرف\nالسعر 12 مليون\n[24/10/2026, 10:16:01] Sara: تمام");
     const buf = await zip.generateAsync({ type: "nodebuffer" });
-    const { agent, csrf } = await signIn(h, "broker");
+    const { agent, csrf } = await signIn(h, "manager");
     const r = await agent.post("/app/import/group").field("_csrf", csrf).attach("chat", buf, { filename: "chat.zip", contentType: "application/zip" });
     const id = importId(r);
     await Imports.waitForGroupImport(id);
@@ -234,7 +236,7 @@ describe("group import (forwarded posts and chat exports)", () => {
 
   test("while posts are read the page polls; the AI quota running out is reported per post", async () => {
     h.AI.respond(() => Object.assign(new Error("quota"), { code: "AGENCY_QUOTA_EXCEEDED" }));
-    const { agent, csrf } = await signIn(h, "broker");
+    const { agent, csrf } = await signIn(h, "manager");
     const r = await agent.post("/app/import/group").field("_csrf", csrf).field("text", "شقة للبيع في ميفيدا 200 متر 3 غرف السعر 12 مليون");
     const id = importId(r);
     await Imports.waitForGroupImport(id);
@@ -244,10 +246,19 @@ describe("group import (forwarded posts and chat exports)", () => {
   });
 
   test("nothing that looks like a unit → told so, no AI call", async () => {
-    const { agent, csrf } = await signIn(h, "broker");
+    const { agent, csrf } = await signIn(h, "manager");
     const r = await agent.post("/app/import/group").field("_csrf", csrf).field("text", "صباح الخير\n\n\nمطلوب شقة في التجمع 3 غرف تحت 8 مليون");
     expect(r.status).toBe(422);
     expect(h.AI.calls).toHaveLength(0);
+  });
+});
+
+describe("imports are manager-only", () => {
+  test("a broker is refused on Excel, group posts, chat with photos and apply; single add still works elsewhere", async () => {
+    const { agent, csrf } = await signIn(h, "broker");
+    for (const url of ["/app/import/excel", "/app/import/group", "/app/import/zip/start", "/app/import/zip", "/app/import/00000000-0000-0000-0000-000000000000/apply"]) {
+      expect((await agent.post(url).set("X-CSRF-Token", csrf).type("form").send({})).status).toBe(403);
+    }
   });
 });
 

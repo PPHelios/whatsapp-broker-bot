@@ -26,6 +26,8 @@ const BROKERS = {
   broker: { id: "10000000-0000-0000-0000-000000000001", agency_id: AGENCY_A, phone: "201000000001", role: "broker", name: "Broker One", lang: "ar" },
   colleague: { id: "10000000-0000-0000-0000-000000000002", agency_id: AGENCY_A, phone: "201000000002", role: "broker", name: "Broker Two", lang: "ar" },
   admin: { id: "10000000-0000-0000-0000-000000000003", agency_id: AGENCY_A, phone: "201000000003", role: "admin", name: "Agency Admin", lang: "en" },
+  manager: { id: "10000000-0000-0000-0000-000000000004", agency_id: AGENCY_A, phone: "201000000004", role: "manager", name: "Agency Manager", lang: "ar", lazy: true },
+  owner: { id: "10000000-0000-0000-0000-000000000005", agency_id: AGENCY_A, phone: "201000000005", role: "owner", name: "Agency Owner", lang: "ar", lazy: true },
   rival: { id: "20000000-0000-0000-0000-000000000001", agency_id: AGENCY_B, phone: "201000000009", role: "broker", name: "Rival Broker", lang: "ar" }
 };
 
@@ -36,6 +38,7 @@ async function seed(pool) {
     [AGENCY_A, AGENCY_B]
   );
   for (const b of Object.values(BROKERS)) {
+    if (b.lazy) continue; // seeded on demand by h.seedBroker (keeps the Office plan's five seats free)
     await pool.query(
       // Quiet hours off by default so alerts don't depend on the time of day the suite runs.
       `INSERT INTO brokers (id, agency_id, phone_number, name, role, is_active, preferred_lang, notify_prefs)
@@ -187,6 +190,16 @@ async function createHarness() {
     tgTap: (who, data) => {
       const id = tgUser(who);
       return tgUpdate({ callback_query: { id: `cb${++tgSeq}`, from: { id }, message: { message_id: 1, chat: { id, type: "private" } }, data } });
+    },
+    /** Seeds a lazy fixture (a manager or the agency owner) in its agency. */
+    async seedBroker(who) {
+      const b = BROKERS[who];
+      await pool.query(
+        `INSERT INTO brokers (id, agency_id, phone_number, name, role, is_active, preferred_lang, notify_prefs)
+         VALUES ($1, $2, $3, $4, $5, true, $6, '{"quiet":{"enabled":false}}') ON CONFLICT (id) DO NOTHING`,
+        [b.id, b.agency_id, b.phone, b.name, b.role, b.lang]
+      );
+      return b;
     },
     /** Links seeded brokers' Telegram accounts directly in the database. */
     async tgLink(...whos) {
