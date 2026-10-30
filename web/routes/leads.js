@@ -22,7 +22,7 @@ const Intake = require("../../domain/leadIntake");
 const Phone = require("../../domain/phone");
 const SearchLink = require("../../domain/searchLink");
 const Q = require("../../domain/searchQuery");
-const { isManager, isAgencyOwner } = require("../../lib/authz");
+const { isManager, isAgencyOwner, canEditLead } = require("../../lib/authz");
 const { logOperation } = require("../../lib/db");
 const Session = require("../session");
 const { uploads, VOICE } = require("../uploads");
@@ -123,6 +123,7 @@ function register(web, { pool, page }) {
 
   /* The lead board: one column per stage, swipe across; drag a card (or pick a stage) to move it. */
   web.get("/leads/board", async (req, res) => {
+    const flags = await Leads.flagCount(pool, req.session.broker);
     const lang = langOf(req);
     const { broker } = req.session;
     const manager = isManager(broker);
@@ -140,7 +141,7 @@ function register(web, { pool, page }) {
     return page(req, res, {
       title: L(lang, "لوحة العملاء", "Lead board"),
       nav: "leads",
-      body: html`<div class="row between"><h1>${L(lang, "لوحة العملاء", "Lead board")}</h1><a class="btn secondary small" href="/app/leads">${L(lang, "القايمة", "List")}</a></div>
+      body: html`<div class="row between"><h1>${L(lang, "لوحة العملاء", "Lead board")}</h1>${flagButton(flags, lang)}<a class="btn secondary small" href="/app/leads">${L(lang, "القايمة", "List")}</a></div>
 ${moved ? html`<p class="card notice ok" role="status">✅ ${L(lang, `${moved} اتنقل.`, `${moved} moved.`)}${req.query.undo ? html` <a href="/app/leads/${moved}">${L(lang, "افتحه للتراجع", "Open it to undo")}</a>` : ""}</p>` : ""}
 ${manager
   ? html`<form method="get" action="/app/leads/board"><select name="broker" data-autosubmit aria-label="${L(lang, "البروكر", "Broker")}"><option value="">${L(lang, "كل الفريق", "Whole team")}</option>${isAgencyOwner(broker) ? html`<option value="me"${req.query.broker === "me" ? html` selected` : ""}>${L(lang, "المسلّمة ليّ", "Assigned to me")}</option>` : ""}<option value="none"${brokerId === "none" ? html` selected` : ""}>${L(lang, "مش متسلم", "Unassigned")}</option>${brokers.map((b) => html`<option value="${b.id}"${b.id === brokerId && req.query.broker !== "me" ? html` selected` : ""}>${b.name}</option>`)}</select><noscript><button type="submit">${L(lang, "تطبيق", "Apply")}</button></noscript></form>`
@@ -150,7 +151,34 @@ ${manager
     });
   });
 
+  const flagButton = (n, lang) => (n === null ? "" : html`<a class="btn secondary small" href="/app/leads/needs-action" data-flag-count="${n}">🙋 ${n}<span class="sr-only"> ${L(lang, "محتاجين مدير", "Needs my action")}</span></a>`);
+  const flagBox = (lead, broker, manager, lang, csrf, path) =>
+    lead.flagged_at
+      ? html`<section class="card notice" data-flag><p>🙋 <b>${L(lang, "محتاج مدير", "Needs manager")}</b> · ${lead.flag_note}</p>${manager
+          ? html`<form method="post" action="${path}/flag/handle" class="stack"><input type="hidden" name="_csrf" value="${csrf}"><input type="hidden" name="version" value="${lead.version}"><label>${L(lang, "رد (اختياري)", "Reply (optional)")} <input name="reply" maxlength="500"></label><button type="submit">${L(lang, "✅ اتعالج", "✅ Mark handled")}</button></form>`
+          : ""}</section>`
+      : canEditLead(broker, lead)
+        ? html`<details class="card"><summary>🙋 ${L(lang, "محتاج مدير", "Needs manager")}</summary><form method="post" action="${path}/flag" class="stack"><input type="hidden" name="_csrf" value="${csrf}"><input type="hidden" name="version" value="${lead.version}"><label>${L(lang, "محتاج إيه؟", "What do you need?")} <textarea name="text" rows="2" maxlength="1000" required></textarea></label><button type="submit" class="secondary">${L(lang, "ابعت للمدير", "Tell the manager")}</button></form></details>`
+        : "";
+
+  // Managers: the leads brokers flagged, oldest first.
+  web.get("/leads/needs-action", async (req, res, next) => {
+    const { broker } = req.session;
+    const rows = await Leads.openFlags(pool, broker);
+    if (!rows) return next();
+    const lang = langOf(req);
+    return page(req, res, {
+      title: L(lang, "محتاجين مدير", "Needs my action"),
+      nav: "leads",
+      body: html`<h1>🙋 ${L(lang, "محتاجين مدير", "Needs my action")} (${rows.length})</h1>
+${rows.length
+  ? html`<ul class="stack" data-flags>${rows.map((r) => html`<li class="card" data-lead="${Card.refLabel(r.ref)}"><p><b>${Card.displayName(r, lang)}</b> <span class="chip" dir="ltr">${Card.refLabel(r.ref)}</span></p><p>${r.flag_note}</p><p class="muted small">${r.flagged_by_name || ""} · ${V.when(r.flagged_at, lang)}</p><div class="row"><a class="btn secondary" href="${V.leadPath(r)}">${L(lang, "افتح العميل", "Open lead")}</a></div><form method="post" action="${V.leadPath(r)}/flag/handle" class="row"><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="version" value="${r.version}"><input name="reply" maxlength="500" placeholder="${L(lang, "رد (اختياري)", "Reply (optional)")}"><button type="submit">${L(lang, "✅ اتعالج", "✅ Mark handled")}</button></form></li>`)}</ul>`
+  : html`<p class="muted">${L(lang, "مفيش حاجة مستنياك.", "Nothing is waiting on you.")}</p>`}`
+    });
+  });
+
   web.get("/leads", async (req, res) => {
+    const flags = await Leads.flagCount(pool, req.session.broker);
     const lang = langOf(req);
     const { broker } = req.session;
     const manager = isManager(broker);
@@ -185,7 +213,7 @@ ${manager
     return page(req, res, {
       title: L(lang, "العملاء", "Leads"),
       nav: "leads",
-      body: html`<div class="row between"><h1>${L(lang, "العملاء", "Leads")}</h1><span class="row"><a class="btn secondary small" href="/app/leads/board" aria-label="${L(lang, "لوحة العملاء", "Lead board")}">${icon("board", 18)}</a><a class="btn secondary small" href="/app/leads/import" aria-label="${L(lang, "استيراد من ملف", "Import a file")}">${icon("import", 18)}</a><a class="btn small" href="/app/leads/new">${icon("plus", 18)} ${L(lang, "عميل جديد", "New lead")}</a></span></div>
+      body: html`<div class="row between"><h1>${L(lang, "العملاء", "Leads")}</h1><span class="row">${flagButton(flags, lang)}<a class="btn secondary small" href="/app/leads/board" aria-label="${L(lang, "لوحة العملاء", "Lead board")}">${icon("board", 18)}</a><a class="btn secondary small" href="/app/leads/import" aria-label="${L(lang, "استيراد من ملف", "Import a file")}">${icon("import", 18)}</a><a class="btn small" href="/app/leads/new">${icon("plus", 18)} ${L(lang, "عميل جديد", "New lead")}</a></span></div>
 ${/^L-\d{4,6}$/.test(String(req.query.erased || "")) ? html`<p class="card notice" role="status">🔒 ${L(lang, `العميل ${req.query.erased} اتمسح نهائياً.`, `Client ${req.query.erased} was erased for good.`)}</p>` : ""}
 <form method="get" action="/app/leads" class="stack">
   <input type="hidden" name="tab" value="${tab}">
@@ -351,6 +379,7 @@ ${rows.length
           ? html` <form method="post" action="${path}/undo" class="inline"><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="event" value="${undoEvent}"><button type="submit" class="link">↩️ ${L(lang, "تراجع", "Undo")}</button></form>`
           : ""}</div>` : ""}
 ${V.leadHeader(lead, lang)}
+${flagBox(lead, broker, manager, lang, req.session.csrf, path)}
 ${isAgencyOwner(broker) ? html`<form method="post" action="${path}/portfolio" class="row" data-portfolio><input type="hidden" name="_csrf" value="${req.session.csrf}"><input type="hidden" name="value" value="${lead.is_private ? "0" : "1"}"><button type="submit" class="secondary">${lead.is_private ? L(lang, "🔓 رجّعه لكل الفريق", "🔓 Make visible to the team") : L(lang, "🔒 خليه خاص بالمالك", "🔒 Keep private to the owner")}</button>${lead.is_private ? html`<span class="badge">🔒 ${L(lang, "خاص", "Private")}</span>` : ""}</form>` : ""}
 ${manager ? html`<p class="muted" data-merge-hint>🔗 ${L(lang, "نفس العميل متسجل برقم تاني؟", "Same client saved under another number?")} <a href="#merge">${L(lang, "ادمج السجلين", "Merge the two records")}</a></p>` : ""}
 <div class="actions3"><form method="post" action="${path}/contacted">${hidden}<button type="submit" class="secondary">${icon("check", 20)} ${L(lang, "كلمته", "I called")}</button></form>
@@ -490,6 +519,8 @@ ${V.bottomBar(lead, lang, broker.name)}`
       merged: L(lang, "🔗 السجلين اتدمجوا في سجل واحد.", "🔗 The two records are now one."),
       request: L(lang, "🔎 الطلب اتحفظ؛ هتتبلغ بالوحدات الجديدة اللي تناسبه.", "🔎 Request saved; you'll hear about new units that fit."),
       request_removed: L(lang, "🗑️ الطلب اتمسح.", "🗑️ Request removed."),
+      flag: L(lang, "🙋 المدير اتبلّغ.", "🙋 The manager has been told."),
+      flag_handled: L(lang, "✅ اتعلّم إنه اتعالج.", "✅ Marked as handled."),
       viewing: L(lang, "✅ المعاينة اتحفظت. الرقم ده أرضي، ابعت اللينك بنفسك.", "✅ Viewing saved. This number is a landline; send the link yourself.")
     };
     const key = req.query.saved ? "saved" : req.query.known ? "known" : req.query.done;
@@ -520,6 +551,8 @@ ${V.bottomBar(lead, lang, broker.name)}`
         past: L(lang, "الميعاد ده عدّى؛ اختار ميعاد جاي.", "That time has passed; choose a future one."),
         unit_not_found: L(lang, "كود الوحدة مش موجود.", "Unit code not found."),
         note_empty: L(lang, "الملاحظة فاضية.", "The note is empty."),
+        flag_empty: L(lang, "اكتب محتاج إيه من المدير.", "Write what you need from the manager."),
+        already_flagged: L(lang, "العميل ده مبلّغ عنه فعلاً.", "This lead is already flagged."),
         no_open_follow_up: L(lang, "مفيش متابعة مفتوحة.", "No open follow-up."),
         assignee: L(lang, "الوسيط مش موجود.", "Unknown broker."),
       assignee_away: L(lang, "الوسيط ده في إجازة ومش بياخد عملاء جداد.", "This broker is away and takes no new leads."),
@@ -537,6 +570,8 @@ ${V.bottomBar(lead, lang, broker.name)}`
   }
 
   const actor = (req) => req.session.broker;
+  write("flag", (req, lead, version) => Leads.flagForManager(pool, actor(req), lead.id, req.body.text, { version }), "flag");
+  write("flag/handle", (req, lead, version) => Leads.handleFlag(pool, actor(req), lead.id, req.body.reply, { version }), "flag_handled");
   write("stage", (req, lead, version) => Leads.setStage(pool, actor(req), lead.id, { stage: req.body.stage, lostReason: req.body.lost_reason, version }), "stage");
   write(
     "follow-up",
