@@ -49,14 +49,15 @@ test("each main screen has its '?' tip, and the footer offers a person when supp
   const search = await agent.get("/app/search?lang=en");
   expect(search.text).toContain('data-tip="search"');
   expect(search.text).not.toContain("data-support");
-  process.env.SUPPORT_WHATSAPP = "+20 100 000 0000";
+  process.env.SUPPORT_TELEGRAM = "@wehdat_support";
   require("../../config").resetConfig();
   try {
     const page = await agent.get("/app/leads?lang=en");
     expect(page.text).toContain('data-tip="leads"');
-    expect(page.text).toMatch(/href="https:\/\/wa\.me\/201000000000\?text=/);
+    expect(page.text).toContain('href="https://t.me/wehdat_support"');
+    expect(page.text).not.toMatch(/wa\.me|api\.whatsapp/);
   } finally {
-    delete process.env.SUPPORT_WHATSAPP;
+    delete process.env.SUPPORT_TELEGRAM;
     require("../../config").resetConfig();
   }
 });

@@ -1603,7 +1603,7 @@
       "closeWelcome": ["pool", "broker", "now"],
       "firstHint": ["db", "broker", "kind", "now"],
       "telegramLink": ["pool", "broker"],
-      "supportUrl": ["broker", "lang"],
+      "supportUrl": [],
       "progressOf": ["db", "broker"],
       "nudgeDue": ["pool", "params"],
       "nudgeJob": [],
