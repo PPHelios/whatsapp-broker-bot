@@ -43,7 +43,8 @@ const FULL = {
   delivery_year: "2027",
   delivery_quarter: "3",
   owner_name: "Mr Owner",
-  owner_phone: "01011112222"
+  owner_phone: "01011112222",
+  owner_lead_confirm: "on"
 };
 
 /** Multipart POST with fields (arrays repeat) and optional files. */
