@@ -36,6 +36,23 @@ describe("payment plan years", () => {
     expect(L.decodeFilters(L.encodeFilters(f)).payment_years).toBe(8);
   });
 
+  test("a down payment percent is a filter, not a place word", () => {
+    for (const q of ["عايز شقه مقدم ١٠٪", "شقة مقدم 10%", "apartment 10% down"]) {
+      const parsed = Q.fallbackParse(q);
+      expect(parsed.filters.payment_down_pct).toBe(10);
+      expect(parsed.filters.place_terms).toEqual([]);
+      const { sql, params } = buildSearchQuery("agency-1", parsed);
+      expect(sql).toContain("(p->>'down_payment_pct')::numeric = $");
+      expect(params).toContain(10);
+    }
+  });
+
+  test("a down payment amount still reads as an amount", () => {
+    const f = Q.fallbackParse("شقة مقدم 500 الف").filters;
+    expect(f.max_down_payment).toBe(500000);
+    expect(f.payment_down_pct).toBeNull();
+  });
+
   test("an empty filter set has no plan years", () => {
     expect(emptyFilters().payment_years).toBeNull();
   });

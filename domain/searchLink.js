@@ -9,7 +9,7 @@ const Features = require("./features");
 const { PROPERTY_TYPES } = require("./fieldRules");
 
 const MAX_TOKEN = 2000;
-const NUMBER_KEYS = ["price_min", "price_max", "area_min", "area_max", "bedrooms_min", "bedrooms_max", "bathrooms_min", "floor_min", "floor_max", "delivery_by_year", "payment_years", "max_down_payment", "max_installment"];
+const NUMBER_KEYS = ["price_min", "price_max", "area_min", "area_max", "bedrooms_min", "bedrooms_max", "bathrooms_min", "floor_min", "floor_max", "delivery_by_year", "payment_years", "payment_down_pct", "max_down_payment", "max_installment"];
 const FLAG_KEYS = ["delivery_ready", "payment_cash", "payment_installments"];
 const FINISHING = ["core_and_shell", "semi_finished", "fully_finished", "super_lux", "ultra_super_lux"];
 const FURNISHING = ["furnished", "semi_furnished", "unfurnished"];

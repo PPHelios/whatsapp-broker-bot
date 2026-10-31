@@ -29,6 +29,11 @@ const nonNegInt = (v) => {
   return n !== null && n >= 0 ? Math.round(n) : null;
 };
 const uniq = (a) => [...new Set(a)];
+/** Down payment as a percent of the price (a plan's down_payment_pct): 0 to 100, else null. */
+const downPct = (v) => {
+  const n = num(v);
+  return n !== null && n >= 0 && n <= 100 ? n : null;
+};
 /** Years of a payment plan: a whole number from 1 to 30, else null. */
 const planYears = (v) => {
   const n = num(v);
@@ -64,6 +69,7 @@ function emptyFilters() {
     payment_cash: null,
     payment_installments: null,
     payment_years: null,
+    payment_down_pct: null,
     max_down_payment: null,
     max_installment: null,
     features: [],
@@ -179,6 +185,7 @@ function normalizeAiSearch(raw) {
     payment_cash: payment.cash === true ? true : null,
     payment_installments: payment.installments === true ? true : null,
     payment_years: planYears(payment.years ?? f.payment_years),
+    payment_down_pct: downPct(payment.down_pct),
     max_down_payment: pos(payment.max_down_payment ?? f.down_payment_max),
     max_installment: pos(payment.max_installment ?? f.installment_max),
     features: [...keys, ...legacyFlags],
@@ -201,7 +208,7 @@ const STOP = new Set(
   [
     "في", "فى", "من", "الى", "إلى", "علي", "على", "عن", "و", "مع", "عايز", "عاوز", "عايزه", "محتاج", "دورلي", "ورني", "وريني",
     "فيه", "فيها", "عندنا", "عندك", "عندي", "بحث", "ابحث", "لي", "لو", "سمحت", "بس", "حاجة", "حاجه", "وحدة", "وحده", "كمبوند",
-    "سنين", "سنه", "سنة", "سنوات", "سنتين", "years", "year", "yrs",
+    "سنين", "سنه", "سنة", "سنوات", "سنتين", "years", "year", "yrs", "مقدم", "دفعه", "اولي", "down", "payment",
     "the", "a", "an", "in", "for", "at", "with", "show", "me", "find", "search", "i", "want", "need", "looking", "unit", "units",
     "compound", "please", "any", "some", "and", "or", "of", "to", "is", "near", "around", "قريب", "جنب"
   ].map(normalizeSearch)
@@ -485,6 +492,19 @@ function fallbackParse(text) {
     hay = c.hay;
   }
 
+  // Down payment as a percent: "مقدم ١٠٪" / "10% down". The sign is dropped by the normalizer, so the number must stand
+  // alone (no money unit, which the rules above already took) and be at most 100.
+  c = consume(hay, / (مقدم|دفعه اولي|دفعه مقدمه|down payment|downpayment|down) (\d+(?:\.\d+)?) /);
+  if (c.m && downPct(c.m[2]) !== null) {
+    f.payment_down_pct = downPct(c.m[2]);
+    hay = c.hay;
+  }
+  c = consume(hay, / (\d+(?:\.\d+)?) (?:down) /);
+  if (c.m && downPct(c.m[1]) !== null) {
+    f.payment_down_pct = downPct(c.m[1]);
+    hay = c.hay;
+  }
+
   // Property types.
   for (const m of TYPE_MATCHERS) {
     if (hay.includes(` ${m.term} `)) {
@@ -528,7 +548,8 @@ function hasAnyFilter(parsed) {
       f.delivery_ready ||
       f.payment_cash ||
       f.payment_installments ||
-      f.payment_years !== null && f.payment_years !== undefined
+      (f.payment_years !== null && f.payment_years !== undefined) ||
+      (f.payment_down_pct !== null && f.payment_down_pct !== undefined)
   );
 }
 
