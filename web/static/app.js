@@ -443,7 +443,13 @@
     });
     var home = location.pathname === "/app/" || location.pathname === "/app";
     post("web_app_setup_back_button", { is_visible: !home });
-    handlers.back_button_pressed = function () { if (history.length > 1) history.back(); else location.href = "/app/"; };
+    // Telegram's native Back: go to the page's own ← Back link (same as tapping it). iPhone's history.back() can do
+    // nothing inside Telegram, so it is only the fallback for a page with no such link.
+    handlers.back_button_pressed = function () {
+      var link = document.querySelector("a[data-back]");
+      if (link && link.href && new URL(link.href).origin === location.origin && link.href !== location.href) { location.href = link.href; return; }
+      if (history.length > 1) history.back(); else location.href = "/app/";
+    };
     function shown(el) { return el && !el.disabled && !el.closest("[hidden]"); }
     function mainTarget() {
       var all = document.querySelectorAll("[data-tg-main]");
