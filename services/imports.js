@@ -322,29 +322,19 @@ async function processGroup(pool, broker, id, { AI, ctx, lang = "ar" }) {
 
 /**
  * Saves the posts and starts extracting them in the background. Returns the import id.
- * With prepare (a chat export zip), the posts come from it first: prepare(id) → { posts } or { error }, stored on the
- * import as failed so the page can say why.
+ * Posts may carry photos [{ url, hash }]; the match page adds them one by one after the import starts.
  */
-async function startGroupImport(pool, broker, posts, { AI, ctx, lang = "ar", filename = null, prepare = null, cleanup = null }) {
-  const id = await savePlan(pool, broker, "group", { posts, results: [], ...(prepare ? { stage: "photos" } : {}) }, { filename, status: "processing" });
+async function startGroupImport(pool, broker, posts, { AI, ctx, lang = "ar", filename = null }) {
+  const id = await savePlan(pool, broker, "group", { posts, results: [] }, { filename, status: "processing" });
   const job = new Promise((resolve) => setImmediate(resolve))
     .then(async () => {
-      if (prepare) {
-        const ready = await prepare(id);
-        if (ready.error) {
-          await pool.query("UPDATE web_imports SET status = 'failed', payload = payload || $2::jsonb WHERE id = $1", [id, JSON.stringify({ error: ready.error, stage: null })]);
-          return;
-        }
-        await pool.query("UPDATE web_imports SET payload = payload || $2::jsonb WHERE id = $1", [id, JSON.stringify({ posts: ready.posts, stage: null })]);
-      }
       await processGroup(pool, broker, id, { AI, ctx, lang });
     })
     .catch(async (err) => {
       console.error("Group import failed:", err.message);
       await pool.query("UPDATE web_imports SET status = 'failed' WHERE id = $1", [id]).catch(() => {});
     })
-    .finally(async () => {
-      if (cleanup) await Promise.resolve(cleanup()).catch(() => {});
+    .finally(() => {
       jobs.delete(id);
     });
   jobs.set(id, job);

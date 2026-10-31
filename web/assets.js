@@ -22,6 +22,11 @@ const FILES = {
   "app.css": path.join(STATIC_DIR, "app.css"),
   "app.js": path.join(STATIC_DIR, "app.js"),
   "voice.js": path.join(STATIC_DIR, "voice.js"),
+  // Match photos (managers): the chat parser and matcher are the server's own pure files, run in the browser too.
+  "zipread.js": path.join(STATIC_DIR, "zipread.js"),
+  "chatparse.js": path.join(__dirname, "..", "domain", "chatParse.js"),
+  "chatmatch.js": path.join(__dirname, "..", "domain", "chatMatch.js"),
+  "chatphotos.js": path.join(STATIC_DIR, "chatphotos.js"),
   "htmx.min.js": require.resolve("htmx.org/dist/htmx.min.js"),
   // Cairo, self-hosted (CSP font-src 'self'): regular and bold; 600 renders with the bold face.
   "fonts/cairo-400.woff2": path.join(STATIC_DIR, "fonts", "cairo-400.woff2"),
