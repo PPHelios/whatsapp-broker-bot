@@ -324,9 +324,10 @@ function fallbackParse(text) {
   c = consume(hay, / (للبيع|بيع|for sale|sale) /);
   if (c.m && !f.listing_type) f.listing_type = "sale";
   hay = c.hay;
-  if (/ (ريسيل|resale) /.test(hay)) f.market = "resale";
+  // "تكملة اقساط" (taking over the rest of someone's installments) is a resale unit.
+  if (/ (ريسيل|resale|تكملة|تكمله|تكملة اقساط|تكمله اقساط) /.test(hay)) f.market = "resale";
   if (/ (برايمري|primary|من المطور|developer) /.test(hay)) f.market = "primary";
-  hay = hay.replace(/ (ريسيل|resale|برايمري|primary|من المطور) /g, " ");
+  hay = hay.replace(/ (ريسيل|resale|برايمري|primary|من المطور|تكملة|تكمله) /g, " ");
 
   // Bedrooms / bathrooms (digits or Egyptian number words).
   const n = (s) => (/^\d+$/.test(s) ? Number(s) : AR_NUMBER_WORDS[s] ?? null);

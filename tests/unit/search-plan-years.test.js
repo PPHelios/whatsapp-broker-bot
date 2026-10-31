@@ -53,6 +53,13 @@ describe("payment plan years", () => {
     expect(f.payment_down_pct).toBeNull();
   });
 
+  test("taking over remaining installments reads as a resale unit, not a place word", () => {
+    const f = Q.fallbackParse("عايز شقه تكملة اقساط في التجمع").filters;
+    expect(f.market).toBe("resale");
+    expect(f.payment_installments).toBe(true);
+    expect(f.place_terms).toEqual([]);
+  });
+
   test("an empty filter set has no plan years", () => {
     expect(emptyFilters().payment_years).toBeNull();
   });
