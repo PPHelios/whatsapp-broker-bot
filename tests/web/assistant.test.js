@@ -153,3 +153,13 @@ test("a manager adds the missing information to a project or unit; the assistant
   expect((await h.query("SELECT details FROM listings WHERE code = 'BD-1'"))[0].details.notes).toBe("Parking included");
   expect(await Assistant.addInfo(h.pool, admin, { unit: "NOPE-1", text: "x" })).toEqual({ error: "not_found" });
 });
+
+describe("answer formatting", () => {
+  test("the prompt asks for a short chat layout and leaves the dates to the footer", () => {
+    const p = A.prompt("امتى استلام بادية؟", [{ title: "Project Badya", as_of: "2026-10-27", text: "Badya by Palm Hills." }], { lang: "ar", today: "2026-10-31" });
+    expect(p).toMatch(/plain text only/);
+    expect(p).toMatch(/each on its own line starting with "• "/);
+    expect(p).toMatch(/Do not write the data dates in the answer/);
+    expect(p).not.toMatch(/mention the date of its data block/);
+  });
+});
