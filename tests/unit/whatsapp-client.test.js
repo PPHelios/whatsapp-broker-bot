@@ -13,6 +13,8 @@ describe("Graph API retry policy (plan Part 2 D)", () => {
     jest.resetModules();
     process.env.WHATSAPP_ACCESS_TOKEN = "token";
     process.env.WHATSAPP_PHONE_NUMBER_ID = "123";
+    // These tests cover the transport (retries, drops), not who may be messaged: the owner-only check has its own tests.
+    process.env.WHATSAPP_OWNER_ONLY = "false";
     WA = require("../../lib/whatsapp");
     calls = 0;
   });
@@ -64,5 +66,28 @@ describe("Single outbound path (plan #7)", () => {
       /WA\.send[A-Za-z]+\(/.test(fs.readFileSync(path.join(root, f), "utf8"))
     );
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("owner-only outbound guard (lib/waOwnerOnly.js)", () => {
+  const realFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = realFetch;
+    delete process.env.WHATSAPP_OWNER_ONLY;
+    delete process.env.WHATSAPP_ALLOWED_NUMBER;
+  });
+
+  test("nothing reaches the Graph API for a number other than the owner's", async () => {
+    process.env.WHATSAPP_ACCESS_TOKEN = "token";
+    process.env.WHATSAPP_PHONE_NUMBER_ID = "123";
+    process.env.WHATSAPP_OWNER_ONLY = "true";
+    process.env.WHATSAPP_ALLOWED_NUMBER = "201055881114";
+    jest.resetModules();
+    const WA = require("../../lib/whatsapp");
+    global.fetch = jest.fn(async () => ({ ok: true, status: 200, json: async () => ({ messages: [{ id: "w" }] }) }));
+    expect(await WA.sendWhatsAppText("201000000001", "hi")).toBeNull();
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect((await WA.sendWhatsAppText("+20 105 588 1114", "hi"))).not.toBeNull();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 });
