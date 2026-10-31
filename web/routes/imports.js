@@ -12,6 +12,7 @@ const Sheets = require("../../lib/sheets");
 const { logOperation } = require("../../lib/db");
 const { isManager } = require("../../lib/authz");
 const Imports = require("../../services/imports");
+const Edits = require("../../lib/edits");
 const Plans = require("../../domain/plans");
 const ChatPhotos = require("../../services/chatPhotos");
 const Chat = require("../../domain/chatExport");
@@ -53,34 +54,42 @@ const KIND_LABEL = {
 };
 
 function excelPlanPage(imp, lang) {
-  const { items, missing, counts } = imp.payload;
+  const { items, counts, rows: sheetRows, columns } = imp.payload;
   const applied = imp.status !== "ready";
   const section = (kind, body) => {
     const rows = items.filter((i) => i.kind === kind);
     if (!rows.length) return "";
     return html`<section class="card" data-kind="${kind}"><h2>${L(lang, KIND_LABEL[kind][0], KIND_LABEL[kind][1])} (${rows.length})</h2>${body(rows)}</section>`;
   };
+  // Editing is per row: a small form outside the apply form (forms cannot nest), its inputs joined by the form attribute.
+  const canEdit = !applied && Array.isArray(sheetRows) && Array.isArray(columns) && columns.length > 0;
+  const rowCells = (n) => sheetRows?.find((r) => r.rowNumber === n)?.cells || {};
+  const editor = (i) =>
+    canEdit
+      ? html`<details class="edit-row"><summary>✏️ ${L(lang, "تعديل", "Edit")}</summary>
+  <div class="stack">${columns.map((k) => html`<label>${(Edits.FIELD_LABELS[k] || [k, k])[lang === "en" ? 1 : 0]}<input form="edit-${i.row}" name="c_${k}" value="${rowCells(i.row)[k] ?? ""}" maxlength="600"></label>`)}
+  <button type="submit" form="edit-${i.row}" class="secondary">${L(lang, "احفظ التعديل وراجع تاني", "Save the edit and review again")}</button></div></details>`
+      : "";
+  const editForms = canEdit
+    ? items.filter((i) => ["new", "changed", "invalid"].includes(i.kind)).map((i) => html`<form method="post" action="/app/import/${imp.id}/edit/${i.row}" id="edit-${i.row}"></form>`)
+    : "";
   const box = (i, on = true) => (applied ? "" : html`<input type="checkbox" name="rows" value="${i.row}"${on ? raw(" checked") : ""}>`);
   return html`<h1>📥 ${L(lang, "مراجعة الاستيراد", "Review the import")} <span class="muted">${imp.filename || ""}</span></h1>
 <p class="muted">${Object.entries(counts).map(([k, n]) => `${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1])}: ${n}`).join(" · ")}</p>
 ${imp.result ? resultCard(imp.result, lang) : ""}
 <form method="post" action="/app/import/${imp.id}/apply" class="stack">
 ${section("new", (rows) => html`<table><thead><tr><th></th><th>${L(lang, "صف", "Row")}</th><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "الوحدة", "Unit")}</th></tr></thead><tbody>${rows.map(
-  (i) => html`<tr data-row="${i.row}"><td>${box(i)}</td><td>${i.row}</td><td>${i.code || L(lang, "(تلقائي)", "(auto)")}</td><td>${stripMarkdown(Describe.compactLine({ ...i.fields, code: "" }, lang).replace(/^``\s*·\s*/, ""))}${i.warnings.length ? html`<div class="warn muted">${i.warnings.join(" · ")}</div>` : ""}</td></tr>`
+  (i) => html`<tr data-row="${i.row}"><td>${box(i)}</td><td>${i.row}</td><td>${i.code || L(lang, "(تلقائي)", "(auto)")}</td><td>${stripMarkdown(Describe.compactLine({ ...i.fields, code: "" }, lang).replace(/^``\s*·\s*/, ""))}${i.warnings.length ? html`<div class="warn muted">${i.warnings.join(" · ")}</div>` : ""}${editor(i)}</td></tr>`
 )}</tbody></table>`)}
 ${section("changed", (rows) => html`<table><thead><tr><th></th><th>${L(lang, "صف", "Row")}</th><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "التغيير", "Change")}</th></tr></thead><tbody>${rows.map(
-  (i) => html`<tr data-row="${i.row}"><td>${box(i)}</td><td>${i.row}</td><td>${i.code}</td><td><ul>${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ← <ins>${c.to}</ins></li>`)}</ul></td></tr>`
+  (i) => html`<tr data-row="${i.row}"><td>${box(i)}</td><td>${i.row}</td><td>${i.code}</td><td><ul>${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ← <ins>${c.to}</ins></li>`)}</ul>${editor(i)}</td></tr>`
 )}</tbody></table>`)}
-${section("invalid", (rows) => html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${L(lang, "صف", "Row")} ${i.row}${i.code ? ` (${i.code})` : ""}: ${i.reasons.join("، ")}</li>`)}</ul>`)}
+${section("invalid", (rows) => html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${L(lang, "صف", "Row")} ${i.row}${i.code ? ` (${i.code})` : ""}: ${i.reasons.join("، ")}${editor(i)}</li>`)}</ul>`)}
 ${section("forbidden", (rows) => html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${i.code}</li>`)}</ul>`)}
 ${section("unchanged", (rows) => html`<p class="muted">${rows.map((i) => i.code).join("، ")}</p>`)}
-${missing.length
-  ? html`<section class="card" data-kind="missing"><h2>❔ ${L(lang, "وحدات متاحة مش في الشيت", "Available units not in the sheet")} (${missing.length})</h2>
-  <p class="muted">${L(lang, "اختار اللي عايز تأرشفه (مفيش حاجة بتتأرشف لوحدها).", "Pick any to archive (nothing is archived on its own).")}</p>
-  <div class="row">${missing.map((c) => html`<label class="check">${applied ? "" : html`<input type="checkbox" name="archive" value="${c}">`}${c}</label>`)}</div></section>`
-  : ""}
 ${applied ? "" : html`<button type="submit">✅ ${L(lang, "طبّق المختار", "Apply the selected rows")}</button>`}
-</form>`;
+</form>
+${editForms}`;
 }
 
 function resultCard(r, lang) {
@@ -90,7 +99,6 @@ function resultCard(r, lang) {
   <ul>
     ${line(L(lang, "اتضافت", "Created"), r.created)}
     ${line(L(lang, "اتعدلت", "Updated"), r.updated)}
-    ${line(L(lang, "اتأرشفت", "Archived"), r.archived)}
     ${line(L(lang, "اتغيرت من شخص تاني بعد المراجعة (متعدلتش)", "Changed by someone else since the review (not applied)"), r.conflicts)}
     ${line(L(lang, "متطبقتش", "Not applied"), r.failed)}
   </ul>
@@ -246,7 +254,7 @@ ${tabs("import_tab", [
       return importPage(req, res, importHub(req, { tab: 0, notice: html`<p class="card notice bad" role="alert">⚠️ ${msg}</p>` }), 422);
     }
     const plan = await Imports.planExcel(pool, broker, sheet, { lang });
-    const id = await Imports.savePlan(pool, broker, "excel", plan, { filename: String(file.originalname || "").slice(0, 120) });
+    const id = await Imports.savePlan(pool, broker, "excel", { ...plan, rows: sheet.rows, columns: sheet.mapped }, { filename: String(file.originalname || "").slice(0, 120) });
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", metadata: { kind: "excel", rows: sheet.rows.length, counts: plan.counts } });
     return res.redirect(303, `/app/import/${id}`);
   });
@@ -336,6 +344,16 @@ ${tabs("import_tab", [
     return importPage(req, res, imp.kind === "excel" ? excelPlanPage(imp, lang) : groupPage(imp, lang));
   });
 
+  // Edit one row of a ready plan: the whole sheet is planned again with the changed cells (same rules as an upload).
+  web.post("/import/:id/edit/:row", managersOnly, async (req, res, next) => {
+    const lang = langOf(req);
+    const cells = {};
+    for (const [k, v] of Object.entries(req.body || {})) if (k.startsWith("c_") && typeof v === "string") cells[k.slice(2)] = v;
+    const ok = await Imports.editExcelRow(pool, req.session.broker, req.params.id, Number(req.params.row), cells, { lang });
+    if (!ok) return next();
+    return res.redirect(303, `/app/import/${req.params.id}`);
+  });
+
   web.post("/import/:id/apply", managersOnly, async (req, res, next) => {
     const lang = langOf(req);
     const { broker } = req.session;
@@ -344,7 +362,7 @@ ${tabs("import_tab", [
     const rows = [].concat(req.body.rows || []);
     const result =
       imp.kind === "excel"
-        ? await Imports.applyExcel(pool, broker, imp.id, { rows, archive: [].concat(req.body.archive || []), lang })
+        ? await Imports.applyExcel(pool, broker, imp.id, { rows, lang })
         : await Imports.applyGroup(pool, broker, imp.id, { rows, lang });
     if (!result) {
       return importPage(req, res, html`<p class="card notice bad">⚠️ ${L(lang, "الاستيراد ده اتطبق قبل كده أو انتهت صلاحيته.", "This import was already applied or has expired.")} <a href="/app/import/${imp.id}">${L(lang, "عرض", "View")}</a></p>`, 409);

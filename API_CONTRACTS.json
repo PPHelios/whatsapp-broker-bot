@@ -633,6 +633,7 @@
       "savePlan": ["pool", "broker", "kind", "payload", "params"],
       "loadImport": ["pool", "broker", "id"],
       "applyExcel": ["pool", "broker", "id", "params"],
+      "editExcelRow": ["pool", "broker", "id", "rowNumber", "cells", "params"],
       "findDuplicate": ["pool", "agencyId", "l"],
       "startGroupImport": ["pool", "broker", "posts", "params"],
       "waitForGroupImport": ["id"],
