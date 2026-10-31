@@ -15,11 +15,16 @@ beforeEach(async () => {
 });
 afterAll(closeHarness);
 
+const withPhoto = async (l) => {
+  await h.query("INSERT INTO listing_images (listing_id, agency_id, position, url, role) VALUES ($1, $2, 0, $3, NULL)", [l.id, l.agency_id, `${h.Storage.BASE}1.jpg`]);
+  return l;
+};
+
 const unit = () =>
   h.insertListing({ code: "VIL-08", property_type: "villa", compound: "بالم هيلز أكتوبر", compound_en: "Palm Hills October", bedrooms: 5, area_value: 400, price_value: 35e6, feature_keys: ["north_facing"] });
 
 test("the Flyer button sends exactly one message: the image with its caption", async () => {
-  await unit();
+  await withPhoto(await unit());
   const out = await h.tap("broker", "flyer:en:dark:VIL-08");
   expect(out).toHaveLength(1);
   expect(out[0].type).toBe("image");
@@ -30,7 +35,7 @@ test("the Flyer button sends exactly one message: the image with its caption", a
 });
 
 test("'flyer CODE' uses the same pipeline; a second request is served from the cache", async () => {
-  await unit();
+  await withPhoto(await unit());
   const first = await h.text("broker", "flyer vil-08");
   expect(first.map((r) => r.type)).toEqual(["image"]);
   const uploads = h.Storage.objects.size;
@@ -51,4 +56,11 @@ test("a changed unit gets a fresh flyer (cache key follows the data)", async () 
 test("an unknown code says so", async () => {
   const out = await h.text("broker", "flyer NOPE-1");
   expect(out[0].text).toMatch(/غير موجودة|لم يتم العثور/);
+});
+
+test("a unit with no photos still gets its flyer, then one line saying it is text only", async () => {
+  await unit();
+  const out = await h.tap("broker", "flyer:en:dark:VIL-08");
+  expect(out.map((r) => r.type)).toEqual(["image", "text"]);
+  expect(out[1].text).toMatch(/مفيهاش صور/);
 });
