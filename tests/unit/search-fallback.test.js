@@ -53,6 +53,13 @@ const CASES = [
   { q: "2 rooms apartment", want: { property_types: ["apartment"], bedrooms_min: 2, bedrooms_max: 2 } },
   { q: "2 bathrooms apartment", want: { property_types: ["apartment"], bathrooms_min: 2 } },
   { q: "شقة واوضتين", want: { property_types: ["apartment"], bedrooms_min: 2, bedrooms_max: 2 } },
+  // Plan years: Arabic digits, digits, Arabic words and English must all give the same plan length, with no place term.
+  { q: "شقه قسط علي ٨ سنين", want: { property_types: ["apartment"], payment_installments: true, payment_years: 8, place_terms: [] } },
+  { q: "شقه قسط علي 8 سنين", want: { property_types: ["apartment"], payment_installments: true, payment_years: 8, place_terms: [] } },
+  { q: "شقة تقسيط تمانية سنين", want: { property_types: ["apartment"], payment_installments: true, payment_years: 8, place_terms: [] } },
+  { q: "شقة قسط سنتين", want: { property_types: ["apartment"], payment_years: 2, place_terms: [] } },
+  { q: "apartment installments 8 years", want: { property_types: ["apartment"], payment_installments: true, payment_years: 8, place_terms: [] } },
+  { q: "شقة قسط ٨ سنوات في التجمع", want: { property_types: ["apartment"], payment_years: 8, place_terms: [] } },
   { q: "hi", want: { intent: "other" } },
   { q: "مرحبا", want: { intent: "other" } }
 ];

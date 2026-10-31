@@ -35,7 +35,7 @@ Never invent a filter that was not asked for.
     "finishing": [ any of: core_and_shell, semi_finished, fully_finished, super_lux, ultra_super_lux ],
     "furnishing": "furnished" | "semi_furnished" | "unfurnished" | null,
     "delivery": { "ready": true or null, "by_year": integer or null },
-    "payment": { "cash": true or null, "installments": true or null, "max_down_payment": number or null, "max_installment": number or null },
+    "payment": { "cash": true or null, "installments": true or null, "years": integer or null, "max_down_payment": number or null, "max_installment": number or null },
     "features": [ keys from this list only: ${featureList} ],
     "other_features": [ other requested extras, as said ]
   }
@@ -45,6 +45,7 @@ RULES:
 - Numbers are plain EGP numbers: "8 مليون ونص" = 8500000, "مقدم 500 ألف" → payment.max_down_payment 500000, "قسط مش أكتر من 150 ألف" → payment.max_installment 150000, "في حدود 6 مليون" → price_max 6000000.
 - "3 غرف" or "3 bedrooms" → bedrooms_min 3 and bedrooms_max 3. "استوديو" → property_types ["studio"].
 - "استلام فوري" / "ready to move" → delivery.ready true. "تسليم 2027" → delivery.by_year 2027.
+- "على 8 سنين" / "8 years" / "٨ سنين" → payment.years 8 (the plan's length, not a place). Never put the word "سنين" in locations.
 - بحري / north facing → "north_facing"; ناصية / corner → "corner"; غرفة مربية / nanny room → "nanny_room".`;
 
 function featureListForPrompt() {
@@ -157,6 +158,12 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
     }
     if (f.payment_installments) {
       where.push(`(coalesce(l.remaining_amount, 0) > 0 OR jsonb_array_length(coalesce(l.payment_terms->'plans', '[]'::jsonb)) > 0)`);
+    }
+    if (f.payment_years !== null) {
+      // "على 8 سنين": a plan of exactly that many years (or a resale with that many years left).
+      const y = add(f.payment_years);
+      where.push(`(l.installment_years = ${y} OR EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(l.payment_terms->'plans', '[]'::jsonb)) p
+                WHERE (p->>'years')::numeric = ${y}))`);
     }
     if (f.max_down_payment !== null) {
       const p = add(f.max_down_payment);
