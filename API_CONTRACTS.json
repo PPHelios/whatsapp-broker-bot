@@ -212,6 +212,7 @@
       "invalidateStagedReview": ["pool", "brokerId"],
       "reviewDraft": ["broker", "ctx"],
       "answerInstallments": ["broker", "ctx", "yes"],
+      "answerOwner": ["broker", "ctx", "keep"],
       "commitStagedReview": ["broker", "ctx"],
       "commitDraftToDatabase": ["broker", "_draft", "ctx"],
       "commitDraftToListing": ["broker", "_draft", "ctx"],
@@ -758,6 +759,7 @@
       "unitOwnerBlock": ["pool", "viewer", "listing", "lang", "csrf", "notice"]
     },
     "services/unitOwners.js": {
+      "findByPhone": ["db", "agencyId", "phone"],
       "findOrCreate": ["db", "agencyId", "params"],
       "syncFromListing": ["db", "broker", "listing"],
       "getFor": ["pool", "viewer", "ownerId"],

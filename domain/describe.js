@@ -280,7 +280,7 @@ function internalLines(l, lang = "ar") {
     d.commission && `💼 ${en ? "Commission" : "العمولة"}: ${d.commission}`,
     d.co_broker && `🤝 ${en ? "Co-broker" : "وسيط مشارك"}: ${d.co_broker}`,
     d.unit_no && `🔢 ${en ? "Unit no." : "رقم الوحدة"}: ${d.unit_no}`,
-    d.address && `🏠 ${en ? "Address" : "العنوان"}: ${d.address}`,
+    d.address && `🏠 ${en ? "Address (private: only you and managers see it)" : "العنوان (خاص: بس انت والمديرين بتشوفوه)"}: ${d.address}`,
     l.lat != null && l.lng != null && `📍 https://maps.google.com/?q=${l.lat},${l.lng}`,
     d.notes && `📝 ${en ? "Notes" : "ملاحظات"}: ${d.notes}`
   ].filter(Boolean);
