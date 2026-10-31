@@ -162,6 +162,11 @@ async function handleInteractive(broker, message, ctx) {
     return await Drafts.answerInstallments(broker, ctx, replyId === "draft_inst_yes");
   }
 
+  // Answer to the review's owner card: link (or create) the owner, or discard the owner.
+  if (replyId === "draft_owner_keep" || replyId === "draft_owner_drop") {
+    return await Drafts.answerOwner(broker, ctx, replyId === "draft_owner_keep");
+  }
+
   // 5. DRAFT: review (DRAFT_SAVE / draft_save_exit) or commit the staged review (draft_confirm)
   if (
     replyId === "DRAFT_SAVE" ||
