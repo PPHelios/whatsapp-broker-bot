@@ -15,6 +15,8 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `TELEGRAM_WEBHOOK_SECRET` | with the token | — | A random string (`node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`) given to `setWebhook`; Telegram echoes it in `X-Telegram-Bot-Api-Secret-Token` and every other request is refused. The server registers the webhook with it on every start (`lib/tgSetup.js`), so changing it only needs a redeploy. |
 | `TELEGRAM_BOT_USERNAME` | with the token | — | The bot's @username (without @), used to build the brokers' `t.me/<bot>?start=…` start links. |
 | `WHATSAPP_ENABLED` | no | on | `false` (or `0`/`off`/`no`) switches the WhatsApp bot off: the webhook answers 200 and does nothing, nothing is sent on WhatsApp (alerts go to web push and the website inbox), and the `WHATSAPP_*` variables stop being required. Unset or empty = on. Clients' `wa.me` links and share pages don't depend on it. |
+| `WHATSAPP_ALLOWED_NUMBER` | no | `01055881114` | The only number WhatsApp talks to (the CRM owner's; national or international form). Other senders get no reply, and nothing is sent on WhatsApp to any other number. Both checks are in `lib/waOwnerOnly.js`. |
+| `WHATSAPP_OWNER_ONLY` | no | on | Set `false` only in tests: turns the owner-only check off. Leave it unset in production. |
 | `WHATSAPP_APP_SECRET` | yes | — | Meta app secret; every webhook must carry a valid `X-Hub-Signature-256` (fail-closed). |
 | `WHATSAPP_VERIFY_TOKEN` | yes | — | The token you type in Meta when subscribing the webhook (`GET /webhook`). |
 | `WHATSAPP_ACCESS_TOKEN` | yes | — | System-user token for the Cloud API. |

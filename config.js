@@ -83,7 +83,14 @@ function loadConfig(env = process.env) {
       appSecret: env.WHATSAPP_APP_SECRET || "",
       verifyToken: env.WHATSAPP_VERIFY_TOKEN || "",
       // Unsigned webhooks are accepted only when explicitly allowed outside production.
-      allowUnsigned: !isProd && env.WEBHOOK_ALLOW_UNSIGNED === "true"
+      allowUnsigned: !isProd && env.WEBHOOK_ALLOW_UNSIGNED === "true",
+      // The only number WhatsApp talks to (lib/waOwnerOnly.js): the CRM owner's. Egyptian national form is converted.
+      // On by default: WhatsApp serves the owner's number only (login and help). WHATSAPP_OWNER_ONLY=false turns it off (tests only).
+      ownerOnly: env.WHATSAPP_OWNER_ONLY !== "false",
+      ownerNumber: (() => {
+        const d = String(env.WHATSAPP_ALLOWED_NUMBER || "01055881114").replace(/\D/g, "");
+        return d.startsWith("0") ? `20${d.slice(1)}` : d;
+      })()
     },
     // Telegram bot (Release 3T): on when the token is set; the webhook refuses everything without the secret.
     telegram: {

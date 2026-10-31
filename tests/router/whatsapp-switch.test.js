@@ -16,11 +16,14 @@ jest.setTimeout(60000);
 let h;
 afterEach(() => {
   delete process.env.WHATSAPP_ENABLED;
+  delete process.env.WHATSAPP_ALLOWED_NUMBER;
   resetConfig();
 });
 afterAll(closeHarness);
 
-test("unset: the bot replies on WhatsApp as before", async () => {
+test("unset: the owner's WhatsApp number still gets replies (other numbers never do)", async () => {
+  process.env.WHATSAPP_ALLOWED_NUMBER = "201000000001";
+  resetConfig();
   h = await createHarness();
   expect((await h.text("broker", "مساعدة")).length).toBeGreaterThan(0);
 });
