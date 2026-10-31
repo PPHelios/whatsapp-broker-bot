@@ -53,9 +53,9 @@ describe("payment plan years", () => {
     expect(f.payment_down_pct).toBeNull();
   });
 
-  test("taking over remaining installments reads as a resale unit, not a place word", () => {
+  test("taking over remaining installments is a stop phrase, not a market or a place word", () => {
     const f = Q.fallbackParse("عايز شقه تكملة اقساط في التجمع").filters;
-    expect(f.market).toBe("resale");
+    expect(f.market).toBeNull();
     expect(f.payment_installments).toBe(true);
     expect(f.place_terms).toEqual([]);
   });

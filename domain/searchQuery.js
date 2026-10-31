@@ -208,7 +208,7 @@ const STOP = new Set(
   [
     "في", "فى", "من", "الى", "إلى", "علي", "على", "عن", "و", "مع", "عايز", "عاوز", "عايزه", "محتاج", "دورلي", "ورني", "وريني",
     "فيه", "فيها", "عندنا", "عندك", "عندي", "بحث", "ابحث", "لي", "لو", "سمحت", "بس", "حاجة", "حاجه", "وحدة", "وحده", "كمبوند",
-    "سنين", "سنه", "سنة", "سنوات", "سنتين", "years", "year", "yrs", "مقدم", "دفعه", "اولي", "down", "payment",
+    "سنين", "سنه", "سنة", "سنوات", "سنتين", "years", "year", "yrs", "مقدم", "دفعه", "اولي", "down", "payment", "تكملة", "تكمله",
     "the", "a", "an", "in", "for", "at", "with", "show", "me", "find", "search", "i", "want", "need", "looking", "unit", "units",
     "compound", "please", "any", "some", "and", "or", "of", "to", "is", "near", "around", "قريب", "جنب"
   ].map(normalizeSearch)
@@ -324,10 +324,9 @@ function fallbackParse(text) {
   c = consume(hay, / (للبيع|بيع|for sale|sale) /);
   if (c.m && !f.listing_type) f.listing_type = "sale";
   hay = c.hay;
-  // "تكملة اقساط" (taking over the rest of someone's installments) is a resale unit.
-  if (/ (ريسيل|resale|تكملة|تكمله|تكملة اقساط|تكمله اقساط) /.test(hay)) f.market = "resale";
+  if (/ (ريسيل|resale) /.test(hay)) f.market = "resale";
   if (/ (برايمري|primary|من المطور|developer) /.test(hay)) f.market = "primary";
-  hay = hay.replace(/ (ريسيل|resale|برايمري|primary|من المطور|تكملة|تكمله) /g, " ");
+  hay = hay.replace(/ (ريسيل|resale|برايمري|primary|من المطور) /g, " ");
 
   // Bedrooms / bathrooms (digits or Egyptian number words).
   const n = (s) => (/^\d+$/.test(s) ? Number(s) : AR_NUMBER_WORDS[s] ?? null);
