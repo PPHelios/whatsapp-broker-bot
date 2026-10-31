@@ -228,8 +228,9 @@ async function projectRow(db, actor, id) {
 }
 
 /**
- * One project with its developer, phases, plans, materials and units. Brokers get no developer contact and no notes;
- * they see internal links too (marked), which clients never do.
+ * One project with its developer, phases, plans, materials and units. Brokers get no developer contact; they see the
+ * project's notes (what the assistant knows, so nothing secret goes there: commission terms are separate, managers only)
+ * and the internal links too (marked), which clients never do.
  */
 async function getProject(db, actor, id) {
   const project = await projectRow(db, actor, id);
@@ -247,7 +248,7 @@ async function getProject(db, actor, id) {
       )
       .then((r) => r.rows)
   ]);
-  return { project: isManager(actor) ? project : { ...project, notes: null }, developer, phases, plans, materials, units };
+  return { project, developer, phases, plans, materials, units };
 }
 
 async function savePhase(db, actor, projectId, input = {}) {
