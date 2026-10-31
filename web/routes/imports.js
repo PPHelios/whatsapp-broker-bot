@@ -202,8 +202,7 @@ ${tabs("import_tab", [
   <p class="muted" hidden data-zip-status data-msg-big="${L(lang, "الملف أكبر من المسموح.", "The file is larger than allowed.")}" data-msg-fail="${L(lang, "الرفع فشل. جرب تاني.", "The upload failed. Try again.")}" data-msg-wait="${L(lang, "جاري الرفع…", "Uploading…")}"></p>
   <button type="submit">${L(lang, "ارفع واقرأ", "Upload and read")}</button>
 </form>`]
-], { open: tab, cls: "tiles" })}
-<p class="card row between"><span>👥 ${L(lang, "عملاء من ملف (فيسبوك أو إكسيل)؟", "Leads from a file (Facebook or Excel)?")}</span><a class="btn secondary small" href="/app/leads/import">${L(lang, "استيراد عملاء", "Import leads")}</a></p>`;
+], { open: tab, cls: "tiles" })}`;
   };
 
   web.get("/import", (req, res) => importPage(req, res, importHub(req)));
