@@ -242,44 +242,6 @@
     }).catch(function () { say("Sharing didn't work here. Long-press a photo to save it."); })
       .then(function () { btn.disabled = false; });
   });
-  // Chat export zip with photos (/app/import): ask for a signed upload URL, PUT the file straight to Storage with a
-  // progress bar, then send the form with the stored path.
-  document.addEventListener("submit", function (e) {
-    var form = e.target;
-    if (!form || !form.hasAttribute || !form.hasAttribute("data-zip-upload") || form.elements.path.value) return;
-    e.preventDefault();
-    var input = form.querySelector("[data-zip-file]");
-    var bar = form.querySelector("[data-zip-progress]");
-    var status = form.querySelector("[data-zip-status]");
-    var button = form.querySelector("button[type=submit]");
-    var file = input && input.files && input.files[0];
-    var say = function (key) { status.textContent = status.getAttribute(key) || ""; status.hidden = false; };
-    if (!file) return;
-    if (file.size > Number(form.getAttribute("data-max"))) return say("data-msg-big");
-    var fail = function () { button.disabled = false; bar.hidden = true; say("data-msg-fail"); };
-    button.disabled = true;
-    say("data-msg-wait");
-    fetch("/app/import/zip/start", { method: "POST", credentials: "same-origin", headers: { "X-CSRF-Token": meta ? meta.content : "" } })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (j) {
-        if (!j || !j.url) return fail();
-        var xhr = new XMLHttpRequest();
-        xhr.open("PUT", j.url);
-        xhr.setRequestHeader("Content-Type", "application/zip");
-        xhr.setRequestHeader("x-upsert", "false");
-        bar.hidden = false;
-        xhr.upload.onprogress = function (ev) { if (ev.lengthComputable) bar.value = Math.round((ev.loaded * 100) / ev.total); };
-        xhr.onload = function () {
-          if (xhr.status < 200 || xhr.status >= 300) return fail();
-          form.elements.path.value = j.path;
-          form.elements.filename.value = file.name;
-          form.submit();
-        };
-        xhr.onerror = fail;
-        xhr.send(file);
-      })
-      .catch(fail);
-  });
   // A search answered from ?q= becomes its ?f= link in the history, so Back from a unit returns to the same results
   // without asking the AI again.
   document.addEventListener("DOMContentLoaded", function () {
