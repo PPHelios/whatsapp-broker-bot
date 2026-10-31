@@ -112,18 +112,13 @@ describe("Draft vs search collision (COL-01)", () => {
   const longQuery =
     "عايز شقة 3 غرف في التجمع الخامس قريبة من الجامعة الأمريكية بحري تشطيب كامل استلام فوري بسعر حدود 9 مليون";
 
-  test("a long Arabic query survives the cancel-and-search round trip (button id stays short)", async () => {
+  test("during a draft a long Arabic query is draft text, never a search offer", async () => {
     await h.text("broker", "اضافة");
-    const prompt = await h.text("broker", longQuery);
-    const ids = prompt.flatMap((r) => r.buttons || []).map((b) => b.id);
-    expect(ids).toContain("cancel_and_search");
+    const reply = await h.text("broker", longQuery);
+    const ids = reply.flatMap((r) => r.buttons || []).map((b) => b.id);
+    expect(ids).not.toContain("cancel_and_search");
     expect(ids.every((id) => id.length <= 128)).toBe(true);
-
-    h.AI.respond(() => ({ intent: "search", filters: {}, locations: [], location_terms: [] }));
-    await h.tap("broker", "cancel_and_search");
-    const sent = JSON.stringify(h.AI.calls[0].contents);
-    expect(sent).toContain(longQuery);
-    expect(await h.session("broker")).toBeNull();
+    expect(h.AI.calls.filter((c) => c.operation === "search_parse")).toHaveLength(0);
   });
 
   test("legacy base64 buttons already sent to brokers still work", async () => {
