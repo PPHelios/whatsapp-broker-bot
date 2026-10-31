@@ -12,6 +12,7 @@ const AI = require("../lib/ai");
 const ErrorReports = require("../lib/errorReports");
 const { executeGuardedTurn } = require("../lib/dispatcher");
 const { dispatchMessage } = require("./dispatch");
+const WaOwnerOnly = require("../lib/waOwnerOnly");
 
 /** Builds the pipeline around the pool, config, tap guard and the drain state (state.inFlight counts turns). */
 function createTurnPipeline({ pool, config, tapGuard, state }) {
@@ -45,6 +46,8 @@ function createTurnPipeline({ pool, config, tapGuard, state }) {
     for (const entry of body?.entry || []) {
       for (const change of entry?.changes || []) {
         for (const message of change?.value?.messages || []) {
+          // WhatsApp serves the CRM owner's number only, and only login and help (lib/waOwnerOnly.js). Others get nothing.
+          if (!WaOwnerOnly.inboundAllowed(message)) continue;
           await handleInboundMessage(message);
         }
       }

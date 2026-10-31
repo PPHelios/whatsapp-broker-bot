@@ -295,7 +295,8 @@
       "dispatch": ["broker", "text", "ctx", "opts"],
       "matchStatus": ["text"],
       "matchPrice": ["text"],
-      "matchEdit": ["text"]
+      "matchEdit": ["text"],
+      "WEB_LOGIN": "Object"
     },
     "lib/listingStore.js": {
       "findCatalogueMatch": ["db", "agencyId", "l", "params"],
@@ -1208,6 +1209,12 @@
       "paymentConfirmed": ["pool", "params", "params"],
       "remindEnding": ["pool", "params"],
       "reminderJob": []
+    },
+    "lib/waOwnerOnly.js": {
+      "inboundAllowed": ["message"],
+      "outboundAllowed": ["to"],
+      "isOwnerNumber": ["raw"],
+      "HELP": "Object"
     },
     "services/agencyCreate.js": {
       "createAgency": ["pool", "actor", "input", "params"],
