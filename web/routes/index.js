@@ -8,6 +8,7 @@ const PRIVATE = [
   require("./search"),
   require("./assistant"),
   require("./imports"),
+  require("./matchPhotos"),
   require("./unitForm"),
   require("./units"),
   require("./compare"),

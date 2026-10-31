@@ -251,13 +251,10 @@ describe("group import (forwarded posts and chat exports)", () => {
     expect(created[0]).toMatchObject({ compound: "ميفيدا", price_value: 12e6, feature_keys: ["north_facing"], broker_id: h.BROKERS.manager.id });
   });
 
-  test("a zipped WhatsApp chat export: the poster is kept as internal co-broker, never in client copy", async () => {
+  test("an uploaded WhatsApp chat export (.txt): the poster is kept as internal co-broker, never in client copy; a zip is sent to the photos tab", async () => {
     scripted();
-    const zip = new JSZip();
-    zip.file("WhatsApp Chat with Brokers.txt", "[24/10/2026, 10:15:32] Ahmed Broker: شقة للبيع في ميفيدا 200 متر 3 غرف\nالسعر 12 مليون\n[24/10/2026, 10:16:01] Sara: تمام");
-    const buf = await zip.generateAsync({ type: "nodebuffer" });
     const { agent, csrf } = await signIn(h, "manager");
-    const r = await agent.post("/app/import/group").field("_csrf", csrf).attach("chat", buf, { filename: "chat.zip", contentType: "application/zip" });
+    const r = await agent.post("/app/import/group").field("_csrf", csrf).attach("chat", Buffer.from("[24/10/2026, 10:15:32] Ahmed Broker: شقة للبيع في ميفيدا 200 متر 3 غرف\nالسعر 12 مليون\n[24/10/2026, 10:16:01] Sara: تمام"), { filename: "chat.txt", contentType: "text/plain" });
     const id = importId(r);
     await Imports.waitForGroupImport(id);
     expect((await agent.get(`/app/import/${id}`)).text).toMatch(/Ahmed Broker/);
@@ -290,7 +287,7 @@ describe("group import (forwarded posts and chat exports)", () => {
 describe("imports are manager-only", () => {
   test("a broker is refused on Excel, group posts, chat with photos and apply; single add still works elsewhere", async () => {
     const { agent, csrf } = await signIn(h, "broker");
-    for (const url of ["/app/import/excel", "/app/import/group", "/app/import/zip/start", "/app/import/zip", "/app/import/00000000-0000-0000-0000-000000000000/apply"]) {
+    for (const url of ["/app/import/excel", "/app/import/group", "/app/import/match/start", "/app/import/match/unit/HP-1/photo", "/app/import/00000000-0000-0000-0000-000000000000/apply"]) {
       expect((await agent.post(url).set("X-CSRF-Token", csrf).type("form").send({})).status).toBe(403);
     }
   });

@@ -3,23 +3,13 @@
 
 const Links = require("../lib/links");
 
-// The chat export zip goes from the browser straight to Supabase Storage (web/routes/imports.js), so its origin may
-// be fetched; nothing else outside this site.
-const STORAGE_ORIGIN = (() => {
-  try {
-    return process.env.SUPABASE_URL ? new URL(process.env.SUPABASE_URL).origin : null;
-  } catch {
-    return null;
-  }
-})();
-
 const CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self'",
   "img-src 'self' https: data: blob:",
   "media-src 'self' blob:",
-  STORAGE_ORIGIN ? `connect-src 'self' ${STORAGE_ORIGIN}` : "connect-src 'self'",
+  "connect-src 'self'",
   "font-src 'self'",
   "object-src 'none'",
   "base-uri 'self'",
