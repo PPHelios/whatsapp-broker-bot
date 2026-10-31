@@ -29,6 +29,16 @@ const nonNegInt = (v) => {
   return n !== null && n >= 0 ? Math.round(n) : null;
 };
 const uniq = (a) => [...new Set(a)];
+/** Down payment as a percent of the price (a plan's down_payment_pct): 0 to 100, else null. */
+const downPct = (v) => {
+  const n = num(v);
+  return n !== null && n >= 0 && n <= 100 ? n : null;
+};
+/** Years of a payment plan: a whole number from 1 to 30, else null. */
+const planYears = (v) => {
+  const n = num(v);
+  return n !== null && Number.isInteger(Math.round(n)) && Math.round(n) >= 1 && Math.round(n) <= 30 ? Math.round(n) : null;
+};
 const sortPlaces = (list) =>
   uniq(list.map((p) => `${p.kind}:${p.key}`))
     .sort()
@@ -58,6 +68,8 @@ function emptyFilters() {
     delivery_by_year: null,
     payment_cash: null,
     payment_installments: null,
+    payment_years: null,
+    payment_down_pct: null,
     max_down_payment: null,
     max_installment: null,
     features: [],
@@ -172,6 +184,8 @@ function normalizeAiSearch(raw) {
     delivery_by_year: num(delivery.by_year) && num(delivery.by_year) >= 2000 ? Math.round(num(delivery.by_year)) : null,
     payment_cash: payment.cash === true ? true : null,
     payment_installments: payment.installments === true ? true : null,
+    payment_years: planYears(payment.years ?? f.payment_years),
+    payment_down_pct: downPct(payment.down_pct),
     max_down_payment: pos(payment.max_down_payment ?? f.down_payment_max),
     max_installment: pos(payment.max_installment ?? f.installment_max),
     features: [...keys, ...legacyFlags],
@@ -194,6 +208,7 @@ const STOP = new Set(
   [
     "في", "فى", "من", "الى", "إلى", "علي", "على", "عن", "و", "مع", "عايز", "عاوز", "عايزه", "محتاج", "دورلي", "ورني", "وريني",
     "فيه", "فيها", "عندنا", "عندك", "عندي", "بحث", "ابحث", "لي", "لو", "سمحت", "بس", "حاجة", "حاجه", "وحدة", "وحده", "كمبوند",
+    "سنين", "سنه", "سنة", "سنوات", "سنتين", "years", "year", "yrs", "مقدم", "دفعه", "اولي", "down", "payment", "تكملة", "تكمله",
     "the", "a", "an", "in", "for", "at", "with", "show", "me", "find", "search", "i", "want", "need", "looking", "unit", "units",
     "compound", "please", "any", "some", "and", "or", "of", "to", "is", "near", "around", "قريب", "جنب"
   ].map(normalizeSearch)
@@ -465,6 +480,31 @@ function fallbackParse(text) {
   if (c.m) f.payment_installments = true;
   hay = c.hay;
 
+  // Years of a plan: "على ٨ سنين", "8 years", "تمانية سنين", "سنتين". Read here, so the unit word never becomes a place term.
+  c = consume(hay, / ([0-9]+|[ء-ي]+) (سنين|سنه|سنة|سنوات|years|year|yrs) /);
+  if (c.m && planYears(spokenAmount(c.m[1])) !== null) {
+    f.payment_years = planYears(spokenAmount(c.m[1]));
+    hay = c.hay;
+  }
+  c = consume(hay, / (سنتين) /);
+  if (c.m) {
+    f.payment_years = 2;
+    hay = c.hay;
+  }
+
+  // Down payment as a percent: "مقدم ١٠٪" / "10% down". The sign is dropped by the normalizer, so the number must stand
+  // alone (no money unit, which the rules above already took) and be at most 100.
+  c = consume(hay, / (مقدم|دفعه اولي|دفعه مقدمه|down payment|downpayment|down) (\d+(?:\.\d+)?) /);
+  if (c.m && downPct(c.m[2]) !== null) {
+    f.payment_down_pct = downPct(c.m[2]);
+    hay = c.hay;
+  }
+  c = consume(hay, / (\d+(?:\.\d+)?) (?:down) /);
+  if (c.m && downPct(c.m[1]) !== null) {
+    f.payment_down_pct = downPct(c.m[1]);
+    hay = c.hay;
+  }
+
   // Property types.
   for (const m of TYPE_MATCHERS) {
     if (hay.includes(` ${m.term} `)) {
@@ -507,7 +547,9 @@ function hasAnyFilter(parsed) {
         f.max_down_payment, f.max_installment, f.delivery_by_year].some((v) => v !== null && v !== undefined) ||
       f.delivery_ready ||
       f.payment_cash ||
-      f.payment_installments
+      f.payment_installments ||
+      (f.payment_years !== null && f.payment_years !== undefined) ||
+      (f.payment_down_pct !== null && f.payment_down_pct !== undefined)
   );
 }
 
