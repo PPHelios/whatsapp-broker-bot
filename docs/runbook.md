@@ -80,6 +80,10 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 
 ## 4. Onboarding an agency
 
+**Easiest:** the CRM owner adds an agency on `/app/owner` (New agency card): name, logo link, owner's name and mobile, pilot or trial. The owner's one-time Telegram link (7 days) is shown once; send it by hand. Only the CRM owner (`OWNER_BROKER_IDS`) sees the card. Full steps: `docs/agency-onboarding.md`.
+
+The terminal route below is for bulk setups.
+
 1. Copy `docs/pilot/agency.example.json`, fill the agency (name, optional `slug` for public links — lower-case letters, digits and dashes — colours, logo `https://` URL) and brokers (name, Egyptian mobile, role `broker`/`admin`/`owner`/`manager`, `lang` `ar`/`en`). At least one admin, owner or manager. Optional `code_prefix` (1–4 Latin letters) sets the agency's unit code letters (`NH` → auto codes `NH-V12`); without it they come from the agency's name and a manager can change them on 📊 My usage. Set `telegram_bot` (or `TELEGRAM_BOT_USERNAME`) so `onboard` prints each broker's one-time Telegram start link, and `bot_phone` (or `BOT_PHONE`) for WhatsApp start links. The file's `_notes` explain each field.
 2. `npm run onboard -- my-agency.json --dry-run`, then without `--dry-run`. Re-running is safe (agency by name, brokers by phone). It prints the slug, the web app address and each broker's **start link** (`wa.me/<bot>?text=مساعدة`, or `help` for English brokers).
 3. Telegram brokers: send each their Telegram start link privately (one tap on *Start* links their account; one use, 7 days; re-run `onboard` for fresh ones), then `docs/pilot/telegram-howto-ar.md` and `web-howto-ar.md` (or the `-en` versions). WhatsApp brokers must message the bot once before it can reply: send them their start link (one tap, then send), then `docs/pilot/broker-howto-ar.md` and `web-howto-ar.md`, or `broker-howto-en.md` and `web-howto-en.md`.

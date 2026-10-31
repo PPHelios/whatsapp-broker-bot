@@ -20,6 +20,22 @@ Use A for the pilots you pick. Use B only when you open sign-up to the public.
 
 ---
 
+## A0. The owner page (recommended for new agencies)
+
+From `/app/owner`, in the **New agency** card. Only the CRM owner (`OWNER_BROKER_IDS`) sees it; anyone else gets the 404 page.
+
+1. Enter the agency name, an optional logo link (`https://` only), the owner's name and mobile, and pick a plan: **pilot** (free Office until the POC ends) or **trial** (14 days Office).
+2. Tap *Create agency and get the link*. The agency is created approved, and its owner is an active `owner` broker.
+3. Copy the Telegram link shown. It works once and lasts 7 days. Send it to the owner yourself; the app sends nothing.
+4. The owner taps the link, presses *Start*, then uses the **WehdatHub** button in the bot to open the website already signed in.
+5. The owner adds managers and brokers on the Team page.
+
+Errors shown on the page: a mobile already used by another agency, a logo that is not `https://`, a bad mobile, and a name that cannot make a unique link.
+
+If the page says no link was made, `TELEGRAM_BOT_USERNAME` is not set in Render.
+
+Sections A and B below are the terminal and public sign-up routes. For a new agency, use A0.
+
 ## A. Hand onboarding
 
 ### A1. Prepare the file — manual
@@ -71,7 +87,7 @@ On `/app/owner` (you must be a product owner, `OWNER_BROKER_IDS`):
 
 ### B1. Open sign-up — manual
 
-1. Sign in as a product owner and go to `/app/owner`.
+1. Sign in as a product owner and go to `/app/owner`. (A single agency by hand is in A0.)
 2. Turn on the **sign-up** switch (it is off by default). While it is on, `/app/signup` accepts requests and the landing page shows "Sign up your agency".
 3. When you are done with a wave of sign-ups, turn it off again. Closed sign-up shows a "talk to us" page instead.
 
@@ -165,7 +181,7 @@ Day 1, 3 and 7 nudges go to each new broker automatically (Telegram or the websi
 
 ---
 
-## Open gaps (for Haytham to decide; no code changed here)
+## Open gaps
 
 1. **No owner-page button to create an agency by hand.** Option A needs the terminal. The owner page only approves public sign-ups.
 2. **Approve does not send the admin's link.** You copy it from the page and send it yourself.
