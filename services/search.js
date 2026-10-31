@@ -160,10 +160,10 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
       where.push(`(coalesce(l.remaining_amount, 0) > 0 OR jsonb_array_length(coalesce(l.payment_terms->'plans', '[]'::jsonb)) > 0)`);
     }
     if (f.payment_years !== null) {
-      // "على 8 سنين": a plan of exactly that many years (or a resale with that many years left).
+      // "على 8 سنين": a plan of that many years or more (or a resale with that many years left or more).
       const y = add(f.payment_years);
-      where.push(`(l.installment_years = ${y} OR EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(l.payment_terms->'plans', '[]'::jsonb)) p
-                WHERE (p->>'years')::numeric = ${y}))`);
+      where.push(`(l.installment_years >= ${y} OR EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(l.payment_terms->'plans', '[]'::jsonb)) p
+                WHERE (p->>'years')::numeric >= ${y}))`);
     }
     if (f.max_down_payment !== null) {
       const p = add(f.max_down_payment);

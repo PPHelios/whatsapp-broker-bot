@@ -13,8 +13,8 @@ describe("payment plan years", () => {
     expect(parsed.filters.payment_years).toBe(8);
     expect(Q.classifyIntent(parsed)).toBe("search");
     const { sql, params } = buildSearchQuery("agency-1", parsed);
-    expect(sql).toContain("l.installment_years = $");
-    expect(sql).toContain("(p->>'years')::numeric = $");
+    expect(sql).toContain("l.installment_years >= $");
+    expect(sql).toContain("(p->>'years')::numeric >= $");
     expect(params).toContain(8);
     expect(params.some((v) => v === "سنين")).toBe(false);
   });
