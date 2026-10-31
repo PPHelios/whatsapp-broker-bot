@@ -18,6 +18,7 @@ const { refineForm } = require("../views/searchForm");
 
 const WEB_PAGE_SIZE = 20;
 const MAX_SAVED = 50;
+const MAX_SPOKEN_SEARCH = 200;
 const FORM_KEYS = ["code", "listing_type", "market", "type", "place", "price_min", "price_max", "area_min", "area_max", "bedrooms_min", "bedrooms_max", "bathrooms_min", "floor_min", "floor_max", "finishing", "furnishing", "ready", "by_year", "cash", "installments", "max_down_payment", "max_installment", "feature", "other"];
 
 const L = (lang, ar, en) => (lang === "en" ? en : ar);
@@ -151,7 +152,9 @@ ${results}`
     const gate = await RateLimit.hit(pool, `search:broker:${broker.id}`, RateLimit.LIMITS.searchBroker);
     if (!gate.allowed) return res.status(429).json({ error: L(lang, "بحث كتير في دقيقة. استنى شوية.", "Too many searches in a minute. Wait a moment.") });
     try {
-      const text = String(await AI.transcribeAudio(voice.buffer, voice.mimetype.split(";")[0], searchCtx(req)) || "").trim().slice(0, 500);
+      const heard = String(await AI.transcribeAudio(voice.buffer, voice.mimetype.split(";")[0], searchCtx(req)) || "").trim();
+      // A search is a few words. A long transcript from silence is the model making up speech, so it is not used.
+      const text = heard.length > MAX_SPOKEN_SEARCH ? "" : heard.slice(0, 500);
       if (!text) return res.status(422).json({ error: L(lang, "مسمعناش كويس. جرب تاني.", "Couldn't hear you. Try again.") });
       return res.json({ q: text });
     } catch (err) {
