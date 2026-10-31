@@ -1209,6 +1209,11 @@
       "remindEnding": ["pool", "params"],
       "reminderJob": []
     },
+    "services/agencyCreate.js": {
+      "createAgency": ["pool", "actor", "input", "params"],
+      "cleanLogo": ["raw"],
+      "PLANS": "Array"
+    },
     "services/signup.js": {
       "isOpen": ["db"],
       "setOpen": ["db", "enabled"],
