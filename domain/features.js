@@ -36,7 +36,7 @@ const FEATURES = [
   { key: "view_garden", ar: "فيو جاردن", en: "Garden view", group: "view", syn: ["فيو جاردن", "فيو حديقه", "فيو حديقة", "على الجاردن", "garden view"] },
   { key: "view_pool", ar: "فيو بول", en: "Pool view", group: "view", syn: ["فيو بول", "فيو حمام السباحه", "pool view"] },
   { key: "view_lagoon", ar: "فيو لاجون", en: "Lagoon view", group: "view", syn: ["فيو لاجون", "لاجون", "lagoon", "lagoon view", "فيو بحيره", "فيو بحيرة", "lake view"] },
-  { key: "view_landscape", ar: "فيو لاندسكيب", en: "Landscape view", group: "view", syn: ["فيو لاند سكيب", "فيو لاندسكيب", "لاندسكيب", "landscape", "landscape view"] },
+  { key: "view_landscape", ar: "فيو لاندسكيب", en: "Landscape view", group: "view", syn: ["فيو لاند سكيب", "فيو لاندسكيب", "لاندسكيب", "لاند سكيب", "علي لاند سكيب", "landscape", "landscape view"] },
   { key: "view_club", ar: "فيو النادي", en: "Club view", group: "view", syn: ["فيو النادي", "فيو الكلوب", "club view"] },
   { key: "view_sea", ar: "فيو بحر", en: "Sea view", group: "view", syn: ["فيو بحر", "فيو البحر", "sea view"] },
   { key: "view_open", ar: "فيو مفتوح", en: "Open view", group: "view", syn: ["فيو مفتوح", "فيو مفتوحه", "اوبن فيو", "open view", "panoramic view"] },

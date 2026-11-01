@@ -34,7 +34,7 @@ Never invent a filter that was not asked for.
     "floor_min": integer or null, "floor_max": integer or null,   // ground floor = 0
     "finishing": [ any of: core_and_shell, semi_finished, fully_finished, super_lux, ultra_super_lux ],
     "furnishing": "furnished" | "semi_furnished" | "unfurnished" | null,
-    "delivery": { "ready": true or null, "by_year": integer or null },
+    "delivery": { "ready": true or null, "off_plan": true or null, "by_year": integer or null },
     "payment": { "cash": true or null, "installments": true or null, "years": integer or null, "down_pct": number or null, "max_down_payment": number or null, "max_installment": number or null },
     "features": [ keys from this list only: ${featureList} ],
     "other_features": [ other requested extras, as said ]
@@ -46,7 +46,7 @@ RULES:
 - "3 غرف" or "3 bedrooms" → bedrooms_min 3 and bedrooms_max null (3 or more).
 - "متكرر" / "typical" floor → floor_min 1 and floor_max null (any floor except ground). Same for bathrooms ("3 حمامات" → bathrooms_min 3) and area ("150 متر" → area_min 150, area_max null). A range ("من 120 لـ 150 متر") sets both ends. "استوديو" → property_types ["studio"].
 - "budget" / "حدود" / "تحت" / "لحد" with a price → price_max only.
-- "استلام فوري" / "ready to move" → delivery.ready true. "تسليم 2027" → delivery.by_year 2027.
+- "تحت الإنشاء" / "off plan" / "under construction" → delivery.off_plan true. "استلام فوري" / "ready to move" → delivery.ready true. "تسليم 2027" → delivery.by_year 2027.
 - Units are searched by their English text for now, so a compound or area said in Arabic must come back in its English spelling (e.g. "ازاد" → "Azad").
 - "على 8 سنين" / "8 years" / "٨ سنين" → payment.years 8 (the plan's length, not a place). Never put the word "سنين" in locations.
 - "مقدم 10%" / "10% down" / "مقدم ١٠٪" → payment.down_pct 10 (a percent of the price, not an amount).
@@ -157,7 +157,9 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
       if (f.furnishing) where.push(`(l.furnishing IS NULL OR l.furnishing = ${add(f.furnishing)})`);
     }
 
-    if (f.delivery_ready) where.push(`l.is_ready = true`);
+    if (f.delivery_ready === true) where.push(`l.is_ready = true`);
+    // Off plan (تحت الإنشاء): not ready; a unit with no readiness set still matches.
+    if (f.delivery_ready === false) where.push(`(l.is_ready IS NULL OR l.is_ready = false)`);
     if (f.delivery_by_year !== null) where.push(`(l.is_ready = true OR l.delivery_year <= ${add(f.delivery_by_year)})`);
 
     if (f.payment_cash) {
@@ -226,8 +228,29 @@ async function runSearch(pool, agencyId, parsed, { pageSize = PAGE_SIZE } = {}) 
     ({ rows } = await pool.query(sql, params));
     relaxed = rows.length > 0;
   }
+  // Soft words: a place or extra the dictionaries do not know ("المعادي", "اخر دور") must not empty the answer. When
+  // nothing matched and other filters remain, search again without those words and say which words were ignored.
+  let ignoredTerms = [];
+  const soft = [...(parsed.filters.place_terms || []), ...(parsed.filters.feature_terms || [])];
+  if (!rows.length && !parsed.filters.code && soft.length) {
+    const rest = { ...parsed, filters: { ...parsed.filters, place_terms: [], feature_terms: [] } };
+    if (Q.hasAnyFilter(rest)) {
+      ({ sql, params } = buildSearchQuery(agencyId, rest));
+      ({ rows } = await pool.query(sql, params));
+      if (!rows.length) {
+        ({ sql, params } = buildSearchQuery(agencyId, rest, { relaxed: true }));
+        ({ rows } = await pool.query(sql, params));
+        relaxed = rows.length > 0;
+      }
+      if (rows.length) {
+        ignoredTerms = soft;
+        parsed.filters.place_terms = [];
+        parsed.filters.feature_terms = [];
+      }
+    }
+  }
   const total = rows.length ? Number(rows[0].total_count) : 0;
-  return { rows: rows.slice(0, pageSize), ids: rows.map((r) => r.id), total, relaxed, dbMs: Date.now() - t0 };
+  return { rows: rows.slice(0, pageSize), ids: rows.map((r) => r.id), total, relaxed, ignoredTerms, dbMs: Date.now() - t0 };
 }
 
 /**
