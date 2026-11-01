@@ -1,0 +1,394 @@
+[
+  {
+    "label": "Porto Sokhna -بورتو السخنة",
+    "value": "Porto Sokhna - Amer Group"
+  },
+  {
+    "label": "Il Monte Galala - مونت جلالة",
+    "value": "Il Monte Galala - Tatweer Misr"
+  },
+  {
+    "label": "La Vista 6 - لافيستا 6",
+    "value": "La Vista 6"
+  },
+  {
+    "label": "Blue Blue Resort-منتجع بلو بلو",
+    "value": "Blue Blue Resort - MG"
+  },
+  {
+    "label": "The Groove Resort - منتجع ذا جروف",
+    "value": "The Groove Resort - DM Developments"
+  },
+  {
+    "label": "La Vista Gardens - لافيستا جاردنز",
+    "value": "La Vista Gardens"
+  },
+  {
+    "label": "Azha - أزهى",
+    "value": "Azha - Madaar"
+  },
+  {
+    "label": "Baymount Resort - بايمونت",
+    "value": "Baymount Resort - Maven"
+  },
+  {
+    "label": "La Sirena - لا سيرينا",
+    "value": "La Sirena Mini Egypt"
+  },
+  {
+    "label": "Aroma Resort - أروما ريزورت ",
+    "value": "Aroma Resort - Residence"
+  },
+  {
+    "label": "Ein Hills  - عين هيلز",
+    "value": "Ein Hills - Al Shahawi"
+  },
+  {
+    "label": "Telal Resort - تلال ريزورت",
+    "value": "Telal Resort - Roya Group"
+  },
+  {
+    "label": "La Sirena Palm Beach - لاسيرينا بالم بيتش",
+    "value": "La Sirena Palm Beach"
+  },
+  {
+    "label": "Blue Bay Resort - منتجع بلو باي",
+    "value": "Blue Bay Resort - Marseilia"
+  },
+  {
+    "label": "Malibu Resort - منتجع ماليبو",
+    "value": "Malibu Resort - Zaghloul Group"
+  },
+  {
+    "label": "Heaven Beach - هيفين بيتش",
+    "value": "Heaven Beach - West Gulf"
+  },
+  {
+    "label": "La Vista 1 - لافيستا 1",
+    "value": "La Vista 1"
+  },
+  {
+    "label": "Blumar El Sokhna - بلومار السخنة",
+    "value": "Blumar El Sokhna - Wadi Degla"
+  },
+  {
+    "label": "Porto South Beach - بورتو ساوث بيتش",
+    "value": "Porto South Beach - Amer Group"
+  },
+  {
+    "label": "Laguna Bay - لاجونا باي",
+    "value": "Laguna Bay - Palm Hills"
+  },
+  {
+    "label": "Jaz Little Venice Golf Resort - جاز ليتل فينيس جولف ريزورت",
+    "value": "Jaz Little Venice Golf Resort - Hassan Allam"
+  },
+  {
+    "label": "Jebal Resort - منتجع جبال",
+    "value": "Jebal Resort - PRE"
+  },
+  {
+    "label": "Stella Di Mare - ستيلا دي ماري ",
+    "value": "Stella Di Mare - Remco"
+  },
+  {
+    "label": "Piacera Resort - منتجع بياسيرا",
+    "value": "Piacera Resort - Al Ahly Sabbour"
+  },
+  {
+    "label": "Mountain View Sokhna 1 - ماونتن فيو السخنة 1",
+    "value": "Mountain View Sokhna 1"
+  },
+  {
+    "label": "LA Vista Topaz - لافيستا توباز",
+    "value": "LA Vista Topaz"
+  },
+  {
+    "label": "Carnelia - كارنيليا",
+    "value": "Carnelia - Ajna"
+  },
+  {
+    "label": "Mountain View Sokhna 2 - ماونتن فيو السخنة 2",
+    "value": "Mountain View Sokhna 2 - DMG"
+  },
+  {
+    "label": "Jura El Galala Resort - جورا الجلالة ريزورت",
+    "value": "Jura El Galala Resort - NJD"
+  },
+  {
+    "label": "Stella Di Mare Sea View - ستيلا دى مارى سى فيو",
+    "value": "Stella Di Mare Sea View - Remco"
+  },
+  {
+    "label": "Cancun Resort - منتجع كانكون",
+    "value": "Cancun Resort - Amer Group"
+  },
+  {
+    "label": "El Galala Plaza - الجلالة بلازا",
+    "value": "El Galala Plaza"
+  },
+  {
+    "label": "Coronado Marina Resort - منتجع كورونادو مارينا",
+    "value": "Coronado Marina Resort - Next Deal"
+  },
+  {
+    "label": "La Vista Ray لافيستا راى",
+    "value": "La Vista Ray"
+  },
+  {
+    "label": "Majada - ماجادا",
+    "value": "Majada - Iwan"
+  },
+  {
+    "label": "La Luna Beach Resort - منتجع لا لونا بيتش",
+    "value": "La Luna Beach Resort - Next Deal"
+  },
+  {
+    "label": "Hegaz Village - قرية الحجاز",
+    "value": "Hegaz Village"
+  },
+  {
+    "label": "Murano Sokhna - مورانو السخنة",
+    "value": "Murano Sokhna - Wadi Degla"
+  },
+  {
+    "label": "Sand Beach ساند بيتش",
+    "value": "Sand Beach"
+  },
+  {
+    "label": "Golden Coast Resort - منتجع جولدن كوست",
+    "value": "Golden Coast Resort - Next Deal"
+  },
+  {
+    "label": "Olympic Village القريه الاوليمبيه",
+    "value": "Olympic Village"
+  },
+  {
+    "label": "El Ein Bay Resort منتجع العين باى",
+    "value": "El Ein Bay Resort - New Giza"
+  },
+  {
+    "label": "Palmera Hotel & Resort فندق ومنتجع بالميرا",
+    "value": "Palmera Hotel & Resort"
+  },
+  {
+    "label": "El Wadi Resort - منتجع الوادي",
+    "value": "El Wadi Resort - Next Deal"
+  },
+  {
+    "label": "Belagio Resort - منتجع بيلاجيو",
+    "value": "Belagio Resort - Next Deal"
+  },
+  {
+    "label": "New Venice نيو فينيس",
+    "value": "New Venice"
+  },
+  {
+    "label": "Stella Di Mare 2 - ستيلا دى مارى 2",
+    "value": "Stella Di Mare 2 - Remco"
+  },
+  {
+    "label": "Empire Resort منتجع امباير",
+    "value": "Empire Resort"
+  },
+  {
+    "label": "La Jolie لاجولي",
+    "value": "La Jolie"
+  },
+  {
+    "label": "Stella Di Mare Country Club - ستيلا دى مارى كونترى كلوب",
+    "value": "Stella Di Mare Country Club - Remco"
+  },
+  {
+    "label": "Sokhna Heights السخنة هايتس",
+    "value": "Sokhna Heights"
+  },
+  {
+    "label": "Zekrayat El Sokhna Beach شاطئ ذكريات السخنة",
+    "value": "Zekrayat El Sokhna Beach"
+  },
+  {
+    "label": "Tulip توليب",
+    "value": "Tulip"
+  },
+  {
+    "label": "Marina Wadi El Dome Resort - منتجع مارينا وادي الدوم",
+    "value": "Marina Wadi El Dome Resort - Ora"
+  },
+  {
+    "label": "El Sokhna Village قرية السخنة",
+    "value": "El Sokhna Village"
+  },
+  {
+    "label": "Orlando 2 Resort - منتجع أورلاندو 2",
+    "value": "Orlando 2 Resort - El Tayar Group"
+  },
+  {
+    "label": "Ocean Blue Resort - منتجع اوشن بلو",
+    "value": "Ocean Blue Resort - Seldar Misr"
+  },
+  {
+    "label": "La Vista 5 - لافيستا 5",
+    "value": "La Vista 5"
+  },
+  {
+    "label": "La Vista 2 - لافيستا 2",
+    "value": "La Vista 2"
+  },
+  {
+    "label": "Santa Claus Resort - سانتا كلوز ريزورت",
+    "value": "Santa Claus Resort - Next Deal"
+  },
+  {
+    "label": "Amigo Beach اميجو بيتش",
+    "value": "Amigo Beach"
+  },
+  {
+    "label": "Marina Resort - منتجع مارينا",
+    "value": "Marina Resort - Wadi Degla"
+  },
+  {
+    "label": "Misr Senin - مصر سينين",
+    "value": "Misr Senin"
+  },
+  {
+    "label": "Louly Beach Resort - لولى بيتش ريزورت",
+    "value": "Louly Beach Resort - Next Deal"
+  },
+  {
+    "label": "Blumar El Dome - بلومار السخنة",
+    "value": "Blumar El Dome - Wadi Degla"
+  },
+  {
+    "label": "Canary Beach 1 - كنارى بيتش 1",
+    "value": "Canary Beach 1 - Eshak Group"
+  },
+  {
+    "label": "Holiday Beach - هوليداي بيتش",
+    "value": "Holiday Beach"
+  },
+  {
+    "label": "Orlando 1 Resort - منتجع أورلاندو 1 ",
+    "value": "Orlando 1 Resort - El Tayar Group"
+  },
+  {
+    "label": "La Vista 7 - لافيستا 7",
+    "value": "La Vista 7"
+  },
+  {
+    "label": "Boho Resort - بوهو ريزورت",
+    "value": "Boho Resort - Atric"
+  },
+  {
+    "label": "Ibiza Chillout - ابيزا تشيل أوت",
+    "value": "Ibiza Chillout - Master Group"
+  },
+  {
+    "label": "El Manal 2 Resort - منتجع المنال 2",
+    "value": "El Manal 2 Resort - Amigo"
+  },
+  {
+    "label": "Blumar Hills - بلومار هيلز",
+    "value": "Blumar Hills - Wadi Degla"
+  },
+  {
+    "label": "Amexco Paradise Resort - منتجع امكسكو باراديس",
+    "value": "Amexco Paradise Resort - AL Farghali"
+  },
+  {
+    "label": "El Sadat Beach - شاطئ السادات",
+    "value": "El Sadat Beach"
+  },
+  {
+    "label": "Ein Resort - منتجع العين",
+    "value": "Ein Resort"
+  },
+  {
+    "label": "Venecia Bent El Sultan - فينيسيا بنت السلطان",
+    "value": "Venecia Bent El Sultan"
+  },
+  {
+    "label": "Bella Vista Resort - منتجع بيلا فيستا",
+    "value": "Bella Vista Resort"
+  },
+  {
+    "label": "Royal Zafarana Hotel - فندق رويال الزعفرانة",
+    "value": "Royal Zafarana Hotel"
+  },
+  {
+    "label": "Viva El Sokhna Resort - فيفا السخنة ريزورت",
+    "value": "Viva El Sokhna Resort - Red Sea Safari "
+  },
+  {
+    "label": "El Ein Bay 2 Resort - منتجع العين باى 2",
+    "value": "El Ein Bay 2 Resort - New Giza"
+  },
+  {
+    "label": "Ramada رمادا",
+    "value": "Ramada"
+  },
+  {
+    "label": "La Vista 3 لافيستا 3",
+    "value": "La Vista 3"
+  },
+  {
+    "label": "Kai Resort - منتجع كاي",
+    "value": "Kai Resort - Misr Itaila"
+  },
+  {
+    "label": "El Zohour Village for The Armed Forces قرية الزهور للقوات المسلحة",
+    "value": "El Zohour Village for The Armed Forces"
+  },
+  {
+    "label": "Jet Beach Village قرية جيت بيتش",
+    "value": "Jet Beach Village"
+  },
+  {
+    "label": "El Manal 1 Resort - منتجع المنال 1",
+    "value": "El Manal 1 Resort - Amigo"
+  },
+  {
+    "label": "Majesty Bay Al Galala - ماجيستى باى الجلالة",
+    "value": "Majesty Bay Al Galala - Lasirena"
+  },
+  {
+    "label": "Canary Beach 2 - كنارى بيتش 2",
+    "value": "Canary Beach 2 - Eshak Group"
+  },
+  {
+    "label": "Aquarious Resort - منتجع أكواريوس",
+    "value": "Aquarious Resort"
+  },
+  {
+    "label": "Amego 3 Resort - قرية اميجو 3",
+    "value": "Amego 3 Resort"
+  },
+  {
+    "label": "Fanar De Luna - فانار دي لونا",
+    "value": "Fanar De Luna"
+  },
+  {
+    "label": "La Vista 4 - لافيستا 4",
+    "value": "La Vista 4"
+  },
+  {
+    "label": "Hoour Moheb Resort - قرية حورمحب",
+    "value": "Hoour Moheb Resort - Egyco"
+  },
+  {
+    "label": "Regina Ain Sokhna - ريجينا العين السخنة",
+    "value": "Regina Ain Sokhna"
+  },
+  {
+    "label": "Semad Resort - منتجع سماد",
+    "value": "Semad Resort"
+  },
+  {
+    "label": "Dolphins Beach Resort - El Hegaz منتجع دولفينز بيتش - الحجاز",
+    "value": "Dolphins Beach Resort - El Hegaz"
+  },
+  {
+    "label": "Movenpick Sokhna - موفنبيك السخنة",
+    "value": "Movenpick Sokhna"
+  }
+]

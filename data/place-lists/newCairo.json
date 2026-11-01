@@ -1,0 +1,1166 @@
+[
+  {
+      "label": "90th Street - Northern 90th St. - شارع التسعين الشمالى",
+      "value": "90th Street-Northern 90th St."
+  },
+  {
+      "label": "90th Street-Southern 90th St. - شارع التسعين الجنوبى",
+      "value": "90th Street-Southern 90th St."
+  },
+  {
+      "label": "90th Street-90th st After AUC - شارع التسعين بعد الجامعة الامريكية",
+      "value": "90th Street-90th st After AUC"
+  },
+  {
+      "label": "90th Street-90th st Front AUC - شارع التسعين أمام الجامعة الأمريكية",
+      "value": "90th Street-90th st Front AUC"
+  },
+  {
+    "label": "American University Housing District - الجامعة الأمريكية منطقة الاسكان",
+    "value": "American University Housing District"
+},
+  {
+      "label": "Madinaty - مدينتى",
+      "value": "Madinaty"
+  },
+  {
+      "label": "Madinaty-Villas - مدينتى - الفيلات",
+      "value": "Madinaty-Villas"
+  },
+  {
+      "label": "Madinaty-Buildings Area (B1) - (ب1) مدينتى - منطقة العمارات",
+      "value": "Madinaty-Buildings Area (B1)"
+  },
+  {
+      "label": "Madinaty-Buildings Area (B2) - مدينتى - منطقة العمارات (ب2) ",
+      "value": "Madinaty-Buildings Area (B2)"
+  },
+  {
+      "label": "Madinaty-Buildings Area (B3) - مدينتى - منطقة العمارات (ب3)",
+      "value": "Madinaty-Buildings Area (B3)"
+  },
+  {
+      "label": "Madinaty-Buildings Area (B6) - مدينتى - منطقة العمارات (ب6)",
+      "value": "Madinaty-Buildings Area (B6)"
+  },
+  {
+      "label": "Madinaty-Buildings Area (B7) - مدينتى - منطقة العمارات (ب7)",
+      "value": "Madinaty-Buildings Area (B7)"
+  },
+  {
+      "label": "Madinaty-Buildings Area (B8) - مدينتى - منطقة العمارات (ب8)",
+      "value": "Madinaty-Buildings Area (B8)"
+  },
+  {
+      "label": "Madinaty-Buildings Area (B10) - مدينتى - منطقة العمارات (ب10)",
+      "value": "Madinaty-Buildings Area (B10)"
+  },
+  {
+      "label": "Madinaty-Buildings Area (B11) - مدينتى - منطقة العمارات (ب11)",
+      "value": "Madinaty-Buildings Area (B11)"
+  },
+  {
+      "label": "Madinaty-Buildings Area (B12) - مدينتى - منطقة العمارات (ب12)",
+      "value": "Madinaty-Buildings Area (B12)"
+  },
+  {
+      "label": "Madinaty-Buildings Area (B13) - مدينتى - منطقة العمارات (ب13)",
+      "value": "Madinaty-Buildings Area (B13)"
+  },
+  {
+      "label": "Madinaty-Buildings Area (B14) - مدينتى - منطقة العمارات (ب14)",
+      "value": "Madinaty-Buildings Area (B14)"
+  },
+  {
+      "label": "Madinaty-Buildings Area (B15) - مدينتى - منطقة العمارات (ب15)",
+      "value": "Madinaty-Buildings Area (B15)"
+  },
+  {
+      "label": "Madinaty-Sporting Club - مدينتى - النادى الرياضي",
+      "value": "Madinaty-Sporting Club"
+  },
+  {
+      "label": "Madinaty-Golf Club - مدينتى - نادى الجولف",
+      "value": "Madinaty-Golf Club"
+  },
+  {
+      "label": "Madinaty-City Center - مدينتى - سيتى سنتر ",
+      "value": "Madinaty-City Center"
+  },
+  {
+      "label": "Madinaty-Green Belt - مدينتى - الحزام الأخضر",
+      "value": "Madinaty-Green Belt"
+  },
+  {
+      "label": "Madinaty-East Hub Mall - مدينتى - ايست هب مول",
+      "value": "Madinaty-East Hub Mall"
+  },
+  {
+      "label": "Madinaty-Downtown Madinaty - مدينتى - وسط مدينتى",
+      "value": "Madinaty-Downtown Madinaty"
+  },
+  {
+      "label": "Madinaty-Craft Zone Mall - مدينتى - كرافت زون مول",
+      "value": "Madinaty-Craft Zone Mall"
+  },
+  {
+      "label": "Madinaty-South Park - مدينتى - ساوث بارك",
+      "value": "Madinaty-South Park"
+  },
+  {
+      "label": "Madinaty-Central Park - مدينتى - سنترال بارك",
+      "value": "Madinaty-Central Park"
+  },
+  {
+      "label": "Madinaty-City Bolivar - مدينتى - سيتى بوليفار",
+      "value": "Madinaty-City Bolivar"
+  },
+  {
+      "label": "Madinaty-Mega Mall - مدينتى - ميجا مول",
+      "value": "Madinaty-Mega Mall"
+  },
+  {
+      "label": "Madinaty-Work Shops - مدينتى - منطقة التصلحيات",
+      "value": "Madinaty-Work Shops"
+  },
+  {
+      "label": "Madinaty-Buildings Area - مدينتى - منطقة العمارات",
+      "value": "Madinaty-Buildings Area"
+  },
+  {
+      "label": "Madinaty-Collages Area - مدينتى - منطقة الجامعات",
+      "value": "Madinaty-Collages Area"
+  },
+  {
+      "label": "Madinaty-Golf Area - مدينتى - منطقة الجولف",
+      "value": "Madinaty-Golf Area"
+  },
+  {
+      "label": "Madinaty-Privado Compound - مدينتى - بريفادوا",
+      "value": "Madinaty-Privado Compound"
+  },
+  {
+      "label": "Madinaty-Other Neighborhoods - مدينتى - الأحياء الأخرى",
+      "value": "Madinaty-Other Neighborhoods"
+  },
+  {
+      "label": "Bait El Watan - بيت الوطن",
+      "value": "Bait El Watan"
+  },
+  {
+      "label": "First Neighborhood - الحى الأول",
+      "value": "First Neighborhood"
+  },
+  {
+      "label": "Fifth Neighborhood - الحى الخامس",
+      "value": "Fifth Neighborhood"
+  },
+  {
+      "label": "Second Neighborhood - الحى الثانى",
+      "value": "Second Neighborhood"
+  },
+  {
+      "label": "Fourth Neighborhood - الحى الرابع",
+      "value": "Fourth Neighborhood"
+  },
+  {
+      "label": "Third Neighborhood - الحى الثالث",
+      "value": "Third Neighborhood"
+  },
+  {
+      "label": "Sixth Neighborhood - الحى السادس",
+      "value": "Sixth Neighborhood"
+  },
+  {
+      "label": "Seventh Neighborhood - الحى السابع",
+      "value": "Seventh Neighborhood"
+  },
+  {
+      "label": "Eighth Neighborhood - الحى الثامن",
+      "value": "Eighth Neighborhood"
+  },
+  {
+      "label": "South Suez Road - El Hay El Takmely - جنوب طريق السويس - الحى التكميلى",
+      "value": "South Suez Road - El Hay El Takmely"
+  },
+  {
+      "label": "El Narges - النرجس",
+      "value": "ElNarges"
+  },
+  {
+      "label": "El Narges Omarat - النرجس عمارات",
+      "value": "El Narges Omarat"
+  },
+  {
+      "label": "El Narges 1 - النرجس 1",
+      "value": "El Narges 1"
+  },
+  {
+      "label": "El Narges 2 - النرجس 2",
+      "value": "El Narges 2"
+  },
+  {
+      "label": "El Narges 5 - النرجس 5",
+      "value": "El Narges 5"
+  },
+  {
+      "label": "El Narges 3 - النرجس 3",
+      "value": "El Narges 3"
+  },
+  {
+      "label": "El Narges 4 - النرجس 4",
+      "value": "El Narges 4"
+  },
+  {
+      "label": "El Narges 6 - النرجس 6",
+      "value": "El Narges 6"
+  },
+  {
+      "label": "El Narges 7 - النرجس 7",
+      "value": "El Narges 7"
+  },
+  {
+      "label": "El Narges 8 - النرجس 8",
+      "value": "El Narges 8"
+  },
+  {
+      "label": "New Narges - النرجس الجديدة",
+      "value": "New Narges"
+  },
+  {
+      "label": "El Rehab - الرحاب ",
+      "value": "ElRehab "
+  },
+  {
+      "label": "El Rehab-Phase 1 - الرحاب المرحلة 1",
+      "value": "El Rehab-Phase 1"
+  },
+  {
+      "label": "El Rehab-Phase 2 - الرحاب المرحلة 2",
+      "value": "El Rehab-Phase 2"
+  },
+  {
+      "label": "El Rehab-Phase 3 - الرحاب المرحلة 3",
+      "value": "El Rehab-Phase 3"
+  },
+  {
+      "label": "El Rehab-Phase 4 - الرحاب المرحلة 4",
+      "value": "El Rehab-Phase 4"
+  },
+  {
+      "label": "El Rehab-Phase 5 - الرحاب المرحلة 5",
+      "value": "El Rehab-Phase 5"
+  },
+  {
+      "label": "El Rehab-Phase 6 - الرحاب المرحلة 6",
+      "value": "El Rehab-Phase 6"
+  },
+  {
+      "label": "El Rehab-Extension of Rehab - الرحاب - امتداد الرحاب",
+      "value": "El Rehab-Extension of Rehab"
+  },
+  {
+      "label": "El Rehab-Rehab Hills - الرحاب - الرحاب هيلز",
+      "value": "El Rehab-Rehab Hills"
+  },
+  {
+      "label": "El Rehab-Malls and Markets - الرحاب المولات والأسواق",
+      "value": "El Rehab-Malls and Markets"
+  },
+  {
+      "label": "North El Rehab - شمال الرحاب",
+      "value": "North El Rehab"
+  },
+  {
+      "label": "El Rehab-Other Neighborhoods - الرحاب - أحياء أخرى",
+      "value": "El Rehab-Other Neighborhoods"
+  },
+  {
+      "label": "El Banafseg - البنفسج",
+      "value": "ElBanafseg"
+  },
+  {
+      "label": "El Banafseg Omarat - البنفسج عمارات",
+      "value": "El Banafseg Omarat"
+  },
+  {
+      "label": "El Banafseg 1 - البنفسج 1",
+      "value": "El Banafseg 1"
+  },
+  {
+      "label": "El Banafseg 2 - البنفسج 2",
+      "value": "El Banafseg 2"
+  },
+  {
+      "label": "El Banafseg 3 - البنفسج 3",
+      "value": "El Banafseg 3"
+  },
+  {
+      "label": "El Banafseg 4 - البنفسج 4",
+      "value": "El Banafseg 4"
+  },
+  {
+      "label": "El Banafseg 5 - البنفسج 5",
+      "value": "El Banafseg 5"
+  },
+  {
+      "label": "El Banafseg 6 - البنفسج 6",
+      "value": "El Banafseg 6"
+  },
+  {
+      "label": "El Banafseg 7 - البنفسج 7",
+      "value": "El Banafseg 7"
+  },
+  {
+      "label": "El Banafseg 8 - البنفسج 8",
+      "value": "El Banafseg 8"
+  },
+  {
+      "label": "El Banafseg 9 - البنفسج 9",
+      "value": "El Banafseg 9"
+  },
+  {
+      "label": "El Banafseg 10 - البنفسج 10",
+      "value": "El Banafseg 10"
+  },
+  {
+      "label": "El Banafseg 11 - البنفسج 11",
+      "value": "El Banafseg 11"
+  },
+  {
+      "label": "El Banafseg 12 - البنفسج 12",
+      "value": "El Banafseg 12"
+  },
+  {
+      "label": "El Banafseg Services Area - البنفسج منطقة الخدمات",
+      "value": "El Banafseg Services Area"
+  },
+  {
+      "label": "El Banafseg Villas - البنفسج فيلات",
+      "value": "El Banafseg Villas"
+  },
+  {
+      "label": "El Mostakbal City - مدينة المستقبل",
+      "value": "El Mostakbal City"
+  },
+  {
+      "label": "El Mostakbal City-Monte Napoleone Compound - مدينة المستقبل - مونت نابليون",
+      "value": "El Mostakbal City-Monte Napoleone Compound - Reportage"
+  },
+  {
+      "label": "El Mostakbal City-Bloomfields Compound - مدينة المستقبل - بلوومز فيلد",
+      "value": "El Mostakbal City-Bloomfields Compound - Tatweer Misr"
+  },
+  {
+      "label": "El Mostakbal City-Green Square Compound - مدينة المستقبل - جرين سكوير",
+      "value": "El Mostakbal City-Green Square Compound - Al Ahly Sabbour"
+  },
+  {
+      "label": "El Mostakbal City-La Mirada Compound - مدينة المستقبل - لا ميرادا",
+      "value": "El Mostakbal City-La Mirada Compound - Grand Plaza"
+  },
+  {
+      "label": "El Mostakbal City-Beta Greens Compound - مدينة المستقبل - بيتا جرينز",
+      "value": "El Mostakbal City-Beta Greens Compound - Beta Egypt"
+  },
+  {
+      "label": "El Mostakbal City-HAP Town Compound - مدينة المستقبل - هاب تاون",
+      "value": "El Mostakbal City-HAP Town Compound - Hassan Allam"
+  },
+  {
+      "label": "El Mostakbal City-Il Bosco City Compound - مدينة المستقبل - ال بوسكو سيتى",
+      "value": "El Mostakbal City-Il Bosco City Compound - Misr Itaila"
+  },
+  {
+      "label": "El Mostakbal City-L'avenir Compound - مدينة المستقبل - لافينير",
+      "value": "El Mostakbal City-L'avenir Compound - Al Ahly Sabbour"
+  },
+  {
+      "label": "El Mostakbal City-Zizinia El Mostakbal Compound - مدينة المستقبل - زيزينيا المستقبل",
+      "value": "El Mostakbal City-Zizinia El Mostakbal Compound - ARDIC"
+  },
+  {
+      "label": "El Mostakbal City-Neopolis Compound - مدينة المستقبل - نيوبوليس",
+      "value": "El Mostakbal City-Neopolis Compound - Wadi Degla"
+  },
+  {
+      "label": "El Mostakbal City-Golf Porto Cairo - مدينة المستقبل - جولف بورتو كايرو",
+      "value": "El Mostakbal City-Golf Porto Cairo - Porto Group"
+  },
+  {
+      "label": "El Mostakbal City-The City of Odyssia - مدينة المستقبل - مدينة اوديسا",
+      "value": "El Mostakbal City-The City of Odyssia - Al Ahly Sabbour"
+  },
+  {
+      "label": "El Mostakbal City-Aria Compound - مدينة المستقبل - اريا",
+      "value": "El Mostakbal City-Aria Compound - Landmark Sabbour"
+  },
+  {
+      "label": "El Mostakbal City-Rare Compound - مدينة المستقبل - راير",
+      "value": "El Mostakbal City-Rare Compound - Al Ahly Sabbour"
+  },
+  {
+      "label": "El Mostakbal City-The Ridge Compound - مدينة المستقبل - ذا ريدج",
+      "value": "El Mostakbal City-The Ridge Compound - Al Ahly Sabbour"
+  },
+  {
+      "label": "El Mostakbal City-The Canyon Compound - مدينة المستقبل - ذا كانيون",
+      "value": "El Mostakbal City-The Canyon Compound - Maxim"
+  },
+  {
+      "label": "El Mostakbal City-Nyoum Mostakbal Compound - مدينة المستقبل - نيوم مستقبل",
+      "value": "El Mostakbal City-Nyoum Mostakbal Compound - Arab Developers "
+  },
+  {
+      "label": "El Mostakbal City-The Rift Business Park - مدينة المستقبل - ذا ريفت بيزنس بارك",
+      "value": "El Mostakbal City-The Rift Business Park - LUD"
+  },
+  {
+      "label": "El Mostakbal City-Vera Compound - مدينة المستقبل - فيرا",
+      "value": "El Mostakbal City-Vera Compound - ARDIC "
+  },
+  {
+      "label": "El Mostakbal City-The Wonder MarQ Compound - مدينة المستقبل - ذا وندر مارك",
+      "value": "El Mostakbal City-The Wonder MarQ Compound - The MarQ"
+  },
+  {
+      "label": "El Mostakbal City-Park 226 Haptown Compound - مدينة المستقبل - بارك 226 هابتاون",
+      "value": "El Mostakbal City-Park 226 Haptown Compound - Hassan Allam"
+  },
+  {
+      "label": "El Mostakbal City-Alaire Compound - مدينة المستقبل - ألير",
+      "value": "El Mostakbal City-Alaire Compound - Al Ahly Sabbour"
+  },
+  {
+      "label": "El Mostakbal City-Via Montenapoleone Mall - مدينة المستقبل - فيا مونت نابوليون مول",
+      "value": "El Mostakbal City-Via Montenapoleone Mall - Reportage"
+  },
+  {
+      "label": "El Mostakbal City-Rosail City Compound - مدينة المستقبل - روزيل سيتى",
+      "value": "El Mostakbal City-Rosail City Compound - Khaled Sabry Holding"
+  },
+  {
+      "label": "El Mostakbal City-Monark Residence - مدينة المستقبل - مونارك ريزيدنس",
+      "value": "El Mostakbal City-Monark Residence - Royal"
+  },
+  {
+      "label": "El Yasmeen - الياسمين",
+      "value": "ElYasmeen"
+  },
+  {
+      "label": "El Yasmeen 1 - الياسمين 1 ",
+      "value": "El Yasmeen 1"
+  },
+  {
+      "label": "El Yasmeen 2 - الياسمين 2",
+      "value": "El Yasmeen 2"
+  },
+  {
+      "label": "El Yasmeen 3 - الياسمين 3",
+      "value": "El Yasmeen 3"
+  },
+  {
+      "label": "El Yasmeen 4 - الياسمين 4",
+      "value": "El Yasmeen 4"
+  },
+  {
+      "label": "El Yasmeen 5 - الياسمين 5",
+      "value": "El Yasmeen 5"
+  },
+  {
+      "label": "El Yasmeen 6 - الياسمين 6",
+      "value": "El Yasmeen 6"
+  },
+  {
+      "label": "El Yasmeen 7 - الياسمين 7",
+      "value": "El Yasmeen 7"
+  },
+  {
+      "label": "El Yasmeen 8 - الياسمين 8",
+      "value": "El Yasmeen 8"
+  },
+  {
+      "label": "El-Koronfel - القرنفل",
+      "value": "El-Koronfel"
+  },
+  {
+      "label": "El Ahyaa-First Neighborhood - الأحياء - الحى الأول",
+      "value": "El Ahyaa-First Neighborhood"
+  },
+  {
+      "label": "El Ahyaa-Second Neighborhood - الأحياء - الحى الثانى",
+      "value": "El Ahyaa-Second Neighborhood"
+  },
+  {
+      "label": "El Ahyaa-Third Neighborhood - الأحياء - الحى الثالث",
+      "value": "El Ahyaa-Third Neighborhood"
+  },
+  {
+      "label": "El Ahyaa-Fourth Neighborhood - الأحياء - الحى الرابع",
+      "value": "El Ahyaa-Fourth Neighborhood"
+  },
+  {
+      "label": "El Ahyaa-Fifth Neighborhood - الأحياء - الحى الخامس",
+      "value": "El Ahyaa-Fifth Neighborhood"
+  },
+  {
+      "label": "El Ahyaa-Hay El Qudah - الأحياء - حى القودة",
+      "value": "El Ahyaa-Hay El Qudah"
+  },
+  {
+      "label": "South of Academy - جنوب الأكاديمية",
+      "value": "SouthOfAcademy"
+  },
+  {
+      "label": "South Academy (A) - جنوب الأكاديمية (أ)",
+      "value": "South Academy (A)"
+  },
+  {
+      "label": "South Academy (B) - جنوب الأكاديمية (ب)",
+      "value": "South Academy (B)"
+  },
+  {
+      "label": "South Academy (D) - جنوب الأكاديمية (د)",
+      "value": "South Academy (D)"
+  },
+  {
+      "label": "South Academy (G) - جنوب الأكاديمية (ج)",
+      "value": "South Academy (G)"
+  },
+  {
+      "label": "South Academy (H) - جنوب الأكاديمية (ه)",
+      "value": "South Academy (H)"
+  },
+  {
+      "label": "South Academy (O) - جنوب الأكاديمية (و)",
+      "value": "South Academy (O)"
+  },
+  {
+      "label": "South Academy (Z) - جنوب الأكاديمية (ز)",
+      "value": "South Academy (Z)"
+  },
+  {
+      "label": "South Academy-Orouba Axis - جنوب الأكاديمية - محور العروبة",
+      "value": "South Academy-Orouba Axis"
+  },
+  {
+      "label": "New Cairo Extension - امتداد القاهرة الجديدة",
+      "value": "New Cairo Extension"
+  },
+  {
+      "label": "Industrial Zone - المنطقة الصناعية",
+      "value": "Industrial Zone"
+  },
+  {
+      "label": "Lotus North - شمال اللوتس",
+      "value": "LotusNorth"
+  },
+  {
+      "label": "Lotus South - جنوب اللوتس",
+      "value": "LotusSouth"
+  },
+  {
+      "label": "New Lotus - اللوتس الجديدة",
+      "value": "New Lotus"
+  },
+  {
+      "label": "El Andalus - الأندلس",
+      "value": "El Andalus"
+  },
+  {
+      "label": "El Andalus 1 - الأندلس 1",
+      "value": "El Andalus 1"
+  },
+  {
+      "label": "El Andalus 2 - الأندلس 2",
+      "value": "El Andalus 2"
+  },
+  {
+      "label": "El Andalus Family - عائلة الأندلس",
+      "value": "El Andalus Family"
+  },
+  {
+      "label": "El Andalus El Motamayez - الأندلس المتميز",
+      "value": "El Andalus El Motamayez"
+  },
+  {
+      "label": "Takseam El Andlos - تقسيم الأندلس",
+      "value": "Takseam El Andlos"
+  },
+  {
+      "label": "Southern Investors - المستثمرين الجنوبية",
+      "value": "Southern Investors"
+  },
+  {
+      "label": "El Choueifat - الشويفات",
+      "value": "El Choueifat"
+  },
+  {
+      "label": "Gharb El Golf - غرب الجولف",
+      "value": "Gharb El Golf"
+  },
+  {
+      "label": "Gharb Arabella - غرب ارابيلا",
+      "value": "Gharb Arabella"
+  },
+  {
+      "label": "Dar Misr - دار مصر",
+      "value": "Dar Misr"
+  },
+  {
+      "label": "Katameya - القطامية",
+      "value": "Katameya"
+  },
+  {
+      "label": "Northern Investors - المستثمرين الشمالية",
+      "value": "Northern Investors"
+  },
+  {
+      "label": "Down Town - New Cairo - داون تاون - القاهرة الجديدة",
+      "value": "Down Town - New Cairo"
+  },
+  {
+      "label": "Banks Center Street - شارع مجمع البنوك",
+      "value": "Banks Center Street"
+  },
+  {
+      "label": "El Tamer Hena - التمر حنة",
+      "value": "El Tamer Hena"
+  },
+  {
+      "label": "Diplomats - الدبلوماسين",
+      "value": "Diplomats"
+  },
+  {
+      "label": "Extension Northern Investors - امتداد المستثمرين الشمالية",
+      "value": "Extension Northern Investors"
+  },
+  {
+      "label": "El Gameyat - الجامعات",
+      "value": "El Gameyat"
+  },
+  {
+      "label": "Mohammed Naguib Axis - محور محمد نجيب ",
+      "value": "Mohammed Naguib Axis "
+  },
+  {
+      "label": "Suez Rd - طريق السويس",
+      "value": "Suez Rd"
+  },
+  {
+      "label": "Ard El Zohoor - أرض الزهور",
+      "value": "Ard El Zohoor"
+  },
+  {
+      "label": "Gamal Abdel Nasser Axis - محور جمال عبد الناصر",
+      "value": "Gamal Abdel Nasser Axis"
+  },
+  {
+      "label": "Mothalath El Amal - مثلث الأمل",
+      "value": "Mothalath El Amal"
+  },
+  {
+      "label": "Ring Road - الطريق الدائرى",
+      "value": "Ring Road"
+  },
+  {
+      "label": "Ain El Sokhna Rd - طريق العين السخنة",
+      "value": "Ain El Sokhna Rd"
+  },
+  {
+      "label": "Tagammoa 3 - التجمع الثالث",
+      "value": "Tagammoa 3"
+  },
+  {
+      "label": "Tagammoa 3-1st District - التجمع الثالث - المنطقة الأولى",
+      "value": "Tagammoa 3-1st District"
+  },
+  {
+      "label": "Tagammoa 3-2nd District - التجمع الثالث - المنطقة الثانية",
+      "value": "Tagammoa 3-2nd District"
+  },
+  {
+      "label": "Tagammoa 3-3rd District - التجمع الثالث - المنطقة 3",
+      "value": "Tagammoa 3-3rd District"
+  },
+  {
+      "label": "Tagammoa 3-4th District - التجمع الثالث - المنطقة 4",
+      "value": "Tagammoa 3-4th District"
+  },
+  {
+      "label": "Tagammoa 3-El Shabab - التجمع الثالث - الشباب",
+      "value": "Tagammoa 3-El Shabab"
+  },
+  {
+      "label": "Tagammoa 1 - التجمع الأول",
+      "value": "Tagammoa1"
+  },
+  {
+      "label": "Tagammoa 1-The Districts - التجمع الأول - المناطق",
+      "value": "Tagammoa 1-The Districts"
+  },
+  {
+      "label": "Tagammoa 1-Police Academy - التجمع الأول - أكاديمية الشرطة",
+      "value": "Tagammoa 1-Police Academy"
+  },
+  {
+      "label": "Tagammoa 1-Sharq El Academya - التجمع الأول - شرق الأكاديمية",
+      "value": "Tagammoa 1-Sharq El Academya"
+  },
+  {
+      "label": "Tagammoa 1-Sharq El Academya 2 - التجمع الأول - شرق الأكاديمية 2",
+      "value": "Tagammoa 1-Sharq El Academya 2"
+  },
+  {
+      "label": "Tagammoa 1-El Nakhil - التجمع الأول - النخيل",
+      "value": "Tagammoa 1-El Nakhil"
+  },
+  {
+      "label": "Tagammoa 1-Mirage City - التجمع الأول - ميراج سيتى",
+      "value": "Tagammoa 1-Mirage City"
+  },
+  {
+      "label": "Tagammoa 1-Eskan El Shabab - التجمع الأول - اسكان الشباب",
+      "value": "Tagammoa 1-Eskan El Shabab"
+  },
+  {
+      "label": "Tagammoa 1-El Amn El A'am - التجمع الأول - الأمن العام",
+      "value": "Tagammoa 1-El Amn El A'am"
+  },
+  {
+      "label": "Mohamed Zaki Square - ميدان محمد ذكى",
+      "value": "Mohamed Zaki Square"
+  },
+  {
+      "label": "El Sadat Axis - محور السادات",
+      "value": "El Sadat Axis"
+  },
+  {
+      "label": "New Katameya - القطامية الجديدة",
+      "value": "New Katameya"
+  },
+  {
+      "label": "New El Andalous - الأندلس الجديدة",
+      "value": "New El Andalous"
+  },
+  {
+      "label": "Other neighborhoods In New Cairo - أحياء أخرى فى القاهرة الجديدة",
+      "value": "Other neighborhoods In New Cairo"
+  },
+  {
+      "label": "Mivida Compound - Emaar - ميفيدا - اعمار مصر",
+      "value": "Mivida"
+  },
+  {
+      "label": "Gardenia Heights - Abo El Hawl - جاردينيا هايتس - أبو الهول",
+      "value": "Gardenia Heights - Abo El Hawl"
+  },
+  {
+      "label": "Hyde Park Compound - هايد بارك",
+      "value": "Hyde Park Compound"
+  },
+  {
+      "label": "Eastown Compound - ايستاون",
+      "value": "Eastown Compound - Sodic"
+  },
+  {
+      "label": "Mountain View iCity Compound - ماونتن فيو اى سيتى",
+      "value": "Mountain View iCity Compound - DMG"
+  },
+  {
+      "label": "Palm Hills New Cairo - بالم هيلز القاهلرة الجديدة ",
+      "value": "PalmHillsNewCairo"
+  },
+  {
+      "label": "Galleria Residence - جاليريا ريزيدنس",
+      "value": "Galleria Residence - Arabia"
+  },
+  {
+      "label": "Fifth Square Compound - فيفث سكوير",
+      "value": "Fifth Square Compound - AlMarasem"
+  },
+  {
+      "label": "Azad Compound - ازاد",
+      "value": "Azad Compound - Tameer"
+  },
+  {
+      "label": "Cairo Festival City Compound - كايرو فيستفال سيتى",
+      "value": "CairoFestivalCityCompound"
+  },
+  {
+      "label": "Mountain View Hyde Park Compound - ماونتن فيو هايد بارك",
+      "value": "Mountain View Hyde Park Compound"
+  },
+  {
+      "label": "Villette Compound - فيليت",
+      "value": "Villette Compound - Sodic"
+  },
+  {
+      "label": "Village Gate Compound - فيلدج جايت",
+      "value": "Village Gate Compound - Palm Hills"
+  },
+  {
+      "label": "Stone Residence - ستون ريزيدنس",
+      "value": "Stone Residence - PRE"
+  },
+  {
+      "label": "El Patio Oro Compound - ال باتيو اورو",
+      "value": "El Patio Oro Compound - La Vista"
+  },
+  {
+      "label": "Sarai Compound - ساراى",
+      "value": "Sarai Compound - Madinet Masr"
+  },
+  {
+      "label": "Sephora Heights Compound - سيفورا هايتس",
+      "value": "Sephora Heights Compound - Modon"
+  },
+  {
+      "label": "Kattameya Gardens Compound - قطامية جاردنز",
+      "value": "Kattameya Gardens Compound - North Africa"
+  },
+  {
+      "label": "Azzar Infinity Compound - ازار انفينيتى",
+      "value": "Azzar Infinity Compound - Reedy Group"
+  },
+  {
+      "label": "Nyoum Compound - نيوم",
+      "value": "Nyoum Compound - Arab Development"
+  },
+  {
+      "label": "The Village Compound - ذا فيلدج",
+      "value": "The Village Compound - Palm Hills"
+  },
+  {
+      "label": "Lake View Residence- لايك فيو ريزيدنس",
+      "value": "Lake View Residence - El Hazek"
+  },
+  {
+      "label": "Jayd Compound- جايد",
+      "value": "Jayd Compound - Secon"
+  },
+  {
+      "label": "Kattameya Heights Compound - قطامية هايتس ",
+      "value": "Kattameya Heights Compound"
+  },
+  {
+      "label": "The Square Compound - ذا سكوير",
+      "value": "The Square Compound - Sabbour"
+  },
+  {
+      "label": "Palm Hills Kattameya Compound - بالم هيلز قطامية ",
+      "value": "Palm Hills Kattameya Compound - PK1"
+  },
+  {
+      "label": "Katameya Dunes Compound - قطامية ديونز",
+      "value": "Katameya Dunes Compound - Cairo Investment"
+  },
+  {
+      "label": "Village Garden Kattameya (VGK) - فيلدج جاردن قطامية (فى جى كى)",
+      "value": "Village Garden Kattameya (VGK) - Palm Hills"
+  },
+  {
+      "label": "Layan Residence - ليان ريزيدنس",
+      "value": "Layan Residence - Landmark Sabbour"
+  },
+  {
+      "label": "Amorada Compound - امورادا",
+      "value": "Amorada Compound - Afaq"
+  },
+  {
+      "label": "Fifth Square Mall - فيفث سكوير مول",
+      "value": "Fifth Square Mall - Al Marasem"
+  },
+  {
+      "label": "The Address East Compound - ذى ادريس ايست",
+      "value": "The Address East Compound - Dorra"
+  },
+  {
+      "label": "El Patio 7 Compound - ال باتيو 7",
+      "value": "El Patio 7 Compound - La Vista"
+  },
+  {
+      "label": "The Icon Residence 1 - ذا ايكون ريزيدنس 1",
+      "value": "The Icon Residence 1 - Style home"
+  },
+  {
+      "label": "Taj City Compound - تاج سيتى كمبوند",
+      "value": "Taj City Compound - Madinet Masr"
+  },
+  {
+      "label": "Mountain View Executive Residence - ماونتن فيو ايكزيكتف ريزيدنس",
+      "value": "Mountain View Executive Residence"
+  },
+  {
+      "label": "Kattameya Creeks Compound - قطامية كرييكس",
+      "value": "Kattameya Creeks Compound - Starlight"
+  },
+  {
+      "label": "Lake View Compound - لايك فيو",
+      "value": "Lake View Compound - El Hazek"
+  },
+  {
+      "label": "El Nakheel Compound - النخيل",
+      "value": "El Nakheel Compound"
+  },
+  {
+      "label": "Les Rois Compound - لى روا",
+      "value": "Les Rois Compound - Housing and Development"
+  },
+  {
+      "label": "Zed East Compound - زد ايست",
+      "value": "Zed East Compound - ORA"
+  },
+  {
+      "label": "Palm Hills Kattameya Extension Compound - بالم هيلز قطامية اكستنشن",
+      "value": "Palm Hills Kattameya Extension Compound - PK2"
+  },
+  {
+      "label": "Porto Cairo Villas - بورتو كايرو فيلات",
+      "value": "Porto Cairo Villas - porto group"
+  },
+  {
+      "label": "Swan Lake Residence - سوان لايك",
+      "value": "Swan Lake Residence - Hassan Allam"
+  },
+  {
+      "label": "Dar Misr El Koronfel - دار مصر - القرنفل",
+      "value": "Dar Misr El Koronfel"
+  },
+  {
+      "label": "Midtown Compound - ميد تاون",
+      "value": "Midtown Compound - Better Home"
+  },
+  {
+      "label": "The Waterway Compound - ذا واتر واى",
+      "value": "The Waterway Compound"
+  },
+  {
+      "label": "District 5 Compound - ديستركت 5",
+      "value": "District 5 Compound - Marakez"
+  },
+  {
+      "label": "Regents Park Compound - ريجينتس بارك",
+      "value": "Regents Park Compound - Al Dawlia"
+  },
+  {
+      "label": "El Patio 1 Compound - ال باتيو 1",
+      "value": "El Patio 1 Compound - La Vista"
+  },
+  {
+      "label": "Bellagio Compound - بيلاجيو",
+      "value": "Bellagio Compound - Arco"
+  },
+  {
+      "label": "Hayati Residence - حياتى ريزيدنس",
+      "value": "Hayati Residence - Al Ghad Al Mushreq"
+  },
+  {
+      "label": "Kattameya Plaza Compound - قطامية بلازا",
+      "value": "Kattameya Plaza Compound - Sodic"
+  },
+  {
+      "label": "Taj Sultan Compound - تاج سلطان",
+      "value": "Taj Sultan Compound - Madinet Masr"
+  },
+  {
+      "label": "Dyar Compound - ديار",
+      "value": "Dyar Compound - Sabbour"
+  },
+  {
+      "label": "Village Avenue Compound - فيلدج افينيو",
+      "value": "Village Avenue Compound - Palm Hills"
+  },
+  {
+      "label": "Mountain View 2 Compound - ماونتن فيو 2",
+      "value": "Mountain View 2 Compound"
+  },
+  {
+      "label": "Stone Park Compound - ستون بارك",
+      "value": "Stone Park Compound - Roaya"
+  },
+  {
+      "label": "Park View Compound - بارك فيو",
+      "value": "Park View Compound - Hassan Allam"
+  },
+  {
+      "label": "Dyar Park Compound - ديار بارك",
+      "value": "Dyar Park Compound - Arco"
+  },
+  {
+      "label": "Trivium Square Mall - تريفيم سكوير مول",
+      "value": "Trivium Square Mall - INMA"
+  },
+  {
+      "label": "La Rose Compound - لا روز",
+      "value": "La Rose Compound - Secon"
+  },
+  {
+      "label": "Rihana Villas - ريحانا فيلات",
+      "value": "Rihana Villas - Future"
+  },
+  {
+      "label": "Century City Compound - سينتشرى سيتى",
+      "value": "Century City Compound - Vintage"
+  },
+  {
+      "label": "Fleur De Ville Compound - فلور دى فيل",
+      "value": "Fleur De Ville Compound - El Madaen Misr"
+  },
+  {
+      "label": "Value Mall 2 - فاليو مول 2",
+      "value": "Value Mall 2 - Al Watania"
+  },
+  {
+      "label": "Masraweya Compound - مصراوية",
+      "value": "Masraweya Compound - Zaghloul Holding"
+  },
+  {
+      "label": "Concord Gardens Compound - كونكورد جاردنز",
+      "value": "Concord Gardens Compound - Mena Group"
+  },
+  {
+      "label": "Etoile Des Villes Compound - ايتوال دى فيل",
+      "value": "Etoile Des Villes Compound - Al Ahly Sabbour"
+  },
+  {
+      "label": "Grand Residance - جراند ريزيدنس",
+      "value": "Grand Residance - Al Ahly Sabbour"
+  },
+  {
+      "label": "Medical Park Elite - ميديكال بارك",
+      "value": "Medical Park Elite - Al Rabat"
+  },
+  {
+      "label": "La Terra Compound - لا تيرا ",
+      "value": "La Terra Compound - El Gawda "
+  },
+  {
+      "label": "Moon Valley Compound 1 - مون فالى",
+      "value": "Moon Valley Compound 1 - Arabia"
+  },
+  {
+      "label": "Moon Valley Compound 2 - مون فالى 2",
+      "value": "Moon Valley Compound 2 - Arabia"
+  },
+  {
+      "label": "El Patio 2 Compound - ال باتيو 2",
+      "value": "El Patio 2 Compound - La Vista"
+  },
+  {
+      "label": "Mountain View 1 Compound - ماونتن فيو 1 ",
+      "value": "Mountain View 1 Compound "
+  },
+  {
+      "label": "Family City - فاميلى سيتى",
+      "value": "Family City - Egygab"
+  },
+  {
+      "label": "El Deyar Compound - الديار",
+      "value": "El Deyar Compound - Mokhabarat"
+  },
+  {
+      "label": "Business Plus - بيزنس بلس",
+      "value": "Business Plus - Catalyst"
+  },
+  {
+      "label": "Azadir Compound - ازادير",
+      "value": "Azadir Compound - OUD"
+  },
+  {
+      "label": "Trio Gardens Compound - تريو جاردنز",
+      "value": "Trio Gardens Compound - M Squared"
+  },
+  {
+      "label": "Tiba Compound - طيبا ",
+      "value": "Tiba Compound "
+  },
+  {
+      "label": "Ozone Medical Center - اوزون ميديكال سنتر",
+      "value": "Ozone Medical Center - Catalyst"
+  },
+  {
+      "label": "Mena Residence - مينا ريزيدنس",
+      "value": "Mena Residence"
+  },
+  {
+      "label": "90 Avenue Compound - افينيو 90",
+      "value": "90 Avenue Compound - Tabarak"
+  },
+  {
+      "label": "Riviera Heights Compound - ريفيرا هايتس",
+      "value": "Riviera Heights Compound - Nouva Stanza"
+  },
+  {
+      "label": "Kattameya Residence - القطامية ريزيدنس",
+      "value": "Kattameya Residence - Al Ahly Sabbour"
+  },
+  {
+      "label": "Gardenia Heights 3 - جاردينيا هايتس 3",
+      "value": "Gardenia Heights 3 - El Kamel"
+  },
+  {
+      "label": "Seasons Residence - سيزونز ريزيدنس",
+      "value": "Seasons Residence - Hassan Allam"
+  },
+  {
+      "label": "The Villa Compound - ذا فيلا",
+      "value": "The Villa Compound - Dorra"
+  },
+  {
+      "label": "One Piece Compound - وان بيس",
+      "value": "One Piece Compound - Al Fursan"
+  },
+  {
+      "label": "Maxim Country Club - ماكسيم كنترى كلوب ",
+      "value": "Maxim Country Club"
+  },
+  {
+      "label": "Madinet El Sahafyeen - مدينة الصحفيين",
+      "value": "Madinet El Sahafyeen"
+  },
+  {
+      "label": "Capital Gardens Compound - كابيتال جاردنز ",
+      "value": "Capital Gardens Compound - Palm Hills"
+  },
+  {
+      "label": "Dorat El Kahera Compound - درة القاهرة",
+      "value": "Dorat El Kahera Compound - Al Emara Al Hadetha"
+  },
+  {
+      "label": "Arabeya Compound - ارابيا",
+      "value": "Arabeya Compound"
+  },
+  {
+      "label": "Sunrise Compound - صن رايز",
+      "value": "Sunrise Compound - El Nasr Housing"
+  },
+  {
+      "label": "Fountain Park - فاونتن بارك",
+      "value": "Fountain Park"
+  },
+  {
+    "label": "Eagles Compound - ايجلز بارك",
+    "value": "Eagles Compound"
+},
+{
+    "label": "Celia - سيليا",
+    "value": "celia"
+},
+{
+    "label": "Al Maqsad Residences - المقصد ريزيدنس",
+    "value": "alMaqsedResidences"
+},
+{
+    "label": "La Vista City - لا فيستا سيتي",
+    "value": "laVistaCity"
+},
+{
+    "label": "The Capitalway - ذا كابيتال واي",
+    "value": "theCapitalway"
+},
+{
+    "label": "Il Bosco New Capital - البوسكو العاصمه الإداريه",
+    "value": "ilBoscoNewCapital"
+}
+]

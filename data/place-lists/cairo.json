@@ -1,0 +1,990 @@
+[
+  {
+    "label": "Ain Shams - عين شمس",
+    "value": "Ain Shams"
+  },
+  {
+    "label": "Ain Shams-Ahmed Esmat - عين شمس - أحمد عصمت",
+    "value": "Ain Shams-Ahmed Esmat"
+  },
+  {
+    "label": "Ain Shams-Al Naam - عين شمس - النعام",
+    "value": "Ain Shams-Al Naam"
+  },
+  {
+    "label": "Ain Shams-El Zahraa City - عين شمس - مدينة الزهراء",
+    "value": "Ain Shams-El Zahraa City"
+  },
+  {
+    "label": "Ain Shams-Helmyat El Zaitoun - عين شمس - حلمية الزيتون",
+    "value": "Ain Shams-Helmyat El Zaitoun"
+  },
+  {
+    "label": "Ain Shams-Ibrahim Abd El-Razik - عين شمس - ابراهيم عبد الرازق",
+    "value": "Ain Shams-Ibrahim Abd El-Razik"
+  },
+  {
+    "label": "Ain Shams-Mansheya El-Tahrir - عين شمس - منشية التحرير",
+    "value": "Ain Shams-Mansheya El-Tahrir"
+  },
+  {
+    "label": "Ain Shams-Mostafa Hafez - عين شمس - مصطفى حافظ",
+    "value": "Ain Shams-Mostafa Hafez"
+  },
+  {
+    "label": "Ain Shams-Alf Maskan - عين شمس - الألف مسكن",
+    "value": "Ain Shams-Alf Maskan"
+  },
+  {
+    "label": "Al Matareya - المطرية",
+    "value": "Al Matareya"
+  },
+  {
+    "label": "Al Sad Al Aali Cairo - السد العالي - القاهرة",
+    "value": "Al Sad Al Aali Cairo"
+  },
+  {
+    "label": "Al Salam City - مدينة السلام",
+    "value": "Al Salam City"
+  },
+  {
+    "label": "Al Sawah - السواح",
+    "value": "Al Sawah"
+  },
+  {
+    "label": "Al Zeitoun - الزيتون",
+    "value": "Al Zeitoun"
+  },
+  {
+    "label": "Al Zeitoun-Ibn Al Hakam - الزيتون - ابن الحكم",
+    "value": "Al Zeitoun-Ibn Al Hakam"
+  },
+  {
+    "label": "Al Zeitoun-Ibn Sendar - الزيتون - ابن سندر",
+    "value": "Al Zeitoun-Ibn Sendar"
+  },
+  {
+    "label": "Al Zeitoun-Salim Al Awal - الزيتون - سليم الأول",
+    "value": "Al Zeitoun-Salim Al Awal"
+  },
+  {
+    "label": "Al Zeitoun-Toman Bai - الزيتون - طومان باي",
+    "value": "Al Zeitoun-Toman Bai"
+  },
+  {
+    "label": "Amiria - الأميرية ",
+    "value": "Amiria"
+  },
+  {
+    "label": "Badr City - مدينة بدر",
+    "value": "Badr City"
+  },
+  {
+    "label": "Badr City-Badr City Industrial Area - مدينة بدر - مدينة بدر المنطقة الصناعية",
+    "value": "Badr City-Badr City Industrial Area"
+  },
+  {
+    "label": "Basateen - البساتين",
+    "value": "Basateen"
+  },
+  {
+    "label": "Basateen-Al Sad Al Aali - البساتين - السد العالي",
+    "value": "Basateen-Al Sad Al Aali"
+  },
+  {
+    "label": "Basateen-Ber Om Soultan - البساتين - بير أم سلطان",
+    "value": "Basateen-Ber Om Soultan"
+  },
+  {
+    "label": "Basateen-Fayda Kamel - البساتين - فايدة كامل",
+    "value": "Basateen-Fayda Kamel"
+  },
+  {
+    "label": "Basateen-Mazraet Al Baet - البساتين - مزرعة البيت",
+    "value": "Basateen-Mazraet Al Baet"
+  },
+  {
+    "label": "Dar Al Salam - دار السلام",
+    "value": "Dar Al Salam"
+  },
+  {
+    "label": "Dar Al Salam-Al Gezira - دار السلام - الجزيرة",
+    "value": "Dar Al Salam-Al Gezira"
+  },
+  {
+    "label": "Dar Al Salam-El Mala'a - دار السلام - الملاءة",
+    "value": "Dar Al Salam-El Mala'a"
+  },
+  {
+    "label": "Down Town - وسط البلد",
+    "value": "Down Town"
+  },
+  {
+    "label": "Down Town-Abdeen - وسط البلد - عابدين",
+    "value": "Down Town-Abdeen"
+  },
+  {
+    "label": "Down Town-Bab al-Louq - وسط البلد - باب اللوق",
+    "value": "Down Town-Bab al-Louq"
+  },
+  {
+    "label": "Down Town-El Azbakeya - وسط البلد - الأزبكية",
+    "value": "Down Town-El Azbakeya"
+  },
+  {
+    "label": "Down Town-El Esaaf - وسط البلد - الإسعاف",
+    "value": "Down Town-El Esaaf"
+  },
+  {
+    "label": "Down Town-Tahrir Square - وسط البلد - ميدان التحرير",
+    "value": "Down Town-Tahrir Square"
+  },
+  {
+    "label": "Downtown-Talaat Harab - وسط البلد - طلعت حرب",
+    "value": "Downtown-Talaat Harab"
+  },
+  {
+    "label": "DownTown-Al Ataba - وسط البلد - العتبة",
+    "value": "DownTown-Al Ataba"
+  },
+  {
+    "label": "DownTown-Al Azhar - وسط البلد - الأزهر",
+    "value": "DownTown-Al Azhar"
+  },
+  {
+    "label": "DownTown-Al Daher - وسط البلد - الظاهر",
+    "value": "DownTown-Al Daher"
+  },
+  {
+    "label": "DownTown-Al Moski - وسط البلد - الموسكي",
+    "value": "DownTown-Al Moski"
+  },
+  {
+    "label": "DownTown-Al Sabtia - وسط البلد - السبتية",
+    "value": "DownTown-Al Sabtia"
+  },
+  {
+    "label": "DownTown-Al Sharabiyah - وسط البلد - الشرابية",
+    "value": "DownTown-Al Sharabiyah"
+  },
+  {
+    "label": "DownTown-Al-Hussein - وسط البلد - الحسين",
+    "value": "DownTown-Al-Hussein"
+  },
+  {
+    "label": "DownTown-Bab El Shaeria - وسط البلد - باب الشعرية",
+    "value": "DownTown-Bab El Shaeria"
+  },
+  {
+    "label": "DownTown-Boulaq Abo Elela - وسط البلد - بولاق أبو العلا",
+    "value": "DownTown-Boulaq Abo Elela"
+  },
+  {
+    "label": "DownTown-Cornish Al Nile - وسط البلد - كورنيش النيل ",
+    "value": "DownTown-Cornish Al Nile"
+  },
+  {
+    "label": "DownTown-El Darasa - وسط البلد - الدراسة",
+    "value": "DownTown-El Darasa"
+  },
+  {
+    "label": "DownTown-El Fagala - وسط البلد - الفجالة",
+    "value": "DownTown-El Fagala"
+  },
+  {
+    "label": "DownTown-El Gamalia - وسط البلد - الجمالية",
+    "value": "DownTown-El Gamalia"
+  },
+  {
+    "label": "DownTown-El Opera - وسط البلد - الأوبرا",
+    "value": "DownTown-El Opera"
+  },
+  {
+    "label": "DownTown-Ghamrah - وسط البلد - غمرة",
+    "value": "DownTown-Ghamrah"
+  },
+  {
+    "label": "DownTown-Maspero - وسط البلد - ماسبيرو",
+    "value": "DownTown-Maspero"
+  },
+  {
+    "label": "DownTown-Ramsis - وسط البلد - رمسيس",
+    "value": "DownTown-Ramsis"
+  },
+  {
+    "label": "Abaseya - العباسية",
+    "value": "Abaseya"
+  },
+  {
+    "label": "El Marg-Berket Al Hag - المرج - بركة الحاج",
+    "value": "El Marg-Berket Al Hag"
+  },
+  {
+    "label": "El Marg-EL knesa w El Gameaa - المرج - الكنيسة والجامعة",
+    "value": "El Marg-EL knesa w El Gameaa"
+  },
+  {
+    "label": "El Marg-El-Rashah - المرج - الرشاح",
+    "value": "El Marg-El-Rashah"
+  },
+  {
+    "label": "El Marg-Kafr El-Shorafa - المرج - كفر الشرفا",
+    "value": "El Marg-Kafr El-Shorafa"
+  },
+  {
+    "label": "El Marg-Mosset Al Zakah - المرج - مؤسسة الزكاة",
+    "value": "El Marg-Mosset Al Zakah"
+  },
+  {
+    "label": "El Shorouk - الشروق",
+    "value": "El Shorouk"
+  },
+  {
+    "label": "El Shorouk-1st District Villas - الشروق - الحى الأول فيلات",
+    "value": "El Shorouk-1st District Villas"
+  },
+  {
+    "label": "El Shorouk-2nd district - الشروق - الحي الثاني",
+    "value": "El Shorouk-2nd district"
+  },
+  {
+    "label": "El Shorouk-3rd district - الشروق - الحي الثالث",
+    "value": "El Shorouk-3rd district"
+  },
+  {
+    "label": "El Shorouk-4th district - الشروق - الحى الرابع",
+    "value": "El Shorouk-4th district"
+  },
+  {
+    "label": "El Shorouk-5th district - الشروق - الحى الخامس",
+    "value": "El Shorouk-5th district"
+  },
+  {
+    "label": "El Shorouk-6th district - الشروق - الحى السادس",
+    "value": "El Shorouk-6th district"
+  },
+  {
+    "label": "El Shorouk-7th district - الشروق - الحى السابع",
+    "value": "El Shorouk-7th district"
+  },
+  {
+    "label": "El Shorouk-8th district - الشروق - الحى الثامن",
+    "value": "El Shorouk-8th district"
+  },
+  {
+    "label": "El Shorouk-9th district - الشروق - الحى التاسع",
+    "value": "El Shorouk-9th district"
+  },
+  {
+    "label": "El Shorouk Eskan Al Shabab - الشروق - اسكان الشباب",
+    "value": "El Shorouk Eskan Al Shabab"
+  },
+  {
+    "label": "El Shorouk Eskan Al Shabab2 - الشروق - اسكان الشباب 2",
+    "value": "El Shorouk Eskan Al Shabab2"
+  },
+  {
+    "label": "El Shorouk Family Housing - الشروق - الاسكان العائلى",
+    "value": "El Shorouk Family Housing"
+  },
+  {
+    "label": "Future City - مدينة المستقبل",
+    "value": "Future City"
+  },
+  {
+    "label": "Cairo Suez Desert Rd - طريق القاهرة السويس الصحراوى",
+    "value": "Cairo Suez Desert Rd"
+  },
+  {
+    "label": "New Heliopolis City - مدينة هليوبوليس الجديدة",
+    "value": "New Heliopolis City"
+  },
+  {
+    "label": "El Tahrir - التحرير",
+    "value": "El Tahrir"
+  },
+  {
+    "label": "El-Zawia El-Hamra الزاوية الحمراء",
+    "value": "El-Zawia El-Hamra"
+  },
+  {
+    "label": "Elsayeda Aisha - السيدة عائشة",
+    "value": "Elsayeda Aisha"
+  },
+  {
+    "label": "Ezbat El-Nakhl - عزبة النخل",
+    "value": "Ezbat El-Nakhl"
+  },
+  {
+    "label": "Ezbt Elhagana - عزبة الهجانة",
+    "value": "Ezbt Elhagana"
+  },
+  {
+    "label": "Gesr Al Suez - جسر السويس",
+    "value": "Gesr Al Suez"
+  },
+  {
+    "label": "Gesr Al Suez-Al Togareen buildings - جسر السويس - عمارات التجاريين",
+    "value": "Gesr Al Suez-Al Togareen buildings"
+  },
+  {
+    "label": "Gesr Al Suez-Badr Park - جسر السويس - حديقة بدر",
+    "value": "Gesr Al Suez-Badr Park"
+  },
+  {
+    "label": "Gesr Al Suez-El herafieen - جسر السويس - الحرفيين",
+    "value": "Gesr Al Suez-El herafieen"
+  },
+  {
+    "label": "Gesr Al Suez-El-Zohour City - جسر السويس - مدينة الزهور",
+    "value": "Gesr Al Suez-El-Zohour City"
+  },
+  {
+    "label": "Gesr Al Suez-Gamal Abdelnaser - جسر السويس - جمال عبد الناصر",
+    "value": "Gesr Al Suez-Gamal Abdelnaser"
+  },
+  {
+    "label": "Gesr Al Suez-Qebaa City - جسر السويس - مدينة قباء",
+    "value": "Gesr Al Suez-Qebaa City"
+  },
+  {
+    "label": "Gesr Al Suez-Souk El Canal - جسر السويس - سوق القنال",
+    "value": "Gesr Al Suez-Souk El Canal"
+  },
+  {
+    "label": "Gesr Al Suez-Taksem Omar Ibn El-Khattab - جسر السويس - تقسيم عمر بن الخطاب",
+    "value": "Gesr Al Suez-Taksem Omar Ibn El-Khattab"
+  },
+  {
+    "label": "Hadayek Al Qobah - حدائق القبة",
+    "value": "Hadayek Al Qobah"
+  },
+  {
+    "label": "Hadayek Al Qobah-Al Hdayeq - حدائق القبة - الحدائق",
+    "value": "Hadayek Al Qobah-Al Hdayeq"
+  },
+  {
+    "label": "Hadayek Al Qobah-El-Manshyet As Sadr - حدائق القبة - منشية الصدر",
+    "value": "Hadayek Al Qobah-El-Manshyet As Sadr"
+  },
+  {
+    "label": "Hadayek Al Qobah-El-Shaikh Ghorab - حدائق القبة - الشيخ غراب",
+    "value": "Hadayek Al Qobah-El-Shaikh Ghorab"
+  },
+  {
+    "label": "Hadayek Al Qobah-Kobry El Qobba - حدائق القبة - كوبرى القبة",
+    "value": "Hadayek Al Qobah-Kobry El Qobba"
+  },
+  {
+    "label": "Hadayek Al Qobah-Masr and El Sodan - حدائق القبة - مصر والسودان",
+    "value": "Hadayek Al Qobah-Masr and El Sodan"
+  },
+  {
+    "label": "Hadayek Al Qobah-Saraya Al Koba - حدائق القبة - سرايا القبة",
+    "value": "Hadayek Al Qobah-Saraya Al Koba"
+  },
+  {
+    "label": "Hadayek Al Qobah-Sekat Al Waili - حدائق القبة - سكة الوايلي",
+    "value": "Hadayek Al Qobah-Sekat Al Waili"
+  },
+  {
+    "label": "Hadayek Al Qobah-Wali Al Ahd - حدائق القبة - ولي العهد",
+    "value": "Hadayek Al Qobah-Wali Al Ahd"
+  },
+  {
+    "label": "Hadayek Helwan - حدائق حلوان",
+    "value": "Hadayek Helwan"
+  },
+  {
+    "label": "Hadayek Maadi - حدائق المعادي",
+    "value": "Hadayek Maadi"
+  },
+  {
+    "label": "Misr Al Gadida - مصر الجديدة",
+    "value": "MisrAlGadida"
+  },
+  {
+    "label": "Misr Al Gadida- Al-Ismailia Square - مصر الجديدة - ميدان الإسماعيلية",
+    "value": "Misr Al Gadida- Al-Ismailia Square"
+  },
+  {
+    "label": "Misr Al Gadida-Abd El-Hameed Badawi - مصر الجديدة - عبد الحميد بدوي",
+    "value": "Misr Al Gadida-Abd El-Hameed Badawi"
+  },
+  {
+    "label": "Misr Al Gadida-Al Mahkama Square - مصر الجديدة - ميدان المحكمة",
+    "value": "Misr Al Gadida-Al Mahkama Square"
+  },
+  {
+    "label": "Misr Al Gadida-Almaza - مصر الجديدة - الماظة",
+    "value": "Misr Al Gadida-Almaza"
+  },
+  {
+    "label": "Misr Al Gadida-Almoltaka Alarabi - مصر الجديدة - الملتقى العربي",
+    "value": "Misr Al Gadida-Almoltaka Alarabi"
+  },
+  {
+    "label": "Misr Al Gadida-Ard El-Golf - مصر الجديدة - أرض الجولف",
+    "value": "Misr Al Gadida-Ard El-Golf"
+  },
+  {
+    "label": "Misr Al Gadida-Cairo Airport - مصر الجديدة - مطار القاهرة",
+    "value": "Misr Al Gadida-Cairo Airport"
+  },
+  {
+    "label": "Misr Al Gadida-El Oroba - مصر الجديدة - العروبة",
+    "value": "Misr Al Gadida-El Oroba"
+  },
+  {
+    "label": "Misr Al Gadida-El Higaz Square - مصر الجديدة - ميدان الحجاز",
+    "value": "Misr Al Gadida-El Higaz Square"
+  },
+  {
+    "label": "Misr Al Gadida-El Thawra Street - مصر الجديدة - شارع الثورة",
+    "value": "Misr Al Gadida-El Thawra Street"
+  },
+  {
+    "label": "Misr Al Gadida-El Merryland - مصر الجديدة - الميريلاند",
+    "value": "Misr Al Gadida-El Merryland"
+  },
+  {
+    "label": "Misr Al Gadida-El Khalifa El Maa'moun - مصر الجديدة - الخليفة المأمون",
+    "value": "Misr Al Gadida-El Khalifa El Maa'moun"
+  },
+  {
+    "label": "Misr Al Gadida-Masaken Sheraton - مصر الجديدة - مساكن شيراتون",
+    "value": "Misr Al Gadida-Masaken Sheraton"
+  },
+  {
+    "label": "Misr Al Gadida-Masr LEl Tiaran buildings - مصر الجديدة - عمارات مصر الطيران",
+    "value": "Misr Al Gadida-Masr LEl Tiaran buildings"
+  },
+  {
+    "label": "Misr Al Gadida-Roxy Square - مصر الجديدة - ميدان روكسى",
+    "value": "Misr Al Gadida-Roxy Square"
+  },
+  {
+    "label": "Misr Al Gadida-Saint Fatima Square - مصر الجديدة - ميدان سانت فاتيما",
+    "value": "Misr Al Gadida-Saint Fatima Square"
+  },
+  {
+    "label": "Misr Al Gadida-Triumph Square - مصر الجديدة - ميدان تريومف",
+    "value": "Misr Al Gadida-Triumph Square"
+  },
+  {
+    "label": "Helmiet Elzaitoun - حلمية الزيتون",
+    "value": "Helmiet Elzaitoun"
+  },
+  {
+    "label": "Helwan - حلوان",
+    "value": "Helwan"
+  },
+  {
+    "label": "Helwan-15th of May City - حلوان - مدينة 15 مايو",
+    "value": "Helwan-15th of May City"
+  },
+  { 
+    "label": "Helwan-Atlas - حلوان - أطلس",
+    "value": "Helwan-Atlas"
+  },
+  {
+    "label": "Helwan-El Moazafen City - حلوان - مدينة الموظفين",
+    "value": "Helwan-El Moazafen City"
+  },
+  {
+    "label": "Helwan-El Shams City - حلوان - مدينة الشمس",
+    "value": "Helwan-El Shams City"
+  },
+  {
+    "label": "Helwan-Helwan American project - حلوان - المشروع الأمريكى بحلوان",
+    "value": "Helwan-Helwan American project"
+  },
+  {
+    "label": "Helwan-Rael - حلوان - رايل",
+    "value": "Helwan-Rael"
+  },
+  {
+    "label": "Helwan-Wadi Houf - حلوان - وادي حوف",
+    "value": "Helwan-Wadi Houf"
+  },
+  {
+    "label": "Kablat - كابلات",
+    "value": "Kablat"
+  },
+  {
+    "label": "Katamiah-Al Fursan City - القطامية - مدينة الفرسان",
+    "value": "Katamiah-Al Fursan City"
+  },
+  {
+    "label": "Katamiah-Baron City - القطامية - مدينة البارون",
+    "value": "Katamiah-Baron City"
+  },
+  {
+    "label": "Katamiah-Bavaria Town - القطامية - مدينة بافاريا",
+    "value": "Katamiah-Bavaria Town"
+  },
+  {
+    "label": "Katamiah-Ebad El-Rahman - القطامية - عباد الرحمن",
+    "value": "Katamiah-Ebad El-Rahman"
+  },
+  {
+    "label": "Katamiah-Maadi Grand City - القطامية - المعادي جراند سيتي",
+    "value": "Katamiah-Maadi Grand City"
+  },
+  {
+    "label": "Katamiah-Palm City - القطامية - مدينة النخيل",
+    "value": "Katamiah-Palm City"
+  },
+  {
+    "label": "Katamiah-Sama Tower - القطامية - برج سما",
+    "value": "Katamiah-Sama Tower"
+  },
+  {
+    "label": "Katamiah-Tabarak City -  القطامية - مدينة تبارك",
+    "value": "Katamiah-Tabarak City"
+  },
+  {
+    "label": "Kozzika - كوتسيكا",
+    "value": "Kozzika"
+  },
+  {
+    "label": "El Maadi - المعادي",
+    "value": "ElMaadi"
+  },
+  {
+    "label": "Maadi-El-Horreya Square - المعادي - ميدان الحرية",
+    "value": "Maadi-El-Horreya Square"
+  },
+  {
+    "label": "Maadi-Taqseem Laselky - المعادى - تقسيم اللاسلكي",
+    "value": "Maadi-Taqseem Laselky"
+  },
+  {
+    "label": "Maadi-Ahmed Zaki - المعادى - احمد زكى",
+    "value": "Maadi-Ahmed Zaki"
+  },
+  {
+    "label": "Maadi-Becho American City - المعادي - بيتشو أمريكان سيتى",
+    "value": "Maadi-Becho American City"
+  },
+  {
+    "label": "Maadi-El Gazaer Square -  المعادي - ميدان الجزائر",
+    "value": "Maadi-El Gazaer Square"
+  },
+  {
+    "label": "Maadi-Hassanen Desoki - المعادي - حسنين دسوقي",
+    "value": "Maadi-Hassanen Desoki"
+  },
+  {
+    "label": "Maadi-Maadi Degla - المعادي - المعادي دجلة",
+    "value": "Maadi-Maadi Degla"
+  },
+  {
+    "label": "Maadi-Saqr Qoraish - المعادى - صقر قريش",
+    "value": "Maadi-Saqr Qoraish"
+  },
+  {
+    "label": "Maadi-Mearaag Elowy - المعادي - المعراج العلوي",
+    "value": "Maadi-Mearaag Elowy"
+  },
+  {
+    "label": "Maadi-Meraag Sofly - المعادى - معراج السفلى",
+    "value": "Maadi-Meraag Sofly"
+  },
+  {
+    "label": "Maadi-New Maadi - المعادي - المعادي الجديدة",
+    "value": "Maadi-New Maadi"
+  },
+  {
+    "label": "Maadi-Sakanat El Maadi - المعادي - ثكنات المعادي",
+    "value": "Maadi-Sakanat El Maadi"
+  },
+  {
+    "label": "Maadi-Zahraa Al Maadi - المعادي - زهراء المعادي",
+    "value": "Maadi-Zahraa Al Maadi"
+  },
+  {
+    "label": "Maadi-Corneiche El Maadi - المعادي - كورنيش المعادي",
+    "value": "Maadi-Corneiche El Maadi"
+  },
+  {
+    "label": "Manial Al Rodah-Abdo Basha - منيل الروضة - عبده باشا",
+    "value": "Manial Al Rodah-Abdo Basha"
+  },
+  {
+    "label": "Manial Al Rodah-El Manial - منيل الروضة - المنيل",
+    "value": "Manial Al Rodah-El Manial"
+  },
+  {
+    "label": "Manial Al Rodah-El Roda - منيل الروضة - الروضة",
+    "value": "Manial Al Rodah-El Roda"
+  },
+  {
+    "label": "Mansheyet Naser - منشية ناصر",
+    "value": "Mansheyet Naser"
+  },
+  {
+    "label": "Misr El-Kadima - مصر القديمة",
+    "value": "Misr El-Kadima"
+  },
+  {
+    "label": "Misr El-Kadima-Amr Ibn El-Aas - مصر القديمة - عمرو بن العاص",
+    "value": "Misr El-Kadima-Amr Ibn El-Aas"
+  },
+  {
+    "label": "Misr El-Kadima-El-Malek El-Saleh - مصر القديمة - الملك الصالح",
+    "value": "Misr El-Kadima-El-Malek El-Saleh"
+  },
+  {
+    "label": "Misr El-Kadima-Fustat - مصر القديمة - الفسطاط",
+    "value": "Misr El-Kadima-Fustat"
+  },
+  {
+    "label": "Misr El-Kadima-Zahraa Masr El Kadima - مصر القديمة - زهراء مصر القديمة",
+    "value": "Misr El-Kadima-Zahraa Masr El Kadima"
+  },
+  {
+    "label": "Mokattam - المقطم",
+    "value": "Mokattam"
+  },
+  {
+    "label": "Mokattam-Asmarat Heights Compound - المقطم - الأسمرات هايتس",
+    "value": "Mokattam-Asmarat Heights Compound"
+  },
+  {
+    "label": "Mokattam-El-Hadaba El-Wosta - المقطم - الهضبة الوسطى",
+    "value": "Mokattam-El-Hadaba El-Wosta"
+  },
+  {
+    "label": "Mokattam-Uptown Cairo - المقطم - أب تاون كايرو",
+    "value": "Mokattam-Uptown Cairo"
+  },
+  {
+    "label": "Moustorod - مسطرد",
+    "value": "Moustorod"
+  },
+  {
+    "label": "Nasr City - مدينة نصر",
+    "value": "Nasr City"
+  },
+  {
+    "label": "Nasr City Al Hay Al Asher - مدينة نصر - الحي العاشر",
+    "value": "Nasr City Al Hay Al Asher"
+  },
+  {
+    "label": "Nasr City Al Manteqah Al Oula - مدينة نصر - المنطقة الأولى",
+    "value": "Nasr City Al Manteqah Al Oula"
+  },
+  {
+    "label": "Nasr City Al Manteqah Al Sadesah - مدينة نصر - المنطقة السادسة",
+    "value": "Nasr City Al Manteqah Al Sadesah"
+  },
+  {
+    "label": "Nasr City Al Manteqah Al Thamenah - مدينة نصر - المنطقة الثامنة",
+    "value": "Nasr City Al Manteqah Al Thamenah"
+  },
+  {
+    "label": "Nasr City El Hay El Sabea - مدينة نصر - الحي السابع",
+    "value": "Nasr City El Hay El Sabea"
+  },
+  {
+    "label": "Nasr City El Hay El Tamen - مدينة نصر - الحي التامن",
+    "value": "Nasr City El Hay El Tamen"
+  },
+  {
+    "label": "Nasr City-Al TOB Al Ramli - مدينة نصر - الطوب الرملي",
+    "value": "Nasr City-Al TOB Al Ramli"
+  },
+  {
+    "label": "Nasr City-Al Wafaa W Al Amal City - مدينة نصر - مدينة الوفاء والأمل",
+    "value": "Nasr City-Al Wafaa W Al Amal City"
+  },
+  {
+    "label": "Nasr City-Waha District - مدينة نصر - حي الواحة",
+    "value": "Nasr City-Waha District"
+  },
+  {
+    "label": "Nasr City-Zahraa Nasr City - مدينة نصر - زهراء مدينة نصر",
+    "value": "Nasr City-Zahraa Nasr City"
+  },
+  {
+    "label": "Nasr City-Abbas El Akkad - مدينة نصر - عباس العقاد",
+    "value": "Nasr City-Abbas El Akkad"
+  },
+  {
+    "label": "Nasr City-Abo Dawoud El Zahery - مدينة نصر - ابو داود الظاهري",
+    "value": "Nasr City-Abo Dawoud El Zahery"
+  },
+  {
+    "label": "Nasr City-Ahmed Fakhry - مدينة نصر - أحمد فخري",
+    "value": "Nasr City-Ahmed Fakhry"
+  },
+  {
+    "label": "Nasr City-Azhar University - مدينة نصر - جامعة الأزهر",
+    "value": "Nasr City-Azhar University"
+  },
+  {
+    "label": "Nasr City-Cairo Stadium - مدينة نصر - ستاد القاهرة",
+    "value": "Nasr City-Cairo Stadium"
+  },
+  {
+    "label": "Nasr City-El Hadeeqa El Dawlia - مدينة نصر - الحديقة الدولية",
+    "value": "Nasr City-El Hadeeqa El Dawlia"
+  },
+  {
+    "label": "Nasr City-El Masah - مدينة نصر - الماسة",
+    "value": "Nasr City-El Masah"
+  },
+  {
+    "label": "Nasr City-El Serag Mall - مدينة نصر - السراج مول",
+    "value": "Nasr City-El Serag Mall"
+  },
+  {
+    "label": "Nasr City-El Tayaran - مدينة نصر - الطيران",
+    "value": "Nasr City-El Tayaran"
+  },
+  {
+    "label": "Nasr City-Genena Mall - مدينة نصر - جنينة مول",
+    "value": "Nasr City-Genena Mall"
+  },
+  {
+    "label": "Nasr City-Hassan El Ma'moun - مدينة نصر - حسن المأمون",
+    "value": "Nasr City-Hassan El Ma'moun"
+  },
+  {
+    "label": "New Administrative Capital - العاصمة الإدارية الجديدة",
+    "value": "New Administrative Capital"
+  },
+  {
+    "label": "New El-Marg - المرج الجديدة",
+    "value": "New El-Marg"
+  },
+  {
+    "label": "Rod El-Farag - روض الفرج",
+    "value": "Rod El-Farag"
+  },
+  {
+    "label": "Sayeda Naffisa - السيدة نفيسة",
+    "value": "Sayeda Naffisa"
+  },
+  {
+    "label": "Sayeda Naffisa-Zenhom - السيدة نفيسة - زينهم",
+    "value": "Sayeda Naffisa-Zenhom"
+  },
+  {
+    "label": "Sayeda Zeinab - السيدة زينب",
+    "value": "Sayeda Zeinab"
+  },
+  {
+    "label": "Sayeda Zeinab-Al Kalaa - السيدة زينب - القلعة",
+    "value": "Sayeda Zeinab-Al Kalaa"
+  },
+  {
+    "label": "Sayeda Zeinab-Al Kasr Al Einy - السيدة زينب - القصر العيني",
+    "value": "Sayeda Zeinab-Al Kasr Al Einy"
+  },
+  {
+    "label": "Sayeda Zeinab-El Helmeya El Gedida - السيدة زينب - الحلمية الجديدة",
+    "value": "Sayeda Zeinab-El Helmeya El Gedida"
+  },
+  {
+    "label": "Sayeda Zeinab-El Khodary - السيدة زينب - الخضري",
+    "value": "Sayeda Zeinab-El Khodary"
+  },
+  {
+    "label": "Sayeda Zeinab-El Nasrya - السيدة زينب - الناصرية",
+    "value": "Sayeda Zeinab-El Nasrya"
+  },
+  {
+    "label": "Sayeda Zeinab-Garden City - السيدة زينب - جاردن سيتي",
+    "value": "Sayeda Zeinab-Garden City"
+  },
+  {
+    "label": "Sayeda Zeinab-kaleat Elkabsh - السيدة زينب - قلعة الكبش",
+    "value": "Sayeda Zeinab-kaleat Elkabsh"
+  },
+  {
+    "label": "Sayeda Zeinab-Magles Al Shaab - السيدة زينب - مجلس الشعب",
+    "value": "Sayeda Zeinab-Magles Al Shaab"
+  },
+  {
+    "label": "Sayeda Zeinab-Magles Eloma - السيدة زينب - مجلس الأمة",
+    "value": "Sayeda Zeinab-Magles Eloma"
+  },
+  {
+    "label": "Shubra - شبرا",
+    "value": "Shubra"
+  },
+  {
+    "label": "Shubra-El khaimah - شبراالخيمة",
+    "value": "Shubra-El khaimah"
+  },
+  {
+    "label": "Shubra-Masr - شبرا مصر",
+    "value": "Shubra-Masr"
+  },
+  {
+    "label": "Shubra-Rod El Farag - شبرا - روض الفرج",
+    "value": "Shubra-Rod El Farag"
+  },
+  {
+    "label": "El Obour - العبور",
+    "value": "El Obour"
+  },
+  {
+    "label": "El Obour-Ain Shams University - العبور - جامعة عين شمس",
+    "value": "El Obour-Ain Shams University"
+  },
+  {
+    "label": "El Obour-El Eskan El Aa'ely - العبور - الإسكان العائلي",
+    "value": "El Obour-El Eskan El Aa'ely"
+  },
+  {
+    "label": "El Obour-El Eskan El Qawmy - العبور - الإسكان القومي",
+    "value": "El Obour-El Eskan El Qawmy"
+  },
+  {
+    "label": "El Obour-El Hay 1 - العبور - الحي 1",
+    "value": "El Obour-El Hay 1"
+  },
+  {
+    "label": "El Obour-El Hay 2 - العبور - الحي 2",
+    "value": "El Obour-El Hay 2"
+  },
+  {
+    "label": "El Obour-El Hay 3 - العبور - الحي 3",
+    "value": "El Obour-El Hay 3"
+  },
+  {
+    "label": "El Obour-El Hay 4 - العبور - الحي 4",
+    "value": "El Obour-El Hay 4"
+  },
+  {
+    "label": "El Obour-El Hay 5 - العبور - الحي 5",
+    "value": "El Obour-El Hay 5"
+  },
+  {
+    "label": "El Obour-El Hay 6 - 6 العبور - الحي",
+    "value": "El Obour-El Hay 6"
+  },
+  {
+    "label": "El Obour-El Hay 7 - 7 العبور - الحي",
+    "value": "El Obour-El Hay 7"
+  },
+  {
+    "label": "El Obour-El Hay 8 - 8 العبور - الحي",
+    "value": "El Obour-El Hay 8"
+  },
+  {
+    "label": "El Obour-El Hay 9 - 9 العبور - الحي",
+    "value": "El Obour-El Hay 9"
+  },
+  {
+    "label": "El Obour-El Hay El Tarfihy - العبور - الحي الترفيهي",
+    "value": "El Obour-El Hay El Tarfihy"
+  },
+  {
+    "label": "El Obour-Eskan El Mostaqbl - العبور - اسكان المستقبل",
+    "value": "El Obour-Eskan El Mostaqbl"
+  },
+  {
+    "label": "El Obour-Eskan El Shabab - العبور - اسكان الشباب",
+    "value": "El Obour-Eskan El Shabab"
+  },
+  {
+    "label": "El Obour-Gamait Ahmed Oraby - العبور - جمعية أحمد عرابي",
+    "value": "El Obour-Gamait Ahmed Oraby"
+  },
+  {
+    "label": "El Obour-Golf Area - العبور - منطقة الجولف",
+    "value": "El Obour-Golf Area"
+  },
+  {
+    "label": "El Obour-Hadayek Ahmed Oraby - العبور - حدائق أحمد عرابي",
+    "value": "El Obour-Hadayek Ahmed Oraby"
+  },
+  {
+    "label": "El Obour-El Hay El Tarfihy-1 - العبور - الحي الترفيهي 1",
+    "value": "El Obour-El Hay El Tarfihy-1"
+  },
+  {
+    "label": "El Obour-Industrial Area A - العبور-المنطقة الصناعية أ",
+    "value": "El Obour-Industrial Area A"
+  },
+  {
+    "label": "El Obour Industrial Area BG - العبور - المنطقة الصناعية ب ج",
+    "value": "El Obour Industrial Area BG"
+  },
+  {
+    "label": "10th of Ramadan - العاشر من رمضان",
+    "value": "10th of Ramadan"
+  },
+  {
+    "label": "10th of Ramadan-1st District - العاشر من رمضان-الحي الأول",
+    "value": "10th of Ramadan-1st District"
+  },
+  {
+    "label": "10th of Ramadan-2nd District - العاشر من رمضان-الحى الثانى ",
+    "value": "10th of Ramadan-2nd District"
+  },
+  {
+    "label": "10th of Ramadan-3rd District - العاشر من رمضان - الحي الثالث",
+    "value": "10th of Ramadan-3rd District"
+  },
+  {
+    "label": "10th of Ramadan-4th District - العاشر من رمضان-الحى الرابع",
+    "value": "10th of Ramadan-4th District"
+  },
+  {
+    "label": "10th of Ramadan-5st District - العاشر من رمضان - الحي الخامس",
+    "value": "10th of Ramadan-5st District"
+  },
+  {
+    "label": "10th of Ramadan-6nd District - العاشر من رمضان - الحي السادس,",
+    "value": "10th of Ramadan-6nd District,"
+  },
+  {
+    "label": "10th of Ramadan-7rd District - العاشر من رمضان - الحي السابع",
+    "value": "10th of Ramadan-7rd District"
+  },
+  {
+    "label": "10th of Ramadan-8th District - العاشر من رمضان - الحى الثامن",
+    "value": "10th of Ramadan-8th District"
+  },
+  {
+    "label": "10th of Ramadan-9th District - العاشر من رمضان - الحي التاسع",
+    "value": "10th of Ramadan-9th District"
+  },
+  {
+    "label": "10th of Ramadan-10th District - العاشر من رمضان - الحي العاشر",
+    "value": "10th of Ramadan-10th District"
+  },
+  {
+    "label": "10th of Ramadan-11th District - العاشر من رمضان - الحى الحادى عشر",
+    "value": "10th of Ramadan-11th District"
+  },
+  {
+    "label": "10th of Ramadan-12th District - العاشر من رمضان - الحى الثانى عشر",
+    "value": "10th of Ramadan-12th District"
+  },
+  {
+    "label": "10th of Ramadan-13th District - العاشر من رمضان - الحى الثالث عشر",
+    "value": "10th of Ramadan-13th District"
+  },
+  {
+    "label": "10th of Ramadan-14th District - العاشر من رمضان - الحى الرابع عشر",
+    "value": "10th of Ramadan-14th District"
+  },
+  {
+    "label": "10th of Ramadan-City Center - العاشر من رمضان - وسط المدينة",
+    "value": "10th of Ramadan-City Center"
+  },
+  {
+    "label": "10th of Ramadan-Industrial Area - العاشر من رمضان - المنطقة الصناعية",
+    "value": "10th of Ramadan-Industrial Area"
+  },
+  {
+    "label": "10th of Ramadan-2nd Industrial Area - العاشر من رمضان - المنطقة الصناعية الثانية",
+    "value": "10th of Ramadan-2nd Industrial Area"
+  }
+]

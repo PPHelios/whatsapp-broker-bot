@@ -1,0 +1,586 @@
+[
+  {
+      "label": "Aghadir KM 78 - أغادير الكيلو 78",
+      "value": "Aghadir KM 78"
+  },
+  {
+      "label": "Ahlam KM 93 - أحلام الكيلو 93",
+      "value": "Ahlam KM 93"
+  },
+  {
+      "label": "Al Ballah KM 65 - البلاح الكيلو 65",
+      "value": "Al Ballah KM 65"
+  },
+  {
+      "label": "Al Beausite KM 89 - البوسيت الكيلو 89",
+      "value": "Al Beausite KM 89"
+  },
+  {
+      "label": "Al Montaza KM 79 - المنتزه الكيلو 79",
+      "value": "Al Montaza KM 79"
+  },
+  {
+      "label": "Al-Abed, Sidi Hanish - العابد - سيدى حنيش",
+      "value": "Al-Abed, Sidi Hanish"
+  },
+  {
+      "label": "Al-Jawhara village Ras Al-Hikma 204 - قرية الجوهرة - رأس الحكمة الكيلو 204 ",
+      "value": "Al-Jawhara village Ras Al-Hikma 204"
+  },
+  {
+      "label": "Amoon KM 36 - أمون الكيلو 36",
+      "value": "Amoon KM 36"
+  },
+  {
+      "label": "Amwaj KM 136 - أمواج الكيلو 136",
+      "value": "Amwaj KM 136"
+  },
+  {
+      "label": "Andalusia - الأندلس",
+      "value": "Andalusia"
+  },
+  {
+      "label": "Atebaa' KM 43 - الأطباء الكيلو 43",
+      "value": "Atebaa' KM 43"
+  },
+  {
+      "label": "Atic Alamein KM 89 - أتيك العلمين الكيلو 89",
+      "value": "Atic Alamein KM 89"
+  },
+  {
+      "label": "Badr KM 82 - بدر الكيلو 82",
+      "value": "Badr KM 82"
+  },
+  {
+      "label": "Bagosh KM 214 - باجوش الكيلو 214",
+      "value": "Bagosh KM 214"
+  },
+  {
+      "label": "Bianchi KM 134 - بيانكى الكيلو 134",
+      "value": "Bianchi KM 134"
+  },
+  {
+      "label": "Bo Island KM 120 - بو ايلند الكيلو 120",
+      "value": "Bo Island KM 120"
+  },
+  {
+      "label": "Bungalows KM 73 - بانجلوز الكيلو 73",
+      "value": "Bungalows KM 73"
+  },
+  {
+      "label": "Cairo University KM 44 - جامعة القاهرة الكيلو 44",
+      "value": "Cairo University KM 44"
+  },
+  {
+      "label": "Casablanca KM 46 - كازابلانكا الكيلو 46",
+      "value": "Casablanca KM 46"
+  },
+  {
+      "label": "Cazabianca KM 70 - كازابيانكا الكيلو 70",
+      "value": "Cazabianca KM 70"
+  },
+  {
+      "label": "Ceasar Bay Resort KM 201 - سيزر باى الكيلو 201",
+      "value": "Ceasar Bay Resort KM 201"
+  },
+  {
+      "label": "Cleopatra KM 86 -  كليوباترا الكيلو 86",
+      "value": "Cleopatra KM 86"
+  },
+  {
+      "label": "Coral Hills KM 187 - كورال هيلز الكيلو 187",
+      "value": "Coral Hills KM 187"
+  },
+  {
+      "label": "Coronado KM 164 - كورنادو الكيلو 164",
+      "value": "Coronado KM 164"
+  },
+  {
+      "label": "Costa de sole KM 81 - كوستا دل سول ريزورت الكيلو 81",
+      "value": "Costa de sole KM 81"
+  },
+  {
+      "label": "Dalia KM 38 - قرية داليا الكيلو 38",
+      "value": "Dalia KM 38"
+  },
+  {
+      "label": "Diamond beach KM 90 - قرية دياموند بيتش الكيلو 90",
+      "value": "Diamond beach KM 90"
+  },
+  {
+      "label": "Diamora KM 75 - قريه ديمورا الساحل الشمالي الكيلو 75",
+      "value": "Diamora KM 75"
+  },
+  {
+      "label": "Diana Beach KM 57  - ديانا بيتش الكيلو 75",
+      "value": "Diana Beach KM 57"
+  },
+  {
+      "label": "Diplomasyeen 1 KM 45 - الدبلوماسيون 1 الكيلو 45",
+      "value": "Diplomasyeen 1 KM 45"
+  },
+  {
+      "label": "Diplomasyeen 2 KM 57 - الدبلوماسيين 2 الكيلو 57",
+      "value": "Diplomasyeen 2 KM 57"
+  },
+  {
+      "label": "Diplomasyeen 3 KM 126 - الدبلوماسيون 3 الكيلو 126",
+      "value": "Diplomasyeen 3 KM 126"
+  },
+  {
+      "label": "Doa'a Sama'a KM 62 - دعاء السماء الكيلو 62",
+      "value": "Doa'a Sama'a KM 62"
+  },
+  {
+      "label": "El Tayaran KM 43 - الطيران الكيلو 43",
+      "value": "El Tayaran KM 43"
+  },
+  {
+      "label": "Elsahafeyeen KM 81 - الصحفيين الكيلو 81",
+      "value": "Elsahafeyeen KM 81"
+  },
+  {
+      "label": "Elshate' KM 81 -الشاطئ الكيلو 81",
+      "value": "Elshate' KM 81"
+  },
+  {
+      "label": "Emirates Heights KM 179 - أماريتس هايتس الكيلو 179",
+      "value": "Emirates Heights KM 179"
+  },
+  {
+      "label": "Etab Ras al-Hikma KM 212 -ايتاب رأس الحكمة الكيلو 212",
+      "value": "Etab Ras al-Hikma KM 212"
+  },
+  {
+      "label": "Fakhr El Behar KM 32 - فخر البحار الكيلو 32",
+      "value": "Fakhr El Behar KM 32"
+  },
+  {
+      "label": "Fat'hAllah SidiKirir KM 40 - فتح الله سيدي كرير الكيلو 40",
+      "value": "Fat'hAllah SidiKirir KM 40"
+  },
+  {
+      "label": "Fayrouz KM 40 - فيروز الكيلو 40",
+      "value": "Fayrouz KM 40"
+  },
+  {
+      "label": "Fouka Bay KM 214 -  فوكا باى الكيلو 214",
+      "value": "Fouka Bay KM 214"
+  },
+  {
+      "label": "Gamea't Assiut KM 87 - جامعة اسيوط الكيلو 87",
+      "value": "Gamea't Assiut KM 87"
+  },
+  {
+      "label": "Gamea't Dowal KM 69 - جامعة الدول الكيلو 69",
+      "value": "Gamea't Dowal KM 69"
+  },
+  {
+      "label": "Gamea't Ein Shams KM 72 - جامعة عين شمس الكيلو 72",
+      "value": "Gamea't Ein Shams KM 72"
+  },
+  {
+      "label": "Gamea't El Qahera KM 74 - جامعة القاهرة الكيلو 74",
+      "value": "Gamea't El Qahera KM 74"
+  },
+  {
+      "label": "Garawla Bay - جاراوالا باى",
+      "value": "Garawla Bay"
+  },
+  {
+      "label": "Gernata KM 56 - جيرناتا الكيلو 56",
+      "value": "Gernata KM 56"
+  },
+  {
+      "label": "Ghazala Bay KM 142 - غزاله باى الكيلو 142",
+      "value": "Ghazala Bay KM 142"
+  },
+  {
+      "label": "Golden Beach KM 47 - جولدن بيتش الكيلو 47 ",
+      "value": "Golden Beach KM 47"
+  },
+  {
+      "label": "Green (San Giovani) KM 75 - جرين (سان جيوفانى) الكيلو 75",
+      "value": "Green (San Giovani) KM 75"
+  },
+  {
+      "label": "Green Beach KM 89 - جرين بيتش الكيلو 89",
+      "value": "Green Beach KM 89"
+  },
+  {
+      "label": "Hacienda Bay KM 124 - هاسيندا باى الكيلو 124",
+      "value": "Hacienda Bay KM 124"
+  },
+  {
+      "label": "Hacienda white KM 140 - هاسيندا وايت الطيلو 140",
+      "value": "Hacienda white KM 140"
+  },
+  {
+      "label": "Haidi KM 58 - هايدى الكيلو 58",
+      "value": "Haidi KM 58"
+  },
+  {
+      "label": "Hamra port for WEPCO KM120 - حمرا بورت ويبكو الكيلو 120",
+      "value": "Hamra port for WEPCO KM120"
+  },
+  {
+      "label": "Helio Beach KM 50 - قرية هليوبيتش الكيلو 50",
+      "value": "Helio Beach KM 50"
+  },
+  {
+      "label": "Iberotel Burj Al Arab KM 52 - ابروتل برج العرب الكيلو 52",
+      "value": "Iberotel Burj Al Arab KM 52"
+  },
+  {
+      "label": "Jaz Almaza Beach Resort Hotel - فندق جاز ألماظة بيتش ريزورت ",
+      "value": "Jaz Almaza Beach Resort Hotel"
+  },
+  {
+      "label": "Jevera Bay KM 191 -جيفارا باى الكيلو 191",
+      "value": "Jevera Bay KM 191"
+  },
+  {
+      "label": "Jumeirah Bay KM 214 - الجميرا باى الكيلو 214",
+      "value": "Jumeirah Bay KM 214"
+  },
+  {
+      "label": "Karawan KM 69 - قرية الكروان الكيلو 69",
+      "value": "Karawan KM 69"
+  },
+  {
+      "label": "Karma KM 132 - قرية كرمه الكيلو 132",
+      "value": "Karma KM 132"
+  },
+  {
+      "label": "Kereir Gardens KM 41 - كرير جاردنز الكيلو 41",
+      "value": "Kereir Gardens KM 41"
+  },
+  {
+      "label": "Kereir Lagoon KM 39 - كرير لاجون الكيلو 39",
+      "value": "Kereir Lagoon KM 39"
+  },
+  {
+      "label": "La jolie plage KM 58 - لاجولى بلاج الكيلو 58",
+      "value": "La jolie plage KM 58"
+  },
+  {
+      "label": "La Vista Bay KM 176 - لافيستا باى الكيلو 176",
+      "value": "La Vista Bay KM 176"
+  },
+  {
+      "label": "Lamera KM 190 - لاميرا بيتش الكيلو 190",
+      "value": "Lamera KM 190"
+  },
+  {
+      "label": "Lamora KM 178 - لامورا بيتش الكيلو 178",
+      "value": "Lamora KM 178"
+  },
+  {
+      "label": "Lasirena KM 165 - لاسيرينا الكيلو 165",
+      "value": "Lasirena KM 165"
+  },
+  {
+      "label": "Lazurde bay KM 120 - لازوردى باى الكيلو 120",
+      "value": "Lazurde bay KM 120"
+  },
+  {
+      "label": "Lo'la Helioplis KM 124 - لولا هليوبليس الكيلو 124",
+      "value": "Lo'la Helioplis KM 124"
+  },
+  {
+      "label": "Lo'la Kereir KM 34 - لؤلؤة كرير الكيلو 34",
+      "value": "Lo'la Kereir KM 34"
+  },
+  {
+      "label": "Lotus KM 90 - لوتس الكيلو 90",
+      "value": "Lotus KM 90"
+  },
+  {
+      "label": "Lotus Lawyers KM 43 - لوتس للمحامين الكيلو 43",
+      "value": "Lotus Lawyers KM 43"
+  },
+  {
+      "label": "Ma'moura El Gdeeda KM 72 -  المعمورة الجديدة الكيلو 72",
+      "value": "Ma'moura El Gdeeda KM 72"
+  },
+  {
+      "label": "Marakia KM 51 - مراقية الكيلو 51",
+      "value": "Marakia KM 51"
+  },
+  {
+      "label": "Marassi KM 125 -مراسي الكيلو 125",
+      "value": "Marassi-Emaar KM 125"
+  },
+  {
+      "label": "Marbella KM 66 - ماربيلا الكيلو 66",
+      "value": "Marbella KM 66"
+  },
+  {
+      "label": "Marin Sunshine KM 87 - مارين صن شاين الكيلو 87",
+      "value": "Marin Sunshine KM 87"
+  },
+  {
+      "label": "Marina Alamein KM 94 to KM 111 - مارينا العلمين الكيلو 94 حتى الكيلو 111",
+      "value": "Marina Alamein KM 94 to KM 111"
+  },
+  {
+      "label": "Marina el alamin gate 3 KM 100 - مارينا العلمين بوابه 3 الكيلو 100",
+      "value": "Marina el alamin gate 3 KM 100"
+  },
+  {
+      "label": "Marina el alamin gate 3 KM 97 - ماربنا العلمين بوابة 3 الكيلو 97",
+      "value": "Marina el alamin gate 3 KM 97"
+  },
+  {
+      "label": "Marina Mohandseen KM 76 - مارينا المهندسين الكيلو 76" ,
+      "value": "Marina Mohandseen KM 76"
+  },
+  {
+      "label": "Marselia beach 1 KM 75 - مارسيليا بيتش 1 الكيلو 75",
+      "value": "Marselia beach 1 KM 75"
+  },
+  {
+      "label": "Marselia beach 2 KM 73 - مارسيليا بيتش 2 الكيلو 73",
+      "value": "Marselia beach 2 KM 73"
+  },
+  {
+      "label": "Marselia beach 3 KM 71 - مارسيليا بيتش 3 الكيلو 71",
+      "value": "Marselia beach 3 KM 71"
+  },
+  {
+      "label": "Marselia beach 4 KM 124 - مارسيليا بيتش 4 الكيلو 124",
+      "value": "Marselia beach 4 KM 124"
+  },
+  {
+      "label": "Marselia KM 70 - مارسيليا الكيلو 70",
+      "value": "Marselia KM 70"
+  },
+  {
+      "label": "Marwa KM 62 - المروه الكيلو 62",
+      "value": "Marwa KM 62"
+  },
+  {
+      "label": "Mayorca KM 39 - مايوركا الكيلو 39",
+      "value": "Mayorca KM 39"
+  },
+  {
+      "label": "Mina 1 KM 85 - مينا 1 الكيلو 85",
+      "value": "Mina 1 KM 85"
+  },
+  {
+      "label": "Mina 2 KM 85 - مينا 2 الكيلو 85",
+      "value": "Mina 2 KM 85"
+  },
+  {
+      "label": "Mina 3 KM 76 - مينا 3 الكيلو 76",
+      "value": "Mina 3 KM 76"
+  },
+  {
+      "label": "Mina 4 KM 72 - مينا 4 الكيلو 72",
+      "value": "Mina 4 KM 72"
+  },
+  {
+      "label": "Mina 5 KM 202 - مينا 5 الكيلو 202",
+      "value": "Mina 5 KM 202"
+  },
+  {
+      "label": "Mirage Beach KM 40 - شاطئ ميراج الكيلو 40",
+      "value": "Mirage Beach KM 40"
+  },
+  {
+      "label": "Misr Taameer KM 39 - مصر التعمير الكيلو 39",
+      "value": "Misr Taameer KM 39"
+  },
+  {
+      "label": "Mohandessin KM 26 - قرية المهندسين الكيلو 26",
+      "value": "Mohandessin KM 26"
+  },
+  {
+      "label": "Mountain View Diplomats KM 200 - ماونتن فيو دبلوماتس الكيلو 200",
+      "value": "Mountain View Diplomats KM 200"
+  },
+  {
+      "label": "Mountain View Ras El Hekma KM 200 - ماونتن فيو راس الحكمه الكيلو 200",
+      "value": "Mountain View Ras El Hekma KM 200"
+  },
+  {
+      "label": "Narges KM 84 - النرجس الكيلو 84",
+      "value": "Narges KM 84"
+  },
+  {
+      "label": "Nice 1 KM 64 - نيس 1 الكيلو 64",
+      "value": "Nice 1 KM 64"
+  },
+  {
+      "label": "Nice 2 KM 64 - نيس 2 الكيلو 64",
+      "value": "Nice 2 KM 64"
+  },
+  {
+      "label": "Nice 3 KM 76 - نيس 3 الكيلو 76",
+      "value": "Nice 3 KM 76"
+  },
+  {
+      "label": "Nice 4 KM 74 - نيس 4 الكيلو 74",
+      "value": "Nice 4 KM 74"
+  },
+  {
+      "label": "Omara' ELBehar KM 47 - أمراء البحار الكيلو 47",
+      "value": "Omara' ELBehar KM 47"
+  },
+  {
+      "label": "Orchedia Resort KM 133 - منتجع أوركيديا الكيلو 133",
+      "value": "Orchedia Resort KM 133"
+  },
+  {
+      "label": "Palm beach KM 68 - بالم بيتش الكيلو 68",
+      "value": "Palm beach KM 68"
+  },
+  {
+      "label": "Panorama beach KM 76 - بانوراما بيتش الكيلو 76",
+      "value": "Panorama beach KM 76"
+  },
+  {
+      "label": "Petrobeach KM 91 - بيترو بيتش الكيلو 91",
+      "value": "Petrobeach KM 91"
+  },
+  {
+      "label": "Porto Marina extension KM 105 - امتداد بورتو مارينا الكيلو 105",
+      "value": "Porto Marina extension KM 105"
+  },
+  {
+      "label": "Qanat el Suez KM 65 - قناة السويس الكيلو 65",
+      "value": "Qanat el Suez KM 65"
+  },
+  {
+      "label": "Qertag KM 81 - قرطاج الكيلو 81",
+      "value": "Qertag KM 81"
+  },
+  {
+      "label": "Ramatan KM 69 - رامتان الكيلو 69",
+      "value": "Ramatan KM 69"
+  },
+  {
+      "label": "Ramsis KM 45 - رمسيس الكيلو 45",
+      "value": "Ramsis KM 45"
+  },
+  {
+      "label": "Riveria KM 59 - الريفيرا الكيلو 59 ",
+      "value": "Riveria KM 59"
+  },
+  {
+      "label": "Rixos Alamein Hotel KM 142 - فندق ريكسوس العلمين الكيلو 142",
+      "value": "Rixos Alamein Hotel KM 142"
+  },
+  {
+      "label": "Rowad KM 67 - الرواد الكيلو 67",
+      "value": "Rowad KM 67"
+  },
+  {
+      "label": "Rowda KM 71 - الروضة الكيلو 71",
+      "value": "Rowda KM 71"
+  },
+  {
+      "label": "Royal Beach 205 - رويل بيتش الكيلو 205",
+      "value": "Royal Beach 205"
+  },
+  {
+      "label": "Rozana resort KM 56 - روزانا ريزورت الكيلو 56",
+      "value": "Rozana resort KM 56"
+  },
+  {
+      "label": "Sahafeen KM 82 - الصحافيين الكيلو 82",
+      "value": "Sahafeen KM 82"
+  },
+  {
+      "label": "Salsabeel KM 62 - سلسبيل الكيلو 62",
+      "value": "Salsabeel KM 62"
+  },
+  {
+      "label": "Sea View KM 187 - سي فيو الكيلو 187",
+      "value": "Sea View KM 187"
+  },
+  {
+      "label": "Seashell KM 134 - سى شيل الكيلو 134",
+      "value": "Seashell KM 134"
+  },
+  {
+      "label": "Sedra Sidi Kereir KM 35 - سدرا سيدي كرير الكيلو 35",
+      "value": "Sedra Sidi Kereir KM 35"
+  },
+  {
+      "label": "Shate' Aida KM 77 - شاطئ عايدة الكيلو 77",
+      "value": "Shate' Aida KM 77"
+  },
+  {
+      "label": "Shorouq KM 41 - قرية الشروق الكيلو 41",
+      "value": "Shorouq KM 41"
+  },
+  {
+      "label": "Sidi Kreir KM 34 - سيدى كرير الكيلو 34",
+      "value": "Sidi Kreir KM 34"
+  },
+  {
+      "label": "SODIC 201 - سوديك الكيلو 201",
+      "value": "SODIC 201"
+  },
+  {
+      "label": "Stella heights KM 134 - ستيلا هايتس الكيلو 134",
+      "value": "Stella heights KM 134"
+  },
+  {
+      "label": "Sumed KM. 90 - قرية سوميد الكيلو 90",
+      "value": "Sumed KM. 90"
+  },
+  {
+      "label": "Swan Lake KM 198 - سوان ليك الكيلو 198",
+      "value": "Swan Lake KM 198"
+  },
+  {
+      "label": "Tahiti KM 63 - تاهيتى الكيلو 63",
+      "value": "Tahiti KM 63"
+  },
+  {
+      "label": "Telal KM 141 - تلال الكيلو 141",
+      "value": "Telal KM 141"
+  },
+  {
+      "label": "The shore KM 186 - ذا شور الكيلو 186",
+      "value": "The shore KM 186"
+  },
+  {
+      "label": "Tiba rose KM 60 - طيبة روز الكيلو 60",
+      "value": "Tiba rose KM 60"
+  },
+  {
+      "label": "Togaryeen KM 63 - قريةالتجاريين الكيلو 63",
+      "value": "Togaryeen KM 63"
+  },
+  {
+      "label": "Valencia KM 57 - فالنسيا الكيلو 57",
+      "value": "Valencia KM 57"
+  },
+  {
+      "label": "Venus 1 KM 49 - فينوس 1 الكيلو 49",
+      "value": "Venus 1 KM 49"
+  },
+  {
+      "label": "Venus 2 KM 50 - فينوس 2 الكيلو 50",
+      "value": "Venus 2 KM 50"
+  },
+  {
+      "label": "Virginia KM 83 - فرجينيا الكيلو 83",
+      "value": "Virginia KM 83"
+  },
+  {
+      "label": "Zahran City Park KM 82 - زهران سيتى بارك الكيلو 82",
+      "value": "Zahran City Park KM 82"
+  },
+  {
+      "label": "Zohoor KM 85 - الزهور الكيلو 85",
+      "value": "Zohoor KM 85"
+  },
+  {
+      "label": "Zomoroda - زمرده",
+      "value": "Zomoroda"
+  }
+]
