@@ -427,7 +427,7 @@ describe("5. lib/search.js - Bilingual Normalization & Negative Status Guards", 
       limit: 5,
       offset: 0
     });
-    assert.match(sql, /\(l\.bedrooms = 0 OR l\.property_type = 'studio'\)/);
+    assert.match(sql, /\(l\.bedrooms IS NULL OR l\.bedrooms = 0 OR l\.property_type = 'studio'\)/);
   });
 });
 
