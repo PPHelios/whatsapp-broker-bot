@@ -388,6 +388,7 @@ describe("repeated taps and slow steps", () => {
     await h.tgLink("broker");
     h.AI.respond((call) => (call.operation === "listing_extraction" ? fields : { intent: "search", filters: {}, locations: [], location_terms: [] }));
     await h.tgText("broker", "اضافة");
+    await h.tg("broker", { contact: { phone_number: "+201012345678", first_name: "Mr Owner", user_id: 8123 } });
     await h.tgText("broker", "شقة في ميفيدا");
   };
 
@@ -408,6 +409,7 @@ describe("repeated taps and slow steps", () => {
   test("the same button tapped again right away gets a toast and runs once", async () => {
     await startDraft();
     await h.tgText("broker", "تم");
+    await h.tgTap("broker", "draft_owner_keep");
     const start = h.TG.outbox.length;
     await h.tgTap("broker", "draft_confirm");
     h.sameMoment();

@@ -38,20 +38,18 @@ test("a new owner's phone waits for a choice; the unit is not saved until it is 
   const card = await reviewWithOwner("Mr New", "01012345678");
   const text = textOf(card);
   expect(text).toMatch(/New owner|مالك جديد/);
-  expect(ids(card[card.length - 1])).toEqual(expect.arrayContaining(["draft_owner_keep", "draft_owner_drop"]));
+  expect(ids(card[card.length - 1])).toContain("draft_owner_keep");
+  expect(ids(card[card.length - 1])).not.toContain("draft_owner_drop");
   expect(ids(card[card.length - 1])).not.toContain("draft_confirm");
 });
 
-test("discarding the owner saves the unit without an owner", async () => {
+test("there is no discard: the owner is kept and the unit is saved with it", async () => {
   await reviewWithOwner("Mr New", "01012345678");
-  const dropped = await h.tap("broker", "draft_owner_drop");
-  expect(textOf(dropped)).toMatch(/not saved|مش هيتسجل/);
-  expect(ids(dropped[dropped.length - 1])).toContain("draft_confirm");
+  await h.tap("broker", "draft_owner_keep");
   await h.tap("broker", "draft_confirm");
   const [l] = await h.query("SELECT owner_id, details FROM listings WHERE code = 'HP-77'");
-  expect(l.owner_id).toBeNull();
-  expect(l.details.owner_phone).toBeUndefined();
-  expect(await ownerRow("201012345678")).toBeUndefined();
+  expect(l.owner_id).not.toBeNull();
+  expect(l.details.owner_phone.replace(/\D/g, "")).toMatch(/1012345678$/);
 });
 
 test("a phone of an existing owner links the unit to that owner, not a new one", async () => {

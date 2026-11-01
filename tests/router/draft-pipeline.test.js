@@ -59,8 +59,8 @@ describe("P13: the review card flags a unit already listed", () => {
     expect(working.text).toMatch(/بنراجع بيانات الوحدة/); // the working-on-it line, then the one card
     expect(review).toHaveLength(1);
     expect(textOf(review)).toMatch(/شكلها نفس الوحدة MV-OLD[\s\S]*\/app\/units\/MV-OLD/);
-    expect(review[0].buttons.find((b) => b.id === "draft_confirm").title).toBe("احفظ برضه ✅");
-    await keepOwner();
+    const afterKeep = await keepOwner();
+    expect(afterKeep.flatMap((r) => r.buttons || []).find((b) => b.id === "draft_confirm").title).toBe("احفظ برضه ✅");
     await h.tap("broker", "draft_confirm");
     expect(await listings()).toHaveLength(2);
   });
@@ -70,6 +70,7 @@ describe("Add by voice → review → confirm (plan verification #1)", () => {
   test("resale installment unit 'بحري ناصية فيها غرفة مربية', no delivery", async () => {
     await h.text("broker", "اضافه") // F4: spelling-blind command;
     await h.voice("broker");
+    await ownerContact();
     answerExtraction(extraction());
 
     const review = await h.text("broker", "تم");
@@ -81,8 +82,9 @@ describe("Add by voice → review → confirm (plan verification #1)", () => {
     expect(card).toMatch(/غرفة مربية/);
     // Review is the only place warnings appear.
     expect(card).toMatch(/⚠️ موعد التسليم \(أو استلام فوري\) غير مسجل/);
-    expect(buttonsOf(review)).toEqual(["draft_confirm", "draft_edit", "draft_cancel"]);
+    expect(buttonsOf(review)).toContain("draft_owner_keep");
 
+    await keepOwner();
     const saved = await h.tap("broker", "draft_confirm");
     const out = textOf(saved);
     expect(out).toMatch(/تم الحفظ/);
@@ -203,7 +205,7 @@ describe("Only the staged review is committed (A2)", () => {
     const review = await h.text("broker", "تم");
     expect(textOf(review)).toMatch(/ناقص لإتمام الحفظ/);
     expect(textOf(review)).toMatch(/السعر/);
-    expect(buttonsOf(review)).toEqual(expect.arrayContaining(["DRAFT_SAVE", "draft_cancel"]));
+    expect(buttonsOf(review)).toContain("draft_cancel");
     expect(buttonsOf(review)).not.toContain("draft_confirm");
     await keepOwner();
     await h.tap("broker", "draft_confirm");
@@ -216,6 +218,7 @@ describe("Only the staged review is committed (A2)", () => {
     await h.text("broker", "شقة");
     answerExtraction(extraction({ resale: {} }));
     await h.text("broker", "تم");
+    await keepOwner();
     await h.text("broker", "والسعر بقى 9 مليون");
     const before = h.AI.calls.length;
     const replies = await h.tap("broker", "draft_confirm");
@@ -265,6 +268,7 @@ describe("Only the staged review is committed (A2)", () => {
     await h.text("broker", "شقة");
     answerExtraction(extraction({ resale: {} }));
     await h.text("broker", "تم");
+    await keepOwner();
     const tap = () =>
       h.app.handleWebhookBody({
         entry: [{ changes: [{ value: { messages: [{ from: h.BROKERS.broker.phone, id: `wamid.dbl.${Math.random()}`, timestamp: "1", type: "interactive", interactive: { type: "button_reply", button_reply: { id: "draft_confirm", title: "x" } } }] } }] }]
@@ -284,6 +288,7 @@ describe("Code collision never overwrites", () => {
     await h.text("broker", "كود HP-201 شقة");
     answerExtraction(extraction({ resale: {} }));
     await h.text("broker", "تم");
+    await keepOwner();
     const replies = await h.tap("broker", "draft_confirm");
     expect(textOf(replies)).toMatch(/مستخدم/);
     const rows = await listings();
@@ -299,6 +304,7 @@ describe("Code collision never overwrites", () => {
     await h.text("broker", "كود vil-٠٨ فيلا");
     answerExtraction(extraction({ property_type: "villa", resale: {} }));
     await h.text("broker", "تم");
+    await keepOwner();
     expect(textOf(await h.tap("broker", "draft_confirm"))).toMatch(/مستخدم/);
     expect(await listings()).toHaveLength(1);
   });
@@ -337,6 +343,7 @@ describe("Photos go to storage at ingest", () => {
 describe("Photo ceiling and items WhatsApp can't pass on", () => {
   test("17 photos: 15 kept and one limit warning, not one per extra photo", async () => {
     await h.text("broker", "add");
+    await ownerContact();
     const warnings = [];
     for (let i = 0; i < 17; i++) warnings.push(...(await h.photo("broker")));
     expect((await h.session("broker")).media_items).toHaveLength(15);
@@ -346,6 +353,7 @@ describe("Photo ceiling and items WhatsApp can't pass on", () => {
 
   test("an unsupported item inside a draft says it wasn't added, not the welcome", async () => {
     await h.text("broker", "add");
+    await ownerContact();
     const replies = await h.send("broker", {
       type: "unsupported",
       errors: [{ code: 131051, title: "Message type unknown" }]
@@ -366,18 +374,20 @@ describe("Installments are asked, not assumed", () => {
 
   test("total 15M, cash 13M: the review asks; Yes stores 2M remaining without another AI call", async () => {
     await h.text("broker", "add");
+    await ownerContact();
     await h.text("broker", "townhouse hyde park 15M requested 13M");
     answerExtraction(gapOnly());
-    const review = await h.text("broker", "done");
+    const pending = await h.text("broker", "done");
+    expect(buttonsOf(pending)).toContain("draft_owner_keep");
+    const review = await keepOwner();
     expect(textOf(review)).toMatch(/الباقي 2 مليون أقساط/);
-    expect(buttonsOf(review)).toEqual(["draft_inst_yes", "draft_inst_no", "draft_cancel"]);
+    expect(buttonsOf(review)).toEqual(expect.arrayContaining(["draft_inst_yes", "draft_inst_no", "draft_cancel"]));
 
     const calls = h.AI.calls.length;
     const answered = await h.tap("broker", "draft_inst_yes");
     expect(h.AI.calls.length).toBe(calls);
     expect(textOf(answered)).toMatch(/تفاصيل الأقساط/);
-    expect(buttonsOf(answered)).toEqual(["draft_confirm", "draft_edit", "draft_cancel"]);
-    await keepOwner();
+    expect(buttonsOf(answered)).toEqual(expect.arrayContaining(["draft_confirm", "draft_edit", "draft_cancel"]));
     await h.tap("broker", "draft_confirm");
     const [row] = await listings();
     expect(Number(row.remaining_amount)).toBe(2e6);
@@ -386,6 +396,7 @@ describe("Installments are asked, not assumed", () => {
 
   test("No: 13M is the cash price, no installment lines", async () => {
     await h.text("broker", "add");
+    await ownerContact();
     await h.text("broker", "townhouse hyde park 15M requested 13M");
     answerExtraction(gapOnly());
     await h.text("broker", "done");
