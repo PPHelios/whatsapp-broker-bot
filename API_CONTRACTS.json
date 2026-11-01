@@ -1003,6 +1003,18 @@
       "purgeInboundPayloads": ["pool", "params"],
       "privacyJob": []
     },
+    "lib/placeNames.js": {
+      "noteUnknown": ["pool", "name", "params"],
+      "widenSearchTerms": ["pool", "terms"],
+      "pending": ["pool"],
+      "approve": ["pool", "id", "nameAr"],
+      "approved": ["pool"]
+    },
+    "domain/placeNames.js": {
+      "nameKey": ["name"],
+      "isNewEnglishName": ["name"],
+      "widenTerms": ["terms", "approved"]
+    },
     "domain/unitCode.js": {
       "TYPE_LETTER": "Object",
       "typeLetter": ["propertyType"],
