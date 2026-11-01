@@ -426,6 +426,7 @@
       "NORMALIZE_SEARCH_SQL": "String"
     },
     "domain/searchQuery.js": {
+      "enforceInstallmentWords": ["parsed", "text"],
       "emptyFilters": [],
       "normalizeCode": ["code"],
       "normalizeAiSearch": ["raw"],

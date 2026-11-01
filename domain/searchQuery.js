@@ -569,7 +569,24 @@ function ensureFilters(parsed) {
   return normalizeAiSearch({ filters: f, locations: parsed?.locations || [] }).filters;
 }
 
+// Haytham (2026-11-01): a budget is a price ceiling. A monthly installment cap is kept only when the
+// message itself says installment (EN) or قسط / أقساط / تقسيط (AR). The AI reading can drop that word;
+// without it the number moves to the price ceiling (when no price was given).
+const INSTALLMENT_WORD = /installment|instalment|قسط|اقساط|تقسيط/;
+function enforceInstallmentWords(parsed, text) {
+  const said = INSTALLMENT_WORD.test(normalizeSearch(String(text || "")));
+  const f = parsed?.filters;
+  if (!f || said) return parsed;
+  if (f.max_installment !== null && f.max_installment !== undefined) {
+    if (f.price_max === null || f.price_max === undefined) f.price_max = f.max_installment;
+    f.max_installment = null;
+  }
+  f.payment_installments = null;
+  return parsed;
+}
+
 module.exports = {
+  enforceInstallmentWords,
   emptyFilters,
   normalizeCode,
   normalizeAiSearch,

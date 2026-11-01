@@ -74,7 +74,7 @@ async function parseRequest(AI, { text = "", ctx = {} } = {}) {
       ctx
     });
     const raw = JSON.parse(String(res.text || "").replace(/^```(?:json)?/i, "").replace(/```$/, "").trim());
-    const parsed = Q.normalizeAiSearch(raw);
+    const parsed = Q.enforceInstallmentWords(Q.normalizeAiSearch(raw), text);
     if (!parsed.transcript) parsed.transcript = String(text).slice(0, 500);
     return { parsed, source: "ai", modelUsed: res.modelUsed, usage: res.usage || {}, ms: Date.now() - t0 };
   } catch (err) {

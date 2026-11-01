@@ -142,14 +142,16 @@ describe("Filters", () => {
   test("features, delivery and payment are language-neutral filters", async () => {
     await seedInventory();
     await h.insertListing({ code: "RS-1", compound: "Hyde Park", remaining_amount: 5e6, down_payment_value: 3e6, installment_value: 200000, price_value: 8e6 });
-    const ids = async (filters) => {
+    const ids = async (filters, msg = "x") => {
       h.AI.respond(() => ({ intent: "search", filters }));
-      return codesIn(textOf(await h.text("broker", "x")));
+      return codesIn(textOf(await h.text("broker", msg)));
     };
     expect(await ids({ features: ["north_facing", "corner"] })).toEqual(["VIL-08", "MV-3B"]);
     expect(await ids({ delivery: { ready: true } })).toEqual(["HP-3"]);
-    expect(await ids({ compound: "Hyde Park", payment: { installments: true } })).toEqual(["RS-1"]);
-    expect(await ids({ compound: "Hyde Park", payment: { max_installment: 250000 } })).toEqual(["RS-1"]);
+    expect(await ids({ compound: "Hyde Park", payment: { installments: true } }, "hyde park installment")).toEqual(["RS-1"]);
+    // The installment cap counts only when the message says installment or قسط (Haytham, 2026-11-01).
+    h.AI.respond(() => ({ intent: "search", filters: { compound: "Hyde Park", payment: { max_installment: 250000 } } }));
+    expect(codesIn(textOf(await h.text("broker", "hyde park قسط 250 ألف")))).toEqual(["RS-1"]);
     expect(await ids({ compound: "Hyde Park", payment: { cash: true } })).toEqual(["HP-3"]);
   });
 
