@@ -34,6 +34,12 @@ const downPct = (v) => {
   const n = num(v);
   return n !== null && n >= 0 && n <= 100 ? n : null;
 };
+/**
+ * One number is a minimum (3 bedrooms = 3 or more), and one budget is a ceiling. The AI sometimes returns the same
+ * number as both ends; a real range has two different ends, so an equal pair is collapsed here.
+ */
+const singleCountMax = (lo, hi) => (lo !== null && hi !== null && lo === hi ? null : hi);
+const singleBudgetFloor = (lo, hi) => (lo !== null && hi !== null && lo === hi ? null : lo);
 /** Years of a payment plan: a whole number from 1 to 30, else null. */
 const planYears = (v) => {
   const n = num(v);
@@ -169,12 +175,12 @@ function normalizeAiSearch(raw) {
     places,
     place_terms: terms,
     currency: ["EGP", "USD", "EUR"].includes(f.currency) ? f.currency : null,
-    price_min: pos(f.price_min),
+    price_min: singleBudgetFloor(pos(f.price_min), pos(f.price_max)),
     price_max: pos(f.price_max),
     area_min: pos(f.area_min),
-    area_max: pos(f.area_max),
+    area_max: singleCountMax(pos(f.area_min), pos(f.area_max)),
     bedrooms_min: nonNegInt(f.bedrooms_min),
-    bedrooms_max: nonNegInt(f.bedrooms_max),
+    bedrooms_max: singleCountMax(nonNegInt(f.bedrooms_min), nonNegInt(f.bedrooms_max)),
     bathrooms_min: nonNegInt(f.bathrooms_min),
     floor_min: num(f.floor_min) !== null ? Math.round(num(f.floor_min)) : null,
     floor_max: num(f.floor_max) !== null ? Math.round(num(f.floor_max)) : null,
@@ -209,7 +215,7 @@ const STOP = new Set(
     "في", "فى", "من", "الى", "إلى", "علي", "على", "عن", "و", "مع", "عايز", "عاوز", "عايزه", "محتاج", "دورلي", "ورني", "وريني",
     "فيه", "فيها", "عندنا", "عندك", "عندي", "بحث", "ابحث", "لي", "لو", "سمحت", "بس", "حاجة", "حاجه", "وحدة", "وحده", "كمبوند",
     "سنين", "سنه", "سنة", "سنوات", "سنتين", "years", "year", "yrs", "مقدم", "دفعه", "اولي", "down", "payment", "تكملة", "تكمله",
-    "حتي", "لحد", "اقل", "تحت", "حدود", "بحدود", "فوق", "اكتر", "اكثر", "up", "under", "budget",
+    "حتي", "لحد", "اقل", "تحت", "حدود", "بحدود", "فوق", "اكتر", "اكثر", "up", "under", "budget", "متكرر", "متكرره", "typical",
     "the", "a", "an", "in", "for", "at", "with", "show", "me", "find", "search", "i", "want", "need", "looking", "unit", "units",
     "compound", "please", "any", "some", "and", "or", "of", "to", "is", "near", "around", "قريب", "جنب"
   ].map(normalizeSearch)
@@ -455,6 +461,12 @@ function fallbackParse(text) {
       f.floor_min = f.floor_max = fl;
       hay = c.hay;
     }
+  }
+  // "متكرر" / "typical": any floor above ground.
+  c = consume(hay, / (متكرر|متكرره|متكررة|typical|typical floor) /);
+  if (c.m && f.floor_min === null) {
+    f.floor_min = 1;
+    hay = c.hay;
   }
   c = consume(hay, / (?:ب|بال)?(?:الدور الارضي|دور ارضي|ground floor) /);
   if (c.m) {
