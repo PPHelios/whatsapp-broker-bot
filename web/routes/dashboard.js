@@ -27,6 +27,7 @@ const { tabs } = require("../views/tabs");
 const { icon } = require("../icons");
 const Privacy = require("../../services/unitPrivacy");
 const OwnerAgencies = require("../../services/ownerAgencies");
+const AgencyCreate = require("../../services/agencyCreate");
 const { isManager, isAgencyOwner } = require("../../lib/authz");
 const { logOperation } = require("../../lib/db");
 const Vis = require("../../lib/visibility");
@@ -150,9 +151,30 @@ function privacySection(scope, lang, csrf, notice, canSwitch = false) {
 }
 
 /** Owner controls (phase 2 step 4): the sign-up switch and waiting sign-ups, where agencies pay, payments to confirm. */
+/** CRM owner only: add an agency by hand (name, logo URL, owner's mobile, plan). The owner's start link is shown once. */
+function newAgencySection(lang, csrf) {
+  return html`<section class="card" id="new-agency">
+  <h2>➕ ${L(lang, "وكالة جديدة", "New agency")}</h2>
+  <p class="muted">${L(lang, "اكتب بيانات الوكالة ورقم مالكها. هتطلع لينك تيليجرام واحد للمالك (صالح ٧ أيام)، ابعته له بنفسك.", "Enter the agency and its owner's mobile. You get one Telegram link for the owner (valid 7 days); send it yourself.")}</p>
+  <form method="post" action="/app/owner/agencies" class="stack" data-new-agency>
+    <input type="hidden" name="_csrf" value="${csrf}">
+    <label>${L(lang, "اسم الوكالة", "Agency name")} <input name="agency" required maxlength="120"></label>
+    <label>${L(lang, "لينك اللوجو (https، اختياري)", "Logo link (https, optional)")} <input name="logo" type="url" dir="ltr" maxlength="500" placeholder="https://"></label>
+    <label>${L(lang, "اسم المالك", "Owner's name")} <input name="ownerName" required maxlength="80"></label>
+    <label>${L(lang, "موبايل المالك", "Owner's mobile")} <input name="ownerPhone" required inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx" maxlength="20"></label>
+    <fieldset class="row"><legend>${L(lang, "الباقة", "Plan")}</legend>
+      <label><input type="radio" name="plan" value="pilot" checked> ${L(lang, "تجريبي مجاني (Office لحد ما الـPOC يخلص)", "Pilot (free Office until the POC ends)")}</label>
+      <label><input type="radio" name="plan" value="trial"> ${L(lang, `تجربة ${Plans.TRIAL.days} يوم`, `${Plans.TRIAL.days}-day trial`)}</label>
+    </fieldset>
+    <button type="submit">${L(lang, "اعمل الوكالة وطلّع اللينك", "Create agency and get the link")}</button>
+  </form>
+</section>
+`;
+}
+
 function billingSections(b, lang) {
   const day = (x) => new Date(x).toISOString().slice(0, 10);
-  return html`<section class="card" id="signups">
+  return html`${b.csrf !== undefined ? newAgencySection(lang, b.csrf) : ""}<section class="card" id="signups">
   <h2>🏢 ${L(lang, "التسجيل", "Sign-up")}</h2>
   <form method="post" action="/app/owner/signup" class="row">
     <span>${b.open ? L(lang, "التسجيل مفتوح؛ كل طلب مستني موافقتك.", "Sign-up is open; every request waits for your approval.") : L(lang, "التسجيل مقفول.", "Sign-up is closed.")}</span>
@@ -514,7 +536,7 @@ function register(web, { pool, page }) {
     if (!d) return notFound(req, res, page);
     const [open, signups, payments, payTo, trials, reading, referrals, intakes, stuck, credits] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Referrals.overview(pool), Intake.overview(pool), Onboarding.stuckList(pool), Credits.ownerOverview(pool)]);
     const [agencies, log] = await Promise.all([OwnerAgencies.list(pool), OwnerAgencies.auditLog(pool)]);
-    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials }, notice, reading, credits, referrals, intakes, stuck, agencies, log, csrf: req.session.csrf }) }, status);
+    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials, csrf: req.session.csrf }, notice, reading, credits, referrals, intakes, stuck, agencies, log, csrf: req.session.csrf }) }, status);
   };
   const ok = (text) => html`<p class="card notice ok" role="status">✅ ${text}</p>`;
   const bad = (text) => html`<p class="card notice bad" role="alert">❌ ${text}</p>`;
@@ -561,6 +583,20 @@ function register(web, { pool, page }) {
   web.post("/owner/signup", ownerOnly(async (req, res, lang) => {
     await Signup.setOpen(pool, req.body.open === "1");
     return ownerView(req, res, ok(req.body.open === "1" ? L(lang, "التسجيل اتفتح.", "Sign-up is open.") : L(lang, "التسجيل اتقفل.", "Sign-up is closed.")));
+  }));
+
+  // CRM owner only: create an agency and its owner; the owner's Telegram start link is shown once.
+  web.post("/owner/agencies", ownerOnly(async (req, res, lang) => {
+    const r = await AgencyCreate.createAgency(pool, req.session.broker, { agency: req.body.agency, logo: req.body.logo, ownerName: req.body.ownerName, ownerPhone: req.body.ownerPhone, plan: req.body.plan });
+    if (r.error) {
+      const msg = { agency: L(lang, "اكتب اسم الوكالة.", "Enter the agency name."), logo: L(lang, "اللوجو لازم يكون لينك https.", "The logo must be an https link."), name: L(lang, "اكتب اسم المالك.", "Enter the owner's name."), phone: L(lang, "رقم موبايل مصري صحيح (01xxxxxxxxx).", "A valid Egyptian mobile (01xxxxxxxxx)."), plan: L(lang, "اختار باقة.", "Pick a plan."), phone_taken: L(lang, "الرقم ده مسجل بالفعل في وكالة تانية.", "That number is already registered to another agency."), slug: L(lang, "مش قادر أعمل رابط للوكالة دي؛ غيّر الاسم.", "Couldn't make a link for this agency name; change the name."), forbidden: L(lang, "مش مسموح.", "Not allowed.") }[r.error] || r.error;
+      return ownerView(req, res, bad(msg), r.error === "forbidden" ? 403 : 400);
+    }
+    const link = r.url
+      ? html`<p class="row" dir="ltr"><input readonly value="${r.url}" id="owner-start-link" aria-label="${L(lang, "لينك المالك", "Owner's link")}"> <button type="button" class="secondary" data-copy="#owner-start-link">📋 ${L(lang, "نسخ", "Copy")}</button></p>`
+      : html`<p class="muted">${L(lang, "اللينك مش متعمل: TELEGRAM_BOT_USERNAME مش متظبط.", "No link made: TELEGRAM_BOT_USERNAME isn't set.")}</p>`;
+    return ownerView(req, res, html`<section class="card notice ok" role="status" data-new-agency-done="${r.agency.id}"><h2>✅ ${L(lang, `${r.agency.name} اتعملت (${r.agency.pilot ? "تجريبي" : "تجربة"}).`, `${r.agency.name} is created (${r.agency.pilot ? "pilot" : "trial"}).`)}</h2>
+      <p>${L(lang, "ابعت اللينك ده للمالك بنفسك. يتفتح مرة واحدة، وبيفتح البوت؛ من البوت يفتح الموقع.", "Send this link to the owner yourself. It works once and opens the bot; from the bot the website opens.")}</p>${link}</section>`);
   }));
 
   web.post("/owner/signups/:id/approve", ownerOnly(async (req, res, lang) => {

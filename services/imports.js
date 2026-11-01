@@ -95,7 +95,7 @@ const ERROR_LABELS = { code: ["كود غير صالح", "Invalid code"], propert
 /**
  * Plans an Excel import against the agency's inventory (nothing is written).
  * @param {Object} sheet - lib/sheets.js readInventorySheet output
- * @returns {Promise<{ items, missing, counts }>}
+ * @returns {Promise<{ items, counts }>}
  */
 async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
   const parsed = sheet.rows.map((r) => ({ rowNumber: r.rowNumber, ...SheetImport.rowToDraft(r.cells) }));
@@ -153,19 +153,8 @@ async function planExcel(pool, broker, sheet, { lang = "ar" } = {}) {
     }
   }
 
-  // Active units the sheet does not mention (offered for archiving, never archived by default) —
-  // only when the sheet looks like the agency's full inventory list.
-  let missing = [];
-  const matched = items.filter((i) => i.listing_id).length;
-  if (matched > 0 && matched >= codes.length * 0.5) {
-    const { rows } = await pool.query(
-      "SELECT code, broker_id, agency_id FROM listings WHERE " + Vis.units("listings") + " AND agency_id = $1 AND status = 'active' AND NOT (code_norm = ANY($2::text[])) ORDER BY code LIMIT 500",
-      [broker.agency_id, codes]
-    );
-    missing = rows.filter((l) => Authz.canEdit(broker, l)).map((l) => l.code);
-  }
   const counts = items.reduce((acc, i) => ({ ...acc, [i.kind]: (acc[i.kind] || 0) + 1 }), {});
-  return { items, missing, counts };
+  return { items, counts };
 }
 
 /** Saves a plan; returns its id. */
@@ -225,14 +214,14 @@ async function patchOne(pool, broker, code, patch, expectedVersion) {
 }
 
 /**
- * Applies the selected rows of an Excel plan (and the archive opt-ins). Each row is its own transaction.
- * @returns {Promise<{ created, updated, archived, conflicts, failed } | null>} null when the plan cannot be applied
+ * Applies the selected rows of an Excel plan. Each row is its own transaction.
+ * @returns {Promise<{ created, updated, conflicts, failed } | null>} null when the plan cannot be applied
  */
-async function applyExcel(pool, broker, id, { rows = [], archive = [], lang = "ar" } = {}) {
+async function applyExcel(pool, broker, id, { rows = [], lang = "ar" } = {}) {
   const imp = await claim(pool, broker, id, "excel");
   if (!imp) return null;
   const wanted = new Set(rows.map(Number));
-  const result = { created: [], updated: [], archived: [], conflicts: [], failed: [] };
+  const result = { created: [], updated: [], conflicts: [], failed: [] };
   for (const item of imp.payload.items) {
     if (!wanted.has(item.row)) continue;
     if (item.kind === "new") {
@@ -249,15 +238,28 @@ async function applyExcel(pool, broker, id, { rows = [], archive = [], lang = "a
       else (res.outcome === "conflict" ? result.conflicts : result.failed).push(item.code);
     }
   }
-  const allowed = new Set(imp.payload.missing || []);
-  for (const code of archive) {
-    if (!allowed.has(code)) continue;
-    const res = await patchOne(pool, broker, code, { status: "archived" }, null);
-    if (res.outcome === "updated") result.archived.push(code);
-    else result.failed.push(code);
-  }
   await pool.query("UPDATE web_imports SET result = $2::jsonb WHERE id = $1", [id, JSON.stringify(result)]);
   return result;
+}
+
+const MAX_CELL = 600;
+
+/**
+ * Edits one row of a ready Excel plan and plans the whole sheet again from the edited cells, so the row goes through
+ * the same parsing and rules as an upload. Only the sheet's own columns can be edited.
+ * @param {Object} cells - field key → new text
+ * @returns {Promise<boolean>} false when the plan is not ready, expired, has no stored sheet or the row is unknown
+ */
+async function editExcelRow(pool, broker, id, rowNumber, cells, { lang = "ar" } = {}) {
+  const imp = await loadImport(pool, broker, id);
+  if (!imp || imp.kind !== "excel" || imp.status !== "ready" || new Date(imp.expires_at) <= new Date()) return false;
+  const { rows, columns } = imp.payload;
+  const target = Array.isArray(rows) ? rows.find((r) => r.rowNumber === Number(rowNumber)) : null;
+  if (!target) return false;
+  for (const key of columns || []) if (key in cells) target.cells[key] = String(cells[key] ?? "").slice(0, MAX_CELL).trim();
+  const plan = await planExcel(pool, broker, { rows }, { lang });
+  await pool.query("UPDATE web_imports SET payload = $2::jsonb WHERE id = $1 AND status = 'ready'", [id, JSON.stringify({ ...plan, rows, columns })]);
+  return true;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -321,29 +323,19 @@ async function processGroup(pool, broker, id, { AI, ctx, lang = "ar" }) {
 
 /**
  * Saves the posts and starts extracting them in the background. Returns the import id.
- * With prepare (a chat export zip), the posts come from it first: prepare(id) → { posts } or { error }, stored on the
- * import as failed so the page can say why.
+ * Posts may carry photos [{ url, hash }]; the match page adds them one by one after the import starts.
  */
-async function startGroupImport(pool, broker, posts, { AI, ctx, lang = "ar", filename = null, prepare = null, cleanup = null }) {
-  const id = await savePlan(pool, broker, "group", { posts, results: [], ...(prepare ? { stage: "photos" } : {}) }, { filename, status: "processing" });
+async function startGroupImport(pool, broker, posts, { AI, ctx, lang = "ar", filename = null }) {
+  const id = await savePlan(pool, broker, "group", { posts, results: [] }, { filename, status: "processing" });
   const job = new Promise((resolve) => setImmediate(resolve))
     .then(async () => {
-      if (prepare) {
-        const ready = await prepare(id);
-        if (ready.error) {
-          await pool.query("UPDATE web_imports SET status = 'failed', payload = payload || $2::jsonb WHERE id = $1", [id, JSON.stringify({ error: ready.error, stage: null })]);
-          return;
-        }
-        await pool.query("UPDATE web_imports SET payload = payload || $2::jsonb WHERE id = $1", [id, JSON.stringify({ posts: ready.posts, stage: null })]);
-      }
       await processGroup(pool, broker, id, { AI, ctx, lang });
     })
     .catch(async (err) => {
       console.error("Group import failed:", err.message);
       await pool.query("UPDATE web_imports SET status = 'failed' WHERE id = $1", [id]).catch(() => {});
     })
-    .finally(async () => {
-      if (cleanup) await Promise.resolve(cleanup()).catch(() => {});
+    .finally(() => {
       jobs.delete(id);
     });
   jobs.set(id, job);
@@ -392,6 +384,7 @@ module.exports = {
   savePlan,
   loadImport,
   applyExcel,
+  editExcelRow,
   findDuplicate,
   startGroupImport,
   waitForGroupImport,

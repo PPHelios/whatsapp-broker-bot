@@ -174,7 +174,7 @@ function projectForm(lang, developers, p = {}, action = "/app/catalogue/projects
     <label>${L(lang, "الربع (1-4)", "Quarter (1-4)")} <input name="delivery_quarter" inputmode="numeric" dir="ltr" size="2" value="${val(p.delivery_quarter)}"></label>
     <label>${L(lang, "الصيانة %", "Maintenance %")} <input name="maintenance_pct" inputmode="decimal" dir="ltr" size="4" value="${val(p.maintenance_pct)}"></label>
   </div>
-  <label>${L(lang, "ملاحظات داخلية", "Internal notes")} <textarea name="notes" maxlength="1000" rows="2">${p.notes || ""}</textarea></label>
+  <label>${L(lang, "ملاحظات المشروع (الوسطاء بيشوفوها والمساعد بيجاوب منها، متكتبش العمولة هنا)", "Project notes (brokers see them and Ask answers from them; never put commission here)")} <textarea name="notes" maxlength="1000" rows="2">${p.notes || ""}</textarea></label>
   ${p.id ? "" : html`<fieldset data-new-materials><legend>📁 ${L(lang, "الملفات واللينكات (اختياري)", "Materials (optional)")}</legend>
     <label>${L(lang, "بروشور أو ملف (PDF أو صورة، لحد 25 ميجا)", "Brochure or file (PDF or photo, up to 25 MB)")} <input type="file" name="file" accept="application/pdf,image/jpeg,image/png,image/webp"></label>
     <label>${L(lang, "أو لينك (Drive، موقع المطور...)", "Or a link (Drive, developer site...)")} <input name="material_url" type="url" dir="ltr" placeholder="https://"></label>
@@ -191,7 +191,7 @@ function developerForm(lang, d = {}, action = "/app/catalogue/developers") {
   <p class="muted">🔒 ${L(lang, "بيانات التواصل للمديرين بس، وعمرها ما بتظهر للعميل.", "The contact is for managers only and never shown to clients.")}</p>
   <label>${L(lang, "مسؤول المبيعات", "Sales contact")} <input name="contact_name" maxlength="120" value="${d.contact_name || ""}"></label>
   <label>${L(lang, "تليفونه", "Phone")} <input name="contact_phone" maxlength="30" dir="ltr" inputmode="tel" value="${d.contact_phone || ""}"></label>
-  <label>${L(lang, "ملاحظات", "Notes")} <textarea name="notes" maxlength="1000" rows="2">${d.notes || ""}</textarea></label>
+  <label>${L(lang, "ملاحظات داخلية للمديرين (المساعد مش بيقراها)", "Internal notes, managers only (Ask does not read them)")} <textarea name="notes" maxlength="1000" rows="2">${d.notes || ""}</textarea></label>
   <button type="submit">${d.id ? L(lang, "حفظ المطور", "Save developer") : L(lang, "إضافة المطور", "Add developer")}</button>
 </form>`;
 }
@@ -268,14 +268,16 @@ ${notice || ""}
   <p>${label2(STATUS, p.status, lang)} · ${L(lang, "الاستلام", "Delivery")}: <span dir="ltr">${deliveryText(p, lang)}</span> · ${L(lang, "الصيانة", "Maintenance")}: ${pctText(p.maintenance_pct)}${p.archived_at ? html` · <strong>${L(lang, "مؤرشف", "Archived")}</strong>` : ""}</p>
   ${[p.district, p.city].filter(Boolean).length ? html`<p>📍 ${[p.district, p.city].filter(Boolean).join("، ")}</p>` : ""}
   <p>🏢 ${d ? d.name : "—"}${manager && d?.contact_name ? ` · ${d.contact_name}` : ""}${manager && d?.contact_phone ? html` · <a href="tel:${d.contact_phone}" dir="ltr" data-developer-contact>${d.contact_phone}</a>` : ""}</p>
-  ${manager && p.notes ? html`<p class="muted">🔒 ${p.notes}</p>` : ""}
+  ${manager && d?.notes ? html`<p class="muted">🔒 ${d.notes} <span>(${L(lang, "ملاحظات المطور: مش بتتقرا في السؤال", "developer notes: not used by Ask")})</span></p>` : ""}
 </section>
-${highlights || ""}
-${gallery || ""}
-${prices || ""}
-${commissionTerms || ""}
 ${manager ? html`<details class="card"><summary>✏️ ${L(lang, "تعديل المشروع", "Edit project")}</summary>${projectForm(lang, developers, p, base)}
   <form method="post" action="${base}/archive"><input type="hidden" name="archived" value="${p.archived_at ? "0" : "1"}"><button type="submit" class="secondary">${p.archived_at ? L(lang, "رجّعه من الأرشيف", "Restore") : L(lang, "أرشفة المشروع", "Archive project")}</button></form></details>` : ""}
+
+<h2 id="assistant-knows">🤖 ${L(lang, "اللي المساعد (اسأل) عارفه", "What the assistant (Ask) knows")}</h2>
+<p class="muted">${L(lang, "الوسطاء بيشوفوا كل ده، والمساعد بيجاوب منه. مفيش هنا حاجة سرية: العمولة لوحدها تحت وللمديرين بس.", "Brokers see all of this and Ask answers from it. Nothing secret goes here: commission terms are kept apart below, managers only.")}</p>
+${p.notes ? html`<section class="card" id="project-notes" data-project-notes><h3>📝 ${L(lang, "ملاحظات المشروع", "Project notes")}</h3><p>${p.notes}</p></section>` : ""}
+${highlights || ""}
+${prices || ""}
 
 <section class="card" id="phases">
   <h2>${L(lang, "المراحل", "Phases")}</h2>
@@ -296,8 +298,11 @@ ${manager ? html`<details class="card"><summary>✏️ ${L(lang, "تعديل ا�
 ${manager ? html`<details class="card"><summary>➕ ${L(lang, "نظام سداد جديد", "New payment plan")}</summary>${planForm(lang, p.id, phases)}</details>` : ""}
 ${plansRead || ""}
 
+<h2 id="client-files">📤 ${L(lang, "ملفات ولينكات للعملاء", "Files and links for clients")}</h2>
+<p class="muted">${L(lang, "اللي بيتبعت للعميل لينك. المساعد مش بيقرا الملفات دي: اللي بيقراه بيتحط فوق (البروشور وقايمة الأسعار وأنظمة السداد). العميل بياخد بس اللي عليه \"يظهر للعميل\".", "What is sent to clients as links. Ask does not read these files: what it reads is added above (brochure, price list, payment plans). A client gets only the ones marked \"Show to clients\".")}</p>
+${gallery || ""}
 <section class="card" id="materials">
-  <h2>📁 ${L(lang, "الملفات واللينكات", "Materials")}</h2>
+  <h3>📁 ${L(lang, "الملفات واللينكات", "Materials")}</h3>
   ${materials.length ? html`<ul>${materials.map((m) => html`<li data-material="${m.id}" data-client-visible="${m.client_visible ? "1" : "0"}">
     <a href="${m.url}" target="_blank" rel="noopener noreferrer">${m.storage_path ? "📎 " : ""}${m.label}</a> · ${label2(KIND, m.kind, lang)}${m.unit_type ? ` · ${m.unit_type}` : ""} · ${m.client_visible ? L(lang, "👁️ بيظهر للعميل", "👁️ Client-visible") : L(lang, "🔒 داخلي", "🔒 Internal")}${m.check_status === "broken" ? html` · <strong data-broken>⚠️ ${L(lang, "مبقاش بيفتح", "Not opening")}</strong>` : ""}
     ${manager ? html`${m.kind === "price_sheet" ? "" : html`<form method="post" action="${base}/materials/${m.id}/visibility" class="inline"><input type="hidden" name="visible" value="${m.client_visible ? "0" : "1"}"><button type="submit" class="link">${m.client_visible ? L(lang, "خليه داخلي", "Make internal") : L(lang, "اعرضه للعميل", "Show to clients")}</button></form>`}
@@ -325,6 +330,8 @@ ${plansRead || ""}
     <button type="submit" class="secondary">${L(lang, "رفع", "Upload")}</button>
   </form>` : ""}
 </section>
+${commissionTerms ? html`<h2 id="commission-area">🔐 ${L(lang, "العمولة (للمديرين بس)", "Commission (managers only)")}</h2>
+<p class="muted">${L(lang, "سري: مش بيظهر للوسطاء ولا للعملاء ولا للمساعد.", "Secret: never shown to brokers, clients or Ask.")}</p>${commissionTerms}` : ""}
 
 <section class="card" id="units">
   <h2>🏠 ${L(lang, "وحدات المشروع", "Project units")} (${units.length})</h2>

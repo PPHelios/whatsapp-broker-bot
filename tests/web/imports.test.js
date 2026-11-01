@@ -118,18 +118,52 @@ describe("Excel diff import", () => {
     expect(page.text).not.toMatch(/data-kind="(changed|new|invalid)"/);
   });
 
-  test("units missing from a full inventory sheet are offered for archiving, never archived on their own", async () => {
+  test("units missing from the sheet are not listed and the apply form has no archive option", async () => {
     await seed();
     await h.insertListing({ code: "GONE-1" });
     const { agent, csrf } = await signIn(h, "manager");
     const res = await upload(agent, csrf, await workbook(rows.slice(0, 3)));
     const page = await agent.get(res.headers.location);
-    expect(page.text).toMatch(/data-kind="missing"[\s\S]*GONE-1/);
-    expect(page.text).toMatch(/value="COL-1"/); // a manager may archive a colleague's unit too
-    await agent.post(`/app/import/${importId(res)}/apply`).set("X-CSRF-Token", csrf).type("form").send("archive=GONE-1&archive=COL-1");
-    expect((await unit("GONE-1")).status).toBe("archived");
-    expect((await unit("COL-1")).status).toBe("archived"); // ticked, and a manager may archive it
-    expect((await unit("HP-2")).status).toBe("active");
+    expect(page.text).not.toMatch(/data-kind="missing"|GONE-1|name="archive"/);
+    await agent.post(`/app/import/${importId(res)}/apply`).set("X-CSRF-Token", csrf).type("form").send("archive=GONE-1&rows=2");
+    expect((await unit("GONE-1")).status).toBe("active"); // nothing is archived by an import
+  });
+
+  test("a row can be edited on the review page without uploading again; the edited cells go through the same rules", async () => {
+    await seed();
+    const { agent, csrf } = await signIn(h, "manager");
+    const res = await upload(agent, csrf, await workbook(rows));
+    const id = importId(res);
+    const page = await agent.get(res.headers.location);
+    expect(page.text).toMatch(/id="edit-5"/); // the invalid row (BAD-1) is editable
+    expect(page.text).toMatch(/form="edit-2"/); // so is a changed row
+    expect(page.text).not.toMatch(/id="edit-3"/); // an unchanged one is not
+
+    // still invalid: the price is missing
+    await agent.post(`/app/import/${id}/edit/5`).set("X-CSRF-Token", csrf).type("form").send({ c_compound: "Hyde Park" }).expect(303);
+    let [{ payload }] = await h.query("SELECT payload FROM web_imports WHERE id = $1", [id]);
+    expect(payload.items.find((i) => i.row === 5).kind).toBe("invalid");
+
+    // fixed: the row becomes new; a changed row is edited too
+    await agent.post(`/app/import/${id}/edit/5`).set("X-CSRF-Token", csrf).type("form").send({ c_compound: "Hyde Park", c_price_value: "3 مليون" }).expect(303);
+    await agent.post(`/app/import/${id}/edit/2`).set("X-CSRF-Token", csrf).type("form").send({ c_price_value: "9 مليون" }).expect(303);
+    [{ payload }] = await h.query("SELECT payload FROM web_imports WHERE id = $1", [id]);
+    expect(payload.items.find((i) => i.row === 5).kind).toBe("new");
+    expect(payload.items.find((i) => i.row === 2).patch.price_value).toBe(9e6);
+    expect((await unit("BAD-1"))).toBeUndefined(); // nothing is written until Apply
+
+    await agent.post(`/app/import/${id}/apply`).set("X-CSRF-Token", csrf).type("form").send("rows=2&rows=5");
+    expect((await unit("BAD-1")).price_value).toBe(3e6);
+    expect((await unit("HP-1")).price_value).toBe(9e6);
+  });
+
+  test("editing a row of a plan that was applied, another manager's plan or an unknown row is refused", async () => {
+    await seed();
+    const { agent, csrf } = await signIn(h, "manager");
+    const id = importId(await upload(agent, csrf, await workbook(rows)));
+    await agent.post(`/app/import/${id}/edit/99`).set("X-CSRF-Token", csrf).type("form").send({ c_price_value: "1" }).expect(404);
+    await agent.post(`/app/import/${id}/apply`).set("X-CSRF-Token", csrf).type("form").send("rows=2");
+    await agent.post(`/app/import/${id}/edit/5`).set("X-CSRF-Token", csrf).type("form").send({ c_price_value: "1" }).expect(404);
   });
 
   test("the header row is found below banner rows; formula cells give their value", async () => {
@@ -217,13 +251,10 @@ describe("group import (forwarded posts and chat exports)", () => {
     expect(created[0]).toMatchObject({ compound: "ميفيدا", price_value: 12e6, feature_keys: ["north_facing"], broker_id: h.BROKERS.manager.id });
   });
 
-  test("a zipped WhatsApp chat export: the poster is kept as internal co-broker, never in client copy", async () => {
+  test("an uploaded WhatsApp chat export (.txt): the poster is kept as internal co-broker, never in client copy; a zip is sent to the photos tab", async () => {
     scripted();
-    const zip = new JSZip();
-    zip.file("WhatsApp Chat with Brokers.txt", "[24/10/2026, 10:15:32] Ahmed Broker: شقة للبيع في ميفيدا 200 متر 3 غرف\nالسعر 12 مليون\n[24/10/2026, 10:16:01] Sara: تمام");
-    const buf = await zip.generateAsync({ type: "nodebuffer" });
     const { agent, csrf } = await signIn(h, "manager");
-    const r = await agent.post("/app/import/group").field("_csrf", csrf).attach("chat", buf, { filename: "chat.zip", contentType: "application/zip" });
+    const r = await agent.post("/app/import/group").field("_csrf", csrf).attach("chat", Buffer.from("[24/10/2026, 10:15:32] Ahmed Broker: شقة للبيع في ميفيدا 200 متر 3 غرف\nالسعر 12 مليون\n[24/10/2026, 10:16:01] Sara: تمام"), { filename: "chat.txt", contentType: "text/plain" });
     const id = importId(r);
     await Imports.waitForGroupImport(id);
     expect((await agent.get(`/app/import/${id}`)).text).toMatch(/Ahmed Broker/);
@@ -256,7 +287,7 @@ describe("group import (forwarded posts and chat exports)", () => {
 describe("imports are manager-only", () => {
   test("a broker is refused on Excel, group posts, chat with photos and apply; single add still works elsewhere", async () => {
     const { agent, csrf } = await signIn(h, "broker");
-    for (const url of ["/app/import/excel", "/app/import/group", "/app/import/zip/start", "/app/import/zip", "/app/import/00000000-0000-0000-0000-000000000000/apply"]) {
+    for (const url of ["/app/import/excel", "/app/import/group", "/app/import/match/start", "/app/import/match/unit/HP-1/photo", "/app/import/00000000-0000-0000-0000-000000000000/apply"]) {
       expect((await agent.post(url).set("X-CSRF-Token", csrf).type("form").send({})).status).toBe(403);
     }
   });

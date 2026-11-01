@@ -138,42 +138,8 @@ async function dispatchMessage(broker, message, ctx) {
       );
 
       if (activeDraft) {
-        const lower = text.toLowerCase();
-        // Strict explicit search intent check (excluding property types so specs aren't mistaken for search queries)
-        const hasExplicitSearchIntent =
-          /(?:^|\s)(عايز|عاوز|محتاج|ابحث|دورلي|عندك|search|find|looking for|مطلوب)(?=$|\s)/i.test(
-            lower
-          );
-
-        if (hasExplicitSearchIntent) {
-          // Button ids are capped at 128 chars, so the query is kept server-side, not in the id.
-          await poolInstance.query(
-            `INSERT INTO broker_sessions (broker_id, session_type, session_data, expires_at)
-             VALUES ($1::uuid, 'pending_search', jsonb_build_object('query', $2::text), NOW() + INTERVAL '15 minutes')
-             ON CONFLICT (broker_id, session_type) DO UPDATE SET
-               session_data = EXCLUDED.session_data,
-               expires_at = EXCLUDED.expires_at`,
-            [broker.id, text]
-          );
-          const promptBody =
-            lang === "en"
-              ? "⚠️ You have an active listing draft in progress. Would you like to discard it and perform your search?"
-              : "⚠️ لديك مسودة وحدة قيد الإضافة حالياً. هل تريد إلغاء المسودة والبحث في المخزون بدلاً من ذلك؟";
-
-          await replyButtons(broker, promptBody, [
-            {
-              id: "cancel_and_search",
-              title: lang === "en" ? "Search 🔍" : "إلغاء والبحث 🔍"
-            },
-            {
-              id: "draft_edit",
-              title: lang === "en" ? "Keep Draft 📝" : "إكمال المسودة 📝"
-            }
-          ]);
-          return "done";
-        }
-
-        // Invariant: Non-search text sent while a draft is active represents unit specifications
+        // No guessing: while a draft is open, every text is unit data. Commands were handled above;
+        // a draft ends only by cancel, the Cancel button, done, or the 15-minute timeout.
         await Drafts.appendText(poolInstance, broker.id, text, "draft");
         const promptBody =
           lang === "en"

@@ -169,11 +169,7 @@
       "uploadFlyerImage": ["agencyId", "storagePath", "buffer"],
       "uploadAgencyLogo": ["agencyId", "storagePath", "buffer"],
       "uploadProjectFile": ["agencyId", "storagePath", "buffer", "contentType"],
-      "deleteStorageFiles": ["paths"],
-      "CHAT_ZIP_MAX_BYTES": "Number",
-      "createChatUploadUrl": ["storagePath"],
-      "downloadChatExportToFile": ["storagePath", "file"],
-      "deleteChatExport": ["storagePath"]
+      "deleteStorageFiles": ["paths"]
     },
     "lib/dispatcher.js": {
       "countOutbound": ["broker", "kind", "status", "operationType"],
@@ -212,6 +208,7 @@
       "invalidateStagedReview": ["pool", "brokerId"],
       "reviewDraft": ["broker", "ctx"],
       "answerInstallments": ["broker", "ctx", "yes"],
+      "answerOwner": ["broker", "ctx", "keep"],
       "commitStagedReview": ["broker", "ctx"],
       "commitDraftToDatabase": ["broker", "_draft", "ctx"],
       "commitDraftToListing": ["broker", "_draft", "ctx"],
@@ -294,7 +291,8 @@
       "dispatch": ["broker", "text", "ctx", "opts"],
       "matchStatus": ["text"],
       "matchPrice": ["text"],
-      "matchEdit": ["text"]
+      "matchEdit": ["text"],
+      "WEB_LOGIN": "Object"
     },
     "lib/listingStore.js": {
       "findCatalogueMatch": ["db", "agencyId", "l", "params"],
@@ -428,6 +426,7 @@
       "NORMALIZE_SEARCH_SQL": "String"
     },
     "domain/searchQuery.js": {
+      "enforceInstallmentWords": ["parsed", "text"],
       "emptyFilters": [],
       "normalizeCode": ["code"],
       "normalizeAiSearch": ["raw"],
@@ -612,9 +611,7 @@
       "looksLikeListing": ["text"],
       "candidatePosts": ["text", "params"],
       "atMs": ["at"],
-      "parseWithAttachments": ["text"],
-      "assignPhotos": ["messages", "posts"],
-      "candidatePostsWithPhotos": ["text", "params"]
+      "parseWithAttachments": ["text"]
     },
     "lib/sheets.js": {
       "MAX_BYTES": "Number",
@@ -632,6 +629,7 @@
       "savePlan": ["pool", "broker", "kind", "payload", "params"],
       "loadImport": ["pool", "broker", "id"],
       "applyExcel": ["pool", "broker", "id", "params"],
+      "editExcelRow": ["pool", "broker", "id", "rowNumber", "cells", "params"],
       "findDuplicate": ["pool", "agencyId", "l"],
       "startGroupImport": ["pool", "broker", "posts", "params"],
       "waitForGroupImport": ["id"],
@@ -758,6 +756,7 @@
       "unitOwnerBlock": ["pool", "viewer", "listing", "lang", "csrf", "notice"]
     },
     "services/unitOwners.js": {
+      "findByPhone": ["db", "agencyId", "phone"],
       "findOrCreate": ["db", "agencyId", "params"],
       "syncFromListing": ["db", "broker", "listing"],
       "getFor": ["pool", "viewer", "ownerId"],
@@ -1206,6 +1205,17 @@
       "remindEnding": ["pool", "params"],
       "reminderJob": []
     },
+    "lib/waOwnerOnly.js": {
+      "inboundAllowed": ["message"],
+      "outboundAllowed": ["to"],
+      "isOwnerNumber": ["raw"],
+      "HELP": "Object"
+    },
+    "services/agencyCreate.js": {
+      "createAgency": ["pool", "actor", "input", "params"],
+      "cleanLogo": ["raw"],
+      "PLANS": "Array"
+    },
     "services/signup.js": {
       "isOpen": ["db"],
       "setOpen": ["db", "enabled"],
@@ -1228,13 +1238,6 @@
       "saveHashes": ["db", "agencyId", "byUrl"],
       "backfill": ["pool", "params"],
       "backfillJob": []
-    },
-    "services/chatPhotos.js": {
-      "MAX_PHOTO_BYTES": "Number",
-      "isZip": ["b"],
-      "openExport": ["params"],
-      "storePhotos": ["pool", "broker", "importId", "posts", "entries"],
-      "postsFromExport": ["pool", "broker", "importId", "source", "params"]
     },
     "services/viewings.js": {
       "OPEN": "Array",
@@ -1901,6 +1904,32 @@
     },
     "web/views/credits.js": {
       "creditTable": ["actions", "lang"]
+    },
+    "web/routes/matchPhotos.js": {
+      "register": ["web", "params"]
+    },
+    "domain/chatMatch.js": {
+      "match": ["text", "params"],
+      "codeFinder": ["codes", "aliases"],
+      "normCode": ["s"],
+      "MAX_POSTS": "Number"
+    },
+    "domain/chatParse.js": {
+      "BIDI": "Object",
+      "latin": ["s"],
+      "IOS": "Object",
+      "ANDROID": "Object",
+      "HEAD": "Object",
+      "SKIP": "Object",
+      "PHOTO_WINDOW_MS": "Number",
+      "MAX_PHOTOS": "Number",
+      "DEFAULT_DAYS": "Number",
+      "atMs": ["at"],
+      "sinceMs": ["v"],
+      "defaultSince": ["now"],
+      "notOlder": ["since"],
+      "parseWithAttachments": ["text"],
+      "looksLikeListing": ["text"]
     }
   },
   "invariant_variable_names": {

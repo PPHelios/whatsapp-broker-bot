@@ -24,8 +24,8 @@ Never invent a filter that was not asked for.
     "listing_type": "sale" | "rent" | null,
     "market": "primary" | "resale" | null,
     "property_types": [ any of: apartment, duplex, penthouse, chalet, studio, villa, townhouse, twinhouse, office, shop, clinic, commercial, land ],
-    "compound": "ONE compound / project name as said, else null",
-    "locations": [ other place names as said (areas, districts, cities) ],
+    "compound": "ONE compound / project name, written in English (translate an Arabic name to its usual English spelling), else null",
+    "locations": [ other place names (areas, districts, cities), in English where the usual English name is known ],
     "currency": "EGP" | "USD" | "EUR" | null,
     "price_min": number or null, "price_max": number or null,
     "area_min": number or null, "area_max": number or null,
@@ -35,7 +35,7 @@ Never invent a filter that was not asked for.
     "finishing": [ any of: core_and_shell, semi_finished, fully_finished, super_lux, ultra_super_lux ],
     "furnishing": "furnished" | "semi_furnished" | "unfurnished" | null,
     "delivery": { "ready": true or null, "by_year": integer or null },
-    "payment": { "cash": true or null, "installments": true or null, "max_down_payment": number or null, "max_installment": number or null },
+    "payment": { "cash": true or null, "installments": true or null, "years": integer or null, "down_pct": number or null, "max_down_payment": number or null, "max_installment": number or null },
     "features": [ keys from this list only: ${featureList} ],
     "other_features": [ other requested extras, as said ]
   }
@@ -43,8 +43,13 @@ Never invent a filter that was not asked for.
 
 RULES:
 - Numbers are plain EGP numbers: "8 مليون ونص" = 8500000, "مقدم 500 ألف" → payment.max_down_payment 500000, "قسط مش أكتر من 150 ألف" → payment.max_installment 150000, "في حدود 6 مليون" → price_max 6000000.
-- "3 غرف" or "3 bedrooms" → bedrooms_min 3 and bedrooms_max 3. "استوديو" → property_types ["studio"].
+- "3 غرف" or "3 bedrooms" → bedrooms_min 3 and bedrooms_max null (3 or more).
+- "متكرر" / "typical" floor → floor_min 1 and floor_max null (any floor except ground). Same for bathrooms ("3 حمامات" → bathrooms_min 3) and area ("150 متر" → area_min 150, area_max null). A range ("من 120 لـ 150 متر") sets both ends. "استوديو" → property_types ["studio"].
+- "budget" / "حدود" / "تحت" / "لحد" with a price → price_max only.
 - "استلام فوري" / "ready to move" → delivery.ready true. "تسليم 2027" → delivery.by_year 2027.
+- Units are searched by their English text for now, so a compound or area said in Arabic must come back in its English spelling (e.g. "ازاد" → "Azad").
+- "على 8 سنين" / "8 years" / "٨ سنين" → payment.years 8 (the plan's length, not a place). Never put the word "سنين" in locations.
+- "مقدم 10%" / "10% down" / "مقدم ١٠٪" → payment.down_pct 10 (a percent of the price, not an amount).
 - بحري / north facing → "north_facing"; ناصية / corner → "corner"; غرفة مربية / nanny room → "nanny_room".`;
 
 function featureListForPrompt() {
@@ -71,7 +76,7 @@ async function parseRequest(AI, { text = "", ctx = {} } = {}) {
       ctx
     });
     const raw = JSON.parse(String(res.text || "").replace(/^```(?:json)?/i, "").replace(/```$/, "").trim());
-    const parsed = Q.normalizeAiSearch(raw);
+    const parsed = Q.enforceInstallmentWords(Q.normalizeAiSearch(raw), text);
     if (!parsed.transcript) parsed.transcript = String(text).slice(0, 500);
     return { parsed, source: "ai", modelUsed: res.modelUsed, usage: res.usage || {}, ms: Date.now() - t0 };
   } catch (err) {
@@ -129,22 +134,24 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
     if (pMax !== null) where.push(`l.price_value <= ${add(pMax)}`);
     const aMin = widen(f.area_min, 0.85);
     const aMax = widen(f.area_max, 1.15);
-    if (aMin !== null) where.push(`l.area_value >= ${add(aMin)}`);
-    if (aMax !== null) where.push(`l.area_value <= ${add(aMax)}`);
+    // A unit with no area, bedrooms, bathrooms or floor recorded still matches (it is not dropped).
+    if (aMin !== null) where.push(`(l.area_value IS NULL OR l.area_value >= ${add(aMin)})`);
+    if (aMax !== null) where.push(`(l.area_value IS NULL OR l.area_value <= ${add(aMax)})`);
 
     if (f.bedrooms_min !== null && f.bedrooms_min === f.bedrooms_max) {
-      if (f.bedrooms_min === 0) where.push(`(l.bedrooms = 0 OR l.property_type = 'studio')`);
-      else if (relaxed) where.push(`l.bedrooms BETWEEN ${add(Math.max(1, f.bedrooms_min - 1))} AND ${add(f.bedrooms_max + 1)}`);
-      else where.push(`l.bedrooms = ${add(f.bedrooms_min)}`);
+      if (f.bedrooms_min === 0) where.push(`(l.bedrooms IS NULL OR l.bedrooms = 0 OR l.property_type = 'studio')`);
+      else if (relaxed) where.push(`(l.bedrooms IS NULL OR l.bedrooms BETWEEN ${add(Math.max(1, f.bedrooms_min - 1))} AND ${add(f.bedrooms_max + 1)})`);
+      else where.push(`(l.bedrooms IS NULL OR l.bedrooms = ${add(f.bedrooms_min)})`);
     } else {
-      if (f.bedrooms_min !== null) where.push(`l.bedrooms >= ${add(relaxed ? Math.max(0, f.bedrooms_min - 1) : f.bedrooms_min)}`);
-      if (f.bedrooms_max !== null) where.push(`l.bedrooms <= ${add(relaxed ? f.bedrooms_max + 1 : f.bedrooms_max)}`);
+      if (f.bedrooms_min !== null) where.push(`(l.bedrooms IS NULL OR l.bedrooms >= ${add(relaxed ? Math.max(0, f.bedrooms_min - 1) : f.bedrooms_min)})`);
+      if (f.bedrooms_max !== null) where.push(`(l.bedrooms IS NULL OR l.bedrooms <= ${add(relaxed ? f.bedrooms_max + 1 : f.bedrooms_max)})`);
     }
 
     if (!relaxed) {
-      if (f.bathrooms_min !== null) where.push(`l.bathrooms >= ${add(f.bathrooms_min)}`);
-      if (f.floor_min !== null) where.push(`l.floor_level >= ${add(f.floor_min)}`);
-      if (f.floor_max !== null) where.push(`l.floor_level <= ${add(f.floor_max)}`);
+      if (f.bathrooms_min !== null) where.push(`(l.bathrooms IS NULL OR l.bathrooms >= ${add(f.bathrooms_min)})`);
+      // Floor 0 is ground; "typical" arrives as floor_min 1 (any floor above ground). Units with no floor still match.
+      if (f.floor_min !== null) where.push(`(l.floor_level IS NULL OR l.floor_level >= ${add(f.floor_min)})`);
+      if (f.floor_max !== null) where.push(`(l.floor_level IS NULL OR l.floor_level <= ${add(f.floor_max)})`);
       if (f.finishing.length) where.push(`l.finishing = ANY(${add(f.finishing)}::text[])`);
       if (f.furnishing) where.push(`l.furnishing = ${add(f.furnishing)}`);
     }
@@ -157,6 +164,18 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
     }
     if (f.payment_installments) {
       where.push(`(coalesce(l.remaining_amount, 0) > 0 OR jsonb_array_length(coalesce(l.payment_terms->'plans', '[]'::jsonb)) > 0)`);
+    }
+    if (f.payment_down_pct !== null) {
+      // "مقدم 10%": a plan that asks exactly that down payment (resale units have no plan percent, so they are not matched).
+      const d = add(f.payment_down_pct);
+      where.push(`EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(l.payment_terms->'plans', '[]'::jsonb)) p
+                WHERE (p->>'down_payment_pct')::numeric = ${d})`);
+    }
+    if (f.payment_years !== null) {
+      // "على 8 سنين": a plan of that many years or more (or a resale with that many years left or more).
+      const y = add(f.payment_years);
+      where.push(`(l.installment_years >= ${y} OR EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(l.payment_terms->'plans', '[]'::jsonb)) p
+                WHERE (p->>'years')::numeric >= ${y}))`);
     }
     if (f.max_down_payment !== null) {
       const p = add(f.max_down_payment);
@@ -177,7 +196,9 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
       )`);
     }
 
-    if (f.features.length) where.push(`l.feature_keys @> ${add(f.features)}::text[]`);
+    // "furnished" is already the furnishing filter; requiring the feature key too dropped units that had only one of them.
+    const featureKeys = f.furnishing ? f.features.filter((k) => k !== "furnished") : f.features;
+    if (featureKeys.length) where.push(`l.feature_keys @> ${add(featureKeys)}::text[]`);
     for (const t of f.feature_terms) where.push(`l.search_text_normalized LIKE '%' || ${add(t)} || '%'`);
   }
 

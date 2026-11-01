@@ -29,6 +29,22 @@ const nonNegInt = (v) => {
   return n !== null && n >= 0 ? Math.round(n) : null;
 };
 const uniq = (a) => [...new Set(a)];
+/** Down payment as a percent of the price (a plan's down_payment_pct): 0 to 100, else null. */
+const downPct = (v) => {
+  const n = num(v);
+  return n !== null && n >= 0 && n <= 100 ? n : null;
+};
+/**
+ * One number is a minimum (3 bedrooms = 3 or more), and one budget is a ceiling. The AI sometimes returns the same
+ * number as both ends; a real range has two different ends, so an equal pair is collapsed here.
+ */
+const singleCountMax = (lo, hi) => (lo !== null && hi !== null && lo === hi ? null : hi);
+const singleBudgetFloor = (lo, hi) => (lo !== null && hi !== null && lo === hi ? null : lo);
+/** Years of a payment plan: a whole number from 1 to 30, else null. */
+const planYears = (v) => {
+  const n = num(v);
+  return n !== null && Number.isInteger(Math.round(n)) && Math.round(n) >= 1 && Math.round(n) <= 30 ? Math.round(n) : null;
+};
 const sortPlaces = (list) =>
   uniq(list.map((p) => `${p.kind}:${p.key}`))
     .sort()
@@ -58,6 +74,8 @@ function emptyFilters() {
     delivery_by_year: null,
     payment_cash: null,
     payment_installments: null,
+    payment_years: null,
+    payment_down_pct: null,
     max_down_payment: null,
     max_installment: null,
     features: [],
@@ -157,12 +175,12 @@ function normalizeAiSearch(raw) {
     places,
     place_terms: terms,
     currency: ["EGP", "USD", "EUR"].includes(f.currency) ? f.currency : null,
-    price_min: pos(f.price_min),
+    price_min: singleBudgetFloor(pos(f.price_min), pos(f.price_max)),
     price_max: pos(f.price_max),
     area_min: pos(f.area_min),
-    area_max: pos(f.area_max),
+    area_max: singleCountMax(pos(f.area_min), pos(f.area_max)),
     bedrooms_min: nonNegInt(f.bedrooms_min),
-    bedrooms_max: nonNegInt(f.bedrooms_max),
+    bedrooms_max: singleCountMax(nonNegInt(f.bedrooms_min), nonNegInt(f.bedrooms_max)),
     bathrooms_min: nonNegInt(f.bathrooms_min),
     floor_min: num(f.floor_min) !== null ? Math.round(num(f.floor_min)) : null,
     floor_max: num(f.floor_max) !== null ? Math.round(num(f.floor_max)) : null,
@@ -172,6 +190,8 @@ function normalizeAiSearch(raw) {
     delivery_by_year: num(delivery.by_year) && num(delivery.by_year) >= 2000 ? Math.round(num(delivery.by_year)) : null,
     payment_cash: payment.cash === true ? true : null,
     payment_installments: payment.installments === true ? true : null,
+    payment_years: planYears(payment.years ?? f.payment_years),
+    payment_down_pct: downPct(payment.down_pct),
     max_down_payment: pos(payment.max_down_payment ?? f.down_payment_max),
     max_installment: pos(payment.max_installment ?? f.installment_max),
     features: [...keys, ...legacyFlags],
@@ -194,6 +214,8 @@ const STOP = new Set(
   [
     "في", "فى", "من", "الى", "إلى", "علي", "على", "عن", "و", "مع", "عايز", "عاوز", "عايزه", "محتاج", "دورلي", "ورني", "وريني",
     "فيه", "فيها", "عندنا", "عندك", "عندي", "بحث", "ابحث", "لي", "لو", "سمحت", "بس", "حاجة", "حاجه", "وحدة", "وحده", "كمبوند",
+    "سنين", "سنه", "سنة", "سنوات", "سنتين", "years", "year", "yrs", "مقدم", "دفعه", "اولي", "down", "payment", "تكملة", "تكمله",
+    "حتي", "لحد", "اقل", "تحت", "حدود", "بحدود", "فوق", "اكتر", "اكثر", "up", "under", "budget", "متكرر", "متكرره", "typical",
     "the", "a", "an", "in", "for", "at", "with", "show", "me", "find", "search", "i", "want", "need", "looking", "unit", "units",
     "compound", "please", "any", "some", "and", "or", "of", "to", "is", "near", "around", "قريب", "جنب"
   ].map(normalizeSearch)
@@ -316,11 +338,12 @@ function fallbackParse(text) {
   // Bedrooms / bathrooms (digits or Egyptian number words).
   const n = (s) => (/^\d+$/.test(s) ? Number(s) : AR_NUMBER_WORDS[s] ?? null);
   c = consume(hay, / و?(غرفتين|اوضتين) /);
-  if (c.m) f.bedrooms_min = f.bedrooms_max = 2;
+  // A plain count is a minimum: "2 bedroom" means 2 or more (same for bathrooms and area).
+  if (c.m) f.bedrooms_min = 2;
   hay = c.hay;
   c = consume(hay, / (\d+|[ء-ي]+) (غرف|غرفه|اوض|اوضه|نوم|bed|beds|bedroom|bedrooms|room|rooms|br) /);
   if (c.m && n(c.m[1]) !== null) {
-    f.bedrooms_min = f.bedrooms_max = n(c.m[1]);
+    f.bedrooms_min = n(c.m[1]);
     hay = c.hay;
   }
   c = consume(hay, / (حمامين) /);
@@ -378,7 +401,7 @@ function fallbackParse(text) {
     hay = c.hay;
   }
 
-  // Area: "150 متر" / "150 m2" / "150 sqm" is a band of +-10%; "من 120 ل 150 متر" is the exact range.
+  // Area: "150 متر" / "150 m2" is a minimum (150 or more); "من 120 ل 150 متر" is a range.
   c = consume(hay, / (?:من |from )?(\d{2,4}) (?:ل|الي|to|-) (\d{2,4}) (متر|م|m2|m|sqm|meter|meters) /);
   if (c.m) {
     f.area_min = Number(c.m[1]);
@@ -387,9 +410,7 @@ function fallbackParse(text) {
   } else {
     c = consume(hay, / (\d{2,4}) (متر|م|m2|m|sqm|meter|meters) /);
     if (c.m) {
-      const a = Number(c.m[1]);
-      f.area_min = Math.round(a * 0.9);
-      f.area_max = Math.round(a * 1.1);
+      f.area_min = Number(c.m[1]);
       hay = c.hay;
     }
   }
@@ -441,6 +462,12 @@ function fallbackParse(text) {
       hay = c.hay;
     }
   }
+  // "متكرر" / "typical": any floor above ground.
+  c = consume(hay, / (متكرر|متكرره|متكررة|typical|typical floor) /);
+  if (c.m && f.floor_min === null) {
+    f.floor_min = 1;
+    hay = c.hay;
+  }
   c = consume(hay, / (?:ب|بال)?(?:الدور الارضي|دور ارضي|ground floor) /);
   if (c.m) {
     f.floor_min = f.floor_max = 0;
@@ -464,6 +491,31 @@ function fallbackParse(text) {
   c = consume(hay, / (?:ب|بال)?(تقسيط|اقساط|قسط|installments|installment) /);
   if (c.m) f.payment_installments = true;
   hay = c.hay;
+
+  // Years of a plan: "على ٨ سنين", "8 years", "تمانية سنين", "سنتين". Read here, so the unit word never becomes a place term.
+  c = consume(hay, / ([0-9]+|[ء-ي]+) (سنين|سنه|سنة|سنوات|years|year|yrs) /);
+  if (c.m && planYears(spokenAmount(c.m[1])) !== null) {
+    f.payment_years = planYears(spokenAmount(c.m[1]));
+    hay = c.hay;
+  }
+  c = consume(hay, / (سنتين) /);
+  if (c.m) {
+    f.payment_years = 2;
+    hay = c.hay;
+  }
+
+  // Down payment as a percent: "مقدم ١٠٪" / "10% down". The sign is dropped by the normalizer, so the number must stand
+  // alone (no money unit, which the rules above already took) and be at most 100.
+  c = consume(hay, / (مقدم|دفعه اولي|دفعه مقدمه|down payment|downpayment|down) (\d+(?:\.\d+)?) /);
+  if (c.m && downPct(c.m[2]) !== null) {
+    f.payment_down_pct = downPct(c.m[2]);
+    hay = c.hay;
+  }
+  c = consume(hay, / (\d+(?:\.\d+)?) (?:down) /);
+  if (c.m && downPct(c.m[1]) !== null) {
+    f.payment_down_pct = downPct(c.m[1]);
+    hay = c.hay;
+  }
 
   // Property types.
   for (const m of TYPE_MATCHERS) {
@@ -507,7 +559,9 @@ function hasAnyFilter(parsed) {
         f.max_down_payment, f.max_installment, f.delivery_by_year].some((v) => v !== null && v !== undefined) ||
       f.delivery_ready ||
       f.payment_cash ||
-      f.payment_installments
+      f.payment_installments ||
+      (f.payment_years !== null && f.payment_years !== undefined) ||
+      (f.payment_down_pct !== null && f.payment_down_pct !== undefined)
   );
 }
 
@@ -528,7 +582,24 @@ function ensureFilters(parsed) {
   return normalizeAiSearch({ filters: f, locations: parsed?.locations || [] }).filters;
 }
 
+// Haytham (2026-11-01): a budget is a price ceiling. A monthly installment cap is kept only when the
+// message itself says installment (EN) or قسط / أقساط / تقسيط (AR). The AI reading can drop that word;
+// without it the number moves to the price ceiling (when no price was given).
+const INSTALLMENT_WORD = /installment|instalment|قسط|اقساط|تقسيط/;
+function enforceInstallmentWords(parsed, text) {
+  const said = INSTALLMENT_WORD.test(normalizeSearch(String(text || "")));
+  const f = parsed?.filters;
+  if (!f || said) return parsed;
+  if (f.max_installment !== null && f.max_installment !== undefined) {
+    if (f.price_max === null || f.price_max === undefined) f.price_max = f.max_installment;
+    f.max_installment = null;
+  }
+  f.payment_installments = null;
+  return parsed;
+}
+
 module.exports = {
+  enforceInstallmentWords,
   emptyFilters,
   normalizeCode,
   normalizeAiSearch,

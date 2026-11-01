@@ -56,8 +56,9 @@ function prompt(question, blocks, { lang, today }) {
 Answer the broker's question using ONLY the DATA below, which is the agency's own records.
 Rules:
 - Never assume, estimate or use outside knowledge. If the DATA does not contain the answer, set "found": false and write only: "${NOT_FOUND[lang]}" plus, if useful, what related information the DATA does have.
-- When you use a fact, mention the date of its data block in the answer (for example "according to the price sheet of 2026-10-01").
+- Do not write the data dates in the answer: the app shows each data block's date under the answer by itself.
 - Keep it short and ready to forward to a client when the question is about a project or unit; never include internal notes, developer contacts or commissions in client-ready text unless the broker asks about them directly.
+- Format it for a chat message, plain text only (no Markdown, no asterisks, no tables): open with the direct answer in one short line; then, when there are several facts, put each on its own line starting with "• " and a fitting emoji or label (for example "• 📍 New Cairo"); leave a blank line between groups. One fact per line, no long paragraphs.
 - Reply in ${lang === "en" ? "English" : "Egyptian Arabic"}.
 Return JSON only: {"answer":"...","found":true|false}
 

@@ -12,20 +12,20 @@ const NOTES = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures", "voice
 const transcriptOf = (file) => NOTES.find((n) => n.file.startsWith(file)).transcript;
 
 const CASES = [
-  { file: "01-", want: { property_types: ["apartment"], bedrooms_min: 3, bedrooms_max: 3, area_min: 135, area_max: 165 } },
-  { file: "02-", want: { property_types: ["apartment"], bedrooms_min: 3, bedrooms_max: 3 } },
-  { file: "03-", want: { bedrooms_min: 3, bedrooms_max: 3 } }, // the note names no property type
+  { file: "01-", want: { property_types: ["apartment"], bedrooms_min: 3, bedrooms_max: null, area_min: 150, area_max: null } },
+  { file: "02-", want: { property_types: ["apartment"], bedrooms_min: 3, bedrooms_max: null } },
+  { file: "03-", want: { bedrooms_min: 3, bedrooms_max: null } }, // the note names no property type
   { file: "04-", want: { property_types: ["studio"] } },
-  { file: "05-", want: { property_types: ["villa"], bedrooms_min: 5, bedrooms_max: 5 } },
-  { file: "06-", want: { listing_type: "rent", property_types: ["apartment"], bedrooms_min: 3, bedrooms_max: 3 } },
-  { file: "07-", want: { property_types: ["townhouse"], bedrooms_min: 4, bedrooms_max: 4 } },
+  { file: "05-", want: { property_types: ["villa"], bedrooms_min: 5, bedrooms_max: null } },
+  { file: "06-", want: { listing_type: "rent", property_types: ["apartment"], bedrooms_min: 3, bedrooms_max: null } },
+  { file: "07-", want: { property_types: ["townhouse"], bedrooms_min: 4, bedrooms_max: null } },
   { file: "08a-", want: { property_types: ["duplex"] } },
-  { file: "08b-", want: { bedrooms_min: 4, bedrooms_max: 4 } },
-  { file: "09-", want: { property_types: ["apartment"], bedrooms_min: 2, bedrooms_max: 2 } },
-  { file: "10-", want: { property_types: ["apartment"], bedrooms_min: 2, bedrooms_max: 2 } },
+  { file: "08b-", want: { bedrooms_min: 4, bedrooms_max: null } },
+  { file: "09-", want: { property_types: ["apartment"], bedrooms_min: 2, bedrooms_max: null } },
+  { file: "10-", want: { property_types: ["apartment"], bedrooms_min: 2, bedrooms_max: null } },
   { file: "11-", want: { property_types: ["apartment"] } },
   { file: "12-", want: { property_types: ["shop"] } },
-  { file: "13-", want: { property_types: ["apartment"], bedrooms_min: 3, bedrooms_max: 3 } }
+  { file: "13-", want: { property_types: ["apartment"], bedrooms_min: 3, bedrooms_max: null } }
 ];
 
 describe("local search parser on real voice transcripts", () => {

@@ -4,6 +4,8 @@
 //   jest.mock("../../lib/ai", () => require("../harness/fake-ai"));
 //   jest.mock("../../lib/supabase", () => require("../harness/fake-supabase"));
 "use strict";
+// Router tests drive brokers over WhatsApp; the owner-only WhatsApp check is tested on its own (tests/router/whatsapp-owner-only.test.js).
+process.env.WHATSAPP_OWNER_ONLY ??= "false";
 
 const sharp = require("sharp");
 const { createTestDb } = require("./db");

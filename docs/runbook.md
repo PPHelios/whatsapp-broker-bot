@@ -15,13 +15,15 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `TELEGRAM_WEBHOOK_SECRET` | with the token | — | A random string (`node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`) given to `setWebhook`; Telegram echoes it in `X-Telegram-Bot-Api-Secret-Token` and every other request is refused. The server registers the webhook with it on every start (`lib/tgSetup.js`), so changing it only needs a redeploy. |
 | `TELEGRAM_BOT_USERNAME` | with the token | — | The bot's @username (without @), used to build the brokers' `t.me/<bot>?start=…` start links. |
 | `WHATSAPP_ENABLED` | no | on | `false` (or `0`/`off`/`no`) switches the WhatsApp bot off: the webhook answers 200 and does nothing, nothing is sent on WhatsApp (alerts go to web push and the website inbox), and the `WHATSAPP_*` variables stop being required. Unset or empty = on. Clients' `wa.me` links and share pages don't depend on it. |
+| `WHATSAPP_ALLOWED_NUMBER` | no | `01055881114` | The only number WhatsApp talks to (the CRM owner's; national or international form). Other senders get no reply, and nothing is sent on WhatsApp to any other number. Both checks are in `lib/waOwnerOnly.js`. |
+| `WHATSAPP_OWNER_ONLY` | no | on | Set `false` only in tests: turns the owner-only check off. Leave it unset in production. |
 | `WHATSAPP_APP_SECRET` | yes | — | Meta app secret; every webhook must carry a valid `X-Hub-Signature-256` (fail-closed). |
 | `WHATSAPP_VERIFY_TOKEN` | yes | — | The token you type in Meta when subscribing the webhook (`GET /webhook`). |
 | `WHATSAPP_ACCESS_TOKEN` | yes | — | System-user token for the Cloud API. |
 | `WHATSAPP_PHONE_NUMBER_ID` | yes | — | The bot number's id. |
 | `WHATSAPP_API_VERSION` | no | `v25.0` | Graph API version (v25.0 released February 2026; Meta supports a version for about two years, so bump it yearly and check the WhatsApp changelog first). |
 | `GEMINI_API_KEY` | yes | — | Production Gemini key (billing on, budget alert set). The eval never uses it. |
-| `SUPABASE_URL` | yes for photos | — | Storage project URL (public bucket `listing-images`; private bucket `chat-imports` for chat-export zips, created by migration 026, 200 MB per file; the Supabase plan's own upload limit also applies: 50 MB on Free). Without it storage runs in a mock mode: photos are not kept. |
+| `SUPABASE_URL` | yes for photos | — | Storage project URL (public bucket `listing-images`; the old private bucket `chat-imports` from migration 026 is no longer used and can be deleted in the dashboard). Without it storage runs in a mock mode: photos are not kept. |
 | `SUPABASE_SERVICE_ROLE_KEY` | yes for photos | — | Storage key (server only; never in the browser). `SUPABASE_ANON_KEY` is a fallback. |
 | `MALLOC_ARENA_MAX` | no | `2` (blueprint) | Keeps flyer rendering around 250 MB peak RSS. |
 | `PORT` | no | `3000` | Render sets it. |
@@ -47,7 +49,6 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 | `ALERT_TELEGRAM_CHAT_ID` | no | — | The owner's Telegram chat id: where error alerts and bug reports go. Unset = no alerts (errors are still stored in `error_events`). See §6b for how to find it. |
 | `ALERT_EVERY_MIN` | no | `30` | At most one alert per distinct error (fingerprint) in this many minutes. Bug reports always alert. |
 | `SCHEDULER_TICK_MS` | no | `60000` | How often each instance looks for due jobs (at least 5000). Each job still runs on one instance at a time. |
-| `CHAT_ZIP_MAX_MB` | no | `50` | Largest WhatsApp chat-export zip (with photos) the import page takes, in MB (at most 200). Supabase Free refuses uploads over 50 MB, so raise it only on a paid Supabase plan. |
 | `KEEP_AWAKE` | no | off | `true` makes the instance ping its own `/health` every 10 minutes so Render Free doesn't spin it down. Off when unset, because Render Free's monthly instance hours are capped (the workspace has a second free service). Turn on for the POC. |
 | `KEEP_AWAKE_HOURS` | no | `6-1` | Cairo hours when the keep-awake ping runs (`from-to`, may wrap past midnight; `0-0` = all day). 06:00–01:00 is about 590 hours a month. |
 | `SUPPORT_WHATSAPP` / `SUPPORT_TELEGRAM` | no | off | The owner's WhatsApp number (digits, with country code) and/or Telegram username. When set, every signed-in page footer shows "Talk to a person" (WhatsApp first, else Telegram). |
@@ -79,6 +80,10 @@ Secrets are set in the Render dashboard (`render.yaml` lists them with `sync: fa
 * Run a job again now: `UPDATE crm_jobs SET last_started_at = NULL, last_status = NULL WHERE name = '<job>';` (it runs on the next tick).
 
 ## 4. Onboarding an agency
+
+**Easiest:** the CRM owner adds an agency on `/app/owner` (New agency card): name, logo link, owner's name and mobile, pilot or trial. The owner's one-time Telegram link (7 days) is shown once; send it by hand. Only the CRM owner (`OWNER_BROKER_IDS`) sees the card. Full steps: `docs/agency-onboarding.md`.
+
+The terminal route below is for bulk setups.
 
 1. Copy `docs/pilot/agency.example.json`, fill the agency (name, optional `slug` for public links — lower-case letters, digits and dashes — colours, logo `https://` URL) and brokers (name, Egyptian mobile, role `broker`/`admin`/`owner`/`manager`, `lang` `ar`/`en`). At least one admin, owner or manager. Optional `code_prefix` (1–4 Latin letters) sets the agency's unit code letters (`NH` → auto codes `NH-V12`); without it they come from the agency's name and a manager can change them on 📊 My usage. Set `telegram_bot` (or `TELEGRAM_BOT_USERNAME`) so `onboard` prints each broker's one-time Telegram start link, and `bot_phone` (or `BOT_PHONE`) for WhatsApp start links. The file's `_notes` explain each field.
 2. `npm run onboard -- my-agency.json --dry-run`, then without `--dry-run`. Re-running is safe (agency by name, brokers by phone). It prints the slug, the web app address and each broker's **start link** (`wa.me/<bot>?text=مساعدة`, or `help` for English brokers).
@@ -254,7 +259,7 @@ If Meta blocks or restricts the bot's number:
 * **Private units:** `listings.is_private` (migration `054`). Hidden from every query except for the agency owner, managers included; the guard is `lib/visibility.js` with `tests/visibility-guard.test.js`. Jobs have no viewer, so they never see private units or leads.
 * **Unit owners:** `unit_owners` (merged by phone within the agency), `listings.owner_id`, history in `unit_owner_events` (migrations `056`). Brokers see an owner only through a unit they can see.
 * **Activity log:** `/app/activity-log` shows `operation_logs` for managers and the agency owner, 90 days, 50 per page.
-* **Imports:** Excel, group posts and chat exports are managers-only (`/app/import`). Spreadsheets sent to the bot in chat are no longer imported (the bot points to the website). Templates are generated by `lib/importTemplate.js`: mandatory columns red, optional grey, a Read me sheet and two marked dummy rows (delete them before a real import). Routes: `/app/import/template.xlsx`, `/app/leads/import/template.xlsx`.
+* **Imports:** Excel, group posts and Match photos (chat export zips) are managers-only (`/app/import`). Spreadsheets sent to the bot in chat are no longer imported (the bot points to the website). Templates are generated by `lib/importTemplate.js`: mandatory columns red, optional grey, a Read me sheet and two marked dummy rows (delete them before a real import). Routes: `/app/import/template.xlsx`, `/app/leads/import/template.xlsx`.
 
 ## 7f. Lead intake from Make (Facebook and Instagram ads)
 

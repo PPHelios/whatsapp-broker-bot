@@ -20,6 +20,14 @@ async function addEvent(db, agencyId, ownerId, brokerId, kind, data = {}) {
 }
 
 /** The profile with this phone in the agency, made (with a creation event) when none exists. Returns the row, or null for no usable phone. */
+/** The agency's owner with this phone, or null. Read only: nothing is created. */
+async function findByPhone(db, agencyId, phone) {
+  const digits = Phone.normalizePhone(phone);
+  if (!digits) return null;
+  const { rows } = await db.query("SELECT id, name, phones FROM unit_owners WHERE agency_id = $1 AND phones @> ARRAY[$2]::text[] ORDER BY created_at LIMIT 1", [agencyId, digits]);
+  return rows[0] || null;
+}
+
 async function findOrCreate(db, agencyId, { phone, name = null, brokerId = null }) {
   const digits = Phone.normalizePhone(phone);
   if (!digits) return null;
@@ -176,4 +184,4 @@ async function forLead(pool, viewer, lead) {
   return rows[0] ? getFor(pool, viewer, rows[0].id) : null;
 }
 
-module.exports = { findOrCreate, syncFromListing, getFor, listFor, history, edit, remove, reassign, leadFor, forLead };
+module.exports = { findByPhone, findOrCreate, syncFromListing, getFor, listFor, history, edit, remove, reassign, leadFor, forLead };

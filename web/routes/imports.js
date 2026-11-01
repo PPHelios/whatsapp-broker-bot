@@ -1,19 +1,14 @@
 // web/routes/imports.js — Excel diff import, group import (forwarded posts / chat export) and bulk edit
 "use strict";
 
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
-const crypto = require("crypto");
-const Supabase = require("../../lib/supabase");
 const AI = require("../../lib/ai");
 const RateLimit = require("../../lib/rateLimit");
 const Sheets = require("../../lib/sheets");
 const { logOperation } = require("../../lib/db");
 const { isManager } = require("../../lib/authz");
 const Imports = require("../../services/imports");
+const Edits = require("../../lib/edits");
 const Plans = require("../../domain/plans");
-const ChatPhotos = require("../../services/chatPhotos");
 const Chat = require("../../domain/chatExport");
 const Describe = require("../../domain/describe");
 const Session = require("../session");
@@ -33,16 +28,14 @@ for (const re of [/^\/import\/excel$/, /^\/import\/group$/]) Session.allowMultip
 const ImportTemplate = require("../../lib/importTemplate");
 const TEMPLATE_HEADERS = ["Code / الكود", "Compound / الكمبوند", "Property Type / النوع", "Purpose / بيع او ايجار", "Price / السعر", "Area (sqm) / المساحة", "Bedrooms / الغرف", "Bathrooms / الحمامات", "Floor / الدور", "Finishing / التشطيب", "Delivery / التسليم", "Paid / المدفوع", "Remaining / المتبقي", "Installment / القسط", "Frequency / دورية القسط", "Features / المميزات", "District / المنطقة", "Status / الحالة", "Owner / المالك", "Owner phone / تليفون المالك", "Notes / ملاحظات"];
 
-/** A chat export uploaded as .txt → its text (a .zip goes through services/chatPhotos.js, photos included). */
+/** True when a buffer starts like a zip file (a chat export with photos goes to the Match photos tab). */
+const isZip = (b) => Buffer.isBuffer(b) && b.length >= 4 && b[0] === 0x50 && b[1] === 0x4b;
+
+/** A chat export uploaded as .txt → its text. */
 async function chatText(file) {
-  if (!file || ChatPhotos.isZip(file.buffer)) return "";
+  if (!file || isZip(file.buffer)) return "";
   return file.buffer.toString("utf8").slice(0, 5_000_000);
 }
-
-// Where a broker's chat export zip lands in the private chat-imports bucket: their agency and id first, so a path
-// sent back with the form can only be one of their own uploads.
-const zipPrefix = (broker) => `${broker.agency_id}/${broker.id}/`;
-const ZIP_PATH = /^[0-9a-f-]{36}\/[0-9a-f-]{36}\/\d{13}-[0-9a-f]{12}\.zip$/;
 
 const KIND_LABEL = {
   new: ["🆕 جديدة", "🆕 New"],
@@ -53,34 +46,42 @@ const KIND_LABEL = {
 };
 
 function excelPlanPage(imp, lang) {
-  const { items, missing, counts } = imp.payload;
+  const { items, counts, rows: sheetRows, columns } = imp.payload;
   const applied = imp.status !== "ready";
   const section = (kind, body) => {
     const rows = items.filter((i) => i.kind === kind);
     if (!rows.length) return "";
     return html`<section class="card" data-kind="${kind}"><h2>${L(lang, KIND_LABEL[kind][0], KIND_LABEL[kind][1])} (${rows.length})</h2>${body(rows)}</section>`;
   };
+  // Editing is per row: a small form outside the apply form (forms cannot nest), its inputs joined by the form attribute.
+  const canEdit = !applied && Array.isArray(sheetRows) && Array.isArray(columns) && columns.length > 0;
+  const rowCells = (n) => sheetRows?.find((r) => r.rowNumber === n)?.cells || {};
+  const editor = (i) =>
+    canEdit
+      ? html`<details class="edit-row"><summary>✏️ ${L(lang, "تعديل", "Edit")}</summary>
+  <div class="stack">${columns.map((k) => html`<label>${(Edits.FIELD_LABELS[k] || [k, k])[lang === "en" ? 1 : 0]}<input form="edit-${i.row}" name="c_${k}" value="${rowCells(i.row)[k] ?? ""}" maxlength="600"></label>`)}
+  <button type="submit" form="edit-${i.row}" class="secondary">${L(lang, "احفظ التعديل وراجع تاني", "Save the edit and review again")}</button></div></details>`
+      : "";
+  const editForms = canEdit
+    ? items.filter((i) => ["new", "changed", "invalid"].includes(i.kind)).map((i) => html`<form method="post" action="/app/import/${imp.id}/edit/${i.row}" id="edit-${i.row}"></form>`)
+    : "";
   const box = (i, on = true) => (applied ? "" : html`<input type="checkbox" name="rows" value="${i.row}"${on ? raw(" checked") : ""}>`);
   return html`<h1>📥 ${L(lang, "مراجعة الاستيراد", "Review the import")} <span class="muted">${imp.filename || ""}</span></h1>
 <p class="muted">${Object.entries(counts).map(([k, n]) => `${L(lang, KIND_LABEL[k][0], KIND_LABEL[k][1])}: ${n}`).join(" · ")}</p>
 ${imp.result ? resultCard(imp.result, lang) : ""}
 <form method="post" action="/app/import/${imp.id}/apply" class="stack">
 ${section("new", (rows) => html`<table><thead><tr><th></th><th>${L(lang, "صف", "Row")}</th><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "الوحدة", "Unit")}</th></tr></thead><tbody>${rows.map(
-  (i) => html`<tr data-row="${i.row}"><td>${box(i)}</td><td>${i.row}</td><td>${i.code || L(lang, "(تلقائي)", "(auto)")}</td><td>${stripMarkdown(Describe.compactLine({ ...i.fields, code: "" }, lang).replace(/^``\s*·\s*/, ""))}${i.warnings.length ? html`<div class="warn muted">${i.warnings.join(" · ")}</div>` : ""}</td></tr>`
+  (i) => html`<tr data-row="${i.row}"><td>${box(i)}</td><td>${i.row}</td><td>${i.code || L(lang, "(تلقائي)", "(auto)")}</td><td>${stripMarkdown(Describe.compactLine({ ...i.fields, code: "" }, lang).replace(/^``\s*·\s*/, ""))}${i.warnings.length ? html`<div class="warn muted">${i.warnings.join(" · ")}</div>` : ""}${editor(i)}</td></tr>`
 )}</tbody></table>`)}
 ${section("changed", (rows) => html`<table><thead><tr><th></th><th>${L(lang, "صف", "Row")}</th><th>${L(lang, "الكود", "Code")}</th><th>${L(lang, "التغيير", "Change")}</th></tr></thead><tbody>${rows.map(
-  (i) => html`<tr data-row="${i.row}"><td>${box(i)}</td><td>${i.row}</td><td>${i.code}</td><td><ul>${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ← <ins>${c.to}</ins></li>`)}</ul></td></tr>`
+  (i) => html`<tr data-row="${i.row}"><td>${box(i)}</td><td>${i.row}</td><td>${i.code}</td><td><ul>${i.changes.map((c) => html`<li data-change="${c.field}">${c.label}: <del>${c.from}</del> ← <ins>${c.to}</ins></li>`)}</ul>${editor(i)}</td></tr>`
 )}</tbody></table>`)}
-${section("invalid", (rows) => html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${L(lang, "صف", "Row")} ${i.row}${i.code ? ` (${i.code})` : ""}: ${i.reasons.join("، ")}</li>`)}</ul>`)}
+${section("invalid", (rows) => html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${L(lang, "صف", "Row")} ${i.row}${i.code ? ` (${i.code})` : ""}: ${i.reasons.join("، ")}${editor(i)}</li>`)}</ul>`)}
 ${section("forbidden", (rows) => html`<ul>${rows.map((i) => html`<li data-row="${i.row}">${i.code}</li>`)}</ul>`)}
 ${section("unchanged", (rows) => html`<p class="muted">${rows.map((i) => i.code).join("، ")}</p>`)}
-${missing.length
-  ? html`<section class="card" data-kind="missing"><h2>❔ ${L(lang, "وحدات متاحة مش في الشيت", "Available units not in the sheet")} (${missing.length})</h2>
-  <p class="muted">${L(lang, "اختار اللي عايز تأرشفه (مفيش حاجة بتتأرشف لوحدها).", "Pick any to archive (nothing is archived on its own).")}</p>
-  <div class="row">${missing.map((c) => html`<label class="check">${applied ? "" : html`<input type="checkbox" name="archive" value="${c}">`}${c}</label>`)}</div></section>`
-  : ""}
 ${applied ? "" : html`<button type="submit">✅ ${L(lang, "طبّق المختار", "Apply the selected rows")}</button>`}
-</form>`;
+</form>
+${editForms}`;
 }
 
 function resultCard(r, lang) {
@@ -90,7 +91,6 @@ function resultCard(r, lang) {
   <ul>
     ${line(L(lang, "اتضافت", "Created"), r.created)}
     ${line(L(lang, "اتعدلت", "Updated"), r.updated)}
-    ${line(L(lang, "اتأرشفت", "Archived"), r.archived)}
     ${line(L(lang, "اتغيرت من شخص تاني بعد المراجعة (متعدلتش)", "Changed by someone else since the review (not applied)"), r.conflicts)}
     ${line(L(lang, "متطبقتش", "Not applied"), r.failed)}
   </ul>
@@ -118,16 +118,11 @@ function groupPage(imp, lang) {
   const done = results.filter(Boolean).length;
   if (imp.status === "processing") {
     return html`<div id="group-status" hx-get="/app/import/${imp.id}" hx-trigger="every 2s" hx-select="#group-status" hx-swap="outerHTML" class="card">
-  ${imp.payload.stage === "photos"
-    ? html`<h1>⏳ ${L(lang, "جاري فك الشات والصور", "Unpacking the chat and photos")}</h1><p class="muted">${L(lang, "ممكن ياخد دقيقة أو اتنين للشات الكبير.", "A big chat can take a minute or two.")}</p>`
-    : html`<h1>⏳ ${L(lang, "جاري قراءة البوستات", "Reading the posts")}</h1><p>${done} / ${posts.length}</p>`}</div>`;
+  <h1>⏳ ${L(lang, "جاري قراءة البوستات", "Reading the posts")}</h1><p>${done} / ${posts.length}</p></div>`;
   }
   if (imp.status === "failed") {
     const why = {
-      no_chat: L(lang, "الملف مش تصدير شات واتساب (مفيش ملف الشات .txt جوه الـ zip).", "The file isn't a WhatsApp chat export (no chat .txt inside the zip)."),
-      no_posts: L(lang, "ملقيناش بوستات فيها وحدات (سعر ومساحة أو غرف).", "No posts describing a unit (price and area or rooms) were found."),
-      not_found: L(lang, "الملف موصلش كامل. ارفعه تاني.", "The file didn't arrive in full. Upload it again."),
-      too_large: L(lang, "الملف أكبر من المسموح.", "The file is larger than allowed.")
+      no_posts: L(lang, "ملقيناش بوستات فيها وحدات (سعر ومساحة أو غرف).", "No posts describing a unit (price and area or rooms) were found.")
     }[imp.payload.error] || L(lang, "حصلت مشكلة في قراءة الملف.", "Something went wrong reading the file.");
     return html`<div id="group-status" class="card notice bad" data-import-error="${imp.payload.error || "failed"}"><h1>⚠️ ${why}</h1><a href="/app/import">${L(lang, "رجوع", "Back")}</a></div>`;
   }
@@ -154,7 +149,7 @@ ${applied ? "" : html`<button type="submit">✅ ${L(lang, "ضيف المختار
 </form></div>`;
 }
 
-function register(web, { pool, page }) {
+function register(web, { pool, page, assets }) {
   const importPage = (req, res, body, status = 200) => page(req, res, { title: L(langOf(req), "استيراد", "Import"), nav: "import", body }, status);
 
   /**
@@ -177,25 +172,34 @@ ${tabs("import_tab", [
   <input type="hidden" name="_csrf" value="${req.session.csrf}">
   <h2>💬 ${L(lang, "بوستات الجروبات", "Group posts")}</h2>
   <label>${L(lang, "الصق البوستات (سيب سطرين فاضيين بين كل بوست)", "Paste the posts (two empty lines between posts)")}<textarea name="text" rows="6"></textarea></label>
-  <label>${L(lang, "أو ارفع تصدير الشات من واتساب (.txt أو .zip)", "Or upload a WhatsApp chat export (.txt or .zip)")}<input type="file" name="chat" accept=".txt,.zip,text/plain,application/zip"></label>
+  <label>${L(lang, "أو ارفع تصدير الشات من واتساب (.txt)", "Or upload a WhatsApp chat export (.txt)")}<input type="file" name="chat" accept=".txt,text/plain"></label>
   <label>${L(lang, "استورد البوستات من تاريخ", "Import posts from")}<input type="date" name="since" value="${Chat.defaultSince()}"></label>
   <p class="muted">${L(lang, `بنقرا لحد ${Chat.MAX_POSTS} بوست في المرة، وبنعلّم المكرر.`, `Up to ${Chat.MAX_POSTS} posts at a time; duplicates are flagged.`)}</p>
   <button type="submit">${L(lang, "اقرأ البوستات", "Read the posts")}</button>
 </form>`],
-  [html`<span class="ti">📷</span>${L(lang, "شات بالصور", "Chat with photos")}`, html`${err(2)}<form method="post" action="/app/import/zip" class="card stack" data-zip-upload data-max="${Supabase.CHAT_ZIP_MAX_BYTES}">
-  <input type="hidden" name="_csrf" value="${req.session.csrf}">
-  <input type="hidden" name="path" value="">
-  <input type="hidden" name="filename" value="">
-  <h2>📷 ${L(lang, "تصدير شات بالصور", "Chat export with photos")}</h2>
-  <p class="muted">${L(lang, `من واتساب: الجروب ← المزيد ← تصدير الشات ← «إرفاق الوسائط». ارفع الـ zip هنا (لحد ${Math.round(Supabase.CHAT_ZIP_MAX_BYTES / 1048576)} ميجا): كل صورة بتروح للبوست بتاعها (نفس الراسل وفي خلال دقايق)، لحد ${Chat.MAX_PHOTOS} صورة للوحدة، وبنعلّم الصور اللي موجودة على وحدة عندك.`, `In WhatsApp: the group → More → Export chat → "Attach media". Upload the zip here (up to ${Math.round(Supabase.CHAT_ZIP_MAX_BYTES / 1048576)} MB): each photo goes to its post (same sender, within minutes), up to ${Chat.MAX_PHOTOS} a unit, and photos already on one of your units are flagged.`)}</p>
-  <label>${L(lang, "استورد البوستات من تاريخ", "Import posts from")}<input type="date" name="since" value="${Chat.defaultSince()}"></label>
-  <input type="file" accept=".zip,application/zip" data-zip-file required>
-  <progress max="100" value="0" hidden data-zip-progress></progress>
-  <p class="muted" hidden data-zip-status data-msg-big="${L(lang, "الملف أكبر من المسموح.", "The file is larger than allowed.")}" data-msg-fail="${L(lang, "الرفع فشل. جرب تاني.", "The upload failed. Try again.")}" data-msg-wait="${L(lang, "جاري الرفع…", "Uploading…")}"></p>
-  <button type="submit">${L(lang, "ارفع واقرأ", "Upload and read")}</button>
-</form>`]
-], { open: tab, cls: "tiles" })}
-<p class="card row between"><span>👥 ${L(lang, "عملاء من ملف (فيسبوك أو إكسيل)؟", "Leads from a file (Facebook or Excel)?")}</span><a class="btn secondary small" href="/app/leads/import">${L(lang, "استيراد عملاء", "Import leads")}</a></p>`;
+  [html`<span class="ti">📷</span>${L(lang, "شات بالصور", "Chat with photos")}`, html`${err(2)}<div class="card stack" data-cp data-lang="${lang}" data-csrf="${req.session.csrf}" data-units-url="/app/import/match/units" data-start-url="/app/import/match/start" data-unit-url="/app/import/match/unit/{code}/photo" data-post-url="/app/import/match/{id}/photo/{n}">
+  <h2>📷 ${L(lang, "تطابق الصور من شات واتساب", "Match photos from a WhatsApp chat")}</h2>
+  <p class="muted">${L(lang, "من واتساب: الجروب ← المزيد ← تصدير الشات ← «إرفاق الوسائط». الملف بيتفتح في المتصفح عندك بس: مش بيترفع، فمفيش حد أقصى لحجمه. بنوزع كل صورة على وحدتها حسب الكود في الوصف أو حسب الترتيب والراسل، وإنت بتراجع قبل أي رفع. مفيش حاجة بتتحفظ إلا الصور اللي تختارها.", "In WhatsApp: the group → More → Export chat → “Attach media”. The file is opened in your browser only: it is not uploaded, so its size has no limit. Each photo is placed on its unit by the code in the description, or by order and sender, and you review it before anything is sent. Only the photos you choose are saved.")}</p>
+  <input type="file" accept=".zip,.txt,application/zip,text/plain" data-cp-file>
+  <label>${L(lang, "الوحدات", "Units")}<select data-cp-mode>
+    <option value="codes">${L(lang, "الوحدات اللي في التطبيق (بالكود)", "Units already in the app (by code)")}</option>
+    <option value="posts">${L(lang, "اقرأ الوحدات من البوستات (ذكاء اصطناعي)", "Read the units from the posts (AI)")}</option>
+  </select></label>
+  <label>${L(lang, "من تاريخ", "From date")}<input type="date" data-cp-since value="${Chat.defaultSince()}"></label>
+  <label>${L(lang, "الفاصل بين الصور والوصف", "Gap between photos and description")}<select data-cp-window>
+    <option value="5">5 ${L(lang, "دقايق", "minutes")}</option><option value="10" selected>10 ${L(lang, "دقايق", "minutes")}</option><option value="30">30 ${L(lang, "دقيقة", "minutes")}</option>
+  </select></label>
+  <label>${L(lang, "ترتيب الصور والوصف", "Order of photos and description")}<select data-cp-pattern>
+    <option value="auto">${L(lang, "اكتشف تلقائياً", "Detect automatically")}</option>
+    <option value="photos_first">${L(lang, "الصور الأول وبعدها الوصف", "Photos first, then the description")}</option>
+    <option value="text_first">${L(lang, "الوصف الأول وبعدها الصور", "Description first, then photos")}</option>
+  </select></label>
+  <label class="row"><input type="checkbox" data-cp-same checked> ${L(lang, "نفس الشخص اللي بعت الوصف بس", "Only photos from the same person as the description")}</label>
+  <button type="button" data-cp-read>${L(lang, "اقرأ الملف", "Read the file")}</button>
+  <div data-cp-out></div>
+  <script src="${assets.url("zipread.js")}"></script><script src="${assets.url("chatparse.js")}"></script><script src="${assets.url("chatmatch.js")}"></script><script src="${assets.url("chatphotos.js")}"></script>
+</div>`]
+], { open: tab, cls: "tiles" })}`;
   };
 
   web.get("/import", (req, res) => importPage(req, res, importHub(req)));
@@ -246,7 +250,7 @@ ${tabs("import_tab", [
       return importPage(req, res, importHub(req, { tab: 0, notice: html`<p class="card notice bad" role="alert">⚠️ ${msg}</p>` }), 422);
     }
     const plan = await Imports.planExcel(pool, broker, sheet, { lang });
-    const id = await Imports.savePlan(pool, broker, "excel", plan, { filename: String(file.originalname || "").slice(0, 120) });
+    const id = await Imports.savePlan(pool, broker, "excel", { ...plan, rows: sheet.rows, columns: sheet.mapped }, { filename: String(file.originalname || "").slice(0, 120) });
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", metadata: { kind: "excel", rows: sheet.rows.length, counts: plan.counts } });
     return res.redirect(303, `/app/import/${id}`);
   });
@@ -259,17 +263,8 @@ ${tabs("import_tab", [
     const file = (req.files?.chat || [])[0];
     const text = [String(req.body.text || ""), await chatText(file)].filter((t) => t.trim()).join("\n\n\n");
     const found = Chat.candidatePosts(text, { since: req.body.since });
-    if (file && ChatPhotos.isZip(file.buffer)) {
-      // A small zip sent with the form: read with its photos in the background, pasted posts first.
-      const id = await Imports.startGroupImport(pool, broker, [], {
-        AI,
-        ctx: { pool, broker, agency: req.session.agency, lang },
-        lang,
-        filename: String(file.originalname || "").slice(0, 120),
-        prepare: (importId) => ChatPhotos.postsFromExport(pool, broker, importId, { buffer: file.buffer }, { extraPosts: found.posts, since: req.body.since })
-      });
-      logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", metadata: { kind: "group_zip", bytes: file.buffer.length } });
-      return res.redirect(303, `/app/import/${id}`);
+    if (file && isZip(file.buffer)) {
+      return importPage(req, res, importHub(req, { tab: 1, notice: html`<p class="card notice bad" role="alert" data-import-error="zip">⚠️ ${L(lang, "الـ zip بالصور بيتفتح من تبويب «شات بالصور».", "A zip with photos goes in the “Chat with photos” tab.")}</p>` }), 422);
     }
     if (!found.posts.length) {
       return importPage(req, res, importHub(req, { tab: 1, notice: html`<p class="card notice bad" role="alert">🔍 ${L(lang, "ملقيناش بوستات فيها وحدات (سعر ومساحة أو غرف).", "No posts describing a unit (price and area or rooms) were found.")}</p>` }), 422);
@@ -284,56 +279,22 @@ ${tabs("import_tab", [
     return res.redirect(303, `/app/import/${id}`);
   });
 
-  // A chat export zip with photos goes from the browser straight to Storage (a signed upload URL), so a 100 MB file
-  // never passes through this server's memory; the server then streams it to a temp file and reads it from there.
-  web.post("/import/zip/start", managersOnly, async (req, res) => {
-    const { broker } = req.session;
-    const gate = await RateLimit.hit(pool, `upload:broker:${broker.id}`, RateLimit.LIMITS.uploadBroker);
-    if (!gate.allowed) return res.status(429).json({ error: "rate" });
-    const target = `${zipPrefix(broker)}${Date.now()}-${crypto.randomBytes(6).toString("hex")}.zip`;
-    const signed = await Supabase.createChatUploadUrl(target);
-    if (!signed) return res.status(503).json({ error: "storage" });
-    return res.json({ url: signed.url, path: target });
-  });
-
-  web.post("/import/zip", managersOnly, async (req, res) => {
-    const lang = langOf(req);
-    const { broker } = req.session;
-    const target = String(req.body.path || "");
-    if (!ZIP_PATH.test(target) || !target.startsWith(zipPrefix(broker))) {
-      return importPage(req, res, importHub(req, { tab: 2, notice: html`<p class="card notice bad" role="alert">⚠️ ${L(lang, "اختار ملف الـ zip الأول.", "Choose the zip file first.")}</p>` }), 400);
-    }
-    const tmp = path.join(os.tmpdir(), `chat-${crypto.randomBytes(8).toString("hex")}.zip`);
-    const id = await Imports.startGroupImport(pool, broker, [], {
-      AI,
-      ctx: { pool, broker, agency: req.session.agency, lang },
-      lang,
-      filename: String(req.body.filename || "").slice(0, 120) || null,
-      prepare: async (importId) => {
-        try {
-          await Supabase.downloadChatExportToFile(target, tmp);
-        } catch (err) {
-          if (err.code === "NOT_FOUND") return { error: "not_found" };
-          if (err.code === "TOO_LARGE") return { error: "too_large" };
-          throw err;
-        }
-        return ChatPhotos.postsFromExport(pool, broker, importId, { file: tmp }, { since: req.body.since });
-      },
-      cleanup: async () => {
-        await fs.promises.unlink(tmp).catch(() => {});
-        await Supabase.deleteChatExport(target);
-      }
-    });
-    logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, operation_type: "web_import_plan", metadata: { kind: "group_zip_upload" } });
-    return res.redirect(303, `/app/import/${id}`);
-  });
-
   web.get("/import/:id", async (req, res, next) => {
     const lang = langOf(req);
     const imp = await Imports.loadImport(pool, req.session.broker, req.params.id);
     if (!imp) return next();
     if (imp.kind === "leads") return res.redirect(303, `/app/leads/import/${imp.id}`);
     return importPage(req, res, imp.kind === "excel" ? excelPlanPage(imp, lang) : groupPage(imp, lang));
+  });
+
+  // Edit one row of a ready plan: the whole sheet is planned again with the changed cells (same rules as an upload).
+  web.post("/import/:id/edit/:row", managersOnly, async (req, res, next) => {
+    const lang = langOf(req);
+    const cells = {};
+    for (const [k, v] of Object.entries(req.body || {})) if (k.startsWith("c_") && typeof v === "string") cells[k.slice(2)] = v;
+    const ok = await Imports.editExcelRow(pool, req.session.broker, req.params.id, Number(req.params.row), cells, { lang });
+    if (!ok) return next();
+    return res.redirect(303, `/app/import/${req.params.id}`);
   });
 
   web.post("/import/:id/apply", managersOnly, async (req, res, next) => {
@@ -344,7 +305,7 @@ ${tabs("import_tab", [
     const rows = [].concat(req.body.rows || []);
     const result =
       imp.kind === "excel"
-        ? await Imports.applyExcel(pool, broker, imp.id, { rows, archive: [].concat(req.body.archive || []), lang })
+        ? await Imports.applyExcel(pool, broker, imp.id, { rows, lang })
         : await Imports.applyGroup(pool, broker, imp.id, { rows, lang });
     if (!result) {
       return importPage(req, res, html`<p class="card notice bad">⚠️ ${L(lang, "الاستيراد ده اتطبق قبل كده أو انتهت صلاحيته.", "This import was already applied or has expired.")} <a href="/app/import/${imp.id}">${L(lang, "عرض", "View")}</a></p>`, 409);

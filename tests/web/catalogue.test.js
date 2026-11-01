@@ -24,7 +24,7 @@ async function seedProject() {
   const admin = await row("admin");
   const dev = await Catalogue.saveDeveloper(h.pool, admin, { name: "بالم هيلز", name_en: "Palm Hills", contact_name: "Omar Sales", contact_phone: "01099998888" });
   expect(dev.ok).toBe(true);
-  const p = await Catalogue.saveProject(h.pool, admin, { name: "Badya", developer_id: dev.developer.id, delivery_year: "٢٠٢٨", delivery_quarter: "2", maintenance_pct: "8", notes: "commission 3% from unit 5" });
+  const p = await Catalogue.saveProject(h.pool, admin, { name: "Badya", developer_id: dev.developer.id, delivery_year: "٢٠٢٨", delivery_quarter: "2", maintenance_pct: "8", notes: "Club fee 300,000 EGP" });
   expect(p.ok).toBe(true);
   return { admin, developer: dev.developer, project: p.project };
 }
@@ -78,14 +78,14 @@ describe("projects and plans", () => {
     expect(fresh.maintenance_pct).toBeNull();
   });
 
-  test("brokers read the catalogue but never edit it and never see the developer contact or notes; agencies are separate", async () => {
+  test("brokers read the catalogue but never edit it and never see the developer contact (they do read the project notes the assistant uses); agencies are separate", async () => {
     const { project, developer } = await seedProject();
     const broker = await row("broker");
     expect((await Catalogue.saveProject(h.pool, broker, { name: "Mine" })).error).toBe("forbidden");
     expect((await Catalogue.savePlan(h.pool, broker, project.id, { name: "x", down_payment_pct: "10" })).error).toBe("forbidden");
     const seen = await Catalogue.getProject(h.pool, broker, project.id);
     expect(seen.developer).not.toHaveProperty("contact_phone");
-    expect(seen.project.notes).toBeNull();
+    expect(seen.project.notes).toBe("Club fee 300,000 EGP");
     expect((await Catalogue.listDevelopers(h.pool, broker))[0]).not.toHaveProperty("contact_name");
     const rival = { ...(await row("rival")), role: "admin" };
     expect(await Catalogue.getProject(h.pool, rival, project.id)).toBeNull();
@@ -174,6 +174,25 @@ describe("the pages", () => {
     const sent = (await h.text("broker", "layout BD-5")).map((r) => JSON.stringify(r));
     expect(sent.join("\n")).toMatch(/Brochure\*: https:\/\/example.com\/b.pdf/);
     expect(sent.join("\n")).toMatch(/Commission letter\* 🔒/);
+  });
+});
+
+describe("project page: what Ask knows, files for clients, commission", () => {
+  test("three labelled areas; brokers see the notes Ask uses but never the commission area", async () => {
+    const { admin, project } = await seedProject();
+    await Catalogue.saveMaterial(h.pool, admin, project.id, { label: "Brochure", kind: "brochure", url: "https://example.com/b.pdf", client_visible: "1" });
+    const url = `/app/catalogue/projects/${project.id}`;
+    const mgr = (await (await signIn(h, "admin")).agent.get(url)).text;
+    expect(mgr).toMatch(/id="assistant-knows"/);
+    expect(mgr).toMatch(/id="client-files"/);
+    expect(mgr).toMatch(/id="commission-area"/);
+    expect(mgr.indexOf('id="assistant-knows"')).toBeLessThan(mgr.indexOf('id="client-files"'));
+    expect(mgr.indexOf('id="client-files"')).toBeLessThan(mgr.indexOf('id="commission-area"'));
+    const brk = (await (await signIn(h, "broker")).agent.get(url)).text;
+    expect(brk).toMatch(/id="assistant-knows"/);
+    expect(brk).toMatch(/data-project-notes[^]*Club fee 300,000 EGP/);
+    expect(brk).toMatch(/id="client-files"/);
+    expect(brk).not.toMatch(/id="commission-area"/);
   });
 });
 
