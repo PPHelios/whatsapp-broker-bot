@@ -24,8 +24,8 @@ Never invent a filter that was not asked for.
     "listing_type": "sale" | "rent" | null,
     "market": "primary" | "resale" | null,
     "property_types": [ any of: apartment, duplex, penthouse, chalet, studio, villa, townhouse, twinhouse, office, shop, clinic, commercial, land ],
-    "compound": "ONE compound / project name as said, else null",
-    "locations": [ other place names as said (areas, districts, cities) ],
+    "compound": "ONE compound / project name, written in English (translate an Arabic name to its usual English spelling), else null",
+    "locations": [ other place names (areas, districts, cities), in English where the usual English name is known ],
     "currency": "EGP" | "USD" | "EUR" | null,
     "price_min": number or null, "price_max": number or null,
     "area_min": number or null, "area_max": number or null,
@@ -46,6 +46,7 @@ RULES:
 - "3 غرف" or "3 bedrooms" → bedrooms_min 3 and bedrooms_max null (3 or more). Same for bathrooms ("3 حمامات" → bathrooms_min 3) and area ("150 متر" → area_min 150, area_max null). A range ("من 120 لـ 150 متر") sets both ends. "استوديو" → property_types ["studio"].
 - "budget" / "حدود" / "تحت" / "لحد" with a price → price_max only.
 - "استلام فوري" / "ready to move" → delivery.ready true. "تسليم 2027" → delivery.by_year 2027.
+- Units are searched by their English text for now, so a compound or area said in Arabic must come back in its English spelling (e.g. "ازاد" → "Azad").
 - "على 8 سنين" / "8 years" / "٨ سنين" → payment.years 8 (the plan's length, not a place). Never put the word "سنين" in locations.
 - "مقدم 10%" / "10% down" / "مقدم ١٠٪" → payment.down_pct 10 (a percent of the price, not an amount).
 - بحري / north facing → "north_facing"; ناصية / corner → "corner"; غرفة مربية / nanny room → "nanny_room".`;
