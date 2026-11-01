@@ -129,8 +129,8 @@ describe("one photo onto a unit", () => {
 
 describe("no codes: posts become a group import and the photos follow", () => {
   const posts = [
-    { sender: "Ahmed", at: "24/10/2026 10:15", text: "فيلا في هايد بارك 300 متر 4 غرف السعر 25 مليون" },
-    { sender: "Sara", at: "24/10/2026 10:20", text: "فيلا في ميفيدا 300 متر 4 غرف السعر 25 مليون تشطيب كامل" }
+    { sender: "Ahmed", at: "24/10/2026 10:15", text: "فيلا في هايد بارك 300 متر 4 غرف السعر 25 مليون 01012345678" },
+    { sender: "Sara", at: "24/10/2026 10:20", text: "فيلا في ميفيدا 300 متر 4 غرف السعر 25 مليون تشطيب كامل 01012345678" }
   ];
 
   test("photos are shown on the review, attached to the new unit with their hash; photos of posts that are not applied are deleted", async () => {
