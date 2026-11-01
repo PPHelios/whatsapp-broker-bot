@@ -43,7 +43,8 @@ Never invent a filter that was not asked for.
 
 RULES:
 - Numbers are plain EGP numbers: "8 مليون ونص" = 8500000, "مقدم 500 ألف" → payment.max_down_payment 500000, "قسط مش أكتر من 150 ألف" → payment.max_installment 150000, "في حدود 6 مليون" → price_max 6000000.
-- "3 غرف" or "3 bedrooms" → bedrooms_min 3 and bedrooms_max 3. "استوديو" → property_types ["studio"].
+- "3 غرف" or "3 bedrooms" → bedrooms_min 3 and bedrooms_max null (3 or more). Same for bathrooms ("3 حمامات" → bathrooms_min 3) and area ("150 متر" → area_min 150, area_max null). A range ("من 120 لـ 150 متر") sets both ends. "استوديو" → property_types ["studio"].
+- "budget" / "حدود" / "تحت" / "لحد" with a price → price_max only.
 - "استلام فوري" / "ready to move" → delivery.ready true. "تسليم 2027" → delivery.by_year 2027.
 - "على 8 سنين" / "8 years" / "٨ سنين" → payment.years 8 (the plan's length, not a place). Never put the word "سنين" in locations.
 - "مقدم 10%" / "10% down" / "مقدم ١٠٪" → payment.down_pct 10 (a percent of the price, not an amount).

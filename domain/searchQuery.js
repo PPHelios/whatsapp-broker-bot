@@ -331,11 +331,12 @@ function fallbackParse(text) {
   // Bedrooms / bathrooms (digits or Egyptian number words).
   const n = (s) => (/^\d+$/.test(s) ? Number(s) : AR_NUMBER_WORDS[s] ?? null);
   c = consume(hay, / و?(غرفتين|اوضتين) /);
-  if (c.m) f.bedrooms_min = f.bedrooms_max = 2;
+  // A plain count is a minimum: "2 bedroom" means 2 or more (same for bathrooms and area).
+  if (c.m) f.bedrooms_min = 2;
   hay = c.hay;
   c = consume(hay, / (\d+|[ء-ي]+) (غرف|غرفه|اوض|اوضه|نوم|bed|beds|bedroom|bedrooms|room|rooms|br) /);
   if (c.m && n(c.m[1]) !== null) {
-    f.bedrooms_min = f.bedrooms_max = n(c.m[1]);
+    f.bedrooms_min = n(c.m[1]);
     hay = c.hay;
   }
   c = consume(hay, / (حمامين) /);
@@ -393,7 +394,7 @@ function fallbackParse(text) {
     hay = c.hay;
   }
 
-  // Area: "150 متر" / "150 m2" / "150 sqm" is a band of +-10%; "من 120 ل 150 متر" is the exact range.
+  // Area: "150 متر" / "150 m2" is a minimum (150 or more); "من 120 ل 150 متر" is a range.
   c = consume(hay, / (?:من |from )?(\d{2,4}) (?:ل|الي|to|-) (\d{2,4}) (متر|م|m2|m|sqm|meter|meters) /);
   if (c.m) {
     f.area_min = Number(c.m[1]);
@@ -402,9 +403,7 @@ function fallbackParse(text) {
   } else {
     c = consume(hay, / (\d{2,4}) (متر|م|m2|m|sqm|meter|meters) /);
     if (c.m) {
-      const a = Number(c.m[1]);
-      f.area_min = Math.round(a * 0.9);
-      f.area_max = Math.round(a * 1.1);
+      f.area_min = Number(c.m[1]);
       hay = c.hay;
     }
   }
