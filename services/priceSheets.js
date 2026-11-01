@@ -125,6 +125,7 @@ function fieldsFor(entry, project, phase) {
     feature_keys: [],
     features_other: [],
     details: {
+      owner_phone: entry.owner_phone || null,
       ...(entry.building ? { building: entry.building } : {}),
       ...(entry.floor && floor === null ? { floor: entry.floor } : {}),
       ...(entry.area_to ? { area_to: entry.area_to } : {}),

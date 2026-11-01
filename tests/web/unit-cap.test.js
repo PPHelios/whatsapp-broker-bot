@@ -46,12 +46,12 @@ test("a unit past the cap is refused with the upgrade message; archiving makes r
   await setCap("office", 1);
   await h.insertListing({ code: "CAP-1" });
   const { agent, csrf } = await signIn(h, "broker");
-  const r = await agent.post("/app/units/new").field("_csrf", csrf).field("force", "1").field("listing_type", "sale").field("market", "resale").field("property_type", "apartment").field("compound", "Hyde Park").field("price_value", "9 مليون").field("area_value", "150").field("bedrooms", "3").field("bathrooms", "2").field("finishing", "fully_finished");
+  const r = await agent.post("/app/units/new").field("_csrf", csrf).field("force", "1").field("listing_type", "sale").field("market", "resale").field("property_type", "apartment").field("compound", "Hyde Park").field("price_value", "9 مليون").field("area_value", "150").field("bedrooms", "3").field("bathrooms", "2").field("finishing", "fully_finished").field("owner_phone", "01012345678");
   expect(r.status).toBe(403);
   expect(r.text).toContain("وصلت للحد الأقصى");
   expect((await h.query("SELECT count(*)::int AS n FROM listings WHERE agency_id = $1", [h.BROKERS.broker.agency_id]))[0].n).toBe(1);
   await h.query("UPDATE listings SET status = 'archived' WHERE code = 'CAP-1'");
-  const ok = await agent.post("/app/units/new").field("_csrf", csrf).field("force", "1").field("listing_type", "sale").field("market", "resale").field("property_type", "apartment").field("compound", "Hyde Park").field("price_value", "9 مليون").field("area_value", "150").field("bedrooms", "3").field("bathrooms", "2").field("finishing", "fully_finished");
+  const ok = await agent.post("/app/units/new").field("_csrf", csrf).field("force", "1").field("listing_type", "sale").field("market", "resale").field("property_type", "apartment").field("compound", "Hyde Park").field("price_value", "9 مليون").field("area_value", "150").field("bedrooms", "3").field("bathrooms", "2").field("finishing", "fully_finished").field("owner_phone", "01012345678");
   expect(ok.status).toBe(303);
 });
 
