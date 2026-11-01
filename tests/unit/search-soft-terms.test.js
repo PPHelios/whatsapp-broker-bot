@@ -6,7 +6,15 @@ const Q = require("../../domain/searchQuery");
 function pool(rowsByCall) {
   let i = 0;
   const calls = [];
-  return { calls, query: async (sql, params) => { calls.push({ sql, params }); return { rows: rowsByCall[Math.min(i++, rowsByCall.length - 1)] }; } };
+  return {
+    calls,
+    query: async (sql, params) => {
+      calls.push({ sql, params });
+      // The approved-names lookup is not a search: it always comes back empty here.
+      if (/place_names/.test(sql)) return { rows: [] };
+      return { rows: rowsByCall[Math.min(i++, rowsByCall.length - 1)] };
+    }
+  };
 }
 const row = { id: "00000000-0000-0000-0000-000000000001", total_count: "1" };
 

@@ -4,6 +4,7 @@
 
 const Q = require("../domain/searchQuery");
 const Vis = require("../lib/visibility");
+const PlaceNames = require("../lib/placeNames");
 
 const PAGE_SIZE = 5;
 // Telegram messages are free, so a Telegram search shows twice as many units per message.
@@ -221,6 +222,10 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
 async function runSearch(pool, agencyId, parsed, { pageSize = PAGE_SIZE } = {}) {
   const t0 = Date.now();
   let relaxed = false;
+  // A word that is an approved compound name (lib/placeNames.js) searches in both its languages.
+  if (parsed.filters.place_terms?.length && !parsed.filters.places?.length) {
+    parsed.filters.place_terms = await PlaceNames.widenSearchTerms(pool, parsed.filters.place_terms);
+  }
   let { sql, params } = buildSearchQuery(agencyId, parsed);
   let { rows } = await pool.query(sql, params);
   if (!rows.length && !parsed.filters.code) {

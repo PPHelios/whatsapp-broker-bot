@@ -18,6 +18,7 @@ const Commission = require("../../domain/commission");
 const Billing = require("../../services/billing");
 const BillingNotices = require("../../services/billingNotices");
 const Signup = require("../../services/signup");
+const PlaceNames = require("../../lib/placeNames");
 const Referrals = require("../../services/referrals");
 const Intake = require("../../services/leadIntake");
 const Plans = require("../../domain/plans");
@@ -447,7 +448,17 @@ function announceSection(log, lang, csrf) {
 </section>`;
 }
 
-function ownerPage(d, lang, { billing = null, notice = null, reading = [], credits = null, referrals = null, intakes = [], stuck = [], agencies = [], log = [], csrf = "" } = {}) {
+// New English compound names waiting for the CRM owner's Arabic name (lib/placeNames.js).
+function namesSection(names, lang, csrf) {
+  return html`<div id="place-names"><h2>${L(lang, "أسماء جديدة", "New names")}</h2>
+<p class="muted small">${L(lang, "كمبوندات باسمها الإنجليزي اللي مش معروفة عندنا. اكتب اسمها بالعربي، والبحث بيعرفها من بعدها.", "Compounds with an English name we don't know yet. Enter the Arabic name; search uses it from then on.")}</p>
+${names.length
+  ? html`<ul class="stack" data-place-names>${names.map((n) => html`<li class="card" data-place-name="${n.id}"><b dir="ltr">${n.name_en}</b> <span class="chip">${n.times_seen} ${L(lang, "مرة", "×")}</span>
+<form method="post" action="/app/owner/place-names/${n.id}/approve" class="row"><input type="hidden" name="_csrf" value="${csrf}"><input name="name_ar" required placeholder="${L(lang, "الاسم بالعربي", "Arabic name")}" aria-label="${L(lang, "الاسم بالعربي", "Arabic name")}"><button type="submit">✅ ${L(lang, "اعتمد", "Approve")}</button></form></li>`)}</ul>`
+  : html`<p class="muted">${L(lang, "مفيش أسماء مستنية.", "No names waiting.")}</p>`}</div>`;
+}
+
+function ownerPage(d, lang, { billing = null, notice = null, reading = [], credits = null, referrals = null, intakes = [], stuck = [], agencies = [], log = [], csrf = "", names = [] } = {}) {
   const usd = (n) => `$${Number(n).toFixed(n < 1 ? 4 : 2)}`;
   return html`<h1>${L(lang, "متابعة التطبيق", "App tracking")}</h1>
 ${notice || ""}
@@ -455,6 +466,7 @@ ${tabs("owner_tab", [
   [L(lang, "الوكالات", "Agencies"), html`${agenciesSection(agencies, lang)}${stuckSection(stuck, lang)}${announceSection(log, lang, csrf)}`],
   [L(lang, "الفلوس", "Money"), html`${billing ? billingSections(billing, lang) : ""}${referrals ? referralsSection(referrals, lang) : ""}${credits ? creditsSection(credits, lang) : ""}`],
   [L(lang, "الأدوات", "Tools"), html`${intakeSection(intakes, lang)}${readingSection(reading, lang)}`],
+  [L(lang, "الأسماء", "Names"), namesSection(names, lang, csrf)],
   [L(lang, "الصحة", "Health"), healthSections(d, lang, usd)]
 ])}`;
 }
@@ -535,8 +547,8 @@ function register(web, { pool, page }) {
     const d = await Dash.ownerDashboard(pool, req.session.broker);
     if (!d) return notFound(req, res, page);
     const [open, signups, payments, payTo, trials, reading, referrals, intakes, stuck, credits] = await Promise.all([Signup.isOpen(pool), Signup.pending(pool), Billing.pendingPayments(pool), Billing.payTo(pool), Billing.trialAgencies(pool), PriceReading.overview(pool), Referrals.overview(pool), Intake.overview(pool), Onboarding.stuckList(pool), Credits.ownerOverview(pool)]);
-    const [agencies, log] = await Promise.all([OwnerAgencies.list(pool), OwnerAgencies.auditLog(pool)]);
-    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials, csrf: req.session.csrf }, notice, reading, credits, referrals, intakes, stuck, agencies, log, csrf: req.session.csrf }) }, status);
+    const [agencies, log, names] = await Promise.all([OwnerAgencies.list(pool), OwnerAgencies.auditLog(pool), PlaceNames.pending(pool)]);
+    return page(req, res, { title: L(langOf(req), "متابعة التطبيق", "App tracking"), nav: "owner", body: ownerPage(d, langOf(req), { billing: { open, signups, payments, payTo, trials, csrf: req.session.csrf }, notice, reading, credits, referrals, intakes, stuck, agencies, log, names, csrf: req.session.csrf }) }, status);
   };
   const ok = (text) => html`<p class="card notice ok" role="status">✅ ${text}</p>`;
   const bad = (text) => html`<p class="card notice bad" role="alert">❌ ${text}</p>`;
@@ -597,6 +609,15 @@ function register(web, { pool, page }) {
       : html`<p class="muted">${L(lang, "اللينك مش متعمل: TELEGRAM_BOT_USERNAME مش متظبط.", "No link made: TELEGRAM_BOT_USERNAME isn't set.")}</p>`;
     return ownerView(req, res, html`<section class="card notice ok" role="status" data-new-agency-done="${r.agency.id}"><h2>✅ ${L(lang, `${r.agency.name} اتعملت (${r.agency.pilot ? "تجريبي" : "تجربة"}).`, `${r.agency.name} is created (${r.agency.pilot ? "pilot" : "trial"}).`)}</h2>
       <p>${L(lang, "ابعت اللينك ده للمالك بنفسك. يتفتح مرة واحدة، وبيفتح البوت؛ من البوت يفتح الموقع.", "Send this link to the owner yourself. It works once and opens the bot; from the bot the website opens.")}</p>${link}</section>`);
+  }));
+
+  // The owner gives a new compound's Arabic name; search uses it from the next minute.
+  web.post("/owner/place-names/:id/approve", ownerOnly(async (req, res, lang) => {
+    const id = uuidParam(req);
+    const r = id ? await PlaceNames.approve(pool, id, req.body.name_ar) : { error: "not_pending" };
+    if (r.error === "bad_arabic") return ownerView(req, res, bad(L(lang, "الاسم لازم يكون بالعربي.", "The name must be in Arabic.")), 400);
+    if (r.error) return ownerView(req, res, bad(L(lang, "الاسم ده اتعمله قبل كده.", "This name was already handled.")), 400);
+    return ownerView(req, res, html`<p class="card" role="status">✅ ${L(lang, "اتحفظ", "Saved")}: ${r.name_en}</p>`);
   }));
 
   web.post("/owner/signups/:id/approve", ownerOnly(async (req, res, lang) => {
