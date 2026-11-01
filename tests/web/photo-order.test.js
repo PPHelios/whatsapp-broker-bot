@@ -37,7 +37,7 @@ function post(agent, url, csrf, fields) {
   for (const [k, v] of Object.entries(fields)) for (const one of [].concat(v)) r = r.field(k, String(one));
   return r;
 }
-const FIELDS = { listing_type: "sale", market: "resale", property_type: "apartment", compound: "Hyde Park", price_value: "9 مليون", area_value: "150", bedrooms: "3" };
+const FIELDS = { listing_type: "sale", market: "resale", property_type: "apartment", compound: "Hyde Park", price_value: "9 مليون", area_value: "150", bedrooms: "3", owner_phone: "01012345678" };
 
 test("the edit form saves the dragged order; AI curation then leaves it alone", async () => {
   const l = await unitWithPhotos(3);

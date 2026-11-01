@@ -23,8 +23,8 @@ afterAll(closeHarness);
 
 const row = async (who) => (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS[who].id]))[0];
 const LINK = "https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789/edit#gid=42";
-const SHEET_1 = "Unit Code,Type,Area,Bedrooms,Price,Status\nB-1,Apartment,165,3,9200000,Available\nB-2,Apartment,180,3,9900000,Available\n";
-const SHEET_2 = "Unit Code,Type,Area,Bedrooms,Price,Status\nB-1,Apartment,165,3,9500000,Available\nB-3,Villa,300,4,25000000,Available\n";
+const SHEET_1 = "Unit Code,Type,Area,Bedrooms,Price,Status,Owner Phone\nB-1,Apartment,165,3,9200000,Available,01012345678\nB-2,Apartment,180,3,9900000,Available,01012345678\n";
+const SHEET_2 = "Unit Code,Type,Area,Bedrooms,Price,Status,Owner Phone\nB-1,Apartment,165,3,9500000,Available,01012345678\nB-3,Villa,300,4,25000000,Available,01012345678\n";
 
 const csvResponse = (text) => ({ ok: true, status: 200, headers: { get: () => "text/csv" }, arrayBuffer: async () => new TextEncoder().encode(text).buffer });
 const htmlResponse = () => ({ ok: true, status: 200, headers: { get: () => "text/html; charset=utf-8" }, arrayBuffer: async () => new TextEncoder().encode("<!doctype html><html>Sign in</html>").buffer });

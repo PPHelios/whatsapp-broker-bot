@@ -30,8 +30,8 @@ const binary = (res, cb) => {
 async function workbook(rows) {
   const wb = new ExcelJS.Workbook();
   const s = wb.addWorksheet("Inventory");
-  s.addRow(HEAD);
-  for (const r of rows) s.addRow(r);
+  s.addRow([...HEAD, "تليفون المالك"]);
+  for (const r of rows) s.addRow([...r, "01012345678"]);
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
 

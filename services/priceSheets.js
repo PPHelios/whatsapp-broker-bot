@@ -125,6 +125,7 @@ function fieldsFor(entry, project, phase) {
     feature_keys: [],
     features_other: [],
     details: {
+      owner_phone: entry.owner_phone || null,
       ...(entry.building ? { building: entry.building } : {}),
       ...(entry.floor && floor === null ? { floor: entry.floor } : {}),
       ...(entry.area_to ? { area_to: entry.area_to } : {}),
@@ -172,6 +173,10 @@ async function apply(pool, actor, projectId, sheetId, { markSold = [], now = new
         if (res.limit) {
           await client.query("ROLLBACK"); // the sheet stays a preview; nothing is half applied
           return { error: "unit_limit", limit: res.limit };
+        }
+        if (res.owner_required) {
+          await client.query("ROLLBACK");
+          return { error: "owner_required", code: e.code || null };
         }
         await client.query("UPDATE listings SET project_id = $2, phase_id = $3, developer_unit_code = $4 WHERE id = $1", [res.listing.id, project.id, phase?.id || null, e.dev_code]);
         await recordPrice(client, { agencyId: actor.agency_id, listingId: res.listing.id, price: e.price, source: "sheet", sheetId: sheet.id, by: actor.id, at: now });

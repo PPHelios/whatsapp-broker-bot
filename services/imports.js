@@ -230,7 +230,8 @@ async function applyExcel(pool, broker, id, { rows = [], lang = "ar" } = {}) {
       else if (res.limit) {
         result.limit = res.limit;
         break;
-      } else result.conflicts.push(res.code);
+      } else if (res.owner_required) result.failed.push(item.code || `row ${item.row}`);
+      else result.conflicts.push(res.code);
     } else if (item.kind === "changed") {
       const res = await patchOne(pool, broker, item.code, item.patch, item.version);
       if (res.outcome === "updated") result.updated.push(item.code);
@@ -293,7 +294,9 @@ async function processGroup(pool, broker, id, { AI, ctx, lang = "ar" }) {
         try {
           const ex = await L.extractPropertyDetails(AI, { texts: [post.text], lang, ctx });
           const composed = L.composeFields({ draft: ex.fields, lang });
-          composed.details = { ...composed.details, source: "group_import", ...(post.sender ? { co_broker: post.sender } : {}), ...(ex.fields.code ? { source_ref: ex.fields.code } : {}) };
+          // A phone in the post is the owner's contact: every unit needs one before it is saved.
+          const ownerPhone = (String(post.text).match(/(?:\+?20)?0?1[0125]\d{8}/) || [])[0] || null;
+          composed.details = { ...composed.details, source: "group_import", ...(ownerPhone ? { owner_phone: ownerPhone } : {}), ...(post.sender ? { co_broker: post.sender } : {}), ...(ex.fields.code ? { source_ref: ex.fields.code } : {}) };
           const ev = Rules.evaluate(composed, { lang });
           results[i] = {
             i,

@@ -45,7 +45,7 @@ test("units from the web form (createListing, as the draft and the imports use),
   await lead();
   const { agent, csrf } = await signIn(h, "broker");
   await agent.post("/app/units/new").field("_csrf", csrf).field("listing_type", "sale").field("market", "resale").field("property_type", "apartment")
-    .field("compound", "Hyde Park").field("price_value", "8.5 مليون").field("area_value", "150").field("bedrooms", "3").field("bathrooms", "2").field("code", "WEB-1");
+    .field("compound", "Hyde Park").field("price_value", "8.5 مليون").field("area_value", "150").field("bedrooms", "3").field("bathrooms", "2").field("owner_phone", "01012345678").field("code", "WEB-1");
   expect((await run()).alerts).toBe(1);
   expect(await run()).toMatchObject({ matches: 0, alerts: 0 });
 

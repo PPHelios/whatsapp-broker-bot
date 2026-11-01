@@ -9,6 +9,7 @@ const { normalizeSearch } = require("./searchText");
 
 // Checked in order: the first match wins.
 const COLUMNS = [
+  ["owner_phone", /^(owner phone|owner mobile|owner|تليفون المالك|رقم المالك|موبايل المالك|المالك)$/],
   ["dev_code", /^(unit code|unit no|unit number|unit|code|unit id|كود|الكود|كود الوحده|رقم الوحده|الوحده)$/],
   ["building", /^(building|bldg|block|phase|zone|cluster|عماره|العماره|مبني|المبني|بلوك|المرحله|مرحله|زون)$/],
   ["property_type", /^(type|unit type|property type|model|النوع|نوع الوحده|نوع|الموديل|موديل)$/],
@@ -84,6 +85,7 @@ function rowToEntry(cells = {}) {
   if (kind === "model" && !type) return { error: "property_type" };
   return {
     kind,
+    owner_phone: text(cells.owner_phone, 40),
     dev_code: devCode ? devCode.toUpperCase() : null,
     property_type: type,
     building: text(cells.building, 40),

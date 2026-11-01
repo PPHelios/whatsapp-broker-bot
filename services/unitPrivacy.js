@@ -60,7 +60,7 @@ async function askStates(pool, broker, rows) {
   const out = new Map();
   if (!broker || isManager(broker) || !rows.length) return out;
   if ((await scopeOf(pool, broker.agency_id)) === "all") return out;
-  const hidden = rows.filter((l) => l.broker_id !== broker.id && (SECRET_DETAILS.some((k) => (l.details || {})[k]) || l.lat != null));
+  const hidden = rows.filter((l) => l.broker_id !== broker.id && (l.owner_id || SECRET_DETAILS.some((k) => (l.details || {})[k]) || l.lat != null));
   if (!hidden.length) return out;
   const ids = hidden.map((l) => l.id);
   const { rows: reqs } = await pool.query(
@@ -80,7 +80,7 @@ async function askStates(pool, broker, rows) {
 async function forBroker(pool, broker, listing) {
   if (await canSee(pool, broker, listing)) return { listing, hidden: false };
   const d = listing.details || {};
-  const hadSecrets = SECRET_DETAILS.some((k) => d[k]) || listing.lat != null;
+  const hadSecrets = Boolean(listing.owner_id) || SECRET_DETAILS.some((k) => d[k]) || listing.lat != null;
   return { listing: redact(listing), hidden: hadSecrets };
 }
 

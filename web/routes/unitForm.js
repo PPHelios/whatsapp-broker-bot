@@ -204,6 +204,10 @@ function register(web, { pool, page }) {
       Supabase.deleteStorageFiles(photos.urls).catch(() => {});
       return again(403, Plans.unitLimitText(result.limit, lang));
     }
+    if (result.owner_required) {
+      Supabase.deleteStorageFiles(photos.urls).catch(() => {});
+      return again(400, L10n(lang, "⚠️ لازم تكتب تليفون المالك قبل ما تحفظ الوحدة.", "⚠️ Enter the owner's phone number before saving the unit."));
+    }
     if (result.conflict) {
       Supabase.deleteStorageFiles(photos.urls).catch(() => {});
       return again(409, L10n(lang, `⚠️ الكود #${result.code} مستخدم لوحدة أخرى في الوكالة. اكتب كود مختلف.`, `⚠️ Code #${result.code} is already used by another unit. Choose another code.`));

@@ -26,7 +26,8 @@ async function workbook(rows, { headerAt = 1 } = {}) {
   const wb = new ExcelJS.Workbook();
   const s = wb.addWorksheet("x");
   for (let i = 1; i < headerAt; i++) s.addRow([i === 1 ? "Agency banner" : ""]);
-  for (const r of rows) s.addRow(r);
+  // Every unit needs an owner phone: the first row is the header, the rest get an owner phone column.
+  rows.forEach((r, i) => s.addRow([...r, i === 0 ? "تليفون المالك" : "01012345678"]));
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
 const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -38,9 +39,10 @@ const HEAD = ["الكود", "الكمبوند", "النوع", "بيع او اي�
 
 describe("Excel diff import", () => {
   async function seed() {
-    await h.insertListing({ code: "HP-1", price_value: 8e6, area_value: 150, bedrooms: 3, bathrooms: 2, feature_keys: ["corner"] });
-    await h.insertListing({ code: "HP-2", price_value: 9e6, area_value: 160, bedrooms: 3, bathrooms: 2 });
-    await h.insertListing({ code: "COL-1", broker_id: h.BROKERS.colleague.id });
+    const details = { owner_phone: "01012345678" };
+    await h.insertListing({ code: "HP-1", price_value: 8e6, area_value: 150, bedrooms: 3, bathrooms: 2, feature_keys: ["corner"], details });
+    await h.insertListing({ code: "HP-2", price_value: 9e6, area_value: 160, bedrooms: 3, bathrooms: 2, details });
+    await h.insertListing({ code: "COL-1", broker_id: h.BROKERS.colleague.id, details });
   }
   const rows = [
     HEAD,
@@ -202,10 +204,11 @@ describe("Excel diff import", () => {
 });
 
 describe("group import (forwarded posts and chat exports)", () => {
+  const OWNER = { owner_phone: "01012345678" };
   const POSTS = {
-    mivida: { listing_type: "sale", market: "resale", property_type: "apartment", compound: "ميفيدا", area_value: 200, bedrooms: 3, price_value: 12e6, features: ["north_facing"] },
-    hp: { listing_type: "sale", market: "resale", property_type: "apartment", compound: "Hyde Park", area_value: 150, bedrooms: 3, price_value: 8.5e6 },
-    noPrice: { listing_type: "sale", property_type: "apartment", compound: "الرحاب", area_value: 120, bedrooms: 2 }
+    mivida: { listing_type: "sale", market: "resale", property_type: "apartment", compound: "ميفيدا", area_value: 200, bedrooms: 3, price_value: 12e6, features: ["north_facing"], details: OWNER },
+    hp: { listing_type: "sale", market: "resale", property_type: "apartment", compound: "Hyde Park", area_value: 150, bedrooms: 3, price_value: 8.5e6, details: OWNER },
+    noPrice: { listing_type: "sale", property_type: "apartment", compound: "الرحاب", area_value: 120, bedrooms: 2, details: OWNER }
   };
   function scripted() {
     h.AI.respond((c) => {
@@ -231,7 +234,7 @@ describe("group import (forwarded posts and chat exports)", () => {
     await h.insertListing({ code: "HP-OLD", compound: "Hyde Park", area_value: 152, bedrooms: 3, price_value: 8.4e6 });
     scripted();
     const { agent, csrf } = await signIn(h, "manager");
-    const text = ["شقة للبيع في ميفيدا 200 متر 3 غرف بحري السعر 12 مليون", "شقة في هايد بارك 150م 3 غرف السعر 8.5 مليون", "صباح الخير يا جماعة", "شقة في الرحاب 120 متر غرفتين مقدم مليون"].join("\n\n\n");
+    const text = ["شقة للبيع في ميفيدا 200 متر 3 غرف بحري السعر 12 مليون 01012345678", "شقة في هايد بارك 150م 3 غرف السعر 8.5 مليون 01012345678", "صباح الخير يا جماعة", "شقة في الرحاب 120 متر غرفتين مقدم مليون"].join("\n\n\n");
     const r = await agent.post("/app/import/group").field("_csrf", csrf).field("text", text);
     expect(r.status).toBe(303);
     const id = importId(r);
@@ -254,7 +257,7 @@ describe("group import (forwarded posts and chat exports)", () => {
   test("an uploaded WhatsApp chat export (.txt): the poster is kept as internal co-broker, never in client copy; a zip is sent to the photos tab", async () => {
     scripted();
     const { agent, csrf } = await signIn(h, "manager");
-    const r = await agent.post("/app/import/group").field("_csrf", csrf).attach("chat", Buffer.from("[24/10/2026, 10:15:32] Ahmed Broker: شقة للبيع في ميفيدا 200 متر 3 غرف\nالسعر 12 مليون\n[24/10/2026, 10:16:01] Sara: تمام"), { filename: "chat.txt", contentType: "text/plain" });
+    const r = await agent.post("/app/import/group").field("_csrf", csrf).attach("chat", Buffer.from("[24/10/2026, 10:15:32] Ahmed Broker: شقة للبيع في ميفيدا 200 متر 3 غرف\nالسعر 12 مليون 01012345678\n[24/10/2026, 10:16:01] Sara: تمام"), { filename: "chat.txt", contentType: "text/plain" });
     const id = importId(r);
     await Imports.waitForGroupImport(id);
     expect((await agent.get(`/app/import/${id}`)).text).toMatch(/Ahmed Broker/);

@@ -46,8 +46,10 @@ describe("wow 1: clients who want the unit", () => {
         : null
     );
     await h.text("broker", "اضافة");
+    await h.send("broker", { type: "contacts", contacts: [{ name: { formatted_name: "Mr Owner" }, phones: [{ phone: "01012345678", type: "CELL" }] }] });
     await h.text("broker", "شقة هايد بارك 150 متر 3 غرف 8.5 مليون كود HP-77");
     await h.text("broker", "تم");
+    await h.tap("broker", "draft_owner_keep");
     const saved = to("broker", await h.tap("broker", "draft_confirm"));
     expect(saved).toHaveLength(1);
     expect(saved[0].text).toMatch(/🔥 2 عملاء عايزين الوحدة دي/);

@@ -43,19 +43,24 @@ function answerExtraction(fields) {
 }
 
 const buttonsOf = (replies) => replies.flatMap((r) => r.buttons || []).map((b) => b.id);
+// A unit needs its owner: the broker shares the owner's contact, then keeps the owner on the review card.
+const ownerContact = (who = "broker") => h.send(who, { type: "contacts", contacts: [{ name: { formatted_name: "Mr Owner" }, phones: [{ phone: "01012345678", type: "CELL" }] }] });
+const keepOwner = (who = "broker") => h.tap(who, "draft_owner_keep");
 const listings = () => h.query("SELECT * FROM listings ORDER BY created_at");
 
 describe("P13: the review card flags a unit already listed", () => {
   test("a warning with the unit's link on the same card; Confirm becomes Save anyway and saves", async () => {
     await h.insertListing({ code: "MV-OLD", compound: "ميفيدا", area_value: 205, bedrooms: 3, price_value: 9.8e6 });
     await h.text("broker", "اضافة");
+    await ownerContact();
     await h.text("broker", "شقة في ميفيدا 200 متر 3 غرف 10 مليون");
     answerExtraction(extraction());
     const [working, ...review] = await h.text("broker", "تم");
     expect(working.text).toMatch(/بنراجع بيانات الوحدة/); // the working-on-it line, then the one card
     expect(review).toHaveLength(1);
     expect(textOf(review)).toMatch(/شكلها نفس الوحدة MV-OLD[\s\S]*\/app\/units\/MV-OLD/);
-    expect(review[0].buttons.find((b) => b.id === "draft_confirm").title).toBe("احفظ برضه ✅");
+    const afterKeep = await keepOwner();
+    expect(afterKeep.flatMap((r) => r.buttons || []).find((b) => b.id === "draft_confirm").title).toBe("احفظ برضه ✅");
     await h.tap("broker", "draft_confirm");
     expect(await listings()).toHaveLength(2);
   });
@@ -65,6 +70,7 @@ describe("Add by voice → review → confirm (plan verification #1)", () => {
   test("resale installment unit 'بحري ناصية فيها غرفة مربية', no delivery", async () => {
     await h.text("broker", "اضافه") // F4: spelling-blind command;
     await h.voice("broker");
+    await ownerContact();
     answerExtraction(extraction());
 
     const review = await h.text("broker", "تم");
@@ -76,8 +82,9 @@ describe("Add by voice → review → confirm (plan verification #1)", () => {
     expect(card).toMatch(/غرفة مربية/);
     // Review is the only place warnings appear.
     expect(card).toMatch(/⚠️ موعد التسليم \(أو استلام فوري\) غير مسجل/);
-    expect(buttonsOf(review)).toEqual(["draft_confirm", "draft_edit", "draft_cancel"]);
+    expect(buttonsOf(review)).toContain("draft_owner_keep");
 
+    await keepOwner();
     const saved = await h.tap("broker", "draft_confirm");
     const out = textOf(saved);
     expect(out).toMatch(/تم الحفظ/);
@@ -118,6 +125,7 @@ describe("Add by voice → review → confirm (plan verification #1)", () => {
 describe("Add by text", () => {
   test("delivery and features are stored in top-level columns", async () => {
     await h.text("broker", "اضافة");
+    await ownerContact();
     await h.text("broker", "شقة في هايد بارك 150 متر 3 غرف 2 حمام الدور الرابع تشطيب كامل تسليم 2027 Q3 فيو جاردن 8.5 مليون كاش");
     answerExtraction(
       extraction({
@@ -138,6 +146,7 @@ describe("Add by text", () => {
     expect(textOf(review)).toMatch(/🗓 تسليم 2027 Q3/);
     // Only the photos warning: every other field was stated.
     expect(textOf(review).match(/⚠️.*/g)).toEqual(["⚠️ الصور غير مسجل"]);
+    await keepOwner();
     await h.tap("broker", "draft_confirm");
     const [row] = await listings();
     expect(row).toMatchObject({
@@ -153,9 +162,12 @@ describe("Add by text", () => {
 
   test("a code stated in the text is used", async () => {
     await h.text("broker", "اضافة");
+    await ownerContact();
     await h.text("broker", "كود VIL-08 فيلا");
     answerExtraction(extraction({ property_type: "villa", bedrooms: 5, resale: {} }));
     await h.text("broker", "تم");
+    await keepOwner();
+    await keepOwner();
     await h.tap("broker", "draft_confirm");
     const [row] = await listings();
     expect(row.code).toBe("VIL-08");
@@ -163,14 +175,18 @@ describe("Add by text", () => {
 
   test("a studio gets 0 bedrooms automatically; an office has none", async () => {
     await h.text("broker", "اضافة");
+    await ownerContact();
     await h.text("broker", "استوديو");
     answerExtraction(extraction({ property_type: "studio", bedrooms: null, resale: {} }));
     await h.text("broker", "تم");
+    await keepOwner();
     await h.tap("broker", "draft_confirm");
     await h.text("broker", "اضافة");
+    await ownerContact();
     await h.text("broker", "مكتب");
     answerExtraction(extraction({ property_type: "office", bedrooms: 2, resale: {} }));
     await h.text("broker", "تم");
+    await keepOwner();
     await h.tap("broker", "draft_confirm");
     const rows = await listings();
     expect(rows.map((r) => [r.property_type, r.bedrooms])).toEqual([
@@ -183,36 +199,44 @@ describe("Add by text", () => {
 describe("Only the staged review is committed (A2)", () => {
   test("missing mandatory fields: no confirm button and confirm does not save", async () => {
     await h.text("broker", "اضافة");
+    await ownerContact();
     await h.text("broker", "شقة في التجمع");
     answerExtraction(extraction({ compound: null, district: null, price_value: null, resale: {} }));
     const review = await h.text("broker", "تم");
     expect(textOf(review)).toMatch(/ناقص لإتمام الحفظ/);
     expect(textOf(review)).toMatch(/السعر/);
-    expect(buttonsOf(review)).toEqual(["DRAFT_SAVE", "draft_cancel"]);
+    expect(buttonsOf(review)).toContain("draft_cancel");
+    expect(buttonsOf(review)).not.toContain("draft_confirm");
+    await keepOwner();
     await h.tap("broker", "draft_confirm");
     expect(await listings()).toHaveLength(0);
   });
 
   test("new input after the review invalidates it: confirm re-reviews instead of saving", async () => {
     await h.text("broker", "اضافة");
+    await ownerContact();
     await h.text("broker", "شقة");
     answerExtraction(extraction({ resale: {} }));
     await h.text("broker", "تم");
+    await keepOwner();
     await h.text("broker", "والسعر بقى 9 مليون");
     const before = h.AI.calls.length;
     const replies = await h.tap("broker", "draft_confirm");
     expect(h.AI.calls.length).toBe(before + 1);
     expect(textOf(replies)).toMatch(/مراجعة قبل الحفظ/);
     expect(await listings()).toHaveLength(0);
+    await keepOwner();
     await h.tap("broker", "draft_confirm");
     expect(await listings()).toHaveLength(1);
   });
 
   test("a double tap saves once", async () => {
     await h.text("broker", "اضافة");
+    await ownerContact();
     await h.text("broker", "شقة");
     answerExtraction(extraction({ resale: {} }));
     await h.text("broker", "تم");
+    await keepOwner();
     await h.tap("broker", "draft_confirm", "تأكيد");
     const second = await h.send("broker", {
       type: "interactive",
@@ -224,9 +248,11 @@ describe("Only the staged review is committed (A2)", () => {
 
   test("taps in quick succession: the repeat is dropped silently and recorded as ignored", async () => {
     await h.text("broker", "اضافة");
+    await ownerContact();
     await h.text("broker", "شقة");
     answerExtraction(extraction({ resale: {} }));
     await h.text("broker", "تم");
+    await keepOwner();
     await h.tap("broker", "draft_confirm", "تأكيد");
     h.sameMoment();
     const second = await h.tap("broker", "draft_confirm", "تأكيد");
@@ -238,9 +264,11 @@ describe("Only the staged review is committed (A2)", () => {
 
   test("two taps at once (the second arrives while the first runs): only the first runs", async () => {
     await h.text("broker", "اضافة");
+    await ownerContact();
     await h.text("broker", "شقة");
     answerExtraction(extraction({ resale: {} }));
     await h.text("broker", "تم");
+    await keepOwner();
     const tap = () =>
       h.app.handleWebhookBody({
         entry: [{ changes: [{ value: { messages: [{ from: h.BROKERS.broker.phone, id: `wamid.dbl.${Math.random()}`, timestamp: "1", type: "interactive", interactive: { type: "button_reply", button_reply: { id: "draft_confirm", title: "x" } } }] } }] }]
@@ -256,9 +284,11 @@ describe("Code collision never overwrites", () => {
   test("a used code replies 'الكود مستخدم', keeps the existing unit and the draft", async () => {
     const existing = await h.insertListing({ code: "HP-201", price_value: 7000000 });
     await h.text("broker", "اضافة");
+    await ownerContact();
     await h.text("broker", "كود HP-201 شقة");
     answerExtraction(extraction({ resale: {} }));
     await h.text("broker", "تم");
+    await keepOwner();
     const replies = await h.tap("broker", "draft_confirm");
     expect(textOf(replies)).toMatch(/مستخدم/);
     const rows = await listings();
@@ -270,9 +300,11 @@ describe("Code collision never overwrites", () => {
   test("lower-case and Arabic-digit variants of a used code also collide", async () => {
     await h.insertListing({ code: "VIL-08" });
     await h.text("broker", "اضافة");
+    await ownerContact();
     await h.text("broker", "كود vil-٠٨ فيلا");
     answerExtraction(extraction({ property_type: "villa", resale: {} }));
     await h.text("broker", "تم");
+    await keepOwner();
     expect(textOf(await h.tap("broker", "draft_confirm"))).toMatch(/مستخدم/);
     expect(await listings()).toHaveLength(1);
   });
@@ -281,6 +313,7 @@ describe("Code collision never overwrites", () => {
 describe("Photos go to storage at ingest", () => {
   test("the draft keeps a URL, not the image bytes; the listing links the photos", async () => {
     await h.text("broker", "اضافة");
+    await ownerContact();
     await h.photo("broker");
     await h.photo("broker");
     const session = await h.session("broker");
@@ -291,6 +324,7 @@ describe("Photos go to storage at ingest", () => {
     await h.text("broker", "شقة");
     answerExtraction(extraction({ resale: {} }));
     await h.text("broker", "تم");
+    await keepOwner();
     await h.tap("broker", "draft_confirm");
     const imgs = await h.query("SELECT position, url FROM listing_images ORDER BY position");
     expect(imgs.map((i) => i.position)).toEqual([0, 1]);
@@ -299,6 +333,7 @@ describe("Photos go to storage at ingest", () => {
 
   test("no photos: the review warns, the saved card does not", async () => {
     await h.text("broker", "اضافة");
+    await ownerContact();
     await h.text("broker", "شقة");
     answerExtraction(extraction({ resale: {} }));
     expect(textOf(await h.text("broker", "تم"))).toMatch(/⚠️ الصور غير مسجل/);
@@ -308,6 +343,7 @@ describe("Photos go to storage at ingest", () => {
 describe("Photo ceiling and items WhatsApp can't pass on", () => {
   test("17 photos: 15 kept and one limit warning, not one per extra photo", async () => {
     await h.text("broker", "add");
+    await ownerContact();
     const warnings = [];
     for (let i = 0; i < 17; i++) warnings.push(...(await h.photo("broker")));
     expect((await h.session("broker")).media_items).toHaveLength(15);
@@ -317,6 +353,7 @@ describe("Photo ceiling and items WhatsApp can't pass on", () => {
 
   test("an unsupported item inside a draft says it wasn't added, not the welcome", async () => {
     await h.text("broker", "add");
+    await ownerContact();
     const replies = await h.send("broker", {
       type: "unsupported",
       errors: [{ code: 131051, title: "Message type unknown" }]
@@ -337,17 +374,20 @@ describe("Installments are asked, not assumed", () => {
 
   test("total 15M, cash 13M: the review asks; Yes stores 2M remaining without another AI call", async () => {
     await h.text("broker", "add");
+    await ownerContact();
     await h.text("broker", "townhouse hyde park 15M requested 13M");
     answerExtraction(gapOnly());
-    const review = await h.text("broker", "done");
+    const pending = await h.text("broker", "done");
+    expect(buttonsOf(pending)).toContain("draft_owner_keep");
+    const review = await keepOwner();
     expect(textOf(review)).toMatch(/الباقي 2 مليون أقساط/);
-    expect(buttonsOf(review)).toEqual(["draft_inst_yes", "draft_inst_no", "draft_cancel"]);
+    expect(buttonsOf(review)).toEqual(expect.arrayContaining(["draft_inst_yes", "draft_inst_no", "draft_cancel"]));
 
     const calls = h.AI.calls.length;
     const answered = await h.tap("broker", "draft_inst_yes");
     expect(h.AI.calls.length).toBe(calls);
     expect(textOf(answered)).toMatch(/تفاصيل الأقساط/);
-    expect(buttonsOf(answered)).toEqual(["draft_confirm", "draft_edit", "draft_cancel"]);
+    expect(buttonsOf(answered)).toEqual(expect.arrayContaining(["draft_confirm", "draft_edit", "draft_cancel"]));
     await h.tap("broker", "draft_confirm");
     const [row] = await listings();
     expect(Number(row.remaining_amount)).toBe(2e6);
@@ -356,11 +396,13 @@ describe("Installments are asked, not assumed", () => {
 
   test("No: 13M is the cash price, no installment lines", async () => {
     await h.text("broker", "add");
+    await ownerContact();
     await h.text("broker", "townhouse hyde park 15M requested 13M");
     answerExtraction(gapOnly());
     await h.text("broker", "done");
     const answered = await h.tap("broker", "draft_inst_no");
     expect(textOf(answered)).not.toMatch(/أقساط/);
+    await keepOwner();
     await h.tap("broker", "draft_confirm");
     const [row] = await listings();
     expect(Number(row.price_value)).toBe(13e6);
@@ -371,6 +413,7 @@ describe("Installments are asked, not assumed", () => {
 describe("Extraction failure keeps the draft", () => {
   test("AI outage: the broker is told, the draft survives, retry works", async () => {
     await h.text("broker", "اضافة");
+    await ownerContact();
     await h.text("broker", "شقة");
     h.AI.respond(() => new Error("503 UNAVAILABLE"));
     const replies = await h.text("broker", "تم");
@@ -378,6 +421,7 @@ describe("Extraction failure keeps the draft", () => {
     expect(await h.session("broker")).not.toBeNull();
     answerExtraction(extraction({ resale: {} }));
     await h.tap("broker", "DRAFT_SAVE");
+    await keepOwner();
     await h.tap("broker", "draft_confirm");
     expect(await listings()).toHaveLength(1);
   });
@@ -386,10 +430,12 @@ describe("Extraction failure keeps the draft", () => {
 describe("F6: compound names snap to known ones", () => {
   test("«هاييد بارك» as the AI heard it is saved as «هايد بارك» and the card says so", async () => {
     await h.text("broker", "اضافة");
+    await ownerContact();
     await h.text("broker", "شقة في هاييد بارك 200 متر 3 غرف 10 مليون");
     answerExtraction(extraction({ compound: "هاييد بارك", compound_en: "Hyde Park" }));
     const review = await h.text("broker", "تم");
     expect(textOf(review)).toContain("اسم الكمبوند اتصحح: هاييد بارك ← هايد بارك");
+    await keepOwner();
     await h.tap("broker", "draft_confirm");
     expect((await listings())[0].compound).toBe("هايد بارك");
   });

@@ -18,7 +18,7 @@ beforeEach(async () => {
 });
 afterAll(closeHarness);
 
-const FIELDS = { listing_type: "sale", market: "resale", property_type: "apartment", compound: "Hyde Park", price_value: "9 مليون", area_value: "150", bedrooms: "3", bathrooms: "2", finishing: "fully_finished", force: "1" };
+const FIELDS = { listing_type: "sale", market: "resale", property_type: "apartment", compound: "Hyde Park", price_value: "9 مليون", area_value: "150", bedrooms: "3", bathrooms: "2", finishing: "fully_finished", force: "1", owner_phone: "01012345678" };
 const post = (agent, csrf, fields) => {
   let r = agent.post("/app/units/new").field("_csrf", csrf);
   for (const [k, v] of Object.entries(fields)) r = r.field(k, v);

@@ -21,7 +21,8 @@ beforeEach(async () => {
 afterAll(closeHarness);
 
 const row = async (who) => (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS[who].id]))[0];
-const csv = (lines) => Buffer.from(lines.join("\n"), "utf8");
+const withOwner = (lines) => lines.map((l, i) => (i === 0 ? `${l},Owner Phone` : `${l},01012345678`));
+const csv = (lines) => Buffer.from(withOwner(lines).join("\n"), "utf8");
 
 async function seed() {
   const admin = await row("admin");
