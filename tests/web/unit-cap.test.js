@@ -58,7 +58,7 @@ test("a unit past the cap is refused with the upgrade message; archiving makes r
 test("createListing reports the cap and plan; English text", async () => {
   await setCap("office", 1);
   await h.insertListing({ code: "CAP-1" });
-  const res = await Store.createListing(h.pool, await row("broker"), { fields: { listing_type: "sale", property_type: "apartment", price_value: 5e6, area_value: 100 }, code: null, lang: "en" });
+  const res = await Store.createListing(h.pool, await row("broker"), { fields: { listing_type: "sale", property_type: "apartment", price_value: 5e6, area_value: 100, details: { owner_phone: "01012345678" } }, code: null, lang: "en" });
   expect(res.limit).toMatchObject({ used: 1, limit: 1 });
   expect(Plans.unitLimitText(res.limit, "en")).toContain("Office plan holds 1 available units");
 });
