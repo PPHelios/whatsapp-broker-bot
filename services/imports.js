@@ -241,7 +241,8 @@ async function applyExcel(pool, broker, id, { rows = [], archive = [], lang = "a
       else if (res.limit) {
         result.limit = res.limit;
         break;
-      } else result.conflicts.push(res.code);
+      } else if (res.owner_required) result.failed.push(item.code || `row ${item.row}`);
+      else result.conflicts.push(res.code);
     } else if (item.kind === "changed") {
       const res = await patchOne(pool, broker, item.code, item.patch, item.version);
       if (res.outcome === "updated") result.updated.push(item.code);
