@@ -16,7 +16,7 @@ const TYPE_TERMS = {
   townhouse: ["تاون هاوس", "تاون", "townhouse", "town house"],
   twinhouse: ["توين هاوس", "توين", "twin house", "twinhouse"],
   office: ["مكتب", "مكاتب", "مكتب اداري", "office", "offices"],
-  shop: ["محل", "محلات", "shop", "retail"],
+  shop: ["محل تجاري", "محل", "محلات", "shop", "retail"],
   clinic: ["عيادة", "عيادات", "clinic"],
   commercial: ["تجاري", "commercial"],
   land: ["أرض", "ارض", "land", "plot"]
