@@ -152,8 +152,9 @@ function buildSearchQuery(agencyId, parsedOrFilters, { limit = SNAPSHOT_MAX, off
       // Floor 0 is ground; "typical" arrives as floor_min 1 (any floor above ground). Units with no floor still match.
       if (f.floor_min !== null) where.push(`(l.floor_level IS NULL OR l.floor_level >= ${add(f.floor_min)})`);
       if (f.floor_max !== null) where.push(`(l.floor_level IS NULL OR l.floor_level <= ${add(f.floor_max)})`);
-      if (f.finishing.length) where.push(`l.finishing = ANY(${add(f.finishing)}::text[])`);
-      if (f.furnishing) where.push(`l.furnishing = ${add(f.furnishing)}`);
+      // A blank finishing or furnishing matches both sides of the filter (only the special fields stay strict).
+      if (f.finishing.length) where.push(`(l.finishing IS NULL OR l.finishing = ANY(${add(f.finishing)}::text[]))`);
+      if (f.furnishing) where.push(`(l.furnishing IS NULL OR l.furnishing = ${add(f.furnishing)})`);
     }
 
     if (f.delivery_ready) where.push(`l.is_ready = true`);

@@ -62,3 +62,17 @@ describe("single values, typical floors and missing fields", () => {
     expect(sql).not.toContain("feature_keys @>");
   });
 });
+
+describe("blank furnishing and finishing match either side", () => {
+  test("a furnished or unfurnished search still includes units with furnishing blank", () => {
+    for (const furnishing of ["furnished", "unfurnished"]) {
+      const { sql } = buildSearchQuery("agency-1", Q.normalizeAiSearch({ filters: { furnishing } }));
+      expect(sql).toContain("(l.furnishing IS NULL OR l.furnishing = ");
+    }
+  });
+
+  test("a finishing filter includes units with finishing blank", () => {
+    const { sql } = buildSearchQuery("agency-1", Q.normalizeAiSearch({ filters: { finishing: ["fully_finished"] } }));
+    expect(sql).toContain("(l.finishing IS NULL OR l.finishing = ANY(");
+  });
+});
