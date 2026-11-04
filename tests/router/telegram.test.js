@@ -174,9 +174,9 @@ describe("notifications on Telegram (step 2)", () => {
     expect(n.reason).toBe("not_linked");
   });
 
-  test("an unlinked broker with no choice still defaults to WhatsApp", async () => {
+  test("an unlinked broker with no choice defaults to the website (never WhatsApp)", async () => {
     const prefs = N.prefsOf(await row("broker"), { telegramLinked: false });
-    expect(prefs.channels.match).toBe("whatsapp");
+    expect(prefs.channels.match).toBe("web");
     expect(N.prefsOf(await row("broker"), { telegramLinked: true }).channels.match).toBe("both");
   });
 

@@ -5,6 +5,7 @@
 "use strict";
 
 jest.mock("../../lib/whatsapp", () => require("../harness/fake-whatsapp"));
+jest.mock("../../lib/telegram", () => require("../harness/fake-telegram"));
 jest.mock("../../lib/ai", () => require("../harness/fake-ai"));
 jest.mock("../../lib/supabase", () => require("../harness/fake-supabase"));
 
@@ -22,6 +23,15 @@ beforeEach(async () => {
   h = await createHarness();
 });
 afterAll(closeHarness);
+// Alerts reach brokers on Telegram (or the website), never WhatsApp.
+beforeAll(() => {
+  process.env.TELEGRAM_BOT_TOKEN = "123:test";
+  require("../../config").resetConfig();
+});
+afterAll(() => {
+  delete process.env.TELEGRAM_BOT_TOKEN;
+  require("../../config").resetConfig();
+});
 
 const row = async (who) => (await h.query("SELECT * FROM brokers WHERE id = $1", [h.BROKERS[who].id]))[0];
 let seq = 0;
@@ -42,6 +52,7 @@ async function lead(who = "broker", phones = "01012345678", name = "Sara") {
 const day = (hour, minute = 0) => new Date(Stages.cairoDayAt(new Date(), 2, hour).getTime() + minute * 60000);
 
 test("a date with no time means 10:00 Cairo; the reminder comes at 10:00, not before, with Done and Postpone", async () => {
+  await h.tgLink("broker");
   const l = await lead();
   const date = Stages.toCairoLocal(day(10)).slice(0, 10);
   const at = Stages.fromCairoLocal(date);
@@ -52,16 +63,17 @@ test("a date with no time means 10:00 Cairo; the reminder comes at 10:00, not be
   expect(await Reminders.remindDue(h.pool, { now: new Date(at.getTime() - 60000) })).toEqual({ reminded: 0, brokers: 0 });
   expect(await Reminders.remindDue(h.pool, { now: at })).toEqual({ reminded: 1, brokers: 1 });
   const [n] = await reminders();
-  expect(n).toMatchObject({ status: "sent", channel: "whatsapp", lead_id: l.id });
+  expect(n).toMatchObject({ status: "sent", channel: "telegram", lead_id: l.id });
   expect(n.title).toBe("📅 متابعة: Sara (L-0001)");
   expect(n.body).toContain("📝 ask about the budget");
-  const wa = sentTo("broker").pop();
-  expect(ids(wa)).toEqual(["ld:fudone:L-0001", "ld:fupost:L-0001"]);
+  const tg = h.TG.outbox.filter((m) => m.chatId === String(h.TG_IDS.broker) && m.keyboard).pop();
+  expect(tg.keyboard.flat().map((b) => b.callback_data)).toEqual(["ld:fudone:L-0001", "ld:fupost:L-0001"]);
   // Once only.
   expect((await Reminders.remindDue(h.pool, { now: new Date(at.getTime() + 60000) })).reminded).toBe(0);
 });
 
 test("quiet hours hold the reminder until they end", async () => {
+  await h.tgLink("broker");
   await h.query(`UPDATE brokers SET notify_prefs = '{"quiet":{"enabled":true,"start":22,"end":8}}' WHERE id = $1`, [h.BROKERS.broker.id]);
   const l = await lead();
   const at = day(23);

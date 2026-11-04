@@ -40,46 +40,25 @@ const rowsOf = (who) => h.query("SELECT kind, channel, reason, status FROM notif
 const waTo = (who) => h.WA.outbox.filter((m) => m.to === h.BROKERS[who].phone);
 
 describe("one notification, one channel (Q15)", () => {
-  test("WhatsApp when chosen, the window is open and credits remain; no push", async () => {
+  test("alerts never go on WhatsApp: a broker without Telegram gets web push, even with a saved WhatsApp choice", async () => {
     await openWindow("broker");
     await h.Push.subscribe(h.pool, h.BROKERS.broker);
-    const r = await N.notifyBroker(h.pool, await brokerRow("broker"), event());
-    expect(r).toMatchObject({ channel: "whatsapp", reason: "chosen", status: "sent" });
-    expect(waTo("broker")).toHaveLength(1);
-    expect(waTo("broker")[0].text).toMatch(/VIL-08 fits your client\n🌐 http:\/\/localhost:3000\/app\/notifications/);
-    expect(h.Push.sent).toHaveLength(0);
-    const [{ metadata }] = await h.query("SELECT metadata FROM operation_logs WHERE operation_type = 'wa_outbound'");
-    expect(metadata).toMatchObject({ kind: "notify_match", action: "notification", egp: 0.21 });
-  });
-
-  test("a failed WhatsApp send falls back to web push once", async () => {
-    await openWindow("broker");
-    await h.Push.subscribe(h.pool, h.BROKERS.broker);
-    h.WA.failNext("text");
-    const r = await N.notifyBroker(h.pool, await brokerRow("broker"), event());
-    expect(r).toMatchObject({ channel: "webpush", reason: "fallback", status: "sent" });
-    expect(waTo("broker")).toHaveLength(0);
+    await h.query(`UPDATE brokers SET notify_prefs = '{"channels":{"match":"whatsapp"},"quiet":{"enabled":false}}' WHERE id = $1`, [h.BROKERS.broker.id]);
+    const b = await brokerRow("broker");
+    expect(N.prefsOf(b).channels.match).toBe("web");
+    const r = await N.notifyBroker(h.pool, b, event());
+    expect(r).toMatchObject({ channel: "webpush", reason: "chosen", status: "sent" });
+    expect(h.WA.outbox).toHaveLength(0);
     expect(h.Push.sent).toHaveLength(1);
+    expect(h.Push.sent[0].raw).toMatch(/VIL-08 fits your client/);
   });
 
-  test("a closed 24-hour window goes to push without trying WhatsApp", async () => {
-    await openWindow("broker", "25 hours");
-    await h.Push.subscribe(h.pool, h.BROKERS.broker);
-    const r = await N.notifyBroker(h.pool, await brokerRow("broker"), event());
-    expect(r).toMatchObject({ channel: "webpush", reason: "window_closed" });
-    expect(h.WA.outbox).toHaveLength(0);
-  });
-
-  test("no credits (100%) goes to push; replies still go out", async () => {
-    await h.query("UPDATE agencies SET wa_credits_monthly = 10 WHERE id = $1", [h.AGENCY_A]);
-    await used("colleague", 10);
-    await openWindow("broker");
-    await h.Push.subscribe(h.pool, h.BROKERS.broker);
-    const r = await N.notifyBroker(h.pool, await brokerRow("broker"), event());
-    expect(r).toMatchObject({ channel: "webpush", reason: "no_credits" });
-    expect(h.WA.outbox).toHaveLength(0);
-    const reply = await h.text("broker", "مساعدة");
-    expect(reply.length).toBeGreaterThan(0);
+  test("saving a WhatsApp choice is ignored; the default stays", async () => {
+    const b = await brokerRow("broker");
+    await N.savePrefs(h.pool, b, { channels: { match: "whatsapp", lead_new: "web" }, quiet: { enabled: false } });
+    const p = N.prefsOf(await brokerRow("broker"));
+    expect(p.channels.match).toBe("web");
+    expect(p.channels.lead_new || "web").toBe("web");
   });
 
   test("website chosen and no push enabled: the inbox alone (status skipped, reason no_push)", async () => {
@@ -93,33 +72,33 @@ describe("one notification, one channel (Q15)", () => {
   });
 
   test("the same event twice notifies once", async () => {
-    await openWindow("broker");
+    await h.Push.subscribe(h.pool, h.BROKERS.broker);
     const b = await brokerRow("broker");
     const ev = event({ dedupeKey: "same" });
     await N.notifyBroker(h.pool, b, ev);
     expect(await N.notifyBroker(h.pool, b, ev)).toEqual({ duplicate: true });
     await Promise.all([N.notifyBroker(h.pool, b, ev), N.notifyBroker(h.pool, b, ev)]);
     expect(await rowsOf("broker")).toHaveLength(1);
-    expect(waTo("broker")).toHaveLength(1);
+    expect(h.Push.sent).toHaveLength(1);
   });
 
   test("alerts of one kind within 2 minutes go out as one grouped message", async () => {
-    await openWindow("broker");
+    await h.Push.subscribe(h.pool, h.BROKERS.broker);
     const b = await brokerRow("broker");
     await N.notifyBroker(h.pool, b, event({ title: "first" }));
     const q1 = await N.notifyBroker(h.pool, b, event({ title: "second" }));
     const q2 = await N.notifyBroker(h.pool, b, event({ title: "third" }));
     expect(q1).toMatchObject({ queued: true });
     expect(q2).toMatchObject({ queued: true });
-    expect(waTo("broker")).toHaveLength(1);
+    expect(h.Push.sent).toHaveLength(1);
     // Another kind is not merged.
     await N.notifyBroker(h.pool, b, event({ kind: "share_opened", title: "opened" }));
-    expect(waTo("broker")).toHaveLength(2);
+    expect(h.Push.sent).toHaveLength(2);
 
     expect(await N.deliverDue(h.pool, { now: new Date(Date.now() + 60 * 1000) })).toEqual({ delivered: 0, groups: 0 });
     expect(await N.deliverDue(h.pool, { now: new Date(Date.now() + 3 * 60 * 1000) })).toEqual({ delivered: 2, groups: 1 });
-    const grouped = waTo("broker")[2].text;
-    expect(grouped).toMatch(/🔔 2 تنبيهات\n• second\n• third/);
+    const grouped = JSON.stringify(h.Push.sent[2].payload);
+    expect(grouped).toMatch(/2 تنبيهات/);
     const rows = await h.query("SELECT title, reason, status, merged_into IS NOT NULL AS merged FROM notifications WHERE broker_id = $1 ORDER BY id", [h.BROKERS.broker.id]);
     expect(rows.map((r) => [r.title, r.status])).toEqual([
       ["first", "sent"],
@@ -143,8 +122,7 @@ describe("one notification, one channel (Q15)", () => {
     await h.Push.subscribe(h.pool, h.BROKERS.broker);
     const out = await N.deliverDue(h.pool, { now: new Date("2026-11-04T06:01:00Z") });
     expect(out).toEqual({ delivered: 1, groups: 1 });
-    // The window is judged at delivery: no recent message from the broker → push.
-    expect(await rowsOf("broker")).toEqual([{ kind: "match", channel: "webpush", reason: "window_closed", status: "sent" }]);
+    expect(await rowsOf("broker")).toEqual([{ kind: "match", channel: "webpush", reason: "chosen", status: "sent" }]);
   });
 
   test("an inactive broker is never messaged; the url must be an /app/ path", async () => {
@@ -301,10 +279,11 @@ describe("website: inbox, log, settings, usage, push", () => {
     expect(save.status).toBe(303);
     const [b] = await h.query("SELECT notify_prefs, preferred_lang FROM brokers WHERE id = $1", [h.BROKERS.broker.id]);
     expect(b.preferred_lang).toBe("en");
-    expect(b.notify_prefs.channels).toMatchObject({ match: "web", assignment: "whatsapp", follow_up: "whatsapp" });
+    expect(b.notify_prefs.channels).toEqual({ match: "web" });
     expect(b.notify_prefs.quiet).toEqual({ enabled: true, start: 23, end: 7 });
     const again = await me.agent.get("/app/settings");
-    expect(again.text).toMatch(/<select name="ch_match" data-kind="match"><option value="web" selected>Website \(free\)<\/option><option value="whatsapp">WhatsApp \(uses credits\)<\/option>/);
+    expect(again.text).toMatch(/<select name="ch_match" data-kind="match"><option value="web" selected>Website \(free\)<\/option><\/select>/);
+    expect(again.text).not.toMatch(/value="whatsapp"/);
   });
 
   test("push: subscribe from the browser, test push, 410 removes the subscription, payload has no phone", async () => {
