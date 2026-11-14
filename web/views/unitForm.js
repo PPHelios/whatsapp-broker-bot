@@ -28,7 +28,39 @@ const freqOptions = (lang) => [["", "—"], ...FREQUENCIES.map((f) => [f, Descri
 /**
  * @param {Object} p - { values (formFromUnit), mode: "new"|"edit", code, version, images, lang, notice, error, review, duplicate (P13: the save button becomes "Save anyway") }
  */
-function unitForm({ values: v, mode = "new", code = null, version = null, images = [], lang = "ar", notice = null, error = null, review = null, csrf = "", duplicate = null, areas = [] }) {
+/** One place box: type or pick; a known place fills its area (shown as one line); an unknown one warns, then opens the add-new part. */
+function placeBox(v, areas, lang) {
+  const nameOf = (a) => a.name_en || a.name_ar;
+  const byId = (id) => areas.find((a) => String(a.id) === String(id));
+  const path = [byId(v.area_id), byId(v.subzone_id)].filter(Boolean).map(nameOf).join(" › ");
+  const isNew = v.compound_new === "1";
+  const hid = (on) => (on ? raw(" hidden") : "");
+  const tops = areas.filter((a) => !a.parent_id);
+  return html`<div class="place" data-place
+    data-msg-warn="${L(lang, "«%s» مش في القائمة. اختار اللي قريب منه، أو ضيفه كجديد.", "“%s” is not in the list. Pick a close match, or add it as new.")}"
+    data-msg-did="${L(lang, "قصدك:", "Did you mean:")}">
+    ${input("compound", L(lang, "الكمبوند (أو اختار منطقة)", "Compound (or pick an area)"), v.compound, { extra: ' list="approved-places" autocomplete="off" data-place-suggest' })}
+    <p class="place-line" data-place-summary${hid(isNew || !path)}>📍 <b data-place-path>${path}</b></p>
+    <div class="place-warn" data-place-warn hidden role="status">
+      <p data-place-warn-text></p>
+      <div class="row" data-place-did></div>
+      <button type="button" class="btn ghost" data-place-add>${L(lang, "＋ ضيفه ككمبوند جديد", "+ Add it as a new compound")}</button>
+    </div>
+    <fieldset class="place-new" data-place-new${hid(!isNew)}>
+      <legend>${L(lang, "كمبوند جديد", "New compound")}</legend>
+      <p class="muted small">${L(lang, "بيتحفظ مع الوحدة وبيتراجع من الإدارة. الحقول اللي عليها * مطلوبة.", "It is saved with the unit and reviewed by the CRM owner. Fields with * are required.")}</p>
+      <label class="req">${L(lang, "المنطقة *", "Area *")}<select name="area_id"><option value="">${L(lang, "اختار المنطقة (مثال: القاهرة الجديدة)", "Pick the area (e.g. New Cairo)")}</option>${tops.map((a) => html`<option value="${a.id}"${sel(String(v.area_id) === String(a.id))}>${nameOf(a)}</option>`)}</select></label>
+      <label>${L(lang, "منطقة فرعية (اختياري)", "Sub-zone (optional)")}<select name="subzone_id"><option value="">—</option>${tops.map((t) => html`<optgroup label="${nameOf(t)}">${areas.filter((s2) => s2.parent_id === t.id).map((a) => html`<option value="${a.id}"${sel(String(v.subzone_id) === String(a.id))}>${nameOf(a)}</option>`)}</optgroup>`)}</select></label>
+      <label>${L(lang, "الاسم بالعربي (اختياري)", "Arabic name (optional)")}<input name="compound_ar" value="${v.compound_ar || ""}" placeholder="${L(lang, "مثال: هايد بارك", "Arabic spelling, if you know it")}"></label>
+      <label>${L(lang, "لينك جوجل ماب (اختياري)", "Google Maps link (optional)")}<input name="compound_pin" dir="ltr" value="${v.compound_pin || ""}" placeholder="https://www.google.com/maps/…"></label>
+      <input type="hidden" name="compound_new" value="1"${isNew ? "" : raw(" disabled")}>
+      <button type="button" class="btn ghost" data-place-cancel>${L(lang, "إلغاء", "Cancel")}</button>
+    </fieldset>
+  </div>`;
+}
+
+function unitForm({ values: v, mode = "new", code = null, version = null, images = [], lang = "ar", notice = null, error = null, review = null, csrf = "", duplicate = null, areas = [], extraValues = null }) {
+  if (extraValues) v = { ...v, ...extraValues };
   const action = mode === "edit" ? `/app/units/${encodeURIComponent(code)}/edit` : "/app/units/new";
   const groups = [...new Set(Features.FEATURES.map((f) => f.group))];
   // A new unit is added in 4 steps (app.js shows one at a time); editing, an error or a review shows everything.
@@ -57,10 +89,7 @@ function unitForm({ values: v, mode = "new", code = null, version = null, images
     ${select("listing_type", L(lang, "بيع أو إيجار *", "Sale or rent *"), v.listing_type, [["", "—"], ["sale", L(lang, "بيع", "Sale")], ["rent", L(lang, "إيجار", "Rent")]])}
     ${v.market === "primary" ? select("market", L(lang, "ريسيل أو برايمري", "Resale or primary"), v.market, [["resale", L(lang, "ريسيل", "Resale")], ["primary", L(lang, "برايمري (من المطور)", "Primary (developer)")]]) : ""}
     ${select("property_type", L(lang, "النوع *", "Type *"), v.property_type, [["", "—"], ...Rules.PROPERTY_TYPES.map((t) => [t, pick(Describe.TYPE_LABELS[t], lang)])])}
-    ${input("compound", L(lang, "الكمبوند (أو اختار منطقة)", "Compound (or pick an area)"), v.compound, { extra: ' list="approved-places" autocomplete="off" data-place-suggest' })}
-    <label>${L(lang, "المنطقة (بتتملى من الكمبوند)", "Area (filled from the compound)")}<select name="area_id"><option value="">—</option>${areas.filter((a) => !a.parent_id).map((a) => html`<option value="${a.id}"${sel(String(v.area_id) === String(a.id))}>${a.name_en || a.name_ar}</option>`)}</select></label>
-    <label>${L(lang, "منطقة فرعية (اختياري)", "Sub-zone (optional)")}<select name="subzone_id"><option value="">—</option>${areas.filter((a) => !a.parent_id).map((t) => html`<optgroup label="${t.name_en || t.name_ar}">${areas.filter((s2) => s2.parent_id === t.id).map((a) => html`<option value="${a.id}"${sel(String(v.subzone_id) === String(a.id))}>${a.name_en || a.name_ar}</option>`)}</optgroup>`)}</select></label>
-    <label class="check"><input type="checkbox" name="compound_new" value="1"${raw(v.compound_new === "1" ? " checked" : "")}> ${L(lang, "الكمبوند مش في القائمة (ضيفه كجديد)", "Compound not in the list (add as new)")}</label>
+    ${placeBox(v, areas, lang)}
     ${input("district", L(lang, "الحي", "District"), v.district)}
     ${input("city", L(lang, "المدينة", "City"), v.city)}
     ${input("price_value", L(lang, "السعر * (الإيجار الشهري للإيجار)", "Price * (monthly rent for rentals)"), v.price_value, { extra: ` inputmode="decimal" placeholder="${L(lang, "8.5 مليون", "8.5M")}"` })}

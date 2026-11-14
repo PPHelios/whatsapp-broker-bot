@@ -73,8 +73,7 @@ async function clientFit(pool, broker, question) {
   );
   const lead = A.matchLeads(question, rows).find((l) => (l.requests || []).some(Boolean));
   if (!lead) return null;
-  const { rows: projects } = await pool.query("SELECT name, name_en, district, city, notes, updated_at FROM projects WHERE agency_id = $1 AND archived_at IS NULL", [broker.agency_id]);
-  const parsed = projects.map((p) => ({ project: p, units: ProjectNotes.parseUnits(p.notes) })).filter((x) => x.units.length);
+  const parsed = await require("./projectOffers").projectsWithOffers(pool, broker.agency_id);
   const hits = [];
   for (const f of lead.requests.filter(Boolean)) for (const h of ProjectNotes.matchUnits(parsed, f)) if (!hits.some((x) => x.unit === h.unit)) hits.push(h);
   if (!hits.length) return null;

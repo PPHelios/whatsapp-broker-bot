@@ -696,3 +696,27 @@ main:has(.searchbox.float) { padding-block-end: 112px; }
   main { padding-block-start: 16px; }
   .card { padding: 20px; }
 }
+/* Place box: one line for a known place; warning and add-new part only when needed */
+.place { grid-column: 1 / -1; display: grid; gap: 8px; }
+.place-line { margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--soft); }
+.place-warn { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--brand); display: grid; gap: 8px; }
+.place-warn p { margin: 0; }
+.place-warn .row { display: flex; flex-wrap: wrap; gap: 8px; }
+.place-new { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line, #ddd); border-radius: 12px; }
+.place [hidden] { display: none !important; }
+
+/* New look: 16px cards, 12px fields (46px high), a green line for a place that fills its own area, and on a laptop a wide side menu with names. */
+:root { --radius: 16px; --radius-btn: 12px; }
+input, select, textarea { min-height: 46px; border-color: #c9d2dc; }
+.place-line { background: var(--ok-soft); color: var(--ok-ink); border: 1px solid #bfe3cb; }
+.tabbar .fab-label { display: none; }
+@media (min-width: 1024px) {
+  body.has-tabbar { padding-inline-start: 248px; }
+  .tabbar { width: 248px; grid-auto-rows: 44px; gap: 4px; padding: 16px 12px; }
+  .tabbar a { flex-direction: row; justify-content: flex-start; gap: 10px; min-height: 44px; padding: 0 14px; border-radius: 10px; font-size: 0.95rem; }
+  .tabbar a[aria-current="page"] { background: var(--brand-soft); color: var(--brand-ink); }
+  .tabbar .fab { order: 99; width: auto; height: 48px; margin: 12px 0 0; justify-content: center; border-radius: 12px; background: var(--brand-ink); color: #fff; box-shadow: none; }
+  .tabbar .fab[aria-current="page"] { background: var(--brand-ink); color: #fff; }
+  .tabbar .fab svg { width: 20px; height: 20px; }
+  .tabbar .fab-label { display: inline; font-weight: 700; }
+}

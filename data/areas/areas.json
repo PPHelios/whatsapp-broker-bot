@@ -1,1169 +1,1170 @@
 [
- {
-  "en": "New Cairo",
-  "ar": "القاهرة الجديدة",
-  "aliases": [
-   "التجمع",
-   "tagamoa",
-   "new cairo city"
-  ],
-  "children": [
-   {
-    "en": "Al Banafseg",
-    "ar": "حي البنفسج",
+  {
+    "en": "New Cairo",
+    "ar": "القاهرة الجديدة",
     "aliases": [
-     "El Banafseg",
-     "البنفسج التجمع الأول / الخامس"
+      "التجمع",
+      "tagamoa",
+      "new cairo city"
     ],
-    "lat": 30.046,
-    "lng": 31.475,
     "children": [
-     {
-      "en": "Banafseg 1 (Villas)",
-      "ar": "فيلات البنفسج 1",
-      "aliases": [],
-      "lat": 30.045,
-      "lng": 31.472,
-      "children": []
-     },
-     {
-      "en": "Banafseg 2 (Villas)",
-      "ar": "فيلات البنفسج 2",
-      "aliases": [],
-      "lat": 30.0465,
-      "lng": 31.4755,
-      "children": []
-     },
-     {
-      "en": "Banafseg 3 (Villas)",
-      "ar": "فيلات البنفسج 3",
-      "aliases": [],
-      "lat": 30.048,
-      "lng": 31.478,
-      "children": []
-     },
-     {
-      "en": "Banafseg 4 (Villas)",
-      "ar": "فيلات البنفسج 4",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Banafseg 5 (Villas)",
-      "ar": "فيلات البنفسج 5",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Banafseg 6 (Villas)",
-      "ar": "فيلات البنفسج 6",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Banafseg 7 (Villas)",
-      "ar": "فيلات البنفسج 7",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Banafseg 8 (Villas)",
-      "ar": "فيلات البنفسج 8",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Banafseg 9 (Villas)",
-      "ar": "فيلات البنفسج 9",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Banafseg 10 (Villas)",
-      "ar": "فيلات البنفسج 10",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Banafseg 11 (Villas)",
-      "ar": "فيلات البنفسج 11",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Banafseg 12 (Villas)",
-      "ar": "فيلات البنفسج 12",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     }
+      {
+        "en": "Al Banafseg",
+        "ar": "حي البنفسج",
+        "aliases": [
+          "El Banafseg",
+          "البنفسج التجمع الأول / الخامس"
+        ],
+        "lat": 30.046,
+        "lng": 31.475,
+        "children": [
+          {
+            "en": "Banafseg 1 (Villas)",
+            "ar": "فيلات البنفسج 1",
+            "aliases": [],
+            "lat": 30.045,
+            "lng": 31.472,
+            "children": []
+          },
+          {
+            "en": "Banafseg 2 (Villas)",
+            "ar": "فيلات البنفسج 2",
+            "aliases": [],
+            "lat": 30.0465,
+            "lng": 31.4755,
+            "children": []
+          },
+          {
+            "en": "Banafseg 3 (Villas)",
+            "ar": "فيلات البنفسج 3",
+            "aliases": [],
+            "lat": 30.048,
+            "lng": 31.478,
+            "children": []
+          },
+          {
+            "en": "Banafseg 4 (Villas)",
+            "ar": "فيلات البنفسج 4",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Banafseg 5 (Villas)",
+            "ar": "فيلات البنفسج 5",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Banafseg 6 (Villas)",
+            "ar": "فيلات البنفسج 6",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Banafseg 7 (Villas)",
+            "ar": "فيلات البنفسج 7",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Banafseg 8 (Villas)",
+            "ar": "فيلات البنفسج 8",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Banafseg 9 (Villas)",
+            "ar": "فيلات البنفسج 9",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Banafseg 10 (Villas)",
+            "ar": "فيلات البنفسج 10",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Banafseg 11 (Villas)",
+            "ar": "فيلات البنفسج 11",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Banafseg 12 (Villas)",
+            "ar": "فيلات البنفسج 12",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          }
+        ]
+      },
+      {
+        "en": "Banafseg Buildings",
+        "ar": "عمارات البنفسج",
+        "aliases": [
+          "Banafseg Omarat"
+        ],
+        "lat": 30.041,
+        "lng": 31.468,
+        "children": []
+      },
+      {
+        "en": "Banafseg Villas",
+        "ar": "فيلات البنفسج",
+        "aliases": [
+          "Banafseg Villas"
+        ],
+        "lat": 30.05,
+        "lng": 31.482,
+        "children": []
+      },
+      {
+        "en": "Al Narges",
+        "ar": "حي النرجس",
+        "aliases": [
+          "El Narges",
+          "النرجس"
+        ],
+        "lat": 30.015,
+        "lng": 31.442,
+        "children": [
+          {
+            "en": "Narges 1 (Villas)",
+            "ar": "فيلات النرجس 1",
+            "aliases": [],
+            "lat": 30.018,
+            "lng": 31.439,
+            "children": []
+          },
+          {
+            "en": "Narges 2 (Villas)",
+            "ar": "فيلات النرجس 2",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Narges 3 (Villas)",
+            "ar": "فيلات النرجس 3",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Narges 4 (Villas)",
+            "ar": "فيلات النرجس 4",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Narges 5 (Villas)",
+            "ar": "فيلات النرجس 5",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Narges 6 (Villas)",
+            "ar": "فيلات النرجس 6",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Narges 7 (Villas)",
+            "ar": "فيلات النرجس 7",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Narges 8 (Villas)",
+            "ar": "فيلات النرجس 8",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          }
+        ]
+      },
+      {
+        "en": "Narges Buildings",
+        "ar": "عمارات النرجس",
+        "aliases": [
+          "El Narges Buildings"
+        ],
+        "lat": 30.021,
+        "lng": 31.443,
+        "children": []
+      },
+      {
+        "en": "Narges Villas",
+        "ar": "فيلات النرجس",
+        "aliases": [
+          "Narges Villas"
+        ],
+        "lat": 30.013,
+        "lng": 31.441,
+        "children": []
+      },
+      {
+        "en": "New Narges",
+        "ar": "النرجس الجديدة",
+        "aliases": [
+          "امتداد النرجس",
+          "النرجس كابيتال"
+        ],
+        "lat": 29.995,
+        "lng": 31.446,
+        "children": []
+      },
+      {
+        "en": "Al Yasmeen",
+        "ar": "حي الياسمين",
+        "aliases": [
+          "El Yasmeen",
+          "El Yasmine",
+          "الياسمين فيلات"
+        ],
+        "lat": 30.052,
+        "lng": 31.458,
+        "children": [
+          {
+            "en": "Yasmeen 1",
+            "ar": "الياسمين 1",
+            "aliases": [],
+            "lat": 30.051,
+            "lng": 31.455,
+            "children": []
+          },
+          {
+            "en": "Yasmeen 2",
+            "ar": "الياسمين 2",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Yasmeen 3",
+            "ar": "الياسمين 3",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Yasmeen 4",
+            "ar": "الياسمين 4",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Yasmeen 5",
+            "ar": "الياسمين 5",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Yasmeen 6",
+            "ar": "الياسمين 6",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Yasmeen 7",
+            "ar": "الياسمين 7",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Yasmeen 8",
+            "ar": "الياسمين 8",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          }
+        ]
+      },
+      {
+        "en": "Al Lotus",
+        "ar": "منطقة اللوتس",
+        "aliases": [
+          "El Lotus",
+          "اللوتس التجمع الخامس"
+        ],
+        "lat": 30.03,
+        "lng": 31.505,
+        "children": [
+          {
+            "en": "Northern Lotus 1",
+            "ar": "اللوتس الشمالية 1",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Northern Lotus 2",
+            "ar": "اللوتس الشمالية 2",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Northern Lotus 3",
+            "ar": "اللوتس الشمالية 3",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Northern Lotus 4",
+            "ar": "اللوتس الشمالية 4",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Northern Lotus 5",
+            "ar": "اللوتس الشمالية 5",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Southern Lotus 6",
+            "ar": "اللوتس الجنوبية 6",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Southern Lotus 7",
+            "ar": "اللوتس الجنوبية 7",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Southern Lotus 8",
+            "ar": "اللوتس الجنوبية 8",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Southern Lotus 9",
+            "ar": "اللوتس الجنوبية 9",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Southern Lotus 10",
+            "ar": "اللوتس الجنوبية 10",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Southern Lotus 11",
+            "ar": "اللوتس الجنوبية 11",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          }
+        ]
+      },
+      {
+        "en": "Northern Lotus",
+        "ar": "اللوتس الشمالية",
+        "aliases": [
+          "North Lotus"
+        ],
+        "lat": 30.038,
+        "lng": 31.505,
+        "children": []
+      },
+      {
+        "en": "Southern Lotus",
+        "ar": "اللوتس الجنوبية",
+        "aliases": [
+          "South Lotus"
+        ],
+        "lat": 30.024,
+        "lng": 31.506,
+        "children": []
+      },
+      {
+        "en": "New Lotus",
+        "ar": "اللوتس الجديدة",
+        "aliases": [
+          "امتداد اللوتس"
+        ],
+        "lat": 30.032,
+        "lng": 31.514,
+        "children": []
+      },
+      {
+        "en": "South of the Academy",
+        "ar": "جنوب الأكاديمية",
+        "aliases": [
+          "South Academy"
+        ],
+        "lat": 30.038,
+        "lng": 31.425,
+        "children": []
+      },
+      {
+        "en": "East of the Academy",
+        "ar": "شرق الأكاديمية",
+        "aliases": [
+          "Shark El Akademya"
+        ],
+        "lat": 30.046,
+        "lng": 31.432,
+        "children": []
+      },
+      {
+        "en": "Choueifat",
+        "ar": "منطقة الشويفات",
+        "aliases": [
+          "حي الشويفات",
+          "El Showeifat"
+        ],
+        "lat": 30.022,
+        "lng": 31.428,
+        "children": []
+      },
+      {
+        "en": "Diplomats District",
+        "ar": "حي الدبلوماسيين",
+        "aliases": [
+          "منطقة الدبلوماسيين"
+        ],
+        "lat": 30.016,
+        "lng": 31.431,
+        "children": []
+      },
+      {
+        "en": "Al Andalus",
+        "ar": "منطقة الأندلس",
+        "aliases": [
+          "El Andalous",
+          "الأندلس التجمع الخامس"
+        ],
+        "lat": 30.001,
+        "lng": 31.491,
+        "children": [
+          {
+            "en": "Andalus 1",
+            "ar": "الأندلس 1",
+            "aliases": [],
+            "lat": 30.004,
+            "lng": 31.488,
+            "children": []
+          },
+          {
+            "en": "Andalus 2",
+            "ar": "الأندلس 2",
+            "aliases": [],
+            "lat": 29.998,
+            "lng": 31.494,
+            "children": []
+          }
+        ]
+      },
+      {
+        "en": "Abu El Houl",
+        "ar": "منطقة أبو الهول",
+        "aliases": [
+          "جاردينيا هايتس",
+          "Gardenia Heights (conflicts with compound Gardenia Hightes)"
+        ],
+        "lat": 29.983,
+        "lng": 31.468,
+        "children": []
+      },
+      {
+        "en": "Bait El Watan",
+        "ar": "بيت الوطن",
+        "aliases": [
+          "أراضي بيت الوطن",
+          "Beit El Watan"
+        ],
+        "lat": 30.035,
+        "lng": 31.535,
+        "children": [
+          {
+            "en": "Bait El Watan District 1",
+            "ar": "الحي 1 (بيت الوطن)",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Bait El Watan District 2",
+            "ar": "الحي 2 (بيت الوطن)",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Bait El Watan District 3",
+            "ar": "الحي 3 (بيت الوطن)",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Bait El Watan District 4",
+            "ar": "الحي 4 (بيت الوطن)",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Bait El Watan District 5",
+            "ar": "الحي 5 (بيت الوطن)",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Bait El Watan District 6",
+            "ar": "الحي 6 (بيت الوطن)",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Bait El Watan District 7",
+            "ar": "الحي 7 (بيت الوطن)",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          },
+          {
+            "en": "Bait El Watan District 8",
+            "ar": "الحي 8 (بيت الوطن)",
+            "aliases": [],
+            "lat": null,
+            "lng": null,
+            "children": []
+          }
+        ]
+      },
+      {
+        "en": "North of Rehab",
+        "ar": "شمال الرحاب",
+        "aliases": [
+          "أراضي شمال الرحاب"
+        ],
+        "lat": 30.072,
+        "lng": 31.495,
+        "children": []
+      },
+      {
+        "en": "North House",
+        "ar": "النورث هاوس",
+        "aliases": [
+          "جنوب طريق السويس"
+        ],
+        "lat": 30.065,
+        "lng": 31.53,
+        "children": []
+      },
+      {
+        "en": "Al Qoronfol",
+        "ar": "حي القرنفل",
+        "aliases": [
+          "Al Koronfol",
+          "القرنفل فيلات"
+        ],
+        "lat": 30.062,
+        "lng": 31.491,
+        "children": []
+      },
+      {
+        "en": "Tamr Henna",
+        "ar": "تمر حنة",
+        "aliases": [
+          "Tamar Henna",
+          "فيلات تمر حنة"
+        ],
+        "lat": 30.048,
+        "lng": 31.51,
+        "children": []
+      },
+      {
+        "en": "Al Karnak",
+        "ar": "الكرنك",
+        "aliases": [
+          "فيلات الكرنك"
+        ],
+        "lat": 30.052,
+        "lng": 31.505,
+        "children": []
+      },
+      {
+        "en": "Al Sharbatly",
+        "ar": "الشربتلي",
+        "aliases": [
+          "منطقة فيلات الشربتلي"
+        ],
+        "lat": 30.045,
+        "lng": 31.508,
+        "children": []
+      },
+      {
+        "en": "Northern Investors Area",
+        "ar": "المستثمرين الشمالية",
+        "aliases": [
+          "North Investors",
+          "Northern Investors"
+        ],
+        "lat": 30.04,
+        "lng": 31.49,
+        "children": []
+      },
+      {
+        "en": "Southern Investors Area",
+        "ar": "المستثمرين الجنوبية",
+        "aliases": [
+          "South Investors",
+          "Southern Investors"
+        ],
+        "lat": 30.01,
+        "lng": 31.488,
+        "children": []
+      },
+      {
+        "en": "West Golf",
+        "ar": "غرب الجولف",
+        "aliases": [
+          "منطقة غرب الجولف"
+        ],
+        "lat": 30.015,
+        "lng": 31.412,
+        "children": []
+      },
+      {
+        "en": "Arabella",
+        "ar": "أرابيلا",
+        "aliases": [
+          "منطقة أرابيلا المفتوحة (غير الكمبوند)"
+        ],
+        "lat": 30.001,
+        "lng": 31.432,
+        "children": []
+      },
+      {
+        "en": "Golden Square",
+        "ar": "المربع الذهبي",
+        "aliases": [],
+        "lat": null,
+        "lng": null,
+        "children": []
+      },
+      {
+        "en": "North 90th",
+        "ar": "شمال التسعين",
+        "aliases": [
+          "North 90 Street"
+        ],
+        "lat": null,
+        "lng": null,
+        "children": []
+      },
+      {
+        "en": "South 90th",
+        "ar": "جنوب التسعين",
+        "aliases": [
+          "South 90 Street"
+        ],
+        "lat": null,
+        "lng": null,
+        "children": []
+      },
+      {
+        "en": "Sadat Axis",
+        "ar": "محور السادات",
+        "aliases": [],
+        "lat": null,
+        "lng": null,
+        "children": []
+      },
+      {
+        "en": "Behind AUC",
+        "ar": "خلف الجامعة الأمريكية",
+        "aliases": [],
+        "lat": null,
+        "lng": null,
+        "children": []
+      },
+      {
+        "en": "Facing AUC",
+        "ar": "أمام الجامعة الأمريكية",
+        "aliases": [],
+        "lat": null,
+        "lng": null,
+        "children": []
+      },
+      {
+        "en": "Beside AUC",
+        "ar": "بجوار الجامعة الأمريكية",
+        "aliases": [],
+        "lat": null,
+        "lng": null,
+        "children": []
+      },
+      {
+        "en": "1st Settlement",
+        "ar": "التجمع الأول",
+        "aliases": [
+          "first settlement"
+        ],
+        "lat": null,
+        "lng": null,
+        "children": []
+      },
+      {
+        "en": "3rd Settlement",
+        "ar": "التجمع الثالث",
+        "aliases": [
+          "third settlement"
+        ],
+        "lat": null,
+        "lng": null,
+        "children": []
+      },
+      {
+        "en": "5th Settlement",
+        "ar": "التجمع الخامس",
+        "aliases": [
+          "fifth settlement"
+        ],
+        "lat": null,
+        "lng": null,
+        "children": [
+          {
+            "en": "1st District (Fifth Settlement)",
+            "ar": "الحي الأول",
+            "aliases": [
+              "الحي الأول التجمع الخامس"
+            ],
+            "lat": 30.005,
+            "lng": 31.428,
+            "children": []
+          },
+          {
+            "en": "2nd District (Fifth Settlement)",
+            "ar": "الحي الثاني",
+            "aliases": [
+              "الحي الثاني التجمع الخامس"
+            ],
+            "lat": 30.009,
+            "lng": 31.435,
+            "children": []
+          },
+          {
+            "en": "3rd District (Fifth Settlement)",
+            "ar": "الحي الثالث",
+            "aliases": [
+              "الحي الثالث التجمع الخامس"
+            ],
+            "lat": 30.002,
+            "lng": 31.442,
+            "children": []
+          },
+          {
+            "en": "4th District (Fifth Settlement)",
+            "ar": "الحي الرابع",
+            "aliases": [
+              "الحي الرابع التجمع الخامس"
+            ],
+            "lat": 30.008,
+            "lng": 31.452,
+            "children": []
+          },
+          {
+            "en": "5th District (Fifth Settlement)",
+            "ar": "الحي الخامس",
+            "aliases": [
+              "الحي الخامس التجمع الخامس"
+            ],
+            "lat": 30.015,
+            "lng": 31.46,
+            "children": []
+          }
+        ]
+      },
+      {
+        "en": "Bolivar Axis",
+        "ar": "محور بوليفار",
+        "aliases": [],
+        "lat": null,
+        "lng": null,
+        "children": []
+      },
+      {
+        "en": "Ring Road (Katameya)",
+        "ar": "الدائري - القطامية",
+        "aliases": [],
+        "lat": null,
+        "lng": null,
+        "children": []
+      },
+      {
+        "en": "Mirage City",
+        "ar": "ميراج سيتي",
+        "aliases": [],
+        "lat": null,
+        "lng": null,
+        "children": []
+      },
+      {
+        "en": "MU23",
+        "ar": "MU23",
+        "aliases": [],
+        "lat": null,
+        "lng": null,
+        "children": []
+      }
     ]
-   },
-   {
-    "en": "Banafseg Buildings",
-    "ar": "عمارات البنفسج",
+  },
+  {
+    "en": "Sheikh Zayed",
+    "ar": "الشيخ زايد",
     "aliases": [
-     "Banafseg Omarat"
+      "زايد",
+      "zayed",
+      "sheikh zayed city"
     ],
-    "lat": 30.041,
-    "lng": 31.468,
-    "children": []
-   },
-   {
-    "en": "Banafseg Villas",
-    "ar": "فيلات البنفسج",
-    "aliases": [
-     "Banafseg Villas"
-    ],
-    "lat": 30.05,
-    "lng": 31.482,
-    "children": []
-   },
-   {
-    "en": "Al Narges",
-    "ar": "حي النرجس",
-    "aliases": [
-     "El Narges",
-     "النرجس"
-    ],
-    "lat": 30.015,
-    "lng": 31.442,
     "children": [
-     {
-      "en": "Narges 1 (Villas)",
-      "ar": "فيلات النرجس 1",
-      "aliases": [],
-      "lat": 30.018,
-      "lng": 31.439,
-      "children": []
-     },
-     {
-      "en": "Narges 2 (Villas)",
-      "ar": "فيلات النرجس 2",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Narges 3 (Villas)",
-      "ar": "فيلات النرجس 3",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Narges 4 (Villas)",
-      "ar": "فيلات النرجس 4",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Narges 5 (Villas)",
-      "ar": "فيلات النرجس 5",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Narges 6 (Villas)",
-      "ar": "فيلات النرجس 6",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Narges 7 (Villas)",
-      "ar": "فيلات النرجس 7",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Narges 8 (Villas)",
-      "ar": "فيلات النرجس 8",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     }
+      {
+        "en": "1st District (Sheikh Zayed)",
+        "ar": "الحي الأول",
+        "aliases": [
+          "Zayed 1",
+          "Hyper One sector"
+        ],
+        "lat": 30.041,
+        "lng": 31.012,
+        "children": []
+      },
+      {
+        "en": "2nd District (Sheikh Zayed)",
+        "ar": "الحي الثاني",
+        "aliases": [
+          "Tivoli / Americana Plaza"
+        ],
+        "lat": 30.036,
+        "lng": 31.002,
+        "children": []
+      },
+      {
+        "en": "3rd District (Sheikh Zayed)",
+        "ar": "الحي الثالث",
+        "aliases": [
+          "Adjacent to Arkan strip"
+        ],
+        "lat": 30.043,
+        "lng": 30.995,
+        "children": []
+      },
+      {
+        "en": "4th District (Sheikh Zayed)",
+        "ar": "الحي الرابع",
+        "aliases": [
+          "Specialized Hospital sector"
+        ],
+        "lat": 30.05,
+        "lng": 30.998,
+        "children": []
+      },
+      {
+        "en": "5th District (Sheikh Zayed)",
+        "ar": "الحي الخامس",
+        "aliases": [
+          "Zayed Central Park sector"
+        ],
+        "lat": 30.055,
+        "lng": 30.99,
+        "children": []
+      },
+      {
+        "en": "7th District (Sheikh Zayed)",
+        "ar": "الحي السابع",
+        "aliases": [
+          "Villas"
+        ],
+        "lat": 30.053,
+        "lng": 31.018,
+        "children": []
+      },
+      {
+        "en": "8th District (Sheikh Zayed)",
+        "ar": "الحي الثامن",
+        "aliases": [
+          "Villas"
+        ],
+        "lat": 30.06,
+        "lng": 31.012,
+        "children": []
+      },
+      {
+        "en": "9th District (Sheikh Zayed)",
+        "ar": "الحي التاسع",
+        "aliases": [
+          "Villas and buildings"
+        ],
+        "lat": 30.064,
+        "lng": 30.998,
+        "children": []
+      },
+      {
+        "en": "10th District (Sheikh Zayed)",
+        "ar": "الحي العاشر",
+        "aliases": [
+          "Zayed Dunes / Dahshur side"
+        ],
+        "lat": 30.062,
+        "lng": 30.985,
+        "children": []
+      },
+      {
+        "en": "11th District (Sheikh Zayed)",
+        "ar": "الحي الحادي عشر",
+        "aliases": [
+          "Commercial spine"
+        ],
+        "lat": 30.052,
+        "lng": 30.975,
+        "children": []
+      },
+      {
+        "en": "12th District (Sheikh Zayed)",
+        "ar": "الحي الثاني عشر",
+        "aliases": [
+          "Zayed Regency / Al Karma"
+        ],
+        "lat": 30.044,
+        "lng": 30.972,
+        "children": []
+      },
+      {
+        "en": "13th District (Sheikh Zayed)",
+        "ar": "الحي الثالث عشر",
+        "aliases": [
+          "26th of July corridor"
+        ],
+        "lat": 30.037,
+        "lng": 30.978,
+        "children": []
+      },
+      {
+        "en": "14th District (Sheikh Zayed)",
+        "ar": "الحي الرابع عشر",
+        "aliases": [
+          "Al Ahly Club zone"
+        ],
+        "lat": 30.033,
+        "lng": 30.963,
+        "children": []
+      },
+      {
+        "en": "16th District (Sheikh Zayed)",
+        "ar": "الحي السادس عشر",
+        "aliases": [
+          "Beverly Hills entrance side"
+        ],
+        "lat": 30.071,
+        "lng": 30.962,
+        "children": []
+      },
+      {
+        "en": "Green Belt (Sheikh Zayed)",
+        "ar": "الحزام الأخضر",
+        "aliases": [
+          "Basins 1-16"
+        ],
+        "lat": 30.085,
+        "lng": 30.95,
+        "children": []
+      },
+      {
+        "en": "Green Revolution",
+        "ar": "الثورة الخضراء",
+        "aliases": [
+          "Opposite Hyper One"
+        ],
+        "lat": 30.03,
+        "lng": 31.035,
+        "children": []
+      },
+      {
+        "en": "New Zayed",
+        "ar": "الشيخ زايد الجديدة",
+        "aliases": [
+          "امتداد الشيخ زايد"
+        ],
+        "lat": 30.09,
+        "lng": 30.89,
+        "children": []
+      },
+      {
+        "en": "Central Zayed",
+        "ar": "وسط زايد",
+        "aliases": [],
+        "lat": null,
+        "lng": null,
+        "children": []
+      }
     ]
-   },
-   {
-    "en": "Narges Buildings",
-    "ar": "عمارات النرجس",
+  },
+  {
+    "en": "6th of October",
+    "ar": "6 أكتوبر",
     "aliases": [
-     "El Narges Buildings"
+      "أكتوبر",
+      "october",
+      "6 october"
     ],
-    "lat": 30.021,
-    "lng": 31.443,
     "children": []
-   },
-   {
-    "en": "Narges Villas",
-    "ar": "فيلات النرجس",
+  },
+  {
+    "en": "Mostakbal City",
+    "ar": "مدينة المستقبل",
     "aliases": [
-     "Narges Villas"
+      "المستقبل",
+      "future city"
     ],
-    "lat": 30.013,
-    "lng": 31.441,
-    "children": []
-   },
-   {
-    "en": "New Narges",
-    "ar": "النرجس الجديدة",
-    "aliases": [
-     "امتداد النرجس",
-     "النرجس كابيتال"
-    ],
-    "lat": 29.995,
-    "lng": 31.446,
-    "children": []
-   },
-   {
-    "en": "Al Yasmeen",
-    "ar": "حي الياسمين",
-    "aliases": [
-     "El Yasmeen",
-     "El Yasmine",
-     "الياسمين فيلات"
-    ],
-    "lat": 30.052,
-    "lng": 31.458,
     "children": [
-     {
-      "en": "Yasmeen 1",
-      "ar": "الياسمين 1",
-      "aliases": [],
-      "lat": 30.051,
-      "lng": 31.455,
-      "children": []
-     },
-     {
-      "en": "Yasmeen 2",
-      "ar": "الياسمين 2",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Yasmeen 3",
-      "ar": "الياسمين 3",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Yasmeen 4",
-      "ar": "الياسمين 4",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Yasmeen 5",
-      "ar": "الياسمين 5",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Yasmeen 6",
-      "ar": "الياسمين 6",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Yasmeen 7",
-      "ar": "الياسمين 7",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Yasmeen 8",
-      "ar": "الياسمين 8",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     }
+      {
+        "en": "Central Mostakbal",
+        "ar": "وسط المستقبل",
+        "aliases": [],
+        "lat": null,
+        "lng": null,
+        "children": []
+      },
+      {
+        "en": "First Phase Mostakbal",
+        "ar": "المرحلة الأولى المستقبل",
+        "aliases": [],
+        "lat": null,
+        "lng": null,
+        "children": []
+      }
     ]
-   },
-   {
-    "en": "Al Lotus",
-    "ar": "منطقة اللوتس",
+  },
+  {
+    "en": "New Capital",
+    "ar": "العاصمة الإدارية",
     "aliases": [
-     "El Lotus",
-     "اللوتس التجمع الخامس"
+      "العاصمة",
+      "new administrative capital"
     ],
-    "lat": 30.03,
-    "lng": 31.505,
     "children": [
-     {
-      "en": "Northern Lotus 1",
-      "ar": "اللوتس الشمالية 1",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Northern Lotus 2",
-      "ar": "اللوتس الشمالية 2",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Northern Lotus 3",
-      "ar": "اللوتس الشمالية 3",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Northern Lotus 4",
-      "ar": "اللوتس الشمالية 4",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Northern Lotus 5",
-      "ar": "اللوتس الشمالية 5",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Southern Lotus 6",
-      "ar": "اللوتس الجنوبية 6",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Southern Lotus 7",
-      "ar": "اللوتس الجنوبية 7",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Southern Lotus 8",
-      "ar": "اللوتس الجنوبية 8",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Southern Lotus 9",
-      "ar": "اللوتس الجنوبية 9",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Southern Lotus 10",
-      "ar": "اللوتس الجنوبية 10",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Southern Lotus 11",
-      "ar": "اللوتس الجنوبية 11",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     }
+      {
+        "en": "R7 Sector",
+        "ar": "القطاع R7",
+        "aliases": [
+          "R7"
+        ],
+        "lat": null,
+        "lng": null,
+        "children": []
+      },
+      {
+        "en": "R3 Sector",
+        "ar": "القطاع R3",
+        "aliases": [
+          "R3"
+        ],
+        "lat": null,
+        "lng": null,
+        "children": []
+      }
     ]
-   },
-   {
-    "en": "Northern Lotus",
-    "ar": "اللوتس الشمالية",
+  },
+  {
+    "en": "Shorouk",
+    "ar": "الشروق",
     "aliases": [
-     "North Lotus"
+      "el shorouk"
     ],
-    "lat": 30.038,
-    "lng": 31.505,
     "children": []
-   },
-   {
-    "en": "Southern Lotus",
-    "ar": "اللوتس الجنوبية",
+  },
+  {
+    "en": "North Coast",
+    "ar": "الساحل الشمالي",
     "aliases": [
-     "South Lotus"
+      "الساحل",
+      "sahel"
     ],
-    "lat": 30.024,
-    "lng": 31.506,
     "children": []
-   },
-   {
-    "en": "New Lotus",
-    "ar": "اللوتس الجديدة",
+  },
+  {
+    "en": "Ain Sokhna",
+    "ar": "العين السخنة",
     "aliases": [
-     "امتداد اللوتس"
+      "السخنة",
+      "sokhna"
     ],
-    "lat": 30.032,
-    "lng": 31.514,
     "children": []
-   },
-   {
-    "en": "South of the Academy",
-    "ar": "جنوب الأكاديمية",
-    "aliases": [
-     "South Academy"
-    ],
-    "lat": 30.038,
-    "lng": 31.425,
-    "children": []
-   },
-   {
-    "en": "East of the Academy",
-    "ar": "شرق الأكاديمية",
-    "aliases": [
-     "Shark El Akademya"
-    ],
-    "lat": 30.046,
-    "lng": 31.432,
-    "children": []
-   },
-   {
-    "en": "Choueifat",
-    "ar": "منطقة الشويفات",
-    "aliases": [
-     "حي الشويفات",
-     "El Showeifat"
-    ],
-    "lat": 30.022,
-    "lng": 31.428,
-    "children": []
-   },
-   {
-    "en": "Diplomats District",
-    "ar": "حي الدبلوماسيين",
-    "aliases": [
-     "منطقة الدبلوماسيين"
-    ],
-    "lat": 30.016,
-    "lng": 31.431,
-    "children": []
-   },
-   {
-    "en": "Al Andalus",
-    "ar": "منطقة الأندلس",
-    "aliases": [
-     "El Andalous",
-     "الأندلس التجمع الخامس"
-    ],
-    "lat": 30.001,
-    "lng": 31.491,
-    "children": [
-     {
-      "en": "Andalus 1",
-      "ar": "الأندلس 1",
-      "aliases": [],
-      "lat": 30.004,
-      "lng": 31.488,
-      "children": []
-     },
-     {
-      "en": "Andalus 2",
-      "ar": "الأندلس 2",
-      "aliases": [],
-      "lat": 29.998,
-      "lng": 31.494,
-      "children": []
-     }
-    ]
-   },
-   {
-    "en": "Abu El Houl",
-    "ar": "منطقة أبو الهول",
-    "aliases": [
-     "جاردينيا هايتس",
-     "Gardenia Heights (conflicts with compound Gardenia Hightes)"
-    ],
-    "lat": 29.983,
-    "lng": 31.468,
-    "children": []
-   },
-   {
-    "en": "Bait El Watan",
-    "ar": "بيت الوطن",
-    "aliases": [
-     "أراضي بيت الوطن",
-     "Beit El Watan"
-    ],
-    "lat": 30.035,
-    "lng": 31.535,
-    "children": [
-     {
-      "en": "Bait El Watan District 1",
-      "ar": "الحي 1 (بيت الوطن)",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Bait El Watan District 2",
-      "ar": "الحي 2 (بيت الوطن)",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Bait El Watan District 3",
-      "ar": "الحي 3 (بيت الوطن)",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Bait El Watan District 4",
-      "ar": "الحي 4 (بيت الوطن)",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Bait El Watan District 5",
-      "ar": "الحي 5 (بيت الوطن)",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Bait El Watan District 6",
-      "ar": "الحي 6 (بيت الوطن)",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Bait El Watan District 7",
-      "ar": "الحي 7 (بيت الوطن)",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     },
-     {
-      "en": "Bait El Watan District 8",
-      "ar": "الحي 8 (بيت الوطن)",
-      "aliases": [],
-      "lat": null,
-      "lng": null,
-      "children": []
-     }
-    ]
-   },
-   {
-    "en": "North of Rehab",
-    "ar": "شمال الرحاب",
-    "aliases": [
-     "أراضي شمال الرحاب"
-    ],
-    "lat": 30.072,
-    "lng": 31.495,
-    "children": []
-   },
-   {
-    "en": "North House",
-    "ar": "النورث هاوس",
-    "aliases": [
-     "جنوب طريق السويس"
-    ],
-    "lat": 30.065,
-    "lng": 31.53,
-    "children": []
-   },
-   {
-    "en": "Al Qoronfol",
-    "ar": "حي القرنفل",
-    "aliases": [
-     "Al Koronfol",
-     "القرنفل فيلات"
-    ],
-    "lat": 30.062,
-    "lng": 31.491,
-    "children": []
-   },
-   {
-    "en": "Tamr Henna",
-    "ar": "تمر حنة",
-    "aliases": [
-     "Tamar Henna",
-     "فيلات تمر حنة"
-    ],
-    "lat": 30.048,
-    "lng": 31.51,
-    "children": []
-   },
-   {
-    "en": "Al Karnak",
-    "ar": "الكرنك",
-    "aliases": [
-     "فيلات الكرنك"
-    ],
-    "lat": 30.052,
-    "lng": 31.505,
-    "children": []
-   },
-   {
-    "en": "Al Sharbatly",
-    "ar": "الشربتلي",
-    "aliases": [
-     "منطقة فيلات الشربتلي"
-    ],
-    "lat": 30.045,
-    "lng": 31.508,
-    "children": []
-   },
-   {
-    "en": "Northern Investors Area",
-    "ar": "المستثمرين الشمالية",
-    "aliases": [
-     "North Investors",
-     "Northern Investors"
-    ],
-    "lat": 30.04,
-    "lng": 31.49,
-    "children": []
-   },
-   {
-    "en": "Southern Investors Area",
-    "ar": "المستثمرين الجنوبية",
-    "aliases": [
-     "South Investors",
-     "Southern Investors"
-    ],
-    "lat": 30.01,
-    "lng": 31.488,
-    "children": []
-   },
-   {
-    "en": "1st District (Fifth Settlement)",
-    "ar": "الحي الأول",
-    "aliases": [
-     "الحي الأول التجمع الخامس"
-    ],
-    "lat": 30.005,
-    "lng": 31.428,
-    "children": []
-   },
-   {
-    "en": "2nd District (Fifth Settlement)",
-    "ar": "الحي الثاني",
-    "aliases": [
-     "الحي الثاني التجمع الخامس"
-    ],
-    "lat": 30.009,
-    "lng": 31.435,
-    "children": []
-   },
-   {
-    "en": "3rd District (Fifth Settlement)",
-    "ar": "الحي الثالث",
-    "aliases": [
-     "الحي الثالث التجمع الخامس"
-    ],
-    "lat": 30.002,
-    "lng": 31.442,
-    "children": []
-   },
-   {
-    "en": "4th District (Fifth Settlement)",
-    "ar": "الحي الرابع",
-    "aliases": [
-     "الحي الرابع التجمع الخامس"
-    ],
-    "lat": 30.008,
-    "lng": 31.452,
-    "children": []
-   },
-   {
-    "en": "5th District (Fifth Settlement)",
-    "ar": "الحي الخامس",
-    "aliases": [
-     "الحي الخامس التجمع الخامس"
-    ],
-    "lat": 30.015,
-    "lng": 31.46,
-    "children": []
-   },
-   {
-    "en": "West Golf",
-    "ar": "غرب الجولف",
-    "aliases": [
-     "منطقة غرب الجولف"
-    ],
-    "lat": 30.015,
-    "lng": 31.412,
-    "children": []
-   },
-   {
-    "en": "Arabella",
-    "ar": "أرابيلا",
-    "aliases": [
-     "منطقة أرابيلا المفتوحة (غير الكمبوند)"
-    ],
-    "lat": 30.001,
-    "lng": 31.432,
-    "children": []
-   },
-   {
-    "en": "Golden Square",
-    "ar": "المربع الذهبي",
-    "aliases": [],
-    "lat": null,
-    "lng": null,
-    "children": []
-   },
-   {
-    "en": "North 90th",
-    "ar": "شمال التسعين",
-    "aliases": [
-     "North 90 Street"
-    ],
-    "lat": null,
-    "lng": null,
-    "children": []
-   },
-   {
-    "en": "South 90th",
-    "ar": "جنوب التسعين",
-    "aliases": [
-     "South 90 Street"
-    ],
-    "lat": null,
-    "lng": null,
-    "children": []
-   },
-   {
-    "en": "Sadat Axis",
-    "ar": "محور السادات",
-    "aliases": [],
-    "lat": null,
-    "lng": null,
-    "children": []
-   },
-   {
-    "en": "Behind AUC",
-    "ar": "خلف الجامعة الأمريكية",
-    "aliases": [],
-    "lat": null,
-    "lng": null,
-    "children": []
-   },
-   {
-    "en": "Facing AUC",
-    "ar": "أمام الجامعة الأمريكية",
-    "aliases": [],
-    "lat": null,
-    "lng": null,
-    "children": []
-   },
-   {
-    "en": "Beside AUC",
-    "ar": "بجوار الجامعة الأمريكية",
-    "aliases": [],
-    "lat": null,
-    "lng": null,
-    "children": []
-   },
-   {
-    "en": "1st Settlement",
-    "ar": "التجمع الأول",
-    "aliases": [
-     "first settlement"
-    ],
-    "lat": null,
-    "lng": null,
-    "children": []
-   },
-   {
-    "en": "3rd Settlement",
-    "ar": "التجمع الثالث",
-    "aliases": [
-     "third settlement"
-    ],
-    "lat": null,
-    "lng": null,
-    "children": []
-   },
-   {
-    "en": "5th Settlement",
-    "ar": "التجمع الخامس",
-    "aliases": [
-     "fifth settlement"
-    ],
-    "lat": null,
-    "lng": null,
-    "children": []
-   },
-   {
-    "en": "Bolivar Axis",
-    "ar": "محور بوليفار",
-    "aliases": [],
-    "lat": null,
-    "lng": null,
-    "children": []
-   },
-   {
-    "en": "Ring Road (Katameya)",
-    "ar": "الدائري - القطامية",
-    "aliases": [],
-    "lat": null,
-    "lng": null,
-    "children": []
-   },
-   {
-    "en": "Mirage City",
-    "ar": "ميراج سيتي",
-    "aliases": [],
-    "lat": null,
-    "lng": null,
-    "children": []
-   },
-   {
-    "en": "MU23",
-    "ar": "MU23",
-    "aliases": [],
-    "lat": null,
-    "lng": null,
-    "children": []
-   }
-  ]
- },
- {
-  "en": "Sheikh Zayed",
-  "ar": "الشيخ زايد",
-  "aliases": [
-   "زايد",
-   "zayed",
-   "sheikh zayed city"
-  ],
-  "children": [
-   {
-    "en": "1st District (Sheikh Zayed)",
-    "ar": "الحي الأول",
-    "aliases": [
-     "Zayed 1",
-     "Hyper One sector"
-    ],
-    "lat": 30.041,
-    "lng": 31.012,
-    "children": []
-   },
-   {
-    "en": "2nd District (Sheikh Zayed)",
-    "ar": "الحي الثاني",
-    "aliases": [
-     "Tivoli / Americana Plaza"
-    ],
-    "lat": 30.036,
-    "lng": 31.002,
-    "children": []
-   },
-   {
-    "en": "3rd District (Sheikh Zayed)",
-    "ar": "الحي الثالث",
-    "aliases": [
-     "Adjacent to Arkan strip"
-    ],
-    "lat": 30.043,
-    "lng": 30.995,
-    "children": []
-   },
-   {
-    "en": "4th District (Sheikh Zayed)",
-    "ar": "الحي الرابع",
-    "aliases": [
-     "Specialized Hospital sector"
-    ],
-    "lat": 30.05,
-    "lng": 30.998,
-    "children": []
-   },
-   {
-    "en": "5th District (Sheikh Zayed)",
-    "ar": "الحي الخامس",
-    "aliases": [
-     "Zayed Central Park sector"
-    ],
-    "lat": 30.055,
-    "lng": 30.99,
-    "children": []
-   },
-   {
-    "en": "7th District (Sheikh Zayed)",
-    "ar": "الحي السابع",
-    "aliases": [
-     "Villas"
-    ],
-    "lat": 30.053,
-    "lng": 31.018,
-    "children": []
-   },
-   {
-    "en": "8th District (Sheikh Zayed)",
-    "ar": "الحي الثامن",
-    "aliases": [
-     "Villas"
-    ],
-    "lat": 30.06,
-    "lng": 31.012,
-    "children": []
-   },
-   {
-    "en": "9th District (Sheikh Zayed)",
-    "ar": "الحي التاسع",
-    "aliases": [
-     "Villas and buildings"
-    ],
-    "lat": 30.064,
-    "lng": 30.998,
-    "children": []
-   },
-   {
-    "en": "10th District (Sheikh Zayed)",
-    "ar": "الحي العاشر",
-    "aliases": [
-     "Zayed Dunes / Dahshur side"
-    ],
-    "lat": 30.062,
-    "lng": 30.985,
-    "children": []
-   },
-   {
-    "en": "11th District (Sheikh Zayed)",
-    "ar": "الحي الحادي عشر",
-    "aliases": [
-     "Commercial spine"
-    ],
-    "lat": 30.052,
-    "lng": 30.975,
-    "children": []
-   },
-   {
-    "en": "12th District (Sheikh Zayed)",
-    "ar": "الحي الثاني عشر",
-    "aliases": [
-     "Zayed Regency / Al Karma"
-    ],
-    "lat": 30.044,
-    "lng": 30.972,
-    "children": []
-   },
-   {
-    "en": "13th District (Sheikh Zayed)",
-    "ar": "الحي الثالث عشر",
-    "aliases": [
-     "26th of July corridor"
-    ],
-    "lat": 30.037,
-    "lng": 30.978,
-    "children": []
-   },
-   {
-    "en": "14th District (Sheikh Zayed)",
-    "ar": "الحي الرابع عشر",
-    "aliases": [
-     "Al Ahly Club zone"
-    ],
-    "lat": 30.033,
-    "lng": 30.963,
-    "children": []
-   },
-   {
-    "en": "16th District (Sheikh Zayed)",
-    "ar": "الحي السادس عشر",
-    "aliases": [
-     "Beverly Hills entrance side"
-    ],
-    "lat": 30.071,
-    "lng": 30.962,
-    "children": []
-   },
-   {
-    "en": "Green Belt (Sheikh Zayed)",
-    "ar": "الحزام الأخضر",
-    "aliases": [
-     "Basins 1-16"
-    ],
-    "lat": 30.085,
-    "lng": 30.95,
-    "children": []
-   },
-   {
-    "en": "Green Revolution",
-    "ar": "الثورة الخضراء",
-    "aliases": [
-     "Opposite Hyper One"
-    ],
-    "lat": 30.03,
-    "lng": 31.035,
-    "children": []
-   },
-   {
-    "en": "New Zayed",
-    "ar": "الشيخ زايد الجديدة",
-    "aliases": [
-     "امتداد الشيخ زايد"
-    ],
-    "lat": 30.09,
-    "lng": 30.89,
-    "children": []
-   },
-   {
-    "en": "Central Zayed",
-    "ar": "وسط زايد",
-    "aliases": [],
-    "lat": null,
-    "lng": null,
-    "children": []
-   }
-  ]
- },
- {
-  "en": "6th of October",
-  "ar": "6 أكتوبر",
-  "aliases": [
-   "أكتوبر",
-   "october",
-   "6 october"
-  ],
-  "children": []
- },
- {
-  "en": "Mostakbal City",
-  "ar": "مدينة المستقبل",
-  "aliases": [
-   "المستقبل",
-   "future city"
-  ],
-  "children": [
-   {
-    "en": "Central Mostakbal",
-    "ar": "وسط المستقبل",
-    "aliases": [],
-    "lat": null,
-    "lng": null,
-    "children": []
-   },
-   {
-    "en": "First Phase Mostakbal",
-    "ar": "المرحلة الأولى المستقبل",
-    "aliases": [],
-    "lat": null,
-    "lng": null,
-    "children": []
-   }
-  ]
- },
- {
-  "en": "New Capital",
-  "ar": "العاصمة الإدارية",
-  "aliases": [
-   "العاصمة",
-   "new administrative capital"
-  ],
-  "children": [
-   {
-    "en": "R7 Sector",
-    "ar": "القطاع R7",
-    "aliases": [
-     "R7"
-    ],
-    "lat": null,
-    "lng": null,
-    "children": []
-   },
-   {
-    "en": "R3 Sector",
-    "ar": "القطاع R3",
-    "aliases": [
-     "R3"
-    ],
-    "lat": null,
-    "lng": null,
-    "children": []
-   }
-  ]
- },
- {
-  "en": "Shorouk",
-  "ar": "الشروق",
-  "aliases": [
-   "el shorouk"
-  ],
-  "children": []
- },
- {
-  "en": "North Coast",
-  "ar": "الساحل الشمالي",
-  "aliases": [
-   "الساحل",
-   "sahel"
-  ],
-  "children": []
- },
- {
-  "en": "Ain Sokhna",
-  "ar": "العين السخنة",
-  "aliases": [
-   "السخنة",
-   "sokhna"
-  ],
-  "children": []
- }
+  }
 ]

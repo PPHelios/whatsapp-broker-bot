@@ -51,9 +51,11 @@ async function seed(pool) {
     );
   }
   // The approved list every web-form test saves against (a compound outside the list is refused by the form).
+  await pool.query("UPDATE map_places SET subzone_id = NULL, area_id = NULL"); // sub-zones first: a place cannot keep a sub-zone without its area
+  await pool.query("UPDATE listings SET subzone_id = NULL, area_id = NULL");
   await pool.query("DELETE FROM areas"); // the seed list from migration 099 is not part of these fixtures
   await pool.query(`INSERT INTO areas (id, name_key, name_en, name_ar) VALUES ('a0000000-0000-0000-0000-0000000000c1', 'new cairo', 'New Cairo', 'القاهرة الجديدة') ON CONFLICT DO NOTHING`);
-  await pool.query(`INSERT INTO map_places (name_key, name_en, name_ar, lat, lng, approved, area_id) VALUES ('hyde park', 'Hyde Park', 'هايد بارك', 29.98, 31.55, true, 'a0000000-0000-0000-0000-0000000000c1')`);
+  await pool.query(`INSERT INTO map_places (name_key, name_en, name_ar, lat, lng, approved, area_id) VALUES ('hyde park', 'Hyde Park', 'هايد بارك', 29.98, 31.55, true, 'a0000000-0000-0000-0000-0000000000c1') ON CONFLICT (name_key) DO UPDATE SET area_id = EXCLUDED.area_id, approved = true`);
 }
 
 /** Inserts a listing directly (fixture), bypassing the bot. Returns the row. */

@@ -53,7 +53,7 @@ test("a pin counts the active units of this agency in its compound, in either la
   const res = await b.agent.get("/app/map/pins");
   expect(res.status).toBe(200);
   expect(res.body.pins).toHaveLength(1);
-  expect(res.body.pins[0]).toMatchObject({ name: "Mivida", n: 3, lat: 30.0058, lng: 31.5377 });
+  expect(res.body.pins[0]).toMatchObject({ name: "Mivida", n: 3, lat: 30.0075, lng: 31.539855 });
   expect(res.body.unmapped).toBe(1);
   expect(res.body.facets.types).toEqual(["apartment"]);
 });

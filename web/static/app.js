@@ -1337,8 +1337,8 @@
           window.__placeQ = q.toLowerCase();
           (d.items || []).forEach(function (it) {
             var o = document.createElement("option");
-            o.value = it.name_en || it.name_ar;
-            o.label = [it.name_ar && it.name_en ? it.name_ar : "", it.path].filter(Boolean).join(" · ");
+            o.value = it.label || it.name_en || it.name_ar;
+            o.label = it.path || "";
             list.appendChild(o);
           });
         })
@@ -1367,30 +1367,75 @@
     }
     placeArea(input);
   });
-  function placeArea(input) {
+  // Place box states: known place -> its area shown as one line (boxes stay hidden); unknown name -> a warning with close
+  // matches and an "add as new" button; add-new opens a small part with the required area and the optional extras.
+  function placeBits(input) {
     var form = input.form;
-    var areaSel = form && form.querySelector('select[name="area_id"]');
-    var subSel = form && form.querySelector('select[name="subzone_id"]');
-    var isNew = form && form.querySelector('input[name="compound_new"]');
-    if (!areaSel) return;
+    var box = input.closest("[data-place]");
+    if (!form || !box) return null;
+    return {
+      box: box, areaSel: form.querySelector('select[name="area_id"]'), subSel: form.querySelector('select[name="subzone_id"]'),
+      isNew: form.querySelector('input[name="compound_new"]'), panel: box.querySelector("[data-place-new]"),
+      warn: box.querySelector("[data-place-warn]"), sum: box.querySelector("[data-place-summary]"), input: input
+    };
+  }
+  function optText(sel) { return sel && sel.value && sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : ""; }
+  function placeShowSummary(b) {
+    var t = [optText(b.areaSel), optText(b.subSel)].filter(Boolean).join(" › ");
+    b.sum.querySelector("[data-place-path]").textContent = t;
+    b.sum.hidden = !t;
+  }
+  function placeOpenNew(b, open) {
+    b.panel.hidden = !open;
+    b.isNew.disabled = !open;
+    if (open) { b.warn.hidden = true; b.sum.hidden = true; b.areaSel.setAttribute("required", "required"); } else { b.areaSel.removeAttribute("required"); }
+  }
+  function placeArea(input) {
+    var b = placeBits(input);
+    if (!b || !b.areaSel) return;
     var v = input.value.trim().toLowerCase();
     var hit = (window.__placeItems || []).filter(function (it) { return (it.name_en || "").toLowerCase() === v || (it.name_ar || "").toLowerCase() === v; })[0];
-    areaSel.classList.remove("need", "locked");
-    areaSel.removeAttribute("required");
-    if (!v) { if (isNew) isNew.checked = false; return; }
-    if (hit && hit.kind === "compound" && hit.area_id) {
-      areaSel.value = hit.area_id;
-      if (subSel) subSel.value = hit.subzone_id || "";
-      areaSel.classList.add("locked");
-      if (isNew) isNew.checked = false;
-    } else if (hit && hit.kind !== "compound") {
-      areaSel.value = hit.area_id || areaSel.value;
-      if (subSel && hit.subzone_id) subSel.value = hit.subzone_id;
-      if (isNew) isNew.checked = false;
-    } else {
-      areaSel.classList.add("need");
-      areaSel.setAttribute("required", "required");
-      if (isNew && !hit) isNew.checked = true;
+    b.warn.hidden = true;
+    if (!v) { placeOpenNew(b, false); b.sum.hidden = true; return; }
+    if (hit && hit.area_id) {
+      placeOpenNew(b, false);
+      b.areaSel.value = hit.area_id;
+      if (b.subSel) b.subSel.value = hit.kind === "compound" || hit.subzone_id ? hit.subzone_id || "" : b.subSel.value;
+      placeShowSummary(b);
+      return;
     }
+    if (!b.panel.hidden) return; // the add-new part is already open for this name
+    b.sum.hidden = true;
+    var items = (window.__placeItems || []).slice(0, 3);
+    b.warn.querySelector("[data-place-warn-text]").textContent = (b.box.getAttribute("data-msg-warn") || "").replace("%s", input.value.trim());
+    var did = b.warn.querySelector("[data-place-did]");
+    did.innerHTML = "";
+    items.forEach(function (it) {
+      var btn = document.createElement("button");
+      btn.type = "button"; btn.className = "btn ghost"; btn.setAttribute("data-place-pick", it.label || it.name_en || it.name_ar);
+      btn.textContent = (it.label || it.name_en || it.name_ar) + (it.path ? " · " + it.path : "");
+      did.appendChild(btn);
+    });
+    b.warn.hidden = false;
   }
+  document.addEventListener("click", function (e) {
+    var t = e.target && e.target.closest ? e.target.closest("[data-place-add],[data-place-cancel],[data-place-pick]") : null;
+    if (!t) return;
+    var box = t.closest("[data-place]");
+    var input = box && box.querySelector("[data-place-suggest]");
+    var b = input && placeBits(input);
+    if (!b) return;
+    if (t.hasAttribute("data-place-pick")) {
+      input.value = t.getAttribute("data-place-pick");
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    } else if (t.hasAttribute("data-place-add")) {
+      b.areaSel.value = ""; if (b.subSel) b.subSel.value = "";
+      placeOpenNew(b, true);
+      b.areaSel.focus();
+    } else {
+      placeOpenNew(b, false);
+      b.warn.hidden = true;
+      input.focus();
+    }
+  });
 })();

@@ -51,7 +51,8 @@ function parseUnits(notes) {
     const years = num((raw.match(/(\d{1,2})\s*(?:سنين|سنوات|سنه|سنة)/) || [])[1]);
     // No monthly installment written: estimate it from the rest (no interest), and keep it apart from a written one.
     const monthly_est = monthly == null && down != null && years ? Math.round((price - down) / (years * 12)) : null;
-    out.push({ area, floor, price, down, monthly, monthly_est, years, raw });
+    const bedrooms = num((raw.match(/(\d)\s*(?:غرف|غرفه|غرفة|bed(?:room)?s?|br)(?![a-z])/i) || raw.match(/(?:غرف|غرفه|غرفة)\s*(\d)(?!\d)/) || [])[1]);
+    out.push({ area, floor, bedrooms, price, down, monthly, monthly_est, years, raw });
   }
   return out;
 }
@@ -83,7 +84,7 @@ function matchUnits(projects, f = {}) {
     .map((p) => normalizeSearch(p))
     .filter(Boolean);
   // A request with no area, place, price or installment asked is not a question about one offer: nothing is listed.
-  const asked = places.length || [f.area_min, f.area_max, f.price_min, f.price_max, f.max_installment, f.max_down_payment].some((v) => v != null);
+  const asked = places.length || [f.area_min, f.area_max, f.price_min, f.price_max, f.max_installment, f.max_down_payment, f.bedrooms_min, f.bedrooms_max].some((v) => v != null);
   if (!asked) return [];
   const hits = [];
   for (const { project, units } of projects) {
@@ -92,6 +93,10 @@ function matchUnits(projects, f = {}) {
       // One number asked ("أكتر من 120") is a minimum, the same meaning the search parser and unit search give it.
       if (f.area_min != null && f.area_max == null && u.area < f.area_min) continue;
       if (f.area_min != null && f.area_max != null && (u.area < f.area_min || u.area > f.area_max)) continue;
+      if (f.area_min == null && f.area_max != null && (u.area == null || u.area > f.area_max)) continue;
+      if (f.area_min != null && u.area == null) continue;
+      if (f.bedrooms_min != null && (u.bedrooms == null || u.bedrooms < f.bedrooms_min)) continue;
+      if (f.bedrooms_max != null && f.bedrooms_min != null && f.bedrooms_max !== f.bedrooms_min && u.bedrooms > f.bedrooms_max) continue;
       if (f.price_max != null && u.price > f.price_max) continue;
       if (f.price_min != null && u.price < f.price_min) continue;
       if (f.max_installment != null && ((u.monthly ?? u.monthly_est) == null || (u.monthly ?? u.monthly_est) > f.max_installment)) continue;

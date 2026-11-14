@@ -99,13 +99,15 @@ const KIND_RANK = { compound: 0, subzone: 1, area: 2 };
  * @param {{places: object[], areas: object[]}} lists approved rows only
  * @returns {Array<{kind: "compound"|"area"|"subzone", id: string, name_en: string|null, name_ar: string|null, path: string, via: "name"|"alias"|"alike", area_id: string|null, subzone_id: string|null}>}
  */
-function suggest(text, { places = [], areas = [] }, limit = 8) {
+function suggest(text, { places = [], areas = [] }, limit = 8, lang = "en") {
+  // Typing matches Arabic or English; what is shown (label, path) is in the reader's language.
+  const nm = (a) => (lang === "ar" ? a.name_ar || a.name_en : a.name_en || a.name_ar);
   const q = placeKey(text);
   if (q.length < 2) return [];
   const byId = new Map(areas.map((a) => [a.id, a]));
   const pathOf = (row) => {
     const own = row.parent_id !== undefined ? chain(areas, row.id).slice(0, -1) : [row.area_id, row.subzone_id].filter(Boolean).map((i) => byId.get(i)).filter(Boolean);
-    return own.map((a) => a.name_en || a.name_ar).join(" › ");
+    return own.map(nm).join(" › ");
   };
   const rows = [
     ...places.map((p) => ({ kind: "compound", row: p })),
@@ -127,7 +129,7 @@ function suggest(text, { places = [], areas = [] }, limit = 8) {
     if (best) {
       // What to store when this suggestion is picked: a compound brings its own area; an area or sub-zone is the area itself.
       const at = kind === "compound" ? { area_id: row.area_id || null, subzone_id: row.subzone_id || null } : placement(areas, row.id);
-      out.push({ kind, id: row.id, name_en: row.name_en || null, name_ar: row.name_ar || null, path: pathOf(row), via: best.via, ...at, score: best.score });
+      out.push({ kind, id: row.id, label: nm(row), name_en: row.name_en || null, name_ar: row.name_ar || null, path: pathOf(row), via: best.via, ...at, score: best.score });
     }
   }
   return out

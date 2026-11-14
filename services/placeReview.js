@@ -61,7 +61,7 @@ async function proposeArea(db, brokerId, input, { batch = null } = {}) {
 /** Everything waiting: groups of alike names with the places they may duplicate, plus the lists the owner picks from. */
 async function queue(pool) {
   const [names, pendAreas, places, areas] = await Promise.all([
-    pool.query("SELECT id, name_en, name_ar, times_seen, example, created_at FROM place_names WHERE status = 'pending' ORDER BY times_seen DESC, created_at LIMIT 200"),
+    pool.query("SELECT id, name_en, name_ar, pin_link, times_seen, example, created_at FROM place_names WHERE status = 'pending' ORDER BY times_seen DESC, created_at LIMIT 200"),
     pool.query("SELECT id, parent_id, name_en, name_ar, aliases, created_at FROM areas WHERE status = 'pending' ORDER BY created_at LIMIT 200"),
     pool.query("SELECT id, name_en, name_ar, aliases, area_id, subzone_id FROM map_places WHERE approved"),
     Areas.approvedAreas(pool)

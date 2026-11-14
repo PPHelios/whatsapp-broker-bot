@@ -36,9 +36,9 @@ describe("grid endpoint", () => {
     expect(page.text).not.toMatch(/data-kind="invalid"/);
     await agent.post(`${r.body.url}/apply`).type("form").send({ _csrf: csrf, rows: ["1", "3"] });
     const v = await unit("VR1");
-    expect(v).toMatchObject({ listing_type: "rent", compound: "Villette", bedrooms: 3, bathrooms: 2 });
+    expect(v).toMatchObject({ listing_type: "rent", compound: "فيليت", bedrooms: 3, bathrooms: 2 });
     expect(Number(v.price_value)).toBe(25000);
-    expect((await unit("MI1")).compound).toBe("Mivida");
+    expect((await unit("MI1")).compound).toBe("ميفيدا");
   });
 
   test("a body that is not a workbook, too many tabs, or a column empty on every row is refused with a message", async () => {

@@ -11,7 +11,8 @@ function approveCompoundForm(g, q, lang, csrf) {
   const also = g.items.filter((i) => i.id !== lead.id).map((i) => html`<input type="hidden" name="also" value="${i.id}">`);
   return html`<form method="post" action="/app/owner/places/${lead.id}/approve" class="stack" data-approve-place>
   <input type="hidden" name="_csrf" value="${csrf}">${also}
-  <div class="row"><input name="name_en" value="${lead.name_en || ""}" dir="ltr" aria-label="${L(lang, "الاسم بالإنجليزي", "English name")}"><input name="name_ar" placeholder="${L(lang, "الاسم بالعربي (اختياري)", "Arabic name (optional)")}" aria-label="${L(lang, "الاسم بالعربي", "Arabic name")}"></div>
+  <div class="row"><input name="name_en" value="${lead.name_en || ""}" dir="ltr" aria-label="${L(lang, "الاسم بالإنجليزي", "English name")}"><input name="name_ar" value="${lead.name_ar || ""}" placeholder="${L(lang, "الاسم بالعربي (اختياري)", "Arabic name (optional)")}" aria-label="${L(lang, "الاسم بالعربي", "Arabic name")}"></div>
+  ${lead.pin_link ? html`<p class="muted small" dir="ltr">📍 ${lead.pin_link}</p>` : ""}
   <div class="row"><select name="area_id" required aria-label="${L(lang, "المنطقة", "Area")}"><option value="">${L(lang, "المنطقة (مطلوبة)", "Area (required)")}</option>${q.topAreas.map((a) => html`<option value="${a.id}">${a.name}</option>`)}</select>
   <select name="subzone_id" aria-label="${L(lang, "المنطقة الفرعية", "Sub-zone")}"><option value="">${L(lang, "منطقة فرعية (اختياري)", "Sub-zone (optional)")}</option>${q.subzones.map((a) => html`<option value="${a.id}">${a.name}</option>`)}</select></div>
   <input name="aliases" placeholder="${L(lang, "أسماء تانية (اختياري)", "Other names (optional)")}" aria-label="${L(lang, "أسماء تانية", "Other names")}">

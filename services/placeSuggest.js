@@ -22,9 +22,9 @@ async function lists(pool) {
 }
 
 /** Up to `limit` suggestions for the text: [{kind, id, name_en, name_ar, path, via}]. */
-async function suggest(pool, text, limit = 8) {
+async function suggest(pool, text, limit = 8, lang = "en") {
   const { places, areas } = await lists(pool);
-  return A.suggest(String(text || "").slice(0, 80), { places, areas }, Math.min(Math.max(1, limit), 20));
+  return A.suggest(String(text || "").slice(0, 80), { places, areas }, Math.min(Math.max(1, limit), 20), lang === "ar" ? "ar" : "en");
 }
 
 /** The whole approved list for the phone to keep: { version, places, areas }. With the version the phone already holds: { version, unchanged: true }. */

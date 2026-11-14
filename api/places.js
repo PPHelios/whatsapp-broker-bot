@@ -6,7 +6,7 @@ const Suggest = require("../services/placeSuggest");
 function register(api, { pool }) {
   // GET /places/suggest?q=… → { items: [{ kind: "compound"|"area"|"subzone", id, name_en, name_ar, path, via }] }
   api.get("/places/suggest", async (req, res) => {
-    const items = await Suggest.suggest(pool, req.query.q, Number(req.query.limit) || 8);
+    const items = await Suggest.suggest(pool, req.query.q, Number(req.query.limit) || 8, req.query.lang === "ar" ? "ar" : "en");
     return res.json({ items });
   });
 

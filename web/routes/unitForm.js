@@ -125,6 +125,10 @@ function register(web, { pool, page, assets }) {
     return null;
   };
 
+  // What the add-new compound part sent, kept when the form is shown again.
+  const newPlace = (body = {}) => ({ compound_new: body.compound_new === "1" ? "1" : "", compound_ar: String(body.compound_ar || "").slice(0, 120), compound_pin: String(body.compound_pin || "").slice(0, 500) });
+  // After a save: the Arabic name and map link typed for a new compound wait on its pending name for the owner.
+  const keepNewPlace = (body = {}) => (body.compound_new === "1" ? require("../../lib/placeNames").addDetails(pool, body.compound, { nameAr: body.compound_ar, pin: body.compound_pin }).catch(() => {}) : null);
   // The compound must be on the approved list; a name that is not asks for a pick, or for "add as new" (kept as pending).
   const compoundError = async (client, listing, body, lang) => {
     if (!String(listing.compound || "").trim() || body.compound_new === "1") return null;
@@ -168,7 +172,7 @@ function register(web, { pool, page, assets }) {
       {
         title: edit ? `${L10n(lang, "تعديل", "Edit")} ${opts.code}` : L10n(lang, "إضافة وحدة", "Add a unit"),
         nav: edit ? "units" : "add",
-        body: html`<h1>${edit ? `✏️ ${L10n(lang, "تعديل", "Edit")} ${opts.code}` : `➕ ${L10n(lang, "إضافة وحدة", "Add a unit")}`}</h1>${unitForm({ lang, csrf: req.session.csrf, areas, ...opts })}${placeList()}<datalist id="approved-places">${approvedPlaces.flatMap((p) => [p.name_en, p.name_ar]).filter(Boolean).map((n) => html`<option value="${n}">`)}</datalist><datalist id="lead-codes">${leadChoices.map((c) => html`<option value="${c.label.split(" ")[0]}">${c.label}</option>`)}</datalist><script src="${assets.url("zipread.js")}"></script><script src="${assets.url("unitPhotos.js")}"></script>`
+        body: html`<h1>${edit ? `✏️ ${L10n(lang, "تعديل", "Edit")} ${opts.code}` : `➕ ${L10n(lang, "إضافة وحدة", "Add a unit")}`}</h1>${unitForm({ lang, csrf: req.session.csrf, areas, extraValues: newPlace(req.body), ...opts })}${placeList()}<datalist id="approved-places">${approvedPlaces.map((p) => (lang === "en" ? p.name_en || p.name_ar : p.name_ar || p.name_en)).filter(Boolean).map((n) => html`<option value="${n}">`)}</datalist><datalist id="lead-codes">${leadChoices.map((c) => html`<option value="${c.label.split(" ")[0]}">${c.label}</option>`)}</datalist><script src="${assets.url("zipread.js")}"></script><script src="${assets.url("unitPhotos.js")}"></script>`
       },
       status
     );
@@ -213,7 +217,7 @@ function register(web, { pool, page, assets }) {
     if (mode === "edit" && !existing) return res.sendStatus(404);
     const form = Form.unitFromForm(req.body);
     const base = Form.composeFromForm({ existing, form, lang });
-    const view = { mode, code: existing?.code, version: req.body.version, images: existing ? await imagesOf(pool, existing) : [], lang, csrf: req.session.csrf };
+    const view = { mode, code: existing?.code, version: req.body.version, images: existing ? await imagesOf(pool, existing) : [], lang, csrf: req.session.csrf, extraValues: newPlace(req.body) };
     const text = String(req.body.describe || "").trim().slice(0, 4000);
     const voice = filesOf(req, "voice").slice(0, 5).map((f) => ({ buffer: f.buffer, mimeType: f.mimetype.split(";")[0] }));
     if (!text && !voice.length) {
@@ -427,6 +431,7 @@ function register(web, { pool, page, assets }) {
       return again(409, L10n(lang, `⚠️ الكود #${result.code} مستخدم لوحدة أخرى في الشركة. اكتب كود مختلف.`, `⚠️ Code #${result.code} is already used by another unit. Choose another code.`));
     }
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: result.listing.code, operation_type: "web_unit_create", total_duration_ms: Date.now() - t0, storage_upload_ms: photoMs, db_ms: Date.now() - tDb, metadata: { photos: photos.urls.length + staged.paths.length, direct: staged.paths.length, photo_failures: photos.failed, save_key: Boolean(saveKey) } });
+    await keepNewPlace(req.body);
     return res.redirect(303, `/app/units/${encodeURIComponent(result.listing.code)}?saved=1`);
   });
 
@@ -535,6 +540,7 @@ function register(web, { pool, page, assets }) {
     // Storage files are removed outside the transaction (SEC-04).
     if (out.removed.length) Supabase.deleteStorageFiles(out.removed).catch(Swallow.logged(pool, "unitForm.removePhotos"));
     logOperation(pool, { agency_id: broker.agency_id, broker_id: broker.id, listing_code: out.saved.code, operation_type: "web_unit_edit", total_duration_ms: Date.now() - t0, storage_upload_ms: photoMs, db_ms: Date.now() - tDb, metadata: { columns: out.columns, photos_added: photos.urls.length + staged.paths.length, direct: staged.paths.length, photos_removed: out.removed.length, photos_reordered: Boolean(out.reordered), save_key: Boolean(saveKey) } });
+    await keepNewPlace(req.body);
     return res.redirect(303, `/app/units/${encodeURIComponent(out.saved.code)}?saved=1`);
   });
 }

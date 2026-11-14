@@ -6,7 +6,7 @@ const Suggest = require("../../services/placeSuggest");
 function register(web, { pool }) {
   web.get("/places/suggest", async (req, res) => {
     res.set("Cache-Control", "no-store");
-    return res.json({ items: await Suggest.suggest(pool, req.query.q, 8) });
+    return res.json({ items: await Suggest.suggest(pool, req.query.q, 8, req.session?.broker?.preferred_lang === "en" ? "en" : "ar") });
   });
 }
 

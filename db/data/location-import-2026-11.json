@@ -1,0 +1,7734 @@
+{
+"tree": [
+{
+"path": "15th of May City",
+"name_en": "15th of May City",
+"name_ar": "مدينة 15 مايو",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJNVrcCDYxWBQRcO4C-wvnVBk",
+"lat": 29.828845,
+"lng": 31.369759
+},
+{
+"path": "6th of October",
+"name_en": "6th of October",
+"name_ar": "السادس من أكتوبر",
+"place_type": "city_or_district",
+"governorate": "Giza",
+"google_place_id": "ChIJnRnfJuFVWBQReFbaL53PpiQ",
+"lat": 29.961107,
+"lng": 30.929599
+},
+{
+"path": "Abbassia",
+"name_en": "Abbassia",
+"name_ar": "العباسية",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJCV0ByII_WBQR-lpg0dYjAfI",
+"lat": 30.065008,
+"lng": 31.271445
+},
+{
+"path": "Ain Shams",
+"name_en": "Ain Shams",
+"name_ar": "عين شمس",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJFa9vR6AaWBQRGjJUE6LloWE",
+"lat": 30.076582,
+"lng": 31.284539
+},
+{
+"path": "Ain Sokhna",
+"name_en": "Ain Sokhna",
+"name_ar": "العين السخنة",
+"place_type": "city_or_district",
+"governorate": "Suez",
+"google_place_id": "ChIJPaMGx1NNVhQRUP0DWZls8zQ",
+"lat": 29.672266,
+"lng": 32.336634
+},
+{
+"path": "Badr City",
+"name_en": "Badr City",
+"name_ar": "مدينة بدر",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJ0Uky7LzwVxQRrMTic70_xR8",
+"lat": 30.139167,
+"lng": 31.731748
+},
+{
+"path": "Downtown Cairo",
+"name_en": "Downtown Cairo",
+"name_ar": "وسط البلد",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJzQR-SMdAWBQRVDcs_ge0dzM",
+"lat": 30.046714,
+"lng": 31.234713
+},
+{
+"path": "El Marg",
+"name_en": "El Marg",
+"name_ar": "المرج",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJY1iocDsUWBQRLIDvLnVXB2A",
+"lat": 30.152101,
+"lng": 31.33573
+},
+{
+"path": "Garden City",
+"name_en": "Garden City",
+"name_ar": "جاردن سيتي",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJ0VVEW8xAWBQR70829-J2gVo",
+"lat": 30.038058,
+"lng": 31.232589
+},
+{
+"path": "Giza",
+"name_en": "Giza",
+"name_ar": "الجيزة",
+"place_type": "city_or_district",
+"governorate": "Giza",
+"google_place_id": "ChIJl5ZXNZJGWBQRUvx4mB_WkU4",
+"lat": 30.013056,
+"lng": 31.208853
+},
+{
+"path": "Hadayek El Kobba",
+"name_en": "Hadayek El Kobba",
+"name_ar": "حدائق القبة",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJ9-CNjew_WBQRMs8v5Vo0wYI",
+"lat": 30.085791,
+"lng": 31.278373
+},
+{
+"path": "Heliopolis",
+"name_en": "Heliopolis",
+"name_ar": "مصر الجديدة",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJmeXkw9wVWBQRBpKjSi7CZ2w",
+"lat": 30.112315,
+"lng": 31.343851
+},
+{
+"path": "Helwan",
+"name_en": "Helwan",
+"name_ar": "حلوان",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJSZ8QIic0WBQRbKwM0bRNFgg",
+"lat": 29.842151,
+"lng": 31.333354
+},
+{
+"path": "Maadi",
+"name_en": "Maadi",
+"name_ar": "المعادي",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJWwXI5fVHWBQRQRkNyZvvIYs",
+"lat": 29.959514,
+"lng": 31.258935
+},
+{
+"path": "Madinaty",
+"name_en": "Madinaty",
+"name_ar": "مدينتي",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJRwPSlwEeWBQRO-D9PGcV6Hc",
+"lat": 30.095602,
+"lng": 31.634931
+},
+{
+"path": "Manial",
+"name_en": "Manial",
+"name_ar": "المنيل",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJ3c7vARlHWBQRzpMsWkICQf8",
+"lat": 30.021361,
+"lng": 31.226865
+},
+{
+"path": "Matareya",
+"name_en": "Matareya",
+"name_ar": "المطرية",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJNYhsZqUVWBQRMp3pF8SezW8",
+"lat": 30.125399,
+"lng": 31.318125
+},
+{
+"path": "Mokattam",
+"name_en": "Mokattam",
+"name_ar": "المقطم",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJ449GTyk_WBQRFwy8wuBJZUE",
+"lat": 30.021667,
+"lng": 31.303333
+},
+{
+"path": "Mostakbal City",
+"name_en": "Mostakbal City",
+"name_ar": "مدينة المستقبل",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJhV4S1Lf1VxQRuoB46xyN2_Q",
+"lat": 30.067551,
+"lng": 31.659047
+},
+{
+"path": "Nasr City",
+"name_en": "Nasr City",
+"name_ar": "مدينة نصر",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJ76fLgBM8WBQRjZcGng4mQdU",
+"lat": 30.051085,
+"lng": 31.365599
+},
+{
+"path": "New Cairo",
+"name_en": "New Cairo",
+"name_ar": "القاهرة الجديدة",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": null
+},
+{
+"path": "New Capital",
+"name_en": "New Capital",
+"name_ar": "العاصمة الإدارية الجديدة",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJ_2wjGC3yVxQRofv5zkVa7j0",
+"lat": 30.018586,
+"lng": 31.732023
+},
+{
+"path": "New Heliopolis",
+"name_en": "New Heliopolis",
+"name_ar": "هليوبوليس الجديدة",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJRzwQzAb3VxQRG01kT6LtcWs",
+"lat": 30.16593,
+"lng": 31.689044
+},
+{
+"path": "North Coast",
+"name_en": "North Coast",
+"name_ar": "الساحل الشمالي",
+"place_type": "city_or_district",
+"governorate": "North Coast",
+"google_place_id": "ChIJeS614_eA9RQRoHSj7_QuYWY",
+"lat": 30.965388,
+"lng": 29.54267
+},
+{
+"path": "Obour City",
+"name_en": "Obour City",
+"name_ar": "مدينة العبور",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJfaRMPbcaWBQRZ38AHS3J4Yk",
+"lat": 30.193809,
+"lng": 31.460161
+},
+{
+"path": "Sheikh Zayed",
+"name_en": "Sheikh Zayed",
+"name_ar": "الشيخ زايد",
+"place_type": "city_or_district",
+"governorate": "Giza",
+"google_place_id": "ChIJ2SSz8SlaWBQRjQtDBldSxcU",
+"lat": 30.038174,
+"lng": 30.979353
+},
+{
+"path": "Shorouk",
+"name_en": "Shorouk",
+"name_ar": "الشروق",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJYx5cyNf3VxQRRXHSBaWAbKE",
+"lat": 30.161783,
+"lng": 31.624344
+},
+{
+"path": "Shoubra",
+"name_en": "Shoubra",
+"name_ar": "شبرا",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJL2U_0W5AWBQRIfr4rRjxzxA",
+"lat": 30.085551,
+"lng": 31.245349
+},
+{
+"path": "Zamalek",
+"name_en": "Zamalek",
+"name_ar": "الزمالك",
+"place_type": "city_or_district",
+"governorate": "Cairo",
+"google_place_id": "ChIJJYLZWeBAWBQRXCGLLlhvy5E",
+"lat": 30.060942,
+"lng": 31.219709
+},
+{
+"path": "6th of October > 10th District (6th of October)",
+"name_en": "10th District (6th of October)",
+"name_ar": "الحي العاشر (6 أكتوبر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJpf1OT2tWWBQRGNpW85q27EQ",
+"lat": 29.965977,
+"lng": 30.920217
+},
+{
+"path": "6th of October > 11th District (6th of October)",
+"name_en": "11th District (6th of October)",
+"name_ar": "الحي الحادي عشر (6 أكتوبر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJwZjOi6f4WBQRBESYn80FEhU",
+"lat": 29.96113,
+"lng": 30.908739
+},
+{
+"path": "6th of October > 12th District (6th of October)",
+"name_en": "12th District (6th of October)",
+"name_ar": "الحي الثاني عشر (6 أكتوبر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJ1R8QLwdWWBQREt6XLbkBjEw",
+"lat": 29.954794,
+"lng": 30.902999
+},
+{
+"path": "6th of October > 1st District (6th of October)",
+"name_en": "1st District (6th of October)",
+"name_ar": "الحي الأول (6 أكتوبر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJb4hta-5WWBQRT0YlsyjTPWk",
+"lat": 29.963192,
+"lng": 30.956081
+},
+{
+"path": "6th of October > 2nd District (6th of October)",
+"name_en": "2nd District (6th of October)",
+"name_ar": "الحي الثاني (6 أكتوبر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJYZwXGfVWWBQRtrnTGqggozg",
+"lat": 29.966169,
+"lng": 30.944606
+},
+{
+"path": "6th of October > 3rd District (6th of October)",
+"name_en": "3rd District (6th of October)",
+"name_ar": "الحي الثالث (6 أكتوبر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJbbI5o2NWWBQRdBLoi1UB5T8",
+"lat": 29.957231,
+"lng": 30.938868
+},
+{
+"path": "6th of October > 4th District (6th of October)",
+"name_en": "4th District (6th of October)",
+"name_ar": "الحي الرابع (6 أكتوبر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJy7QTvXBWWBQRNUVn195Jpm0",
+"lat": 29.954993,
+"lng": 30.927391
+},
+{
+"path": "6th of October > 5th District (6th of October)",
+"name_en": "5th District (6th of October)",
+"name_ar": "الحي الخامس (6 أكتوبر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJX76Jc99VWBQRBc8edCUte0Y",
+"lat": 29.946984,
+"lng": 30.923087
+},
+{
+"path": "6th of October > 6th District (6th of October)",
+"name_en": "6th District (6th of October)",
+"name_ar": "الحي السادس (6 أكتوبر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJozwWNeZVWBQR-WSy4-FCxq0",
+"lat": 29.941392,
+"lng": 30.914478
+},
+{
+"path": "6th of October > 7th District (6th of October)",
+"name_en": "7th District (6th of October)",
+"name_ar": "الحي السابع (6 أكتوبر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJ_3xCuP9WWBQRDXfjw1RDyUQ",
+"lat": 29.983483,
+"lng": 30.943171
+},
+{
+"path": "6th of October > 8th District (6th of October)",
+"name_en": "8th District (6th of October)",
+"name_ar": "الحي الثامن (6 أكتوبر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJmXt1olBWWBQRR6X5rmkiZdY",
+"lat": 29.977897,
+"lng": 30.934564
+},
+{
+"path": "6th of October > 9th District (6th of October)",
+"name_en": "9th District (6th of October)",
+"name_ar": "الحي التاسع (6 أكتوبر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJK188jsFZWBQRYIbgHJD60aQ",
+"lat": 30.035589,
+"lng": 30.963252
+},
+{
+"path": "6th of October > Al Motamayez District",
+"name_en": "Al Motamayez District",
+"name_ar": "الحي المتميز",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJwVf7gDRXWBQRm_RH-VxUVEA",
+"lat": 29.99105,
+"lng": 30.984242
+},
+{
+"path": "6th of October > Cairo-Alexandria Desert Road",
+"name_en": "Cairo-Alexandria Desert Road",
+"name_ar": "طريق القاهرة - الإسكندرية الصحراوي",
+"place_type": "road_or_corridor",
+"governorate": "Giza",
+"google_place_id": "EjVDYWlybyAtIEFsZXhhbmRyaWEgRGVzZXJ0IFJkLCBHaXphIEdvdmVybm9yYXRlLCBFZ3lwdCIuKiwKFAoSCSmo_YKEplgUEZ_TX8EPfPsSEhQKEgmdGd8m4VVYFBF4Vtovnc-mJA",
+"lat": 30.03211,
+"lng": 31.061508
+},
+{
+"path": "6th of October > Central Axis",
+"name_en": "Central Axis",
+"name_ar": "المحور المركزي",
+"place_type": "road_or_corridor",
+"governorate": "Giza",
+"google_place_id": "ChIJhzmRW-JVWBQR-3MNropL--E",
+"lat": 29.9498,
+"lng": 30.910023
+},
+{
+"path": "6th of October > Dahshour Link",
+"name_en": "Dahshour Link",
+"name_ar": "وصلة دهشور",
+"place_type": "road_or_corridor",
+"governorate": "Giza",
+"google_place_id": "ChIJ3bIXDWJXWBQReDiCcGM9Nhs",
+"disambiguation": "AMBIGUOUS (2 parents: 6th of October, Sheikh Zayed) — ask 'which one?'; do not use as parent",
+"lat": 29.993308,
+"lng": 30.959297
+},
+{
+"path": "6th of October > Fayoum Road",
+"name_en": "Fayoum Road",
+"name_ar": "طريق الفيوم",
+"place_type": "road_or_corridor",
+"governorate": "Giza",
+"google_place_id": "EilGYWl5dW0gRGVzZXJ0IFJkLCBHaXphIEdvdmVybm9yYXRlLCBFZ3lwdCIuKiwKFAoSCdsQe9NMrFkUESjw7rKe4nf7EhQKEgmdGd8m4VVYFBF4Vtovnc-mJA",
+"lat": 29.900247,
+"lng": 31.085527
+},
+{
+"path": "6th of October > Green Belt (6th of October)",
+"name_en": "Green Belt (6th of October)",
+"name_ar": "الحزام الأخضر (6 أكتوبر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJa0Lbj4r4WBQRQNsurTvhEvE",
+"lat": 29.944823,
+"lng": 30.815436
+},
+{
+"path": "6th of October > Green October",
+"name_en": "Green October",
+"name_ar": "أكتوبر الخضراء",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJ7b8D_8hXWBQRveknuIVtpLQ",
+"lat": 29.97736,
+"lng": 30.953693
+},
+{
+"path": "6th of October > New October",
+"name_en": "New October",
+"name_ar": "أكتوبر الجديدة",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJB1p7Y4T_WBQRU3osAN7OXFs",
+"lat": 29.890914,
+"lng": 30.811373
+},
+{
+"path": "6th of October > Northern Expansions",
+"name_en": "Northern Expansions",
+"name_ar": "التوسعات الشمالية",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJeaKlRin5WBQRA9VRnfx53Bg",
+"lat": 29.991168,
+"lng": 30.884179
+},
+{
+"path": "6th of October > October Gardens (Hadayek October)",
+"name_en": "October Gardens (Hadayek October)",
+"name_ar": "حدائق أكتوبر",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJ30PzOOpRWBQR_0ceIlkUgTA",
+"lat": 29.931434,
+"lng": 31.061528
+},
+{
+"path": "6th of October > Touristic Villages",
+"name_en": "Touristic Villages",
+"name_ar": "القرى السياحية",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJC7agioZXWBQRHhnZNq8UCPk",
+"lat": 29.992747,
+"lng": 30.983844
+},
+{
+"path": "6th of October > Wahat Road",
+"name_en": "Wahat Road",
+"name_ar": "طريق الواحات",
+"place_type": "road_or_corridor",
+"governorate": "Giza",
+"google_place_id": "EiRFbCBXYWhhdCBSZCwgR2l6YSBHb3Zlcm5vcmF0ZSwgRWd5cHQiLiosChQKEgk92XjeRWtcFBFDYASLFCItmhIUChIJnRnfJuFVWBQReFbaL53PpiQ",
+"lat": 29.933832,
+"lng": 30.943906
+},
+{
+"path": "6th of October > West Somid",
+"name_en": "West Somid",
+"name_ar": "غرب سوميد",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJO8pOjiBXWBQRckLur8QSkp0",
+"lat": 29.981061,
+"lng": 30.967555
+},
+{
+"path": "Ain Sokhna > Galala",
+"name_en": "Galala",
+"name_ar": "الجلالة",
+"place_type": "sub_area_or_sector",
+"governorate": "Suez",
+"google_place_id": "ChIJbRHe7KFVVhQRzv2-1TmbA4Q",
+"lat": 29.504081,
+"lng": 32.410574
+},
+{
+"path": "Ain Sokhna > Galala Plateau",
+"name_en": "Galala Plateau",
+"name_ar": "هضبة الجلالة",
+"place_type": "sub_area_or_sector",
+"governorate": "Suez",
+"google_place_id": "ChIJx27-NmP_VhQRYuk6hvSqaSM",
+"lat": 29.44703,
+"lng": 32.412386
+},
+{
+"path": "Ain Sokhna > Katameya-Sokhna Road",
+"name_en": "Katameya-Sokhna Road",
+"name_ar": "طريق القطامية - السخنة",
+"place_type": "road_or_corridor",
+"governorate": "Suez",
+"google_place_id": "EjFBaW4gRWwgU29raG5hIFJkLCBBdHRha2EsIFN1ZXogR292ZXJub3JhdGUsIEVneXB0Ii4qLAoUChIJCRBGZ9s7WBQRQAxCE-05AtUSFAoSCT2jBsdTTVYUEVD9A1mZbPM0",
+"lat": 29.647736,
+"lng": 32.279111
+},
+{
+"path": "Ain Sokhna > Little Venice Area",
+"name_en": "Little Venice Area",
+"name_ar": "منطقة ليتل فينيس",
+"place_type": "sub_area_or_sector",
+"governorate": "Suez",
+"google_place_id": "ChIJUWkaPXNLVhQRRZvOYRD-WmM",
+"lat": 29.729846,
+"lng": 32.370643
+},
+{
+"path": "Ain Sokhna > Porto Sokhna Area",
+"name_en": "Porto Sokhna Area",
+"name_ar": "منطقة بورتو السخنة",
+"place_type": "sub_area_or_sector",
+"governorate": "Suez",
+"google_place_id": "ChIJ885WfZz4VhQRqOhYlQRDZx4",
+"lat": 29.443251,
+"lng": 32.483384
+},
+{
+"path": "Ain Sokhna > Red Sea Coast (South Sokhna)",
+"name_en": "Red Sea Coast (South Sokhna)",
+"name_ar": "ساحل البحر الأحمر (جنوب السخنة)",
+"place_type": "sub_area_or_sector",
+"governorate": "Suez",
+"google_place_id": "ChIJbXfr5bdUVhQREjXvBdb_18U",
+"lat": 29.348051,
+"lng": 32.580505
+},
+{
+"path": "Ain Sokhna > Stella Di Mare Area",
+"name_en": "Stella Di Mare Area",
+"name_ar": "منطقة ستيلا دي ماري",
+"place_type": "sub_area_or_sector",
+"governorate": "Suez",
+"google_place_id": "ChIJ3f9tkb6yVxQRDm8ylYsVNuo",
+"lat": 29.672381,
+"lng": 32.357258
+},
+{
+"path": "Ain Sokhna > Suez-Sokhna Road",
+"name_en": "Suez-Sokhna Road",
+"name_ar": "طريق السويس - السخنة",
+"place_type": "road_or_corridor",
+"governorate": "Suez",
+"google_place_id": "EjFBaW4gRWwgU29raG5hIFJkLCBBdHRha2EsIFN1ZXogR292ZXJub3JhdGUsIEVneXB0Ii4qLAoUChIJCRBGZ9s7WBQRQAxCE-05AtUSFAoSCT2jBsdTTVYUEVD9A1mZbPM0",
+"lat": 29.647736,
+"lng": 32.279111
+},
+{
+"path": "Ain Sokhna > Wadi Degla Area",
+"name_en": "Wadi Degla Area",
+"name_ar": "منطقة وادي دجلة",
+"place_type": "sub_area_or_sector",
+"governorate": "Suez",
+"google_place_id": "ChIJXxruYQCtVxQR8UizfoXW3QY",
+"lat": 29.592896,
+"lng": 32.340456
+},
+{
+"path": "Ain Sokhna > Windmills Area (Tawaheen El Hawa)",
+"name_en": "Windmills Area (Tawaheen El Hawa)",
+"name_ar": "منطقة طواحين الهواء",
+"place_type": "sub_area_or_sector",
+"governorate": "Suez",
+"google_place_id": "ChIJI9SOi0LrVhQRSGTCJmU6ed4",
+"lat": 29.140306,
+"lng": 32.647121
+},
+{
+"path": "Ain Sokhna > Zaafarana Road",
+"name_en": "Zaafarana Road",
+"name_ar": "طريق الزعفرانة",
+"place_type": "road_or_corridor",
+"governorate": "Suez",
+"google_place_id": "ChIJG-eXCOysVxQRQ3XL1rYuukY",
+"lat": 29.412053,
+"lng": 32.51141
+},
+{
+"path": "Badr City > 1st District (Badr City)",
+"name_en": "1st District (Badr City)",
+"name_ar": "الحي الأول (بدر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJpc1KVXTxVxQRSxXxqSGzf7s",
+"lat": 30.135544,
+"lng": 31.727431
+},
+{
+"path": "Badr City > 2nd District (Badr City)",
+"name_en": "2nd District (Badr City)",
+"name_ar": "الحي الثاني (بدر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJbyU2NC73VxQRoPQWnQNg89Q",
+"lat": 30.129807,
+"lng": 31.685006
+},
+{
+"path": "Badr City > 3rd District (Badr City)",
+"name_en": "3rd District (Badr City)",
+"name_ar": "الحي الثالث (بدر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ4YuCt7b3VxQRWjp-8hdqaK4",
+"lat": 30.126866,
+"lng": 31.718837
+},
+{
+"path": "Badr City > 4th District (Badr City)",
+"name_en": "4th District (Badr City)",
+"name_ar": "الحي الرابع (بدر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ4YuCt7b3VxQRWjp-8hdqaK4",
+"lat": 30.126866,
+"lng": 31.718837
+},
+{
+"path": "Badr City > 5th District (Badr City)",
+"name_en": "5th District (Badr City)",
+"name_ar": "الحي الخامس (بدر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJbx2HJEz3VxQRJnO-msQ3Cvk",
+"lat": 30.141182,
+"lng": 31.714552
+},
+{
+"path": "Badr City > 6th District (Badr City)",
+"name_en": "6th District (Badr City)",
+"name_ar": "الحي السادس (بدر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": null
+},
+{
+"path": "Badr City > 7th District (Badr City)",
+"name_en": "7th District (Badr City)",
+"name_ar": "الحي السابع (بدر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJuXv7n0b7VxQRADlGwvQIIrc",
+"lat": 30.155419,
+"lng": 31.76409
+},
+{
+"path": "Badr City > Capital Gardens",
+"name_en": "Capital Gardens",
+"name_ar": "حدائق العاصمة",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJUy40h732VxQRoOkkUiM1SrM",
+"lat": 30.08828,
+"lng": 31.691657
+},
+{
+"path": "Giza > Abu Rawash",
+"name_en": "Abu Rawash",
+"name_ar": "أبو رواش",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJqSlG4sNEWBQR1EZ5qNNcNss",
+"lat": 30.045047,
+"lng": 31.095012
+},
+{
+"path": "Giza > Agouza",
+"name_en": "Agouza",
+"name_ar": "العجوزة",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJXc3RyidBWBQREAMVl-pZIfE",
+"lat": 30.051122,
+"lng": 31.212553
+},
+{
+"path": "Giza > Atfih",
+"name_en": "Atfih",
+"name_ar": "أطفيح",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJtbhF7NmUWRQRnxmqCtSjE4Q",
+"lat": 29.408061,
+"lng": 31.252741
+},
+{
+"path": "Giza > Badrasheen",
+"name_en": "Badrasheen",
+"name_ar": "البدرشين",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJ99KuHmY1WBQRR2llW3ey3QQ",
+"lat": 29.810728,
+"lng": 31.251191
+},
+{
+"path": "Giza > Bulaq El Dakrour",
+"name_en": "Bulaq El Dakrour",
+"name_ar": "بولاق الدكرور",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJq2RBqCpEWBQRFTUGuKE69_o",
+"lat": 30.030203,
+"lng": 31.188219
+},
+{
+"path": "Giza > Dokki",
+"name_en": "Dokki",
+"name_ar": "الدقي",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJAY0F1MVGWBQR0HJKv6MtgAM",
+"lat": 30.038266,
+"lng": 31.211435
+},
+{
+"path": "Giza > El Saff",
+"name_en": "El Saff",
+"name_ar": "الصف",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJTVE5T6PHWRQR6l4Xo7XMxok",
+"lat": 29.574725,
+"lng": 31.295225
+},
+{
+"path": "Giza > Faisal",
+"name_en": "Faisal",
+"name_ar": "فيصل",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJUbhd7OhGWBQRFN9qCdYwDRM",
+"lat": 30.01737,
+"lng": 31.203936
+},
+{
+"path": "Giza > Hadayek El Ahram",
+"name_en": "Hadayek El Ahram",
+"name_ar": "حدائق الأهرام",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJxd_eVZxFWBQRfVoz3BUlPx8",
+"lat": 29.991216,
+"lng": 31.128639
+},
+{
+"path": "Giza > Haram",
+"name_en": "Haram",
+"name_ar": "الهرم",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "Ei5BbCBIYXJhbSwgRWwgT21yYW5peWEsIEdpemEgR292ZXJub3JhdGUsIEVneXB0Ii4qLAoUChIJ_zQjXnZGWBQRxYk24SYhAikSFAoSCZeWVzWSRlgUEVL8eJgf1pFO",
+"lat": 30.002486,
+"lng": 31.182693
+},
+{
+"path": "Giza > Hawamdeya",
+"name_en": "Hawamdeya",
+"name_ar": "الحوامدية",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJt4iqONZJWBQRApKwCWHuqyM",
+"lat": 29.895466,
+"lng": 31.262903
+},
+{
+"path": "Giza > Imbaba",
+"name_en": "Imbaba",
+"name_ar": "إمبابة",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJOeJ39QtBWBQRfkjGnkd3pRc",
+"lat": 30.083226,
+"lng": 31.205668
+},
+{
+"path": "Giza > Kit Kat",
+"name_en": "Kit Kat",
+"name_ar": "الكيت كات",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJ99GQOBxBWBQRo0WFEmMGL0Y",
+"lat": 30.06655,
+"lng": 31.213024
+},
+{
+"path": "Giza > Mansoureya",
+"name_en": "Mansoureya",
+"name_ar": "المنصورية",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJv-fAvjtDWBQRuAF6BYNbJCE",
+"lat": 30.092345,
+"lng": 31.09247
+},
+{
+"path": "Giza > Mariouteya",
+"name_en": "Mariouteya",
+"name_ar": "المريوطية",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJeTM5CutaWBQR0yDzM4TMHUY",
+"lat": 30.02167,
+"lng": 31.052983
+},
+{
+"path": "Giza > Mohandessin",
+"name_en": "Mohandessin",
+"name_ar": "المهندسين",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJfYzAyjFBWBQR9KiUlHu-AL0",
+"lat": 30.055326,
+"lng": 31.203229
+},
+{
+"path": "Giza > Mounib",
+"name_en": "Mounib",
+"name_ar": "المنيب",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJwxTYWs5GWBQRR_1l1on9-AE",
+"lat": 30.034895,
+"lng": 31.203365
+},
+{
+"path": "Giza > Omraneya",
+"name_en": "Omraneya",
+"name_ar": "العمرانية",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJnRYqp49FWBQR7tfBlyOrJ0M",
+"lat": 29.997575,
+"lng": 31.19764
+},
+{
+"path": "Giza > Pyramids Plateau",
+"name_en": "Pyramids Plateau",
+"name_ar": "هضبة الأهرام",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJ1-7Ki31PWBQRbbfEc4MNCJk",
+"lat": 29.976935,
+"lng": 31.132651
+},
+{
+"path": "Giza > Smart Village",
+"name_en": "Smart Village",
+"name_ar": "القرية الذكية",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJdYJLAqNbWBQRsXPl8GyXvZ8",
+"lat": 30.071814,
+"lng": 31.019825
+},
+{
+"path": "Giza > Warraq",
+"name_en": "Warraq",
+"name_ar": "الوراق",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJVbd8LihAWBQRm-gwBNRTbPM",
+"lat": 30.118611,
+"lng": 31.225833
+},
+{
+"path": "Heliopolis > Almaza",
+"name_en": "Almaza",
+"name_ar": "ألماظة",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJB-euKrQVWBQRKjUVjfGfNKs",
+"lat": 30.092423,
+"lng": 31.347927
+},
+{
+"path": "Heliopolis > Ard El Golf",
+"name_en": "Ard El Golf",
+"name_ar": "أرض الجولف",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJz961RBg-WBQR2HK25harflQ",
+"lat": 30.08258,
+"lng": 31.333282
+},
+{
+"path": "Heliopolis > El Nozha El Gedida",
+"name_en": "El Nozha El Gedida",
+"name_ar": "النزهة الجديدة",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJFcW0TvUXWBQR4V3jcKLL9n8",
+"lat": 30.125482,
+"lng": 31.376907
+},
+{
+"path": "Heliopolis > Hegaz",
+"name_en": "Hegaz",
+"name_ar": "الحجاز",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJWxbG2ocVWBQRTMxpLWhMmC8",
+"lat": 30.106692,
+"lng": 31.33534
+},
+{
+"path": "Heliopolis > Korba",
+"name_en": "Korba",
+"name_ar": "الكوربة",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJUduKY5k_WBQRwgxGmYZDrhU",
+"lat": 30.091139,
+"lng": 31.321222
+},
+{
+"path": "Heliopolis > Merghany",
+"name_en": "Merghany",
+"name_ar": "الميرغني",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ_088thg-WBQR91C-OB-2lCA",
+"lat": 30.085251,
+"lng": 31.333331
+},
+{
+"path": "Heliopolis > Nozha",
+"name_en": "Nozha",
+"name_ar": "النزهة",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJmeXkw9wVWBQRBpKjSi7CZ2w",
+"lat": 30.112315,
+"lng": 31.343851
+},
+{
+"path": "Heliopolis > Roxy",
+"name_en": "Roxy",
+"name_ar": "روكسي",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJR5EJJio-WBQRkI5spjPRc9A",
+"lat": 30.093218,
+"lng": 31.315154
+},
+{
+"path": "Heliopolis > Saint Fatima",
+"name_en": "Saint Fatima",
+"name_ar": "سانت فاتيما",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJi156hRgVWBQRiwUtEe4CfvA",
+"lat": 30.112634,
+"lng": 31.34631
+},
+{
+"path": "Heliopolis > Sheraton",
+"name_en": "Sheraton",
+"name_ar": "شيراتون",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJnTW3BPpWWBQRpuFlmUwlW-c",
+"lat": 30.107029,
+"lng": 31.36496
+},
+{
+"path": "Heliopolis > Triumph",
+"name_en": "Triumph",
+"name_ar": "تريومف",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJb3Vz7IIVWBQR5KNEY4kmYfk",
+"lat": 30.100396,
+"lng": 31.342919
+},
+{
+"path": "Maadi > Arab El Maadi",
+"name_en": "Arab El Maadi",
+"name_ar": "عرب المعادي",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ-9WML3E4WBQRwnQrsMSwLu4",
+"lat": 29.969334,
+"lng": 31.269043
+},
+{
+"path": "Maadi > Autostrad Maadi",
+"name_en": "Autostrad Maadi",
+"name_ar": "أوتوستراد المعادي",
+"place_type": "road_or_corridor",
+"governorate": "Cairo",
+"google_place_id": "ChIJQy7KQvQ4WBQRtTAvABvrt6M",
+"lat": 29.981654,
+"lng": 31.289123
+},
+{
+"path": "Maadi > Corniche El Maadi",
+"name_en": "Corniche El Maadi",
+"name_ar": "كورنيش المعادي",
+"place_type": "road_or_corridor",
+"governorate": "Cairo",
+"google_place_id": "ChIJnULS2r5HWBQRVthclc6Y-jg",
+"lat": 29.973,
+"lng": 31.235369
+},
+{
+"path": "Maadi > Degla Maadi",
+"name_en": "Degla Maadi",
+"name_ar": "دجلة المعادي",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ3eFdldg5WBQR1CDJ0dtGh0c",
+"lat": 29.960261,
+"lng": 31.276892
+},
+{
+"path": "Maadi > Hadayek El Maadi",
+"name_en": "Hadayek El Maadi",
+"name_ar": "حدائق المعادي",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJIUKifpJHWBQRBOFDWuCMGeY",
+"lat": 29.970143,
+"lng": 31.250608
+},
+{
+"path": "Maadi > New Maadi",
+"name_en": "New Maadi",
+"name_ar": "المعادي الجديدة",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJe_NDjDo5WBQRe9Z1ddClxkw",
+"lat": 29.984018,
+"lng": 31.280245
+},
+{
+"path": "Maadi > Sarayat El Maadi",
+"name_en": "Sarayat El Maadi",
+"name_ar": "سرايات المعادي",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJWwXI5fVHWBQRQRkNyZvvIYs",
+"lat": 29.959514,
+"lng": 31.258935
+},
+{
+"path": "Maadi > Thakanat El Maadi",
+"name_en": "Thakanat El Maadi",
+"name_ar": "ثكنات المعادي",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ03r3zwc4WBQRdQaph5R3Z4E",
+"lat": 29.952141,
+"lng": 31.264725
+},
+{
+"path": "Maadi > Zahraa El Maadi",
+"name_en": "Zahraa El Maadi",
+"name_ar": "زهراء المعادي",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "EilaYWhyYWEgQWwgTWFhZGksIENhaXJvIEdvdmVybm9yYXRlLCBFZ3lwdCIuKiwKFAoSCSfA2glSOFgUET3td3NaasGrEhQKEglbBcjl9UdYFBFBGQ3Jm-8hiw",
+"lat": 29.964229,
+"lng": 31.28114
+},
+{
+"path": "Madinaty > B1",
+"name_en": "B1",
+"name_ar": "منطقة B1",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJj2mPOBv2VxQRoAGtYjD3l-g",
+"lat": 30.105378,
+"lng": 31.640638
+},
+{
+"path": "Madinaty > B10",
+"name_en": "B10",
+"name_ar": "منطقة B10",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJxdT2HJf1VxQRQ9XH0Pxnp8U",
+"lat": 30.085636,
+"lng": 31.656533
+},
+{
+"path": "Madinaty > B11",
+"name_en": "B11",
+"name_ar": "منطقة B11",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJmbL218T1VxQRvwj8XJpkj54",
+"lat": 30.075772,
+"lng": 31.658255
+},
+{
+"path": "Madinaty > B12",
+"name_en": "B12",
+"name_ar": "منطقة B12",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ13dgJT_1VxQRZqey1w8Ids4",
+"lat": 30.07944,
+"lng": 31.672974
+},
+{
+"path": "Madinaty > B14",
+"name_en": "B14",
+"name_ar": "منطقة B14",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJTxJFdSb3VxQRxLliEhj38PM",
+"lat": 30.096092,
+"lng": 31.673827
+},
+{
+"path": "Madinaty > B15",
+"name_en": "B15",
+"name_ar": "منطقة B15",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJDUSOEAD3VxQR2HRoznjaE7s",
+"lat": 30.090271,
+"lng": 31.676692
+},
+{
+"path": "Madinaty > B2",
+"name_en": "B2",
+"name_ar": "منطقة B2",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJPVE-ZBH2VxQRiqIc3q2j9hA",
+"lat": 30.10466,
+"lng": 31.644709
+},
+{
+"path": "Madinaty > B3",
+"name_en": "B3",
+"name_ar": "منطقة B3",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJLSwiTf31VxQR3x-1mm_6gyY",
+"lat": 30.09087,
+"lng": 31.642183
+},
+{
+"path": "Madinaty > B6",
+"name_en": "B6",
+"name_ar": "منطقة B6",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ8yQDQ-_1VxQRdn1lBhvrYNI",
+"lat": 30.078579,
+"lng": 31.644012
+},
+{
+"path": "Madinaty > B7",
+"name_en": "B7",
+"name_ar": "منطقة B7",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ7QTSUuD1VxQRq_tMxMd7BV4",
+"lat": 30.087776,
+"lng": 31.648537
+},
+{
+"path": "Madinaty > B8",
+"name_en": "B8",
+"name_ar": "منطقة B8",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJKdgHe232VxQRNx6w8WDHNHM",
+"lat": 30.100619,
+"lng": 31.652552
+},
+{
+"path": "Madinaty > Privado",
+"name_en": "Privado",
+"name_ar": "بريفادو",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJGzSHZh33VxQR24xrC0A2L-w",
+"lat": 30.091613,
+"lng": 31.665172
+},
+{
+"path": "Madinaty > VG1",
+"name_en": "VG1",
+"name_ar": "فيلات VG1",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": null
+},
+{
+"path": "Madinaty > VG2",
+"name_en": "VG2",
+"name_ar": "فيلات VG2",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJk7VSEgAfWBQRxMW8sv3S7FY",
+"lat": 30.085659,
+"lng": 31.622923
+},
+{
+"path": "Madinaty > VG3",
+"name_en": "VG3",
+"name_ar": "فيلات VG3",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ7eDLOc4fWBQRmUQ_mHzbhSU",
+"lat": 30.080917,
+"lng": 31.624849
+},
+{
+"path": "Madinaty > VG4",
+"name_en": "VG4",
+"name_ar": "فيلات VG4",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJPXE9f0v1VxQR_ps6Fh1Opek",
+"lat": 30.079745,
+"lng": 31.63257
+},
+{
+"path": "Madinaty > VG5",
+"name_en": "VG5",
+"name_ar": "فيلات VG5",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJPXE9f0v1VxQR_ps6Fh1Opek",
+"lat": 30.079745,
+"lng": 31.63257
+},
+{
+"path": "Mokattam > Al Asmarat",
+"name_en": "Al Asmarat",
+"name_ar": "الأسمرات",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJIbQT3-U5WBQR2zmp8NkfEEs",
+"lat": 30.000401,
+"lng": 31.333657
+},
+{
+"path": "Mokattam > Corniche El Mokattam",
+"name_en": "Corniche El Mokattam",
+"name_ar": "كورنيش المقطم",
+"place_type": "road_or_corridor",
+"governorate": "Cairo",
+"google_place_id": "ChIJVdFsNk0_WBQR9yJLMXiTfQU",
+"lat": 30.015552,
+"lng": 31.335087
+},
+{
+"path": "Mokattam > Lower Plateau (Al Hadaba Al Sofla)",
+"name_en": "Lower Plateau (Al Hadaba Al Sofla)",
+"name_ar": "الهضبة السفلى",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJjxDfCt04WBQRc9cOcxx268g",
+"lat": 29.997192,
+"lng": 31.299631
+},
+{
+"path": "Mokattam > Middle Plateau (Al Hadaba Al Wosta)",
+"name_en": "Middle Plateau (Al Hadaba Al Wosta)",
+"name_ar": "الهضبة الوسطى",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ-QszlcI4WBQRgeqND99Lu54",
+"lat": 29.995194,
+"lng": 31.294578
+},
+{
+"path": "Mokattam > Upper Plateau (Al Hadaba Al Olya)",
+"name_en": "Upper Plateau (Al Hadaba Al Olya)",
+"name_ar": "الهضبة العليا",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJyW3_mSk_WBQRmNOPNUuOc3c",
+"lat": 30.021186,
+"lng": 31.305622
+},
+{
+"path": "Mokattam > Uptown Cairo",
+"name_en": "Uptown Cairo",
+"name_ar": "أبتاون كايرو",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ449GTyk_WBQRFwy8wuBJZUE",
+"lat": 30.021667,
+"lng": 31.303333
+},
+{
+"path": "Mostakbal City > Al Amal Axis",
+"name_en": "Al Amal Axis",
+"name_ar": "محور الأمل",
+"place_type": "road_or_corridor",
+"governorate": "Cairo",
+"google_place_id": "ChIJl-ZKUQ73VxQRniC5fJsvtbI",
+"lat": 30.091136,
+"lng": 31.687948
+},
+{
+"path": "Mostakbal City > Cairo-Suez Road",
+"name_en": "Cairo-Suez Road",
+"name_ar": "طريق القاهرة - السويس",
+"place_type": "road_or_corridor",
+"governorate": "Cairo",
+"google_place_id": "ChIJ87eO8Dn0VxQR0B1NnLzhJaQ",
+"disambiguation": "AMBIGUOUS (3 parents: Mostakbal City, Nasr City, New Cairo) — ask 'which one?'; do not use as parent",
+"lat": 30.049559,
+"lng": 31.614016
+},
+{
+"path": "Mostakbal City > Central Mostakbal",
+"name_en": "Central Mostakbal",
+"name_ar": "وسط المستقبل",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJv4OwY9H1VxQRnzXxa66vbUI",
+"lat": 30.045551,
+"lng": 31.657856
+},
+{
+"path": "Mostakbal City > Fifth Phase Mostakbal",
+"name_en": "Fifth Phase Mostakbal",
+"name_ar": "المرحلة الخامسة (المستقبل)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ87eO8Dn0VxQR0B1NnLzhJaQ",
+"lat": 30.049559,
+"lng": 31.614016
+},
+{
+"path": "Mostakbal City > First Phase Mostakbal",
+"name_en": "First Phase Mostakbal",
+"name_ar": "المرحلة الأولى (المستقبل)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJhV4S1Lf1VxQRuoB46xyN2_Q",
+"lat": 30.067551,
+"lng": 31.659047
+},
+{
+"path": "Mostakbal City > Fourth Phase Mostakbal",
+"name_en": "Fourth Phase Mostakbal",
+"name_ar": "المرحلة الرابعة (المستقبل)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ87eO8Dn0VxQR0B1NnLzhJaQ",
+"lat": 30.049559,
+"lng": 31.614016
+},
+{
+"path": "Mostakbal City > Second Phase Mostakbal",
+"name_en": "Second Phase Mostakbal",
+"name_ar": "المرحلة الثانية (المستقبل)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ87eO8Dn0VxQR0B1NnLzhJaQ",
+"lat": 30.049559,
+"lng": 31.614016
+},
+{
+"path": "Mostakbal City > Third Phase Mostakbal",
+"name_en": "Third Phase Mostakbal",
+"name_ar": "المرحلة الثالثة (المستقبل)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJhV4S1Lf1VxQRuoB46xyN2_Q",
+"lat": 30.067551,
+"lng": 31.659047
+},
+{
+"path": "Nasr City > 10th Zone (Nasr City)",
+"name_en": "10th Zone (Nasr City)",
+"name_ar": "المنطقة العاشرة (مدينة نصر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ6XhYQLg9WBQRSpq7wo0TGBw",
+"lat": 30.049072,
+"lng": 31.378845
+},
+{
+"path": "Nasr City > 1st Zone (Nasr City)",
+"name_en": "1st Zone (Nasr City)",
+"name_ar": "المنطقة الأولى (مدينة نصر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ33EttYQ-WBQR6PvsiCiUGDw",
+"lat": 30.035168,
+"lng": 31.34707
+},
+{
+"path": "Nasr City > 6th Zone (Nasr City)",
+"name_en": "6th Zone (Nasr City)",
+"name_ar": "المنطقة السادسة (مدينة نصر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJb9KeM1A_WBQRRNzB_NaWIgY",
+"lat": 30.06834,
+"lng": 31.344709
+},
+{
+"path": "Nasr City > 7th Zone (Nasr City)",
+"name_en": "7th Zone (Nasr City)",
+"name_ar": "المنطقة السابعة (مدينة نصر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJeRMx5PI-WBQRAxXXPzL_o6o",
+"lat": 30.041964,
+"lng": 31.329422
+},
+{
+"path": "Nasr City > 8th Zone (Nasr City)",
+"name_en": "8th Zone (Nasr City)",
+"name_ar": "المنطقة الثامنة (مدينة نصر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJgyo4XZQ9WBQR5QdESFPD-Ns",
+"lat": 30.06141,
+"lng": 31.380363
+},
+{
+"path": "Nasr City > 9th Zone (Nasr City)",
+"name_en": "9th Zone (Nasr City)",
+"name_ar": "المنطقة التاسعة (مدينة نصر)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ73A5_V49WBQRR66OTU5BBeY",
+"lat": 30.068259,
+"lng": 31.39465
+},
+{
+"path": "Nasr City > Abbas El Akkad",
+"name_en": "Abbas El Akkad",
+"name_ar": "عباس العقاد",
+"place_type": "road_or_corridor",
+"governorate": "Cairo",
+"google_place_id": "ChIJUfkwwWU-WBQRtTz8dUtxudI",
+"lat": 30.056667,
+"lng": 31.338133
+},
+{
+"path": "Nasr City > Al Hay Al Asher",
+"name_en": "Al Hay Al Asher",
+"name_ar": "الحي العاشر",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ76fLgBM8WBQR7G4x-M4vkfU",
+"lat": 30.043528,
+"lng": 31.379232
+},
+{
+"path": "Nasr City > Al Sefarat (Ambassadors District)",
+"name_en": "Al Sefarat (Ambassadors District)",
+"name_ar": "حي السفارات",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJj-B_4I8-WBQRmt2s7CCB47g",
+"lat": 30.037059,
+"lng": 31.341102
+},
+{
+"path": "Nasr City > Al Waha",
+"name_en": "Al Waha",
+"name_ar": "الواحة",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJixiGzzQ8WBQRygNajq3hoDg",
+"lat": 30.037601,
+"lng": 31.372627
+},
+{
+"path": "Nasr City > Cairo-Suez Road",
+"name_en": "Cairo-Suez Road",
+"name_ar": "طريق القاهرة - السويس",
+"place_type": "road_or_corridor",
+"governorate": "Cairo",
+"google_place_id": "EixTdWV6IFJkLCBOYXNyIENpdHksIENhaXJvIEdvdmVybm9yYXRlLCBFZ3lwdCIuKiwKFAoSCVdnBSsnFlgUEXEl4FzZ2zgmEhQKEgnvp8uAEzxYFBGNlwaeDiZB1Q",
+"disambiguation": "AMBIGUOUS (3 parents: Mostakbal City, Nasr City, New Cairo) — ask 'which one?'; do not use as parent",
+"lat": 30.080677,
+"lng": 31.397697
+},
+{
+"path": "Nasr City > Makram Ebeid",
+"name_en": "Makram Ebeid",
+"name_ar": "مكرم عبيد",
+"place_type": "road_or_corridor",
+"governorate": "Cairo",
+"google_place_id": "ChIJixjLKHI-WBQR-dNvDOmZPXA",
+"lat": 30.061974,
+"lng": 31.344986
+},
+{
+"path": "Nasr City > Mostafa El Nahas",
+"name_en": "Mostafa El Nahas",
+"name_ar": "مصطفى النحاس",
+"place_type": "road_or_corridor",
+"governorate": "Cairo",
+"google_place_id": "ChIJSeqyLRM-WBQRGOUH6nOjD8Q",
+"lat": 30.068581,
+"lng": 31.339465
+},
+{
+"path": "Nasr City > Rabaa El Adaweya",
+"name_en": "Rabaa El Adaweya",
+"name_ar": "رابعة العدوية",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJVUMVoEY-WBQRod34TQEZoDU",
+"lat": 30.067284,
+"lng": 31.324224
+},
+{
+"path": "Nasr City > Tayaran Street",
+"name_en": "Tayaran Street",
+"name_ar": "شارع الطيران",
+"place_type": "road_or_corridor",
+"governorate": "Cairo",
+"google_place_id": "ChIJowpqxkU-WBQRinDtDMDbsEs",
+"lat": 30.067217,
+"lng": 31.324553
+},
+{
+"path": "Nasr City > Zahraa Nasr City",
+"name_en": "Zahraa Nasr City",
+"name_ar": "زهراء مدينة نصر",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJuTboU7w9WBQRzdyIyGYTi9U",
+"lat": 30.053429,
+"lng": 31.385167
+},
+{
+"path": "New Cairo > 10th Neighborhood (1st Settlement)",
+"name_en": "10th Neighborhood (1st Settlement)",
+"name_ar": "المجاورة العاشرة (التجمع الأول)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": null
+},
+{
+"path": "New Cairo > 1st Neighborhood (1st Settlement)",
+"name_en": "1st Neighborhood (1st Settlement)",
+"name_ar": "المجاورة الأولى (التجمع الأول)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJdcolK10ZWBQRqUcldgTkRN0",
+"lat": 30.062667,
+"lng": 31.455045
+},
+{
+"path": "New Cairo > 1st Neighborhood (3rd Settlement)",
+"name_en": "1st Neighborhood (3rd Settlement)",
+"name_ar": "المجاورة الأولى (التجمع الثالث)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJiZktCcgZWBQRQti_yZfDg4c",
+"lat": 30.060168,
+"lng": 31.452487
+},
+{
+"path": "New Cairo > 1st Settlement",
+"name_en": "1st Settlement",
+"name_ar": "التجمع الأول",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJdcolK10ZWBQRqUcldgTkRN0",
+"lat": 30.062667,
+"lng": 31.455045
+},
+{
+"path": "New Cairo > 2nd Neighborhood (1st Settlement)",
+"name_en": "2nd Neighborhood (1st Settlement)",
+"name_ar": "المجاورة الثانية (التجمع الأول)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJdcolK10ZWBQRqUcldgTkRN0",
+"lat": 30.062667,
+"lng": 31.455045
+},
+{
+"path": "New Cairo > 2nd Neighborhood (3rd Settlement)",
+"name_en": "2nd Neighborhood (3rd Settlement)",
+"name_ar": "المجاورة الثانية (التجمع الثالث)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJP1hoIM48WBQRnpZktJe1WpM",
+"lat": 30.009735,
+"lng": 31.438476
+},
+{
+"path": "New Cairo > 3rd Neighborhood (1st Settlement)",
+"name_en": "3rd Neighborhood (1st Settlement)",
+"name_ar": "المجاورة الثالثة (التجمع الأول)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJdcolK10ZWBQRqUcldgTkRN0",
+"lat": 30.062667,
+"lng": 31.455045
+},
+{
+"path": "New Cairo > 3rd Neighborhood (3rd Settlement)",
+"name_en": "3rd Neighborhood (3rd Settlement)",
+"name_ar": "المجاورة الثالثة (التجمع الثالث)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": null
+},
+{
+"path": "New Cairo > 3rd Settlement",
+"name_en": "3rd Settlement",
+"name_ar": "التجمع الثالث",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJxyp4eKs8WBQRObp76I3RhgE",
+"lat": 29.984312,
+"lng": 31.442474
+},
+{
+"path": "New Cairo > 4th Neighborhood (1st Settlement)",
+"name_en": "4th Neighborhood (1st Settlement)",
+"name_ar": "المجاورة الرابعة (التجمع الأول)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJl5JvCgAZWBQRnhB5Z60Z6-8",
+"lat": 30.053526,
+"lng": 31.451694
+},
+{
+"path": "New Cairo > 4th Neighborhood (3rd Settlement)",
+"name_en": "4th Neighborhood (3rd Settlement)",
+"name_ar": "المجاورة الرابعة (التجمع الثالث)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": null
+},
+{
+"path": "New Cairo > 5th Neighborhood (1st Settlement)",
+"name_en": "5th Neighborhood (1st Settlement)",
+"name_ar": "المجاورة الخامسة (التجمع الأول)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": null
+},
+{
+"path": "New Cairo > 5th Neighborhood (3rd Settlement)",
+"name_en": "5th Neighborhood (3rd Settlement)",
+"name_ar": "المجاورة الخامسة (التجمع الثالث)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJCdk2VMc8WBQRAz7sKEUdkn8",
+"lat": 30.008487,
+"lng": 31.428476
+},
+{
+"path": "New Cairo > 5th Settlement",
+"name_en": "5th Settlement",
+"name_ar": "التجمع الخامس",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJCdk2VMc8WBQRAz7sKEUdkn8",
+"lat": 30.008487,
+"lng": 31.428476
+},
+{
+"path": "New Cairo > 6th Neighborhood (1st Settlement)",
+"name_en": "6th Neighborhood (1st Settlement)",
+"name_ar": "المجاورة السادسة (التجمع الأول)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": null
+},
+{
+"path": "New Cairo > 6th Neighborhood (3rd Settlement)",
+"name_en": "6th Neighborhood (3rd Settlement)",
+"name_ar": "المجاورة السادسة (التجمع الثالث)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJWUpPU74ZWBQRyMBvoHJohaM",
+"lat": 30.060158,
+"lng": 31.456899
+},
+{
+"path": "New Cairo > 7th Neighborhood (1st Settlement)",
+"name_en": "7th Neighborhood (1st Settlement)",
+"name_ar": "المجاورة السابعة (التجمع الأول)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": null
+},
+{
+"path": "New Cairo > 7th Neighborhood (3rd Settlement)",
+"name_en": "7th Neighborhood (3rd Settlement)",
+"name_ar": "المجاورة السابعة (التجمع الثالث)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJxy-uZ7IjWBQRFEBht7XZgwk",
+"lat": 30.000724,
+"lng": 31.504004
+},
+{
+"path": "New Cairo > 8th Neighborhood (1st Settlement)",
+"name_en": "8th Neighborhood (1st Settlement)",
+"name_ar": "المجاورة الثامنة (التجمع الأول)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJo_KiaQA9WBQRaLitBBzpRnQ",
+"lat": 30.053047,
+"lng": 31.444342
+},
+{
+"path": "New Cairo > 9th Neighborhood (1st Settlement)",
+"name_en": "9th Neighborhood (1st Settlement)",
+"name_ar": "المجاورة التاسعة (التجمع الأول)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJR7jRMwAjWBQRug3xioTM_sU",
+"lat": 30.058016,
+"lng": 31.452192
+},
+{
+"path": "New Cairo > Abu El Houl",
+"name_en": "Abu El Houl",
+"name_ar": "أبو الهول",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": null
+},
+{
+"path": "New Cairo > Al Andalus",
+"name_en": "Al Andalus",
+"name_ar": "الأندلس",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJFaznfrIjWBQRycp_NoBb4SA",
+"lat": 30.001078,
+"lng": 31.50321
+},
+{
+"path": "New Cairo > Al Banafseg",
+"name_en": "Al Banafseg",
+"name_ar": "البنفسج",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJM36dTA0YWBQRM07Eb3litU0",
+"lat": 30.047975,
+"lng": 31.465614
+},
+{
+"path": "New Cairo > Al Karnak",
+"name_en": "Al Karnak",
+"name_ar": "الكرنك",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": null
+},
+{
+"path": "New Cairo > Al Lotus",
+"name_en": "Al Lotus",
+"name_ar": "اللوتس",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJewvUgxMiWBQRCl8cX3YuC50",
+"lat": 30.025785,
+"lng": 31.519872
+},
+{
+"path": "New Cairo > Al Narges",
+"name_en": "Al Narges",
+"name_ar": "النرجس",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJpy-3694iWBQRLz0uoLOepqk",
+"lat": 30.009794,
+"lng": 31.462758
+},
+{
+"path": "New Cairo > Al Qoronfol",
+"name_en": "Al Qoronfol",
+"name_ar": "القرنفل",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJu4r2XCwZWBQRBtIN_6rBtxU",
+"lat": 30.051522,
+"lng": 31.526606
+},
+{
+"path": "New Cairo > Al Sharbatly",
+"name_en": "Al Sharbatly",
+"name_ar": "الشربتلي",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJt-DwsMw8WBQRZmSW9lnKPCg",
+"lat": 30.005122,
+"lng": 31.445172
+},
+{
+"path": "New Cairo > Al Tagamoa Al Awal",
+"name_en": "Al Tagamoa Al Awal",
+"name_ar": "التجمع الأول (مناطق)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ-f8PJA8YWBQRbYjaNzNGjO8",
+"lat": 30.0635,
+"lng": 31.459538
+},
+{
+"path": "New Cairo > Al Tagamoa Al Khames",
+"name_en": "Al Tagamoa Al Khames",
+"name_ar": "التجمع الخامس (مناطق)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJCdk2VMc8WBQRAz7sKEUdkn8",
+"lat": 30.008487,
+"lng": 31.428476
+},
+{
+"path": "New Cairo > Al Tagamoa Al Thaleth",
+"name_en": "Al Tagamoa Al Thaleth",
+"name_ar": "التجمع الثالث (مناطق)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJCdk2VMc8WBQRAz7sKEUdkn8",
+"lat": 30.008487,
+"lng": 31.428476
+},
+{
+"path": "New Cairo > Al Tagamoa Al Thani",
+"name_en": "Al Tagamoa Al Thani",
+"name_ar": "التجمع الثاني",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJL9MWLAgXWBQRkfPKEkBVMt0",
+"lat": 30.025552,
+"lng": 31.455281
+},
+{
+"path": "New Cairo > Al Yasmeen",
+"name_en": "Al Yasmeen",
+"name_ar": "الياسمين",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJeW6jz7UiWBQRTMwywGIVq4M",
+"lat": 30.043975,
+"lng": 31.451331
+},
+{
+"path": "New Cairo > Arabella",
+"name_en": "Arabella",
+"name_ar": "أرابيلا",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ6yYpZ688WBQR_kO1FF5AOc4",
+"lat": 29.987119,
+"lng": 31.435619
+},
+{
+"path": "New Cairo > Bait El Watan",
+"name_en": "Bait El Watan",
+"name_ar": "بيت الوطن",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJfbYlje8fWBQR1KZabq5l3QU",
+"lat": 30.069658,
+"lng": 31.545488
+},
+{
+"path": "New Cairo > Banafseg Buildings",
+"name_en": "Banafseg Buildings",
+"name_ar": "عمارات البنفسج",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJHeQkfJMiWBQRqqMliat8tbM",
+"lat": 30.035343,
+"lng": 31.474379
+},
+{
+"path": "New Cairo > Banafseg Villas",
+"name_en": "Banafseg Villas",
+"name_ar": "فيلات البنفسج",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJAyGIRQAjWBQR_GEO3a73zvA",
+"lat": 30.047953,
+"lng": 31.474054
+},
+{
+"path": "New Cairo > Behind AUC",
+"name_en": "Behind AUC",
+"name_ar": "خلف الجامعة الأمريكية",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJubCKaDcjWBQRT4I8n-dU-Ak",
+"lat": 30.019208,
+"lng": 31.500474
+},
+{
+"path": "New Cairo > Beside AUC",
+"name_en": "Beside AUC",
+"name_ar": "بجوار الجامعة الأمريكية",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJubCKaDcjWBQRT4I8n-dU-Ak",
+"lat": 30.019208,
+"lng": 31.500474
+},
+{
+"path": "New Cairo > Bolivar Axis",
+"name_en": "Bolivar Axis",
+"name_ar": "محور بوليفار",
+"place_type": "road_or_corridor",
+"governorate": "Cairo",
+"google_place_id": "ChIJYTWjoRcXWBQRR4eqK2EgNV4",
+"lat": 30.08058,
+"lng": 31.434658
+},
+{
+"path": "New Cairo > Cairo-Suez Road",
+"name_en": "Cairo-Suez Road",
+"name_ar": "طريق القاهرة - السويس",
+"place_type": "road_or_corridor",
+"governorate": "Cairo",
+"google_place_id": "EiFTdWV6IFJkLCBDYWlybyBHb3Zlcm5vcmF0ZSwgRWd5cHQiLiosChQKEglXZwUrJxZYFBFxJeBc2ds4JhIUChIJ53DS_M8iWBQR2J-Ih9Zziwk",
+"disambiguation": "AMBIGUOUS (3 parents: Mostakbal City, Nasr City, New Cairo) — ask 'which one?'; do not use as parent",
+"lat": 30.103546,
+"lng": 31.591099
+},
+{
+"path": "New Cairo > Choueifat",
+"name_en": "Choueifat",
+"name_ar": "الشويفات",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJJYjV6I48WBQR1rwEdudec70",
+"lat": 30.001919,
+"lng": 31.407248
+},
+{
+"path": "New Cairo > Diplomats District",
+"name_en": "Diplomats District",
+"name_ar": "حي الدبلوماسيين",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJLWyQwrM8WBQRpMHbVP6XOFc",
+"lat": 29.992701,
+"lng": 31.439355
+},
+{
+"path": "New Cairo > East of the Academy",
+"name_en": "East of the Academy",
+"name_ar": "شرق الأكاديمية",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJMWkw5zc9WBQRgv3Ki-nyqPU",
+"lat": 30.041649,
+"lng": 31.435619
+},
+{
+"path": "New Cairo > El Gezira Area (3rd Settlement)",
+"name_en": "El Gezira Area (3rd Settlement)",
+"name_ar": "منطقة الجزيرة (التجمع الثالث)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ9zbsQPoiWBQR_3jSUV2iMG8",
+"lat": 30.018279,
+"lng": 31.48405
+},
+{
+"path": "New Cairo > El Mashroaa El Amriki (3rd Settlement)",
+"name_en": "El Mashroaa El Amriki (3rd Settlement)",
+"name_ar": "المشروع الأمريكي (التجمع الثالث)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": null
+},
+{
+"path": "New Cairo > El Mostakbal Area (3rd Settlement)",
+"name_en": "El Mostakbal Area (3rd Settlement)",
+"name_ar": "منطقة المستقبل (التجمع الثالث)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": null
+},
+{
+"path": "New Cairo > El Rehab",
+"name_en": "El Rehab",
+"name_ar": "الرحاب",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJQf5pK2IYWBQR7iU7ZoBaiDU",
+"lat": 30.064626,
+"lng": 31.488175
+},
+{
+"path": "New Cairo > El Shabab Area (3rd Settlement)",
+"name_en": "El Shabab Area (3rd Settlement)",
+"name_ar": "منطقة الشباب (التجمع الثالث)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJtfZOgKw8WBQRH_QWQhC9Nls",
+"lat": 29.984022,
+"lng": 31.442358
+},
+{
+"path": "New Cairo > Facing AUC",
+"name_en": "Facing AUC",
+"name_ar": "أمام الجامعة الأمريكية",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJubCKaDcjWBQRT4I8n-dU-Ak",
+"lat": 30.019208,
+"lng": 31.500474
+},
+{
+"path": "New Cairo > Gamal Abdel Nasser Axis",
+"name_en": "Gamal Abdel Nasser Axis",
+"name_ar": "محور جمال عبد الناصر",
+"place_type": "road_or_corridor",
+"governorate": "Cairo",
+"google_place_id": "ChIJ1TxWNBE9WBQRNcjT3VvNBgw",
+"lat": 29.983405,
+"lng": 31.437936
+},
+{
+"path": "New Cairo > Golden Square",
+"name_en": "Golden Square",
+"name_ar": "المربع الذهبي",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJP90FgxwjWBQR-BULnmGwSPU",
+"lat": 30.015079,
+"lng": 31.526458
+},
+{
+"path": "New Cairo > Katameya",
+"name_en": "Katameya",
+"name_ar": "القطامية",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ4-SXHYc8WBQRKkfwEuZHQoA",
+"lat": 29.992943,
+"lng": 31.407723
+},
+{
+"path": "New Cairo > MU23",
+"name_en": "MU23",
+"name_ar": "منطقة MU23",
+"place_type": "road_or_corridor",
+"governorate": "Cairo",
+"google_place_id": null,
+"disambiguation": "AMBIGUOUS (2 parents: New Cairo, New Capital) — ask 'which one?'; do not use as parent"
+},
+{
+"path": "New Cairo > Mega Mall Area (3rd Settlement)",
+"name_en": "Mega Mall Area (3rd Settlement)",
+"name_ar": "منطقة الميجا مول (التجمع الثالث)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ_VEvIVg7WBQRUXXr3WIyOko",
+"lat": 29.979456,
+"lng": 31.433985
+},
+{
+"path": "New Cairo > Mirage City",
+"name_en": "Mirage City",
+"name_ar": "ميراج سيتي",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJmYvuTvsXWBQRdkobRUbF0ak",
+"lat": 30.071696,
+"lng": 31.435443
+},
+{
+"path": "New Cairo > Mohamed Naguib Axis",
+"name_en": "Mohamed Naguib Axis",
+"name_ar": "محور محمد نجيب",
+"place_type": "road_or_corridor",
+"governorate": "Cairo",
+"google_place_id": "ChIJEQmK1eEiWBQRlo3310KQEnc",
+"lat": 30.028632,
+"lng": 31.474843
+},
+{
+"path": "New Cairo > Narges Buildings",
+"name_en": "Narges Buildings",
+"name_ar": "عمارات النرجس",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ339-NjEjWBQRAinILENcg7U",
+"lat": 30.003355,
+"lng": 31.45276
+},
+{
+"path": "New Cairo > Narges Villas",
+"name_en": "Narges Villas",
+"name_ar": "فيلات النرجس",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJQyuQ7PYjWBQRl_pFar6pmN4",
+"lat": 30.013342,
+"lng": 31.448207
+},
+{
+"path": "New Cairo > New Lotus",
+"name_en": "New Lotus",
+"name_ar": "اللوتس الجديدة",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJewvUgxMiWBQRCl8cX3YuC50",
+"lat": 30.025785,
+"lng": 31.519872
+},
+{
+"path": "New Cairo > New Narges",
+"name_en": "New Narges",
+"name_ar": "النرجس الجديدة",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJpy-3694iWBQRLz0uoLOepqk",
+"lat": 30.009794,
+"lng": 31.462758
+},
+{
+"path": "New Cairo > North 90th",
+"name_en": "North 90th",
+"name_ar": "التسعين الشمالي",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJX3YQ_dI8WBQRUpIe_PQ7HDM",
+"lat": 30.012212,
+"lng": 31.44303
+},
+{
+"path": "New Cairo > North House",
+"name_en": "North House",
+"name_ar": "نورث هاوس",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJOeksN6YfWBQRnM29upcL3KA",
+"lat": 30.084566,
+"lng": 31.555379
+},
+{
+"path": "New Cairo > North of Rehab",
+"name_en": "North of Rehab",
+"name_ar": "شمال الرحاب",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJQf5pK2IYWBQR7iU7ZoBaiDU",
+"lat": 30.064626,
+"lng": 31.488175
+},
+{
+"path": "New Cairo > Northern Investors Area",
+"name_en": "Northern Investors Area",
+"name_ar": "منطقة المستثمرين الشمالية",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJb6f5eYciWBQRiESfL3bFRhA",
+"lat": 30.045266,
+"lng": 31.485607
+},
+{
+"path": "New Cairo > Northern Lotus",
+"name_en": "Northern Lotus",
+"name_ar": "اللوتس الشمالية",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJd6r8vA4iWBQRsVKlSIHWov8",
+"lat": 30.034838,
+"lng": 31.520669
+},
+{
+"path": "New Cairo > Ring Road (Katameya)",
+"name_en": "Ring Road (Katameya)",
+"name_ar": "الطريق الدائري (القطامية)",
+"place_type": "road_or_corridor",
+"governorate": "Cairo",
+"google_place_id": "ElRSaW5nIFJkICYgRSBLYXRhbWV5YSwgSW5kdXN0cmlhbCBBcmVhLCBOZXcgQ2Fpcm8gMywgQ2Fpcm8gR292ZXJub3JhdGUgNDcxNTAwMSwgRWd5cHQiZiJkChQKEglRmE-AhCRYFBFFhMekaC_AhBIUChIJUZhPgIQkWBQRRYTHpGgvwIQaFAoSCed-m02JJFgUEQNR1R2qrT8LGhQKEgk1OU7KnCRYFBEkvhTzX3-0eCIKDVj42xEVWd7DEg",
+"lat": 29.962863,
+"lng": 31.482633
+},
+{
+"path": "New Cairo > Sadat Axis",
+"name_en": "Sadat Axis",
+"name_ar": "محور السادات",
+"place_type": "road_or_corridor",
+"governorate": "Cairo",
+"google_place_id": "ChIJ_4x456UiWBQRIAsSKirJ2H0",
+"lat": 30.05341,
+"lng": 31.469223
+},
+{
+"path": "New Cairo > South 90th",
+"name_en": "South 90th",
+"name_ar": "التسعين الجنوبي",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJX3YQ_dI8WBQRUpIe_PQ7HDM",
+"lat": 30.012212,
+"lng": 31.44303
+},
+{
+"path": "New Cairo > South of the Academy",
+"name_en": "South of the Academy",
+"name_ar": "جنوب الأكاديمية",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ_Vmkmho9WBQRaz5QhC5Rl38",
+"lat": 30.037917,
+"lng": 31.434002
+},
+{
+"path": "New Cairo > Southern Investors Area",
+"name_en": "Southern Investors Area",
+"name_ar": "منطقة المستثمرين الجنوبية",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ58VMwbsjWBQREtRkIRnn-g0",
+"lat": 29.990414,
+"lng": 31.506867
+},
+{
+"path": "New Cairo > Southern Lotus",
+"name_en": "Southern Lotus",
+"name_ar": "اللوتس الجنوبية",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJCV4fFgAjWBQRdUqyW5euRbk",
+"lat": 30.015774,
+"lng": 31.519804
+},
+{
+"path": "New Cairo > Tahrir Axis",
+"name_en": "Tahrir Axis",
+"name_ar": "محور التحرير",
+"place_type": "road_or_corridor",
+"governorate": "Cairo",
+"google_place_id": "ChIJVzOG8XsiWBQRERiIpGD-4WQ",
+"lat": 30.041259,
+"lng": 31.495782
+},
+{
+"path": "New Cairo > Taj City",
+"name_en": "Taj City",
+"name_ar": "تاج سيتي",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ9XQaMXw9WBQRapOhXHozFlQ",
+"lat": 30.068366,
+"lng": 31.406569
+},
+{
+"path": "New Cairo > Tamr Henna",
+"name_en": "Tamr Henna",
+"name_ar": "تمر حنة",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJQYcuOgAZWBQRzjVz_HCB3zQ",
+"lat": 30.070176,
+"lng": 31.51583
+},
+{
+"path": "New Cairo > West Golf",
+"name_en": "West Golf",
+"name_ar": "غرب الجولف",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ65e2G109WBQRGj8hWcDDmxs",
+"lat": 29.99903,
+"lng": 31.399859
+},
+{
+"path": "New Capital > Bin Zayed North Axis",
+"name_en": "Bin Zayed North Axis",
+"name_ar": "محور بن زايد الشمالي",
+"place_type": "road_or_corridor",
+"governorate": "Cairo",
+"google_place_id": "ChIJiZPYcmv1VxQRY5ZS2ttF-XA",
+"lat": 30.043429,
+"lng": 31.688453
+},
+{
+"path": "New Capital > Bin Zayed South Axis",
+"name_en": "Bin Zayed South Axis",
+"name_ar": "محور بن زايد الجنوبي",
+"place_type": "road_or_corridor",
+"governorate": "Cairo",
+"google_place_id": "ChIJdXqMR8KLVxQRLI9eKXHpdv8",
+"lat": 29.975482,
+"lng": 31.718312
+},
+{
+"path": "New Capital > Central Business District (CBD)",
+"name_en": "Central Business District (CBD)",
+"name_ar": "منطقة الأعمال المركزية (CBD)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJt3Ll_Jr1VxQRYPcdimsgPvE",
+"lat": 30.00925,
+"lng": 31.690902
+},
+{
+"path": "New Capital > Cultural & Arts District",
+"name_en": "Cultural & Arts District",
+"name_ar": "مدينة الثقافة والفنون",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJycfC9GPzVxQR1JQwNA8dZR8",
+"lat": 30.013777,
+"lng": 31.72502
+},
+{
+"path": "New Capital > Diplomatic District",
+"name_en": "Diplomatic District",
+"name_ar": "الحي الدبلوماسي",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJt3Ll_Jr1VxQRYPcdimsgPvE",
+"lat": 30.00925,
+"lng": 31.690902
+},
+{
+"path": "New Capital > Downtown (New Capital)",
+"name_en": "Downtown (New Capital)",
+"name_ar": "الداون تاون (العاصمة الإدارية)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJjQTvflDzVxQRzRKTYreAZvg",
+"lat": 29.990059,
+"lng": 31.741195
+},
+{
+"path": "New Capital > Financial & Business District",
+"name_en": "Financial & Business District",
+"name_ar": "حي المال والأعمال",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJt3Ll_Jr1VxQRYPcdimsgPvE",
+"lat": 30.00925,
+"lng": 31.690902
+},
+{
+"path": "New Capital > Governmental District",
+"name_en": "Governmental District",
+"name_ar": "الحي الحكومي",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJSxRJfAD1VxQRyMamtTlleVQ",
+"lat": 30.014239,
+"lng": 31.754873
+},
+{
+"path": "New Capital > Green River",
+"name_en": "Green River",
+"name_ar": "النهر الأخضر",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJS0okdb0hWBQRMyD04YRJ-0U",
+"lat": 30.01564,
+"lng": 31.621773
+},
+{
+"path": "New Capital > Investors Area",
+"name_en": "Investors Area",
+"name_ar": "منطقة المستثمرين",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJE78eXLr1VxQRB3HFIesHUI8",
+"lat": 30.012726,
+"lng": 31.701902
+},
+{
+"path": "New Capital > MU23",
+"name_en": "MU23",
+"name_ar": "منطقة MU23",
+"place_type": "road_or_corridor",
+"governorate": "Cairo",
+"google_place_id": "ChIJY53TD4f1VxQRhAyQ8bm3UT0",
+"disambiguation": "AMBIGUOUS (2 parents: New Cairo, New Capital) — ask 'which one?'; do not use as parent",
+"lat": 30.021568,
+"lng": 31.690478
+},
+{
+"path": "New Capital > R1 Sector",
+"name_en": "R1 Sector",
+"name_ar": "الحي السكني R1",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJw1r-RXLzVxQRAaZud8-LnbA",
+"lat": 30.018937,
+"lng": 31.733938
+},
+{
+"path": "New Capital > R2 Sector",
+"name_en": "R2 Sector",
+"name_ar": "الحي السكني R2",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJM7s_8Rb1VxQRQErYCDSaGn4",
+"lat": 30.03238,
+"lng": 31.661669
+},
+{
+"path": "New Capital > R3 Sector",
+"name_en": "R3 Sector",
+"name_ar": "الحي السكني R3",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJY53TD4f1VxQRhAyQ8bm3UT0",
+"lat": 30.021568,
+"lng": 31.690478
+},
+{
+"path": "New Capital > R4 Sector",
+"name_en": "R4 Sector",
+"name_ar": "الحي السكني R4",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJNXCzXDXzVxQRp_78uKo45Zk",
+"lat": 30.003358,
+"lng": 31.735838
+},
+{
+"path": "New Capital > R5 Sector (New Garden City)",
+"name_en": "R5 Sector (New Garden City)",
+"name_ar": "الحي السكني R5 (جاردن سيتي الجديدة)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ-RHAMsuLVxQRzSaC9DzWqY0",
+"lat": 30.004242,
+"lng": 31.646142
+},
+{
+"path": "New Capital > R6 Sector",
+"name_en": "R6 Sector",
+"name_ar": "الحي السكني R6",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJQ_mnMrOLVxQRWyws7at8xwo",
+"lat": 29.995476,
+"lng": 31.683246
+},
+{
+"path": "New Capital > R7 Sector",
+"name_en": "R7 Sector",
+"name_ar": "الحي السكني R7",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJcaW5pVKNVxQRQVvqvOuPHuc",
+"lat": 29.960077,
+"lng": 31.721709
+},
+{
+"path": "New Capital > R8 Sector",
+"name_en": "R8 Sector",
+"name_ar": "الحي السكني R8",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJM7LsdWuNVxQRbio91wBymGs",
+"lat": 29.968268,
+"lng": 31.780461
+},
+{
+"path": "New Capital > Sports City",
+"name_en": "Sports City",
+"name_ar": "المدينة الرياضية",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ2f3V5Vv0VxQRmwxQAHKTPE8",
+"lat": 30.043174,
+"lng": 31.689975
+},
+{
+"path": "New Heliopolis > 1st District (New Heliopolis)",
+"name_en": "1st District (New Heliopolis)",
+"name_ar": "الحي الأول (هليوبوليس الجديدة)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJu9KtD9f3VxQRBJUAmyHLG1Y",
+"lat": 30.156988,
+"lng": 31.673956
+},
+{
+"path": "New Heliopolis > 2nd District (New Heliopolis)",
+"name_en": "2nd District (New Heliopolis)",
+"name_ar": "الحي الثاني (هليوبوليس الجديدة)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJbyU2NC73VxQRoPQWnQNg89Q",
+"lat": 30.129807,
+"lng": 31.685006
+},
+{
+"path": "New Heliopolis > 3rd District (New Heliopolis)",
+"name_en": "3rd District (New Heliopolis)",
+"name_ar": "الحي الثالث (هليوبوليس الجديدة)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJu9KtD9f3VxQRBJUAmyHLG1Y",
+"lat": 30.156988,
+"lng": 31.673956
+},
+{
+"path": "New Heliopolis > 4th District (New Heliopolis)",
+"name_en": "4th District (New Heliopolis)",
+"name_ar": "الحي الرابع (هليوبوليس الجديدة)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJjfaKzPb3VxQRf0BkmViE4fw",
+"lat": 30.142585,
+"lng": 31.677752
+},
+{
+"path": "New Heliopolis > 5th District (New Heliopolis)",
+"name_en": "5th District (New Heliopolis)",
+"name_ar": "الحي الخامس (هليوبوليس الجديدة)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJNejRUwn3VxQRSffa8xKXd2s",
+"lat": 30.138263,
+"lng": 31.679203
+},
+{
+"path": "New Heliopolis > 6th District (New Heliopolis)",
+"name_en": "6th District (New Heliopolis)",
+"name_ar": "الحي السادس (هليوبوليس الجديدة)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ_9k79wr3VxQRD5ocTJxjuxU",
+"lat": 30.143733,
+"lng": 31.675363
+},
+{
+"path": "New Heliopolis > 7th District (New Heliopolis)",
+"name_en": "7th District (New Heliopolis)",
+"name_ar": "الحي السابع (هليوبوليس الجديدة)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJNejRUwn3VxQRSffa8xKXd2s",
+"lat": 30.138263,
+"lng": 31.679203
+},
+{
+"path": "New Heliopolis > 8th District (New Heliopolis)",
+"name_en": "8th District (New Heliopolis)",
+"name_ar": "الحي الثامن (هليوبوليس الجديدة)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJNejRUwn3VxQRSffa8xKXd2s",
+"lat": 30.138263,
+"lng": 31.679203
+},
+{
+"path": "New Heliopolis > Korba Al Gadida",
+"name_en": "Korba Al Gadida",
+"name_ar": "الكوربة الجديدة",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJDR8Lp6b3VxQRUhpvn76pKsw",
+"lat": 30.142394,
+"lng": 31.676369
+},
+{
+"path": "North Coast > Agiba",
+"name_en": "Agiba",
+"name_ar": "عجيبة",
+"place_type": "sub_area_or_sector",
+"governorate": "North Coast",
+"google_place_id": "ChIJLXp0EkWTXxQRi65knqbZqfU",
+"lat": 30.816633,
+"lng": 29.107078
+},
+{
+"path": "North Coast > Al Dabaa",
+"name_en": "Al Dabaa",
+"name_ar": "الضبعة",
+"place_type": "sub_area_or_sector",
+"governorate": "North Coast",
+"google_place_id": "ChIJl1zkoAsZYBQRC5DCh6AIkrQ",
+"lat": 31.075969,
+"lng": 28.389685
+},
+{
+"path": "North Coast > Almaza Bay",
+"name_en": "Almaza Bay",
+"name_ar": "ألماظة باي",
+"place_type": "sub_area_or_sector",
+"governorate": "North Coast",
+"google_place_id": "ChIJKQHumVTdYRQR1xNpiyOIDvY",
+"lat": 31.195686,
+"lng": 27.554789
+},
+{
+"path": "North Coast > Bagoush",
+"name_en": "Bagoush",
+"name_ar": "باجوش",
+"place_type": "sub_area_or_sector",
+"governorate": "North Coast",
+"google_place_id": "ChIJxW-aO07bYRQR4k5kP6STUN4",
+"lat": 31.177575,
+"lng": 27.65615
+},
+{
+"path": "North Coast > Borg El Arab",
+"name_en": "Borg El Arab",
+"name_ar": "برج العرب",
+"place_type": "sub_area_or_sector",
+"governorate": "North Coast",
+"google_place_id": "ChIJcSs9vvqA9RQRCAaLDIMM-Tg",
+"lat": 30.933246,
+"lng": 29.474824
+},
+{
+"path": "North Coast > El Alamein",
+"name_en": "El Alamein",
+"name_ar": "العلمين",
+"place_type": "sub_area_or_sector",
+"governorate": "North Coast",
+"google_place_id": "ChIJtaIn8wz8XxQR6Eujp3L972E",
+"lat": 30.97392,
+"lng": 28.759499
+},
+{
+"path": "North Coast > Fouka",
+"name_en": "Fouka",
+"name_ar": "فوكا",
+"place_type": "sub_area_or_sector",
+"governorate": "North Coast",
+"google_place_id": "ChIJoYJlt7syYBQRilR6LGjHpsA",
+"lat": 31.084831,
+"lng": 27.935695
+},
+{
+"path": "North Coast > Garawla",
+"name_en": "Garawla",
+"name_ar": "جراولة",
+"place_type": "sub_area_or_sector",
+"governorate": "North Coast",
+"google_place_id": "ChIJSfPofmTlYRQRLNPNWHuGkWk",
+"lat": 31.23637,
+"lng": 27.405712
+},
+{
+"path": "North Coast > Ghazala Bay",
+"name_en": "Ghazala Bay",
+"name_ar": "خليج غزالة",
+"place_type": "sub_area_or_sector",
+"governorate": "North Coast",
+"google_place_id": "ChIJvd31XG8HYBQRAR9LUCBU0og",
+"lat": 31.020888,
+"lng": 28.581794
+},
+{
+"path": "North Coast > Hacienda",
+"name_en": "Hacienda",
+"name_ar": "هاسيندا",
+"place_type": "sub_area_or_sector",
+"governorate": "North Coast",
+"google_place_id": "ChIJhYWL_0EHYBQR7sr0sCKW0AU",
+"lat": 30.935243,
+"lng": 28.789863
+},
+{
+"path": "North Coast > Marabella",
+"name_en": "Marabella",
+"name_ar": "مارابيلا",
+"place_type": "sub_area_or_sector",
+"governorate": "North Coast",
+"google_place_id": "ChIJyZL4vUeBXxQRgSyiWRO6Q94",
+"lat": 30.87103,
+"lng": 29.338496
+},
+{
+"path": "North Coast > Marakia",
+"name_en": "Marakia",
+"name_ar": "مراقيا",
+"place_type": "sub_area_or_sector",
+"governorate": "North Coast",
+"google_place_id": "ChIJ5T31SeCA9RQR4MqJJ-u_F-0",
+"lat": 30.939203,
+"lng": 29.484229
+},
+{
+"path": "North Coast > Marina El Alamein",
+"name_en": "Marina El Alamein",
+"name_ar": "مارينا العلمين",
+"place_type": "sub_area_or_sector",
+"governorate": "North Coast",
+"google_place_id": "ChIJz20SFHHtXxQRXfkJzM7zqdc",
+"lat": 30.826013,
+"lng": 28.993615
+},
+{
+"path": "North Coast > Marsa Matrouh",
+"name_en": "Marsa Matrouh",
+"name_ar": "مرسى مطروح",
+"place_type": "sub_area_or_sector",
+"governorate": "North Coast",
+"google_place_id": "EklBbGV4YW5kcmlhIC0gTWFyc2EgTWF0cm91aCBSZCwgTm9ydGggQ29hc3QsIEFsZXhhbmRyaWEgR292ZXJub3JhdGUsIEVneXB0Ii4qLAoUChIJXwHOCkUDYBQRk_s7Uj87SzgSFAoSCXkuteP3gPUUEaB0o-_0LmFm",
+"lat": 30.946028,
+"lng": 29.511814
+},
+{
+"path": "North Coast > New Alamein",
+"name_en": "New Alamein",
+"name_ar": "العلمين الجديدة",
+"place_type": "sub_area_or_sector",
+"governorate": "North Coast",
+"google_place_id": "ChIJXYpkjs_vXxQRBDQue7vddmg",
+"lat": 30.850694,
+"lng": 28.935149
+},
+{
+"path": "North Coast > Ras El Hekma",
+"name_en": "Ras El Hekma",
+"name_ar": "رأس الحكمة",
+"place_type": "sub_area_or_sector",
+"governorate": "North Coast",
+"google_place_id": "ChIJX8OHKw0yYBQRAWYK-Yrz2vQ",
+"lat": 31.078855,
+"lng": 27.996324
+},
+{
+"path": "North Coast > Sidi Abdel Rahman",
+"name_en": "Sidi Abdel Rahman",
+"name_ar": "سيدي عبد الرحمن",
+"place_type": "sub_area_or_sector",
+"governorate": "North Coast",
+"google_place_id": "ChIJcwR1lJb7XxQR0PMQud7i0h0",
+"lat": 30.954606,
+"lng": 28.804306
+},
+{
+"path": "North Coast > Sidi Heneish",
+"name_en": "Sidi Heneish",
+"name_ar": "سيدي حنيش",
+"place_type": "sub_area_or_sector",
+"governorate": "North Coast",
+"google_place_id": "ChIJ9SRgMgzbYRQRpWyIdA3xIGY",
+"lat": 31.155202,
+"lng": 27.643264
+},
+{
+"path": "North Coast > Sidi Kreir",
+"name_en": "Sidi Kreir",
+"name_ar": "سيدي كرير",
+"place_type": "sub_area_or_sector",
+"governorate": "North Coast",
+"google_place_id": "ChIJg38y48SP9RQRbCPD05fIElM",
+"lat": 31.015978,
+"lng": 29.635202
+},
+{
+"path": "Obour City > 1st District (Obour)",
+"name_en": "1st District (Obour)",
+"name_ar": "الحي الأول (العبور)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJH72GmTgFWBQR2Y3uQc-HOd4",
+"lat": 30.235652,
+"lng": 31.467042
+},
+{
+"path": "Obour City > 2nd District (Obour)",
+"name_en": "2nd District (Obour)",
+"name_ar": "الحي الثاني (العبور)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJq4cy0mwFWBQRrqBxI5zE6Ow",
+"lat": 30.249115,
+"lng": 31.46816
+},
+{
+"path": "Obour City > 3rd District (Obour)",
+"name_en": "3rd District (Obour)",
+"name_ar": "الحي الثالث (العبور)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJR9Rfpy8FWBQRELx5s8iGQ3g",
+"lat": 30.248136,
+"lng": 31.491202
+},
+{
+"path": "Obour City > 4th District (Obour)",
+"name_en": "4th District (Obour)",
+"name_ar": "الحي الرابع (العبور)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ0xpEVqwdWBQRnKuyCCSYhsU",
+"lat": 30.178297,
+"lng": 31.546108
+},
+{
+"path": "Obour City > 5th District (Obour)",
+"name_en": "5th District (Obour)",
+"name_ar": "الحي الخامس (العبور)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJMZD6kTMFWBQRLTpfaJ54PPo",
+"lat": 30.221325,
+"lng": 31.477039
+},
+{
+"path": "Obour City > 6th District (Obour)",
+"name_en": "6th District (Obour)",
+"name_ar": "الحي السادس (العبور)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJlfkPDLkaWBQRz6SV0tLDoCY",
+"lat": 30.208811,
+"lng": 31.465614
+},
+{
+"path": "Obour City > 7th District (Obour)",
+"name_en": "7th District (Obour)",
+"name_ar": "الحي السابع (العبور)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJI3ipOlsFWBQRHglP-yJvsaU",
+"lat": 30.239046,
+"lng": 31.456882
+},
+{
+"path": "Obour City > 8th District (Obour)",
+"name_en": "8th District (Obour)",
+"name_ar": "الحي الثامن (العبور)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ602mWqoFWBQRQrXKGWq9Lww",
+"lat": 30.258835,
+"lng": 31.487035
+},
+{
+"path": "Obour City > 9th District (Obour)",
+"name_en": "9th District (Obour)",
+"name_ar": "الحي التاسع (العبور)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJxc_8dagaWBQRySr1-Myq3Jk",
+"lat": 30.216843,
+"lng": 31.445841
+},
+{
+"path": "Obour City > Golf City",
+"name_en": "Golf City",
+"name_ar": "جولف سيتي",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJm90a9PkaWBQRR3oBZdsfC1A",
+"lat": 30.178323,
+"lng": 31.482751
+},
+{
+"path": "Obour City > New Obour",
+"name_en": "New Obour",
+"name_ar": "العبور الجديدة",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJfaRMPbcaWBQRZ38AHS3J4Yk",
+"lat": 30.193809,
+"lng": 31.460161
+},
+{
+"path": "Obour City > Orabi Villas",
+"name_en": "Orabi Villas",
+"name_ar": "فيلات عرابي",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": null
+},
+{
+"path": "Sheikh Zayed > 10th District (Sheikh Zayed)",
+"name_en": "10th District (Sheikh Zayed)",
+"name_ar": "الحي العاشر (الشيخ زايد)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJzy_-oOxZWBQROxQ5LapOoxw",
+"lat": 30.038561,
+"lng": 30.971858
+},
+{
+"path": "Sheikh Zayed > 11th District (Sheikh Zayed)",
+"name_en": "11th District (Sheikh Zayed)",
+"name_ar": "الحي الحادي عشر (الشيخ زايد)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJXZsrnZZZWBQRaxvo64keAGg",
+"lat": 30.046116,
+"lng": 30.968317
+},
+{
+"path": "Sheikh Zayed > 12th District (Sheikh Zayed)",
+"name_en": "12th District (Sheikh Zayed)",
+"name_ar": "الحي الثاني عشر (الشيخ زايد)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJnYSF-fVZWBQRxqe_V9VKbyU",
+"lat": 30.041695,
+"lng": 30.98599
+},
+{
+"path": "Sheikh Zayed > 13th District (Sheikh Zayed)",
+"name_en": "13th District (Sheikh Zayed)",
+"name_ar": "الحي الثالث عشر (الشيخ زايد)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJqd7JM49ZWBQRXYylc6fdC_Q",
+"lat": 30.046869,
+"lng": 30.98141
+},
+{
+"path": "Sheikh Zayed > 14th District (Sheikh Zayed)",
+"name_en": "14th District (Sheikh Zayed)",
+"name_ar": "الحي الرابع عشر (الشيخ زايد)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJGV1Vsy1aWBQRoViJLFQ9v0o",
+"lat": 30.050821,
+"lng": 30.994802
+},
+{
+"path": "Sheikh Zayed > 15th District (Sheikh Zayed)",
+"name_en": "15th District (Sheikh Zayed)",
+"name_ar": "الحي الخامس عشر (الشيخ زايد)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJqd7JM49ZWBQRXYylc6fdC_Q",
+"lat": 30.046869,
+"lng": 30.98141
+},
+{
+"path": "Sheikh Zayed > 16th District (Sheikh Zayed)",
+"name_en": "16th District (Sheikh Zayed)",
+"name_ar": "الحي السادس عشر (الشيخ زايد)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJ9VUxQJhZWBQRFrCKldCo0Qw",
+"lat": 30.053202,
+"lng": 30.966187
+},
+{
+"path": "Sheikh Zayed > 17th District (Sheikh Zayed)",
+"name_en": "17th District (Sheikh Zayed)",
+"name_ar": "الحي السابع عشر (الشيخ زايد)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJ2SSz8SlaWBQRjQtDBldSxcU",
+"lat": 30.038174,
+"lng": 30.979353
+},
+{
+"path": "Sheikh Zayed > 1st District (Sheikh Zayed)",
+"name_en": "1st District (Sheikh Zayed)",
+"name_ar": "الحي الأول (الشيخ زايد)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJOZ7FNDhaWBQRLTBoyxWAUBI",
+"lat": 30.039849,
+"lng": 31.007755
+},
+{
+"path": "Sheikh Zayed > 26th of July Corridor",
+"name_en": "26th of July Corridor",
+"name_ar": "محور 26 يوليو",
+"place_type": "road_or_corridor",
+"governorate": "Giza",
+"google_place_id": "Ei4yNnRoIG9mIEp1bHkgQ29ycmlkb3IsIEdpemEgR292ZXJub3JhdGUsIEVneXB0Ii4qLAoUChIJyRzW9EJaWBQREVOB45t3SdsSFAoSCdkks_EpWlgUEY0LQwZXUsXF",
+"lat": 30.026422,
+"lng": 31.01884
+},
+{
+"path": "Sheikh Zayed > 2nd District (Sheikh Zayed)",
+"name_en": "2nd District (Sheikh Zayed)",
+"name_ar": "الحي الثاني (الشيخ زايد)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJOeU09UFZWBQR6i2mVJtaTUE",
+"lat": 30.071085,
+"lng": 30.984761
+},
+{
+"path": "Sheikh Zayed > 3rd District (Sheikh Zayed)",
+"name_en": "3rd District (Sheikh Zayed)",
+"name_ar": "الحي الثالث (الشيخ زايد)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJJcHEbyBZWBQRxd0fDzYA9KU",
+"lat": 30.024666,
+"lng": 30.981511
+},
+{
+"path": "Sheikh Zayed > 4th District (Sheikh Zayed)",
+"name_en": "4th District (Sheikh Zayed)",
+"name_ar": "الحي الرابع (الشيخ زايد)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJt0ChYBtaWBQR-fFpNfjBiNo",
+"lat": 30.024546,
+"lng": 30.994443
+},
+{
+"path": "Sheikh Zayed > 5th District (Sheikh Zayed)",
+"name_en": "5th District (Sheikh Zayed)",
+"name_ar": "الحي الخامس (الشيخ زايد)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJc9enuDpaWBQRDVM2G7CLFt8",
+"lat": 30.041051,
+"lng": 30.99982
+},
+{
+"path": "Sheikh Zayed > 6th District (Sheikh Zayed)",
+"name_en": "6th District (Sheikh Zayed)",
+"name_ar": "الحي السادس (الشيخ زايد)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJqd7JM49ZWBQRXYylc6fdC_Q",
+"lat": 30.046869,
+"lng": 30.98141
+},
+{
+"path": "Sheikh Zayed > 7th District (Sheikh Zayed)",
+"name_en": "7th District (Sheikh Zayed)",
+"name_ar": "الحي السابع (الشيخ زايد)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJJcHEbyBZWBQRxd0fDzYA9KU",
+"lat": 30.024666,
+"lng": 30.981511
+},
+{
+"path": "Sheikh Zayed > 8th District (Sheikh Zayed)",
+"name_en": "8th District (Sheikh Zayed)",
+"name_ar": "الحي الثامن (الشيخ زايد)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJtcoN1IxZWBQRBPFfWW9v__Y",
+"lat": 30.038174,
+"lng": 30.979353
+},
+{
+"path": "Sheikh Zayed > 9th District (Sheikh Zayed)",
+"name_en": "9th District (Sheikh Zayed)",
+"name_ar": "الحي التاسع (الشيخ زايد)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJK188jsFZWBQRYIbgHJD60aQ",
+"lat": 30.035589,
+"lng": 30.963252
+},
+{
+"path": "Sheikh Zayed > Al Karma",
+"name_en": "Al Karma",
+"name_ar": "الكرمة",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJVVVVhbxZWBQRRWX5t-mxCvA",
+"lat": 30.051473,
+"lng": 30.96063
+},
+{
+"path": "Sheikh Zayed > Al Rabwa",
+"name_en": "Al Rabwa",
+"name_ar": "الربوة",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJnRnfJuFVWBQRVx-hlYCnouw",
+"lat": 30.073658,
+"lng": 30.97834
+},
+{
+"path": "Sheikh Zayed > Al Yasmeen (Sheikh Zayed)",
+"name_en": "Al Yasmeen (Sheikh Zayed)",
+"name_ar": "الياسمين (الشيخ زايد)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJf3uldBtbWBQRMigikYloLNU",
+"lat": 30.05392,
+"lng": 30.999756
+},
+{
+"path": "Sheikh Zayed > Allegria",
+"name_en": "Allegria",
+"name_ar": "أليجريا",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJZW7uIRNZWBQRf02nJph8Wf8",
+"lat": 30.079915,
+"lng": 30.960273
+},
+{
+"path": "Sheikh Zayed > Beverly Hills",
+"name_en": "Beverly Hills",
+"name_ar": "بيفرلي هيلز",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJ13udJapZWBQRLvJiTpzDXUc",
+"lat": 30.064838,
+"lng": 30.94684
+},
+{
+"path": "Sheikh Zayed > Central Zayed",
+"name_en": "Central Zayed",
+"name_ar": "وسط زايد",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJ1fkdPSlaWBQRfXsht1VHvZk",
+"lat": 30.052168,
+"lng": 30.884343
+},
+{
+"path": "Sheikh Zayed > Dahshour Link",
+"name_en": "Dahshour Link",
+"name_ar": "وصلة دهشور",
+"place_type": "road_or_corridor",
+"governorate": "Giza",
+"google_place_id": "ChIJz_UBCABZWBQRUoj_CLOqVIw",
+"disambiguation": "AMBIGUOUS (2 parents: 6th of October, Sheikh Zayed) — ask 'which one?'; do not use as parent",
+"lat": 30.03255,
+"lng": 30.962405
+},
+{
+"path": "Sheikh Zayed > Green Belt (Sheikh Zayed)",
+"name_en": "Green Belt (Sheikh Zayed)",
+"name_ar": "الحزام الأخضر (الشيخ زايد)",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJ2SSz8SlaWBQRjQtDBldSxcU",
+"lat": 30.038174,
+"lng": 30.979353
+},
+{
+"path": "Sheikh Zayed > Green Revolution",
+"name_en": "Green Revolution",
+"name_ar": "الثورة الخضراء",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJ9xFlMgBbWBQRg2AxTh8sHI8",
+"lat": 30.038921,
+"lng": 31.021422
+},
+{
+"path": "Sheikh Zayed > New Zayed",
+"name_en": "New Zayed",
+"name_ar": "زايد الجديدة",
+"place_type": "sub_area_or_sector",
+"governorate": "Giza",
+"google_place_id": "ChIJG1iZ6lNbWBQRiI4V0DmayUs",
+"lat": 30.038849,
+"lng": 31.010041
+},
+{
+"path": "Sheikh Zayed > Nozha Axis",
+"name_en": "Nozha Axis",
+"name_ar": "محور النزهة",
+"place_type": "road_or_corridor",
+"governorate": "Giza",
+"google_place_id": "ChIJfVW4xkVaWBQRHwdWJCJULus",
+"lat": 30.036775,
+"lng": 31.017424
+},
+{
+"path": "Shorouk > 1st District (Shorouk)",
+"name_en": "1st District (Shorouk)",
+"name_ar": "الحي الأول (الشروق)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJKa5xnFAdWBQRs7mcLaty5hg",
+"lat": 30.147472,
+"lng": 31.617158
+},
+{
+"path": "Shorouk > 2nd District (Shorouk)",
+"name_en": "2nd District (Shorouk)",
+"name_ar": "الحي الثاني (الشروق)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ3YMF-HIdWBQRgM6Q9-4iYnk",
+"lat": 30.15061,
+"lng": 31.6082
+},
+{
+"path": "Shorouk > 3rd District (Shorouk)",
+"name_en": "3rd District (Shorouk)",
+"name_ar": "الحي الثالث (الشروق)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJ82oAj1b3VxQRDN11yvv23Bc",
+"lat": 30.159928,
+"lng": 31.642442
+},
+{
+"path": "Shorouk > 4th District (Shorouk)",
+"name_en": "4th District (Shorouk)",
+"name_ar": "الحي الرابع (الشروق)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJiQmHQG8dWBQRbQxork__LY4",
+"lat": 30.153366,
+"lng": 31.613181
+},
+{
+"path": "Shorouk > 5th District (Shorouk)",
+"name_en": "5th District (Shorouk)",
+"name_ar": "الحي الخامس (الشروق)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJZ37dY2wdWBQRJazEJyt0UPk",
+"lat": 30.156274,
+"lng": 31.608202
+},
+{
+"path": "Shorouk > 6th District (Shorouk)",
+"name_en": "6th District (Shorouk)",
+"name_ar": "الحي السادس (الشروق)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJZ37dY2wdWBQRJazEJyt0UPk",
+"lat": 30.156274,
+"lng": 31.608202
+},
+{
+"path": "Shorouk > 7th District (Shorouk)",
+"name_en": "7th District (Shorouk)",
+"name_ar": "الحي السابع (الشروق)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJiQmHQG8dWBQRbQxork__LY4",
+"lat": 30.153366,
+"lng": 31.613181
+},
+{
+"path": "Shorouk > 8th District (Shorouk)",
+"name_en": "8th District (Shorouk)",
+"name_ar": "الحي الثامن (الشروق)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJZ37dY2wdWBQRJazEJyt0UPk",
+"lat": 30.156274,
+"lng": 31.608202
+},
+{
+"path": "Shorouk > 9th District (Shorouk)",
+"name_en": "9th District (Shorouk)",
+"name_ar": "الحي التاسع (الشروق)",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJF-x1rnP3VxQRX_OQKKp3HrU",
+"lat": 30.166056,
+"lng": 31.643094
+},
+{
+"path": "Shorouk > Al Nadi Area",
+"name_en": "Al Nadi Area",
+"name_ar": "منطقة النادي",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJh_zPzBAdWBQRT8Lw2rD6cbU",
+"lat": 30.159443,
+"lng": 31.596241
+},
+{
+"path": "Shorouk > Al Nakhil Area",
+"name_en": "Al Nakhil Area",
+"name_ar": "منطقة النخيل",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJmz0X7pQdWBQRJEqkP2CECIM",
+"lat": 30.122794,
+"lng": 31.609776
+},
+{
+"path": "Shorouk > Al Panorama Area",
+"name_en": "Al Panorama Area",
+"name_ar": "منطقة البانوراما",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJU6I6dpwdWBQRTFXfVOrtfv8",
+"lat": 30.135526,
+"lng": 31.613146
+},
+{
+"path": "Shorouk > East Shorouk",
+"name_en": "East Shorouk",
+"name_ar": "شرق الشروق",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJYx5cyNf3VxQRRXHSBaWAbKE",
+"lat": 30.161783,
+"lng": 31.624344
+},
+{
+"path": "Shorouk > West Shorouk",
+"name_en": "West Shorouk",
+"name_ar": "غرب الشروق",
+"place_type": "sub_area_or_sector",
+"governorate": "Cairo",
+"google_place_id": "ChIJYx5cyNf3VxQRRXHSBaWAbKE",
+"lat": 30.161783,
+"lng": 31.624344
+},
+{
+"path": "New Cairo > 5th Settlement > 1st District (Fifth Settlement)",
+"name_en": "1st District (Fifth Settlement)",
+"name_ar": "الحي الأول (التجمع الخامس)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJv0-nack8WBQRMlKEi4Irciw",
+"lat": 30.004579,
+"lng": 31.438959,
+"moved_from": "New Cairo > 1st District (Fifth Settlement)"
+},
+{
+"path": "New Cairo > 5th Settlement > 2nd District (Fifth Settlement)",
+"name_en": "2nd District (Fifth Settlement)",
+"name_ar": "الحي الثاني (التجمع الخامس)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJ558RFwA9WBQROisPF_06nro",
+"lat": 30.008487,
+"lng": 31.428476,
+"moved_from": "New Cairo > 2nd District (Fifth Settlement)"
+},
+{
+"path": "New Cairo > 5th Settlement > 3rd District (Fifth Settlement)",
+"name_en": "3rd District (Fifth Settlement)",
+"name_ar": "الحي الثالث (التجمع الخامس)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJnSkRY5Q8WBQRCKBfEwQsqKU",
+"lat": 30.003341,
+"lng": 31.417905,
+"moved_from": "New Cairo > 3rd District (Fifth Settlement)"
+},
+{
+"path": "New Cairo > 5th Settlement > 4th District (Fifth Settlement)",
+"name_en": "4th District (Fifth Settlement)",
+"name_ar": "الحي الرابع (التجمع الخامس)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJcRxmqJU8WBQR3a9-81tScjw",
+"lat": 30.00252,
+"lng": 31.420397,
+"moved_from": "New Cairo > 4th District (Fifth Settlement)"
+},
+{
+"path": "New Cairo > 5th Settlement > 5th District (Fifth Settlement)",
+"name_en": "5th District (Fifth Settlement)",
+"name_ar": "الحي الخامس (التجمع الخامس)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJCdk2VMc8WBQRAz7sKEUdkn8",
+"lat": 30.008487,
+"lng": 31.428476,
+"moved_from": "New Cairo > 5th District (Fifth Settlement)"
+},
+{
+"path": "New Cairo > Al Andalus > Andalus 1",
+"name_en": "Andalus 1",
+"name_ar": "الأندلس 1",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJjcnhs9MjWBQRk5QsOIX5BKM",
+"lat": 29.993967,
+"lng": 31.528788
+},
+{
+"path": "New Cairo > Al Andalus > Andalus 2",
+"name_en": "Andalus 2",
+"name_ar": "الأندلس 2",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJ0-_LFNMjWBQRy1oD2OWIz6o",
+"lat": 29.995508,
+"lng": 31.529737
+},
+{
+"path": "New Cairo > Al Banafseg > Banafseg 1 (Villas)",
+"name_en": "Banafseg 1 (Villas)",
+"name_ar": "البنفسج 1 (فيلات)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJken9lo4ZWBQR6Gt5xulMqPQ",
+"lat": 30.056914,
+"lng": 31.47447
+},
+{
+"path": "New Cairo > Al Banafseg > Banafseg 10 (Villas)",
+"name_en": "Banafseg 10 (Villas)",
+"name_ar": "البنفسج 10 (فيلات)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJd3zmjn8jWBQRgkjRvGVnrNU",
+"lat": 30.043866,
+"lng": 31.466681
+},
+{
+"path": "New Cairo > Al Banafseg > Banafseg 11 (Villas)",
+"name_en": "Banafseg 11 (Villas)",
+"name_ar": "البنفسج 11 (فيلات)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJ2VcpfwAjWBQRGH-VJrROy9o",
+"lat": 30.037741,
+"lng": 31.470774
+},
+{
+"path": "New Cairo > Al Banafseg > Banafseg 12 (Villas)",
+"name_en": "Banafseg 12 (Villas)",
+"name_ar": "البنفسج 12 (فيلات)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJd3zmjn8jWBQRgkjRvGVnrNU",
+"lat": 30.043866,
+"lng": 31.466681
+},
+{
+"path": "New Cairo > Al Banafseg > Banafseg 2 (Villas)",
+"name_en": "Banafseg 2 (Villas)",
+"name_ar": "البنفسج 2 (فيلات)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJR_bJPJgZWBQRkdeeZBok4zc",
+"lat": 30.066399,
+"lng": 31.465684
+},
+{
+"path": "New Cairo > Al Banafseg > Banafseg 3 (Villas)",
+"name_en": "Banafseg 3 (Villas)",
+"name_ar": "البنفسج 3 (فيلات)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJaSwbLAAZWBQRao1hApABNbM",
+"lat": 30.06191,
+"lng": 31.473665
+},
+{
+"path": "New Cairo > Al Banafseg > Banafseg 4 (Villas)",
+"name_en": "Banafseg 4 (Villas)",
+"name_ar": "البنفسج 4 (فيلات)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJy3pVJQAZWBQRZcJn1lUDAeU",
+"lat": 30.061651,
+"lng": 31.466564
+},
+{
+"path": "New Cairo > Al Banafseg > Banafseg 5 (Villas)",
+"name_en": "Banafseg 5 (Villas)",
+"name_ar": "البنفسج 5 (فيلات)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJken9lo4ZWBQR6Gt5xulMqPQ",
+"lat": 30.056914,
+"lng": 31.47447
+},
+{
+"path": "New Cairo > Al Banafseg > Banafseg 6 (Villas)",
+"name_en": "Banafseg 6 (Villas)",
+"name_ar": "البنفسج 6 (فيلات)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJ45l3UrYjWBQRfHwkS4_TPgw",
+"lat": 30.046017,
+"lng": 31.470799
+},
+{
+"path": "New Cairo > Al Banafseg > Banafseg 7 (Villas)",
+"name_en": "Banafseg 7 (Villas)",
+"name_ar": "البنفسج 7 (فيلات)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJGYdlQQsjWBQRgu-0d7wDnZY",
+"lat": 30.051733,
+"lng": 31.469102
+},
+{
+"path": "New Cairo > Al Banafseg > Banafseg 8 (Villas)",
+"name_en": "Banafseg 8 (Villas)",
+"name_ar": "البنفسج 8 (فيلات)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJrSOaodojWBQRPXBC7UEa0AQ",
+"lat": 30.051985,
+"lng": 31.462507
+},
+{
+"path": "New Cairo > Al Banafseg > Banafseg 9 (Villas)",
+"name_en": "Banafseg 9 (Villas)",
+"name_ar": "البنفسج 9 (فيلات)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJ45l3UrYjWBQRfHwkS4_TPgw",
+"lat": 30.046017,
+"lng": 31.470799
+},
+{
+"path": "New Cairo > Al Lotus > Northern Lotus 1",
+"name_en": "Northern Lotus 1",
+"name_ar": "اللوتس الشمالية 1",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJd6r8vA4iWBQRsVKlSIHWov8",
+"lat": 30.034838,
+"lng": 31.520669
+},
+{
+"path": "New Cairo > Al Lotus > Northern Lotus 2",
+"name_en": "Northern Lotus 2",
+"name_ar": "اللوتس الشمالية 2",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJnVgZH1YjWBQRRryYRCe79fk",
+"lat": 30.036021,
+"lng": 31.521697
+},
+{
+"path": "New Cairo > Al Lotus > Northern Lotus 3",
+"name_en": "Northern Lotus 3",
+"name_ar": "اللوتس الشمالية 3",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJZZfeLKojWBQRRpGonFStbd8",
+"lat": 30.036288,
+"lng": 31.522695
+},
+{
+"path": "New Cairo > Al Lotus > Northern Lotus 4",
+"name_en": "Northern Lotus 4",
+"name_ar": "اللوتس الشمالية 4",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJd6r8vA4iWBQRsVKlSIHWov8",
+"lat": 30.034838,
+"lng": 31.520669
+},
+{
+"path": "New Cairo > Al Lotus > Northern Lotus 5",
+"name_en": "Northern Lotus 5",
+"name_ar": "اللوتس الشمالية 5",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJd6r8vA4iWBQRsVKlSIHWov8",
+"lat": 30.034838,
+"lng": 31.520669
+},
+{
+"path": "New Cairo > Al Lotus > Southern Lotus 10",
+"name_en": "Southern Lotus 10",
+"name_ar": "اللوتس الجنوبية 10",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": null
+},
+{
+"path": "New Cairo > Al Lotus > Southern Lotus 11",
+"name_en": "Southern Lotus 11",
+"name_ar": "اللوتس الجنوبية 11",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJ3YcAr44jWBQRcj88Vx0jh2A",
+"lat": 29.967763,
+"lng": 31.508022
+},
+{
+"path": "New Cairo > Al Lotus > Southern Lotus 6",
+"name_en": "Southern Lotus 6",
+"name_ar": "اللوتس الجنوبية 6",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": null
+},
+{
+"path": "New Cairo > Al Lotus > Southern Lotus 7",
+"name_en": "Southern Lotus 7",
+"name_ar": "اللوتس الجنوبية 7",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJgc8kUAAjWBQRJNYT6ZJR32U",
+"lat": 30.013858,
+"lng": 31.522343
+},
+{
+"path": "New Cairo > Al Lotus > Southern Lotus 8",
+"name_en": "Southern Lotus 8",
+"name_ar": "اللوتس الجنوبية 8",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJ2_KlSQAjWBQRbO-d2LN4ddo",
+"lat": 30.015905,
+"lng": 31.521656
+},
+{
+"path": "New Cairo > Al Lotus > Southern Lotus 9",
+"name_en": "Southern Lotus 9",
+"name_ar": "اللوتس الجنوبية 9",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJ-TH57SAjWBQRcwA4WqVmY1I",
+"lat": 30.014073,
+"lng": 31.52392
+},
+{
+"path": "New Cairo > Al Narges > Narges 1 (Villas)",
+"name_en": "Narges 1 (Villas)",
+"name_ar": "النرجس 1 (فيلات)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": null
+},
+{
+"path": "New Cairo > Al Narges > Narges 2 (Villas)",
+"name_en": "Narges 2 (Villas)",
+"name_ar": "النرجس 2 (فيلات)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJA9NIFwAjWBQRsVA_3iQyVoA",
+"lat": 30.015741,
+"lng": 31.458366
+},
+{
+"path": "New Cairo > Al Narges > Narges 3 (Villas)",
+"name_en": "Narges 3 (Villas)",
+"name_ar": "النرجس 3 (فيلات)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJQyuQ7PYjWBQRl_pFar6pmN4",
+"lat": 30.013342,
+"lng": 31.448207
+},
+{
+"path": "New Cairo > Al Narges > Narges 4 (Villas)",
+"name_en": "Narges 4 (Villas)",
+"name_ar": "النرجس 4 (فيلات)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJtwh9-i0jWBQR6nCHP5nnbiE",
+"lat": 30.008549,
+"lng": 31.45276
+},
+{
+"path": "New Cairo > Al Narges > Narges 5 (Villas)",
+"name_en": "Narges 5 (Villas)",
+"name_ar": "النرجس 5 (فيلات)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJaar1en0jWBQRi2MZ25pQNzA",
+"lat": 30.011544,
+"lng": 31.459949
+},
+{
+"path": "New Cairo > Al Narges > Narges 6 (Villas)",
+"name_en": "Narges 6 (Villas)",
+"name_ar": "النرجس 6 (فيلات)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": null
+},
+{
+"path": "New Cairo > Al Narges > Narges 7 (Villas)",
+"name_en": "Narges 7 (Villas)",
+"name_ar": "النرجس 7 (فيلات)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJBVJcJgAjWBQRITQg_N8QkqA",
+"lat": 30.004619,
+"lng": 31.461152
+},
+{
+"path": "New Cairo > Al Narges > Narges 8 (Villas)",
+"name_en": "Narges 8 (Villas)",
+"name_ar": "النرجس 8 (فيلات)",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJtfgldgAjWBQRRwZlyKK5rF8",
+"lat": 30.000158,
+"lng": 31.465321
+},
+{
+"path": "New Cairo > Al Yasmeen > Yasmeen 1",
+"name_en": "Yasmeen 1",
+"name_ar": "الياسمين 1",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJ18GGfqUiWBQRsVe-btJo2yM",
+"lat": 30.049329,
+"lng": 31.455616
+},
+{
+"path": "New Cairo > Al Yasmeen > Yasmeen 2",
+"name_en": "Yasmeen 2",
+"name_ar": "الياسمين 2",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJgeewuLIiWBQRnGsSJwFzWko",
+"lat": 30.049005,
+"lng": 31.447046
+},
+{
+"path": "New Cairo > Al Yasmeen > Yasmeen 3",
+"name_en": "Yasmeen 3",
+"name_ar": "الياسمين 3",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJU5bCd7oiWBQRzfSMRRfg52I",
+"lat": 30.044137,
+"lng": 31.455616
+},
+{
+"path": "New Cairo > Al Yasmeen > Yasmeen 4",
+"name_en": "Yasmeen 4",
+"name_ar": "الياسمين 4",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJi-NgzrQiWBQRWDN5ep267HM",
+"lat": 30.043813,
+"lng": 31.447046
+},
+{
+"path": "New Cairo > Al Yasmeen > Yasmeen 5",
+"name_en": "Yasmeen 5",
+"name_ar": "الياسمين 5",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJXTguj7ciWBQRsf6cakAqF6M",
+"lat": 30.038945,
+"lng": 31.455616
+},
+{
+"path": "New Cairo > Al Yasmeen > Yasmeen 6",
+"name_en": "Yasmeen 6",
+"name_ar": "الياسمين 6",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJXa1O4jQ9WBQRhLt6bCWz6oU",
+"lat": 30.03762,
+"lng": 31.443475
+},
+{
+"path": "New Cairo > Al Yasmeen > Yasmeen 7",
+"name_en": "Yasmeen 7",
+"name_ar": "الياسمين 7",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJCwDy3MgiWBQRvMU6xNIsblc",
+"lat": 30.033754,
+"lng": 31.455616
+},
+{
+"path": "New Cairo > Al Yasmeen > Yasmeen 8",
+"name_en": "Yasmeen 8",
+"name_ar": "الياسمين 8",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJga4O7jI9WBQRQKdPu45D5yw",
+"lat": 30.03159,
+"lng": 31.444189
+},
+{
+"path": "New Cairo > Bait El Watan > Bait El Watan District 1",
+"name_en": "Bait El Watan District 1",
+"name_ar": "بيت الوطن الحي الأول",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJfbYlje8fWBQR1KZabq5l3QU",
+"lat": 30.069658,
+"lng": 31.545488
+},
+{
+"path": "New Cairo > Bait El Watan > Bait El Watan District 2",
+"name_en": "Bait El Watan District 2",
+"name_ar": "بيت الوطن الحي الثاني",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJfbYlje8fWBQR1KZabq5l3QU",
+"lat": 30.069658,
+"lng": 31.545488
+},
+{
+"path": "New Cairo > Bait El Watan > Bait El Watan District 3",
+"name_en": "Bait El Watan District 3",
+"name_ar": "بيت الوطن الحي الثالث",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJfbYlje8fWBQR1KZabq5l3QU",
+"lat": 30.069658,
+"lng": 31.545488
+},
+{
+"path": "New Cairo > Bait El Watan > Bait El Watan District 4",
+"name_en": "Bait El Watan District 4",
+"name_ar": "بيت الوطن الحي الرابع",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJfbYlje8fWBQR1KZabq5l3QU",
+"lat": 30.069658,
+"lng": 31.545488
+},
+{
+"path": "New Cairo > Bait El Watan > Bait El Watan District 5",
+"name_en": "Bait El Watan District 5",
+"name_ar": "بيت الوطن الحي الخامس",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJZeBkQE0fWBQRMHc4hAm7dcE",
+"lat": 30.052981,
+"lng": 31.584273
+},
+{
+"path": "New Cairo > Bait El Watan > Bait El Watan District 6",
+"name_en": "Bait El Watan District 6",
+"name_ar": "بيت الوطن الحي السادس",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJfbYlje8fWBQR1KZabq5l3QU",
+"lat": 30.069658,
+"lng": 31.545488
+},
+{
+"path": "New Cairo > Bait El Watan > Bait El Watan District 7",
+"name_en": "Bait El Watan District 7",
+"name_ar": "بيت الوطن الحي السابع",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJfbYlje8fWBQR1KZabq5l3QU",
+"lat": 30.069658,
+"lng": 31.545488
+},
+{
+"path": "New Cairo > Bait El Watan > Bait El Watan District 8",
+"name_en": "Bait El Watan District 8",
+"name_ar": "بيت الوطن الحي الثامن",
+"place_type": "neighborhood_or_zone",
+"governorate": "Cairo",
+"google_place_id": "ChIJfbYlje8fWBQR1KZabq5l3QU",
+"lat": 30.069658,
+"lng": 31.545488
+},
+{
+"path": "Sheikh Zayed > New Zayed > Sphinx City",
+"name_en": "Sphinx City",
+"name_ar": "مدينة سفنكس الجديدة",
+"place_type": "neighborhood_or_zone",
+"governorate": "Giza",
+"google_place_id": "ChIJTy7pQMNbWBQRLm5V4qECL7U",
+"lat": 30.030238,
+"lng": 31.001373
+}
+],
+"merges": [
+{
+"from": "New Cairo > North Investors Extension",
+"into": "New Cairo > Northern Investors Area"
+},
+{
+"from": "New Cairo > South Investors Extension",
+"into": "New Cairo > Southern Investors Area"
+}
+],
+"compounds": [
+{
+"id": "48c9455a-47e3-458c-8ebe-2f743d5835c8",
+"new": false,
+"name_en": "31North",
+"name_ar": "31 نورث",
+"path": "New Capital > Downtown (New Capital)",
+"aliases": [
+"31North - 31 نورث"
+],
+"lat": 29.991453,
+"lng": 31.732651,
+"google_place_id": "ChIJTzionzfzVxQRlu0RVnO6I7M"
+},
+{
+"id": "a529e892-0849-4e80-804a-9dfa6d3eab5a",
+"new": false,
+"name_en": "90 Avenue Compound",
+"name_ar": "تسعين أفينيو",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"90 avenue",
+"90 Avenue"
+],
+"lat": 30.024716,
+"lng": 31.491827,
+"google_place_id": "ChIJvUcTYSojWBQRzJmT-Q_T31o"
+},
+{
+"id": "eaee9d22-29be-495b-9faa-5595fd715b52",
+"new": false,
+"name_en": "Acacia Compound",
+"name_ar": "كمبوند أكاسيا",
+"path": "New Cairo > 1st Settlement",
+"aliases": [
+"أكاسيا",
+"acacia",
+"acasia"
+],
+"lat": 30.05165,
+"lng": 31.49212,
+"google_place_id": "ChIJMb1hi4AYWBQRNaSHn-ZVFwY"
+},
+{
+"id": "8ab42676-62c9-48e5-bada-1083343f286a",
+"new": false,
+"name_en": "Akoya Compound",
+"name_ar": "أكويا",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"Akoya",
+"اكويا"
+],
+"lat": 29.98954,
+"lng": 31.50699,
+"google_place_id": "ChIJ58VMwbsjWBQREtRkIRnn-g0"
+},
+{
+"id": "a3c7cb9b-ae33-4372-8fa7-782d9c630f86",
+"new": false,
+"name_en": "Al Burouj",
+"name_ar": "البروج",
+"path": "Shorouk > East Shorouk",
+"aliases": [
+"burouj",
+"elboroj with garden",
+"elborouj"
+],
+"lat": 30.20068,
+"lng": 31.67773,
+"google_place_id": "ChIJqRD3U_c8WBQRunCLjpP0MIA"
+},
+{
+"id": "49b43152-baf6-49b9-813d-1808eb1a453b",
+"new": false,
+"name_en": "Al Gezira",
+"name_ar": "الجزيرة",
+"path": "Sheikh Zayed > Central Zayed",
+"aliases": [
+"al juezira",
+"Al Juezira"
+],
+"lat": 30.02324,
+"lng": 30.987585,
+"google_place_id": "ChIJGe7ylAJaWBQRQ0ukd7kLinE"
+},
+{
+"id": "736fc219-865d-4155-b02d-51b992c9d6df",
+"new": false,
+"name_en": "Al Jazi Egypt",
+"name_ar": "الجازي مصر",
+"path": "New Cairo > North 90th",
+"aliases": [
+"al jazi",
+"الجازي",
+"Al Jazi Garden Compound",
+"Al Jazi Park Ave Compound"
+],
+"lat": 30.036261,
+"lng": 31.478863,
+"google_place_id": "ChIJExof440iWBQRlDo3ELh9k6A",
+"info_en": "Al Jazi Egypt / Al Jazi (الجازي مصر / الجازي) is a 62-acre luxury residential and mixed-use development in New Cairo near North 90th Street and Mohamed Naguib Axis, developed by Seldar Misr, encompassing Al Jazi Gardens, Al Jazi Park Avenue, and Al Jazi First Marriott Residences.",
+"info_ar": "كمبوند الجازي مصر / الجازي هو مشروع سكني وتجاري متكامل على مساحة 62 فداناً في القاهرة الجديدة بالقرب من شارع التسعين الشمالي ومحور محمد نجيب، من تطوير شركة سلدار مصر، ويضم الجازي جاردنز وبارك أفينيو وماريوت ريزيدنس.",
+"info_source": "web_search_verified"
+},
+{
+"id": "5675b780-a3ba-4fff-885b-e999bf19f5aa",
+"new": false,
+"name_en": "Al Maqsad",
+"name_ar": "المقصد",
+"path": "New Capital > R3 Sector",
+"aliases": [
+"Al Maqsad - المقصد"
+],
+"lat": 30.03959,
+"lng": 31.698597,
+"google_place_id": "ChIJ_3hk4fD1VxQRcFBA1eBmHXI"
+},
+{
+"id": "f8e6906e-533d-4dd2-908f-1bf8e572f34c",
+"new": false,
+"name_en": "Al Nakheel New Cairo",
+"name_ar": "النخيل القاهرة الجديدة",
+"path": "New Cairo > 1st Settlement",
+"aliases": [
+"Al Nakheel",
+"النخيل",
+"El Nakheel",
+"el nakhel",
+"El Nakhel"
+],
+"old_name_en": "Al Nakheel",
+"old_name_ar": "النخيل",
+"lat": 30.054919,
+"lng": 31.422665,
+"google_place_id": "ChIJg9QIRKcjWBQR7pwiVNAJWk4"
+},
+{
+"id": "26cd59dc-9f64-435b-89fb-058e217891d2",
+"new": false,
+"name_en": "Al Reham",
+"name_ar": "الريهام",
+"path": "6th of October > Northern Expansions",
+"aliases": [
+"Al Reham - الريهام"
+],
+"lat": 29.988182,
+"lng": 30.926315,
+"google_place_id": "ChIJV9TCs8VXWBQRNgDGRBuXhsA",
+"info_en": "Al Reham (كمبوند الريهام) is a residential apartment compound located in the Northern Expansions of 6th of October near Gamal Abdel Nasser Axis and Shooting Club.",
+"info_ar": "كمبوند الريهام هو مجتمع سكني في التوسعات الشمالية بمدينة 6 أكتوبر بالقرب من محور جمال عبد الناصر ونادي الصيد.",
+"info_source": "web_search_verified"
+},
+{
+"id": "2bf49c12-5867-4320-a513-52cac8370cb6",
+"new": false,
+"name_en": "Al-Qarnfol Villas",
+"name_ar": "فيلات القرنفل",
+"path": "New Cairo > Al Qoronfol",
+"aliases": [
+"Al-Qarnfol Villas - فيلات القرنفل"
+],
+"lat": 29.982236,
+"lng": 31.524819,
+"google_place_id": "ChIJ8_5dCnIZWBQRO7Havga5Zi8"
+},
+{
+"id": "a19fcb16-a097-4903-b0e6-7017ebbafd00",
+"new": false,
+"name_en": "Alaire",
+"name_ar": "ألير",
+"path": "Mostakbal City",
+"aliases": [
+"Alaire - ألير"
+],
+"lat": 30.05335,
+"lng": 31.642113,
+"google_place_id": "ChIJM7RNhG31VxQRdwZYgqmFP48"
+},
+{
+"id": "94df8cdf-7d50-44df-90be-712b5d960a38",
+"new": false,
+"name_en": "Alamein Towers (North Edge)",
+"name_ar": "أبراج العلمين",
+"path": "North Coast > New Alamein",
+"aliases": [
+"Alamein Towers (North Edge) - أبراج العلمين"
+],
+"lat": 30.850694,
+"lng": 28.935149,
+"google_place_id": "ChIJe2xKQe-kbGsRHNpuOAnfPfQ"
+},
+{
+"id": "4e750ba5-f834-47a3-8843-6a809b872a68",
+"new": false,
+"name_en": "Aliva",
+"name_ar": "أليفا",
+"path": "Mostakbal City",
+"aliases": [
+"Aliva - أليفا"
+],
+"lat": 30.053492,
+"lng": 31.674391,
+"google_place_id": "ChIJY5RN-iP1VxQRFSYSoMPt1F4"
+},
+{
+"id": "c5f5c4b5-cef0-459c-aadc-a0b17488b49d",
+"new": false,
+"name_en": "Allegria Compound",
+"name_ar": "كمبوند اليجريا",
+"path": "Sheikh Zayed > Allegria",
+"aliases": [
+"اليجريا",
+"allegria",
+"Allegria"
+],
+"lat": 30.07236,
+"lng": 30.96029,
+"google_place_id": "ChIJ9QNnLQ9ZWBQRBj3lrtT2bPw"
+},
+{
+"id": "d16352a7-8807-4454-aa1d-fb7e61e2b81f",
+"new": false,
+"name_en": "Almaza Bay",
+"name_ar": "الماظة باي",
+"path": "North Coast > Almaza Bay",
+"aliases": [
+"Alma"
+],
+"lat": 31.19381,
+"lng": 27.56046,
+"google_place_id": "ChIJQzbUOVLdYRQRKZjQi85qNIs"
+},
+{
+"id": "4b766180-c75a-4be0-89b3-ba562ee1c8a6",
+"new": false,
+"name_en": "Amazon Diamond Tower",
+"name_ar": "أمازون دايموند تاور",
+"path": "New Capital > Central Business District (CBD)",
+"aliases": [
+"Amazon Diamond Tower - أمازون دايموند تاور"
+],
+"lat": 30.018602,
+"lng": 31.688063,
+"google_place_id": "ChIJBQvxLmH1VxQR9wxBUO70K9c"
+},
+{
+"id": "7a94ebbd-cf2c-422e-9510-8bf2460b8b48",
+"new": false,
+"name_en": "Amorada",
+"name_ar": "امورادا",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"Amorada - امورادا"
+],
+"lat": 29.964093,
+"lng": 31.539045,
+"google_place_id": "ChIJdQg1nCYhWBQRr6QQ6Nrv2Ek"
+},
+{
+"id": "79a7fd73-6fde-419b-9d9a-b1a8e85a1883",
+"new": false,
+"name_en": "Amwaj",
+"name_ar": "أمواج",
+"path": "North Coast > Sidi Abdel Rahman",
+"aliases": [
+"Amwaj - أمواج"
+],
+"lat": 30.968531,
+"lng": 28.736019,
+"google_place_id": "ChIJwcqB4PP9XxQR7YdVTHL6e-8"
+},
+{
+"id": "8bcb1998-b282-4c34-a9a0-2e6a9c63d2a8",
+"new": false,
+"name_en": "Arabeya",
+"name_ar": "ارابيا",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"Arabeya - ارابيا"
+],
+"lat": 30.017352,
+"lng": 31.479538,
+"google_place_id": "ChIJOU9FeHE9WBQRaggjeMG_DNM"
+},
+{
+"id": "36872997-c33f-4f25-80ca-e749c1cd9316",
+"new": false,
+"name_en": "Aria Compound",
+"name_ar": "كمبوند اريا",
+"path": "Mostakbal City > First Phase Mostakbal",
+"aliases": [
+"اريا",
+"Aria"
+],
+"lat": 30.05586,
+"lng": 31.61628,
+"google_place_id": "ChIJM7RNhG31VxQRdwZYgqmFP48"
+},
+{
+"id": "b785ea31-2792-4238-aa77-873215269934",
+"new": false,
+"name_en": "Arkan Plaza",
+"name_ar": "أركان بلازا",
+"path": "Sheikh Zayed > 13th District (Sheikh Zayed)",
+"aliases": [
+"Arkan Plaza - أركان بلازا"
+],
+"lat": 30.020681,
+"lng": 31.003573,
+"google_place_id": "ChIJhRLDJQVbWBQRrbIt7vO8Fuk"
+},
+{
+"id": "e2b303c2-64f6-4ad2-b391-f3ecd7ae300e",
+"new": false,
+"name_en": "Armonia",
+"name_ar": "أرمونيا",
+"path": "New Capital > R7 Sector",
+"aliases": [
+"Armonia - أرمونيا"
+],
+"lat": 29.963785,
+"lng": 31.732957,
+"google_place_id": "ChIJwaSCe0mNVxQRKK1NmtIK2kg"
+},
+{
+"id": "5b693e0f-2526-4cf2-8e09-f8aee2d833b7",
+"new": false,
+"name_en": "Ashgar City Compound",
+"name_ar": "كمبوند أشجار سيتي",
+"path": "6th of October > October Gardens (Hadayek October)",
+"aliases": [
+"Ashgar City",
+"أشجار سيتي",
+"El Ashgar City"
+],
+"lat": 29.93892,
+"lng": 31.02786,
+"google_place_id": "ChIJ7fwChCpRWBQRyWjdvj2aFCo"
+},
+{
+"id": "04f54298-0b4d-4e6f-a088-ee44c3ea3f60",
+"new": false,
+"name_en": "Audaz",
+"name_ar": "أوداز",
+"path": "New Capital > Downtown (New Capital)",
+"aliases": [
+"Audaz - أوداز"
+],
+"lat": 30.008643,
+"lng": 31.739089,
+"google_place_id": "ChIJUVxWGhnzVxQRm8UaqLjSS1E"
+},
+{
+"id": "91274d6b-5893-4a47-9d65-facf9bbcc084",
+"new": false,
+"name_en": "Azad Compound",
+"name_ar": "كمبوند ازاد",
+"path": "New Cairo > Behind AUC",
+"aliases": [
+"ازاد",
+"azad",
+"Azad",
+"Qaryah Shahrazad"
+],
+"lat": 30.013901,
+"lng": 31.506241,
+"google_place_id": "ChIJNdBWxU8jWBQRT8hfuitj6FM"
+},
+{
+"id": "b61015f0-4e28-49f2-a89b-cb146fd62eba",
+"new": false,
+"name_en": "Azadir",
+"name_ar": "ازادير",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"Azadir - ازادير"
+],
+"lat": 30.03629,
+"lng": 31.475829,
+"google_place_id": "ChIJ-5ZhZMQ9WBQR2jOReonz410"
+},
+{
+"id": "8b30a715-36de-4eba-93ae-02c2ff82e76c",
+"new": false,
+"name_en": "Azha Ain Sokhna",
+"name_ar": "أزهى العين السخنة",
+"path": "Ain Sokhna",
+"aliases": [
+"Azha",
+"أزهى",
+"Azha Sokhna",
+"أزهى السخنة"
+],
+"old_name_en": "Azha",
+"old_name_ar": "أزهى",
+"lat": 29.71325,
+"lng": 32.381666,
+"google_place_id": "ChIJAZf-yW5NVhQRWgXv7PrsU7c"
+},
+{
+"id": "1a08b0db-8fda-45c8-b443-27593bafa604",
+"new": false,
+"name_en": "Azzar Infinity",
+"name_ar": "ازار انفينيتى",
+"path": "New Cairo > Golden Square",
+"aliases": [
+"Azzar Infinity - ازار انفينيتى"
+],
+"lat": 30.040866,
+"lng": 31.542887,
+"google_place_id": "ChIJz7fvfAMiWBQR_2IeggO2nyM"
+},
+{
+"id": "b3e93e46-9735-43aa-840e-096d6f9caef8",
+"new": false,
+"name_en": "Badya",
+"name_ar": "بادية",
+"path": "6th of October > New October",
+"aliases": [
+"Badya - بادية"
+],
+"lat": 29.9078,
+"lng": 30.8872,
+"google_place_id": "ChIJRfvaATZVWBQRkgAm_EAAriI"
+},
+{
+"id": "4814ab3a-ebff-4014-a29b-a0ca73cd01e7",
+"new": false,
+"name_en": "Bellagio Compound",
+"name_ar": "كمبوند بلاجيو",
+"path": "New Cairo > 1st Settlement",
+"aliases": [
+"بلاجيو",
+"bellagio",
+"Bellagio"
+],
+"lat": 30.037848,
+"lng": 31.501972,
+"google_place_id": "ChIJWR5CjnsiWBQRzU68utZMS8c"
+},
+{
+"id": "9482da6d-3d22-4c1a-ad7c-14ae11cce549",
+"new": false,
+"name_en": "Belle Vie",
+"name_ar": "بيل في",
+"path": "Sheikh Zayed > New Zayed",
+"aliases": [
+"Belle Vie - بيل في"
+],
+"lat": 30.06369,
+"lng": 30.89763,
+"google_place_id": "ChIJW0N_0jtZWBQRu0xrqghEdsc"
+},
+{
+"id": "720cddff-d315-4ac0-9d66-4a30d6b49b9a",
+"new": false,
+"name_en": "Belleville",
+"name_ar": "بيلفيل",
+"path": "Sheikh Zayed > New Zayed",
+"aliases": [
+"Belleville - بيلفيل"
+],
+"lat": 30.039406,
+"lng": 31.017383,
+"google_place_id": "ChIJW0N_0jtZWBQRu0xrqghEdsc"
+},
+{
+"id": "d3dc0454-658d-4c46-b956-1fc7b99772b1",
+"new": false,
+"name_en": "Beta Gardens",
+"name_ar": "بيتا جاردنز",
+"path": "6th of October",
+"aliases": [
+"Beta Gardens - بيتا جاردنز"
+],
+"lat": 29.895097,
+"lng": 31.066471,
+"google_place_id": "ChIJIfdi2RNSWBQRF47VAg9_8hc"
+},
+{
+"id": "6e68dc32-a070-4a7c-a3df-1b7ca2cdced3",
+"new": false,
+"name_en": "Beta Greens",
+"name_ar": "بيتا جرينز",
+"path": "Mostakbal City",
+"aliases": [
+"Beta Greens - بيتا جرينز"
+],
+"lat": 30.062059,
+"lng": 31.655129,
+"google_place_id": "ChIJ8W55_Jf1VxQRzV4TIb7isOU"
+},
+{
+"id": "53ca42d5-ba93-420a-923e-cb3da58edf45",
+"new": false,
+"name_en": "Beverly Hills Compound",
+"name_ar": "كمبوند بيفرلي هيلز",
+"path": "Sheikh Zayed > Central Zayed",
+"aliases": [
+"بيفرلي هيلز",
+"beverly hills",
+"Beverly Hills"
+],
+"lat": 30.06031,
+"lng": 30.94983,
+"google_place_id": "ChIJz9vWY6xZWBQR1aWWmhF9OdU"
+},
+{
+"id": "4a49ab93-cc8f-4bde-bf56-edf173b5fdda",
+"new": false,
+"name_en": "Bloomfields Compound",
+"name_ar": "كمبوند بلوم فيلدز",
+"path": "Mostakbal City > Central Mostakbal",
+"aliases": [
+"بلوم فيلدز",
+"Bloomfields"
+],
+"lat": 30.06172,
+"lng": 31.64991,
+"google_place_id": "ChIJ7bGWxIT1VxQRCVdpY3fpGrI"
+},
+{
+"id": "a9d01269-265a-4ba2-9ac0-2085b391771d",
+"new": false,
+"name_en": "Blue Tree",
+"name_ar": "بلو تري",
+"path": "New Cairo > Golden Square",
+"aliases": [
+"Blue Tree - بلو تري"
+],
+"lat": 30.015079,
+"lng": 31.526459,
+"google_place_id": "ChIJSWfoyd8fWBQRKF1AYfQNh58"
+},
+{
+"id": "e1f593fb-68a4-407b-a0be-27fa36ef88d0",
+"new": false,
+"name_en": "Boston Residence Katameya",
+"name_ar": "بوستون ريزيدنس القطامية",
+"path": "New Cairo > Katameya",
+"aliases": [
+"boston residence alktamya"
+],
+"lat": 29.988,
+"lng": 31.432,
+"google_place_id": "ChIJtXCOal49WBQRkRX1LbPMCUw"
+},
+{
+"id": "51e07351-bd0c-451b-ba30-089521a40d63",
+"new": false,
+"name_en": "Caesar",
+"name_ar": "سيزر",
+"path": "North Coast > Ras El Hekma",
+"aliases": [
+"Caesar - SODIC",
+"Grand Caesar Compound"
+],
+"lat": 31.063624,
+"lng": 28.011839,
+"google_place_id": "ChIJo2HNnA8zYBQR6xjOPy73ykM"
+},
+{
+"id": "6e55ce57-b82d-4334-aed0-c465a4e227da",
+"new": false,
+"name_en": "Cairo Festival City",
+"name_ar": "كايرو فستيفال سيتي",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"cfc"
+],
+"lat": 30.032864,
+"lng": 31.410012,
+"google_place_id": "ChIJHSIS-Rk9WBQRAGc5dbIUMvQ"
+},
+{
+"id": "0acdec9f-7d1b-4309-8736-449e51d76d97",
+"new": false,
+"name_en": "Cairo Gate",
+"name_ar": "الشيخ زايد - كايرو جايت",
+"path": "Sheikh Zayed",
+"aliases": [
+"Cairo Gate - الشيخ زايد - كايرو جايت"
+],
+"lat": 30.058679,
+"lng": 31.031223,
+"google_place_id": "ChIJb0M_3nNbWBQRsBk0UAcXHeo"
+},
+{
+"id": "8b39c887-0cfb-4204-ad14-ff6e70be1049",
+"new": false,
+"name_en": "Capital Business Park",
+"name_ar": "كابيتال بيزنس بارك",
+"path": "Sheikh Zayed > 13th District (Sheikh Zayed)",
+"aliases": [
+"Capital Business Park - كابيتال بيزنس بارك"
+],
+"lat": 30.023876,
+"lng": 31.012869,
+"google_place_id": "ChIJTQZR7mtaWBQRMoIuC7D0i-o"
+},
+{
+"id": "6a5af13b-69ab-4c2b-96f3-4d184cf885a5",
+"new": false,
+"name_en": "Capital Gardens",
+"name_ar": "كابيتال جاردنز",
+"path": "Mostakbal City > First Phase Mostakbal",
+"aliases": [
+"Capital Gardens - كابيتال جاردنز"
+],
+"lat": 30.08828,
+"lng": 31.691657,
+"google_place_id": "ChIJUy40h732VxQRoOkkUiM1SrM"
+},
+{
+"id": "93624844-3cab-4b3b-8495-e72698cc47e1",
+"new": false,
+"name_en": "Celia",
+"name_ar": "سيليا",
+"path": "New Capital > R5 Sector (New Garden City)",
+"aliases": [
+"Celia - سيليا"
+],
+"lat": 30.02812,
+"lng": 31.497134,
+"google_place_id": "ChIJYTUed22NVxQReJrOSVyS6PM"
+},
+{
+"id": "2bcf57ab-5714-455a-bbd7-52954694aac1",
+"new": false,
+"name_en": "Century City",
+"name_ar": "سينتشرى سيتى",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"Century City - سينتشرى سيتى"
+],
+"lat": 29.965212,
+"lng": 31.534436,
+"google_place_id": "ChIJb6EqAdA9WBQRMA_aPAU2CH0"
+},
+{
+"id": "0750ce23-05bc-4c1b-b2e4-71a852b7e4af",
+"new": false,
+"name_en": "Concord Gardens Compound",
+"name_ar": "كونكورد جاردنز",
+"path": "New Cairo > South 90th",
+"aliases": [
+"concord garden",
+"Concord Gardens"
+],
+"lat": 30.02299,
+"lng": 31.48349,
+"google_place_id": "ChIJVUNezfYiWBQRvRLF2_lsriE"
+},
+{
+"id": "27d4b134-7504-4d12-b552-6e1d08a676a2",
+"new": false,
+"name_en": "Continental Residence",
+"name_ar": "كونتينينتال ريزيدنس",
+"path": "Sheikh Zayed > 17th District (Sheikh Zayed)",
+"aliases": [
+"Continental Residence - كونتينينتال ريزيدنس"
+],
+"lat": 30.061522,
+"lng": 30.961742,
+"google_place_id": "ChIJS_vR96BZWBQR6bboLLmmGzw",
+"info_en": "Continental Residence (كونتينينتال ريزيدنس) is a gated residential community in Sheikh Zayed near the Dahshour Link and Beverly Hills, developed by Al Moez Holding Group on approximately 25 feddans.",
+"info_ar": "كمبوند كونتينينتال ريزيدنس هو مجتمع سكني مغلق في الشيخ زايد بالقرب من وصلة دهشور وبيفرلي هيلز، من تطوير مجموعة المعز القابضة على مساحة نحو 25 فداناً.",
+"info_source": "web_search_verified"
+},
+{
+"id": "880a185c-c825-484b-8e41-d22dee4cdb39",
+"new": false,
+"name_en": "Continental Villas section",
+"name_ar": "منطقة فيلات كونتينينتال",
+"path": "Sheikh Zayed",
+"aliases": [
+"Continental Villas section - منطقة فيلات كونتينينتال"
+],
+"lat": 30.038174,
+"lng": 30.979353,
+"google_place_id": "ChIJS_vR96BZWBQR6bboLLmmGzw",
+"info_en": "Continental Villas section (منطقة فيلات كونتينينتال) is the residential villa zone within the Continental development in Sheikh Zayed, developed by Al Moez Holding Group.",
+"info_ar": "منطقة فيلات كونتينينتال هي المرحلة المخصصة للفيلات ضمن مشروع كونتينينتال في الشيخ زايد من تطوير مجموعة المعز القابضة.",
+"info_source": "web_search_verified"
+},
+{
+"id": "f5ccaab2-885d-413e-b680-ec4dda87c94a",
+"new": false,
+"name_en": "Creek Town",
+"name_ar": "كريك تاون",
+"path": "New Cairo > 1st Settlement",
+"aliases": [
+"Creek Town - كريك تاون"
+],
+"lat": 30.08669,
+"lng": 31.51238,
+"google_place_id": "ChIJRZi-tDQZWBQRiPVPgEExQa0"
+},
+{
+"id": "3b160723-8038-4406-9f0d-ad0c44add3cf",
+"new": false,
+"name_en": "Dar Misr - Al Koronfol",
+"name_ar": "دار مصر - القرنفل",
+"path": "New Cairo > Al Qoronfol",
+"aliases": [
+"dar masr el qoronfel",
+"Dar Misr",
+"Dar Misr El Koronfel",
+"dar misr el koronfol"
+],
+"lat": 30.064626,
+"lng": 31.488175,
+"google_place_id": "ChIJRS6UwF4ZWBQRHssSq1KmgxY"
+},
+{
+"id": "b4bc2b5f-12ba-4ac0-9909-f2ad36e363b6",
+"new": false,
+"name_en": "De Joya New Zayed",
+"name_ar": "دي جويا نيو زايد",
+"path": "Sheikh Zayed > New Zayed",
+"aliases": [
+"Joya Compound"
+],
+"lat": 30.087982,
+"lng": 30.874237,
+"google_place_id": "ChIJ49kpZcr3WBQRBR4T17lZCu0"
+},
+{
+"id": "538c9f85-73d8-4793-a409-dec4843b7696",
+"new": false,
+"name_en": "Degla Palms",
+"name_ar": "دجلة بالمز",
+"path": "6th of October",
+"aliases": [
+"Degla Palms - دجلة بالمز"
+],
+"lat": 29.88495,
+"lng": 30.915913,
+"google_place_id": "ChIJCazuFBVVWBQRjl9nnCiWRp0"
+},
+{
+"id": "c21b479a-0bce-4716-9063-51db01affc93",
+"new": false,
+"name_en": "Diplomats Compound",
+"name_ar": "كمبوند الدبلوماسيين",
+"path": "New Cairo > Golden Square",
+"aliases": [
+"Diplomats",
+"الدبلوماسيين",
+"diplomates"
+],
+"lat": 29.991944,
+"lng": 31.441272,
+"google_place_id": "ChIJLWyQwrM8WBQRpMHbVP6XOFc"
+},
+{
+"id": "08ca4f36-8c26-4dd6-9b84-f6d36bcbdeab",
+"new": false,
+"name_en": "District 5",
+"name_ar": "الحى 5",
+"path": "New Cairo > Katameya",
+"aliases": [
+"distrect 5"
+],
+"lat": 29.956293,
+"lng": 31.450602,
+"google_place_id": "ChIJXz9W66clWBQR9nzTJ8J9Qg0"
+},
+{
+"id": "a8195e4e-8c85-4560-ad9c-74a111649a44",
+"new": false,
+"name_en": "Dorat El Kahera",
+"name_ar": "درة القاهرة",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"Dorat El Kahera - درة القاهرة"
+],
+"lat": 30.128745,
+"lng": 31.346568,
+"google_place_id": "ChIJLWyQwrM8WBQRpMHbVP6XOFc"
+},
+{
+"id": "57656214-9796-49aa-8122-2b4f40afe13f",
+"new": false,
+"name_en": "Double Two Tower",
+"name_ar": "دابل تو",
+"path": "New Capital > MU23",
+"aliases": [
+"دابل تو تاور",
+"Double Two"
+],
+"old_name_en": "Double Two Tower",
+"old_name_ar": "دابل تو 타ور",
+"lat": 30.019063,
+"lng": 31.691813,
+"google_place_id": "ChIJg4U2Xpj1VxQRQtyLRecRpT4"
+},
+{
+"id": "3bb8bf23-d226-40e7-8ea8-71f6de59f546",
+"new": false,
+"name_en": "Dreamland",
+"name_ar": "دريم لاند",
+"path": "6th of October > Wahat Road",
+"aliases": [
+"Dream Land"
+],
+"lat": 29.970396,
+"lng": 31.036989,
+"google_place_id": "ChIJ3_ENf0RRWBQRbShZh4PbZQI"
+},
+{
+"id": "a23db135-d71a-4f6b-8048-72e08110a233",
+"new": false,
+"name_en": "Dyar Al Mokhabrat Compound",
+"name_ar": "ديار المخابرات",
+"path": "6th of October > Northern Expansions",
+"aliases": [
+"Dyar Al Mokhabrat"
+],
+"lat": 29.974673,
+"lng": 30.920835,
+"info_en": "Dyar Al Mokhabrat Compound (كمبوند ديار المخابرات) is a residential compound located in the Northern Expansions of 6th of October.",
+"info_ar": "كمبوند ديار المخابرات هو مجتمع سكني يقع في التوسعات الشمالية بمدينة السادس من أكتوبر.",
+"info_source": "web_search_verified"
+},
+{
+"id": "d3698ed6-e43a-4030-b2a1-a6aa3a1271a6",
+"new": false,
+"name_en": "Dyar Park Compound",
+"name_ar": "كمبوند ديار بارك",
+"path": "New Cairo > Sadat Axis",
+"aliases": [
+"ديار بارك",
+"Dyar compound",
+"dyar park",
+"Dyar Park"
+],
+"lat": 30.044514,
+"lng": 31.514561,
+"google_place_id": "ChIJGUwSLKAYWBQRcUMbtNAu0ns"
+},
+{
+"id": "ea35b078-97c6-447b-a099-0f2a7380c895",
+"new": false,
+"name_en": "Dyar Residence",
+"name_ar": "ديار ريزيدنس",
+"path": "New Cairo > Sadat Axis",
+"aliases": [
+"Dyar Residence - ديار ريزيدنس"
+],
+"lat": 29.968053,
+"lng": 31.522339,
+"google_place_id": "ChIJgT-YiGsjWBQRhBqwSk3JlpE"
+},
+{
+"id": "6cf5213c-fb46-4e92-8956-5cc03e14008d",
+"new": false,
+"name_en": "Dyar Sabour Compound",
+"name_ar": "كمبوند ديار صبور",
+"path": "New Cairo > Sadat Axis",
+"aliases": [
+"ديار صبور",
+"dyar sabour"
+],
+"lat": 30.03998,
+"lng": 31.518288,
+"google_place_id": "ChIJMz18BcMiWBQR0nC3pLiIYB8"
+},
+{
+"id": "ccd81da0-f946-485f-9761-c05ad1bb4418",
+"new": false,
+"name_en": "Eagles",
+"name_ar": "ايجلز بارك",
+"path": "New Cairo",
+"aliases": [
+"Eagles - ايجلز بارك"
+],
+"lat": 30.021188,
+"lng": 31.531474,
+"google_place_id": "ChIJqZ2LtlMjWBQRct9B1fMcprk",
+"info_en": "Eagles / Eagles Park (إيجلز بارك) is a residential project associated with Eagles Real Estate Development.",
+"info_ar": "إيجلز بارك هو مشروع سكني تابع لشركة إيجلز للتطوير العقاري.",
+"info_source": "web_search_verified"
+},
+{
+"id": "bfd44008-c732-4f5f-927e-f8633398eedf",
+"new": false,
+"name_en": "Eastown",
+"name_ar": "إيست تاون",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"east town",
+"sodic eastown",
+"SODIC Eastown Compound"
+],
+"lat": 30.011175,
+"lng": 31.516121,
+"google_place_id": "ChIJX1UUwqYjWBQRPbk_rlHaPZk"
+},
+{
+"id": "88f6b8e9-bf1a-4236-a63d-c851cd0f2a2d",
+"new": false,
+"name_en": "Easy Life Compound",
+"name_ar": "كمبوند ايزي لايف",
+"path": "New Cairo > Southern Investors Area",
+"aliases": [
+"ايزي لايف",
+"easy life",
+"Life Compound"
+],
+"lat": 30.010447,
+"lng": 31.487729,
+"google_place_id": "ChIJaUzVYcYjWBQRKanhWMlvQ90"
+},
+{
+"id": "c79a88b3-c482-463a-a715-0088eccf05a3",
+"new": false,
+"name_en": "El Deyar",
+"name_ar": "الديار",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"El Deyar - الديار"
+],
+"lat": 30.020503,
+"lng": 31.471326,
+"google_place_id": "ChIJ-b0Av_kjWBQRgdNNd5jZJks"
+},
+{
+"id": "cbe30e09-98ef-4727-b9b2-28a9a99a4726",
+"new": false,
+"name_en": "El Masrawya",
+"name_ar": "المصراوية",
+"path": "New Cairo > South 90th",
+"aliases": [
+"el masrwaya",
+"Masraweya",
+"masrwya"
+],
+"lat": 30.023959,
+"lng": 31.477677,
+"google_place_id": "ChIJY0JqBTAjWBQRMhPqw8rGuXI"
+},
+{
+"id": "4d1524aa-926d-40a2-8ea6-9065336dc47e",
+"new": false,
+"name_en": "El Patio 1 Compound",
+"name_ar": "كمبوند الباتيو 1",
+"path": "New Cairo > Northern Investors Area",
+"aliases": [
+"الباتيو 1",
+"el patio 1",
+"El Patio 1",
+"elpatio 1",
+"patio 1"
+],
+"lat": 30.053798,
+"lng": 31.476682,
+"google_place_id": "ChIJ4xDEgHcYWBQRl4K3zpfh7r0"
+},
+{
+"id": "2f564505-e88c-444f-be3e-4757c51f3349",
+"new": false,
+"name_en": "El Patio 2",
+"name_ar": "الباتيو 2",
+"path": "New Cairo > Choueifat",
+"aliases": [
+"El Patio 2Compound"
+],
+"lat": 30.053689,
+"lng": 31.479538,
+"google_place_id": "ChIJd0q4LUkhWBQR4UZCzu20PYc"
+},
+{
+"id": "93b340cf-c9be-430c-8b02-6925b7e2854d",
+"new": false,
+"name_en": "El Patio 7 Compound",
+"name_ar": "الباتيو 7",
+"path": "New Cairo > Behind AUC",
+"aliases": [
+"el patio 7",
+"El Patio 7",
+"patio 7"
+],
+"lat": 30.000724,
+"lng": 31.504004,
+"google_place_id": "ChIJxy-uZ7IjWBQRFEBht7XZgwk"
+},
+{
+"id": "6a04494f-91d8-4358-9a3c-c938c950d658",
+"new": false,
+"name_en": "El Patio Compound",
+"name_ar": "كمبوند الباتيو",
+"path": "New Cairo > Northern Investors Area",
+"aliases": [
+"الباتيو",
+"el patio",
+"El Patio 3 Compound",
+"El Patio 4 Compound",
+"El Patio 5 Compound",
+"El Patio Zahraa Compound"
+],
+"lat": 30.000647,
+"lng": 31.501983,
+"google_place_id": "ChIJd0q4LUkhWBQR4UZCzu20PYc"
+},
+{
+"id": "24856f99-ccd4-4912-8073-3e4c46c0dd16",
+"new": false,
+"name_en": "El Patio Oro",
+"name_ar": "الباتيو أورو",
+"path": "New Cairo > Golden Square",
+"aliases": [
+"patio oro"
+],
+"lat": 30.025113,
+"lng": 31.591433,
+"google_place_id": "ChIJoadnoJIfWBQRso0ARbiXvZA"
+},
+{
+"id": "5de30971-e2f0-4c0d-b98d-2f861a2bc27a",
+"new": false,
+"name_en": "El Rabwa",
+"name_ar": "الربوة",
+"path": "Sheikh Zayed > Al Rabwa",
+"aliases": [
+"El Rabwa - الربوة"
+],
+"lat": 30.073658,
+"lng": 30.97834,
+"google_place_id": "ChIJnRnfJuFVWBQRVx-hlYCnouw"
+},
+{
+"id": "5c5fa6d1-1cfc-4738-9b6c-dc2de72befd0",
+"new": false,
+"name_en": "El Rehab",
+"name_ar": "الرحاب",
+"path": "New Cairo > El Rehab",
+"aliases": [
+"Al Rehab Mgmo3a 8",
+"el rehab",
+"El Rehab City - Group 8",
+"El Rehab City - Phase 1",
+"El Rehab City - Phase 2",
+"rehab",
+"Rehab1"
+],
+"lat": 30.06312,
+"lng": 31.5109,
+"google_place_id": "ChIJ2UozVH0YWBQRSN-m2HjddLQ"
+},
+{
+"id": "8bb793da-3aa5-4bc3-bfb0-0393527e2e96",
+"new": false,
+"name_en": "Emerald Park Compound",
+"name_ar": "كمبوند اميرالد بارك",
+"path": "New Cairo > Sadat Axis",
+"aliases": [
+"اميرالد بارك",
+"emerald park"
+],
+"lat": 30.033609,
+"lng": 31.505364,
+"google_place_id": "ChIJlUlmoG8iWBQRQUZNYfcbIys"
+},
+{
+"id": "232a1a88-248a-48d9-a9ae-c8f63482a541",
+"new": false,
+"name_en": "Entrada",
+"name_ar": "إنترادا",
+"path": "New Capital > R7 Sector",
+"aliases": [
+"Entrada - إنترادا"
+],
+"lat": 29.964545,
+"lng": 31.701096,
+"google_place_id": "ChIJf-Tfk6mLVxQR1RHq9vgaJE0"
+},
+{
+"id": "3aa8c513-b040-4bed-9018-743990d6f220",
+"new": false,
+"name_en": "Epic Complex",
+"name_ar": "إيبيك",
+"path": "New Capital > MU23",
+"aliases": [
+"Epic Complex - إيبيك"
+],
+"lat": 30.028582,
+"lng": 31.676423,
+"google_place_id": "ChIJ7-E90G5BWBQRHU2QLGyjmgU"
+},
+{
+"id": "944fed88-aa62-4787-9f80-179807c6eba4",
+"new": false,
+"name_en": "Etoile Des Villes",
+"name_ar": "ايتوال دى فيل",
+"path": "New Cairo > Northern Investors Area",
+"aliases": [
+"Etoile Des Villes - ايتوال دى فيل"
+],
+"lat": 30.037178,
+"lng": 31.488705,
+"google_place_id": "ChIJPeuQ5j0jWBQRiEfAgVI9FFg"
+},
+{
+"id": "af7d84ce-c72d-4bcf-9097-4833c7e51eec",
+"new": false,
+"name_en": "Family City Compound",
+"name_ar": "كمبوند فاميلي سيتي",
+"path": "New Cairo > 1st Settlement",
+"aliases": [
+"فاميلي سيتي",
+"family city",
+"Family City"
+],
+"lat": 30.034342,
+"lng": 31.486232,
+"google_place_id": "ChIJ6cis5IsiWBQR_bxEHaEvGf8"
+},
+{
+"id": "2f38ee55-8ece-478e-aeb5-3e9b49ad87da",
+"new": false,
+"name_en": "Fifth Square",
+"name_ar": "فيفث سكوير",
+"path": "New Cairo > Golden Square",
+"aliases": [
+"5th square"
+],
+"lat": 30.048339,
+"lng": 31.53702,
+"google_place_id": "ChIJI_RMpUwfWBQRNM22DuD2fT0"
+},
+{
+"id": "501badae-6938-42cd-bd95-cbd1c7ff3016",
+"new": false,
+"name_en": "Fleur De Ville Compound",
+"name_ar": "فلور دي فيل",
+"path": "New Cairo > Sadat Axis",
+"aliases": [
+"Fleur De Ville",
+"flour de valley",
+"Fleur De Ville Compound",
+"كمبوند فلور دي فيل",
+"فلور دي فالي",
+"فلور دي فيل"
+],
+"lat": 30.01691,
+"lng": 31.48798,
+"google_place_id": "ChIJu6pIt_kiWBQRjQhIOQXTGfw",
+"info_en": "Fleur De Ville Compound (كمبوند فلور دي فيل) is a gated residential villa community in the Fifth Settlement (التجمع الخامس) of New Cairo along Sadat Axis, spanning approximately 19 acres.",
+"info_ar": "كمبوند فلور دي فيل هو مجتمع سكني مغلق للفيلات في التجمع الخامس بالقاهرة الجديدة على محور السادات، ويمتد على مساحة تقارب 19 فداناً.",
+"info_source": "user_provided_text"
+},
+{
+"id": "9610571f-0686-45d6-88c9-fa34d98c53ff",
+"new": false,
+"name_en": "Flowers Park Compound",
+"name_ar": "كمبوند فلاورز بارك",
+"path": "New Cairo > Sadat Axis",
+"aliases": [
+"فلاورز بارك",
+"flowers park"
+],
+"lat": 30.052154,
+"lng": 31.496316,
+"google_place_id": "ChIJAyP8NHEjWBQRYqXQp8729Lw"
+},
+{
+"id": "c4dd95c1-65c6-48a5-9d0f-1b34a60fae8d",
+"new": false,
+"name_en": "Fouka Bay",
+"name_ar": "فوكا باي",
+"path": "North Coast > Ras El Hekma",
+"aliases": [
+"Fouka Bay - فوكا باي"
+],
+"lat": 31.084831,
+"lng": 27.935695,
+"google_place_id": "ChIJoYJlt7syYBQRilR6LGjHpsA"
+},
+{
+"id": "5eb86244-bcfa-48c4-bcc3-a8cf898cfe44",
+"new": false,
+"name_en": "Fountain Park",
+"name_ar": "فاونتن بارك",
+"path": "New Cairo > Golden Square",
+"aliases": [
+"Fountain Park - فاونتن بارك"
+],
+"lat": 30.024507,
+"lng": 31.532005,
+"google_place_id": "ChIJP90FgxwjWBQR-BULnmGwSPU",
+"info_en": "Fountain Park (كمبوند فاونتن بارك) is a gated villa community in Golden Square, Fifth Settlement, New Cairo, developed by Orientals for Urban Development (OUD), spanning around 128 feddans with standalone villas and twin houses.",
+"info_ar": "كمبوند فاونتن بارك هو مجتمع سكني مغلق للفيلات في المربع الذهبي بالتجمع الخامس بالقاهرة الجديدة، من تطوير شركة الشرقيون للتنمية العمرانية (OUD) على مساحة نحو 128 فداناً.",
+"info_source": "web_search_verified"
+},
+{
+"id": "14fc93f4-c3ab-4c60-af10-ca95f104c75b",
+"new": false,
+"name_en": "G5 Compound",
+"name_ar": "جي 5",
+"path": "New Cairo > Al Narges",
+"aliases": [
+"g5"
+],
+"lat": 29.996914,
+"lng": 31.450744,
+"google_place_id": "ChIJc6XO9d08WBQRoJSk_XCHpyc"
+},
+{
+"id": "716da12d-eb2a-41f0-8768-30b0477614b3",
+"new": false,
+"name_en": "Galleria Moon Valley Compound",
+"name_ar": "جاليريا مون فالي",
+"path": "New Cairo > Golden Square",
+"aliases": [
+"galleria moon valley",
+"Moon Valley compound"
+],
+"lat": 30.021215,
+"lng": 31.53834,
+"google_place_id": "ChIJCWhrdj0hWBQRwyLc6gMXMWc"
+},
+{
+"id": "8141cf88-d304-4a7e-bdf3-8517d75d9dff",
+"new": false,
+"name_en": "Galleria Residence",
+"name_ar": "جاليريا ريزيدنس",
+"path": "New Cairo > Golden Square",
+"aliases": [
+"Galleria Residence - جاليريا ريزيدنس"
+],
+"lat": 30.021109,
+"lng": 31.541189,
+"google_place_id": "ChIJt0cdNGMhWBQRyR6-qOENzlE"
+},
+{
+"id": "3937b6a6-3c11-48d6-9958-7d732afe210a",
+"new": false,
+"name_en": "Garden City",
+"name_ar": "جاردن سيتى",
+"path": "New Cairo > Southern Investors Area",
+"aliases": [
+"Al Abd Garden City Compound",
+"garden city"
+],
+"lat": 30.03482,
+"lng": 31.2315,
+"google_place_id": "ChIJRZE01hBZWBQRZgdjZUXDDV0"
+},
+{
+"id": "0fbda534-a6f0-42e5-ba89-2f4fd97ed29f",
+"new": false,
+"name_en": "Gardenia City",
+"name_ar": "جاردينيا سيتي",
+"path": "Nasr City > Cairo-Suez Road",
+"aliases": [
+"جاردينيا طريق السويس",
+"جاردينيا مدينة نصر"
+],
+"lat": 30.061263,
+"lng": 31.39497,
+"google_place_id": "ChIJ323lctc9WBQRROz7l9ulJkc"
+},
+{
+"id": "4b33ebfe-fc77-46dd-9e52-de99ecc07889",
+"new": false,
+"name_en": "Gardenia Hightes",
+"name_ar": "جاردينيا هايتس",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"Gardenia Hightes - جاردينيا هايتس"
+],
+"lat": 29.987835,
+"lng": 31.477039,
+"google_place_id": "ChIJ312o-OEjWBQRx-JvfEwWR1g",
+"info_en": "Gardenia Heights (جاردينيا هايتس) is a residential compound in the Fifth Settlement of New Cairo near South 90th Street and Mohamed Naguib Axis, developed by Al Kamel Developments on approximately 25.9 acres.",
+"info_ar": "كمبوند جاردينيا هايتس هو مشروع سكني في التجمع الخامس بالقاهرة الجديدة بالقرب من شارع التسعين الجنوبي ومحور محمد نجيب، من تطوير شركة الكامل للتطوير العقاري على مساحة نحو 25.9 فدان.",
+"info_source": "web_search_verified"
+},
+{
+"id": "9e0df1b5-8db5-4591-96c1-d962c0b8380f",
+"new": false,
+"name_en": "Gardenia Springs Compound",
+"name_ar": "كمبوند جاردينيا سبرنجز",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"Gardenia Springs",
+"جاردينيا سبرنجز",
+"gardenia",
+"Gardenia",
+"Gardenia Area"
+],
+"lat": 30.04814,
+"lng": 31.51131,
+"google_place_id": "ChIJN85zKZ8YWBQR-XbNBif6hCU"
+},
+{
+"id": "a926569b-1128-4c29-99c2-7ca1d4fa4993",
+"new": false,
+"name_en": "Golf View October",
+"name_ar": "جولف فيو أكتوبر",
+"path": "6th of October",
+"aliases": [
+"Golf View",
+"جولف فيو",
+"Golf",
+"golfview"
+],
+"old_name_en": "Golf View",
+"old_name_ar": "جولف فيو",
+"lat": 30.005298,
+"lng": 31.031405,
+"google_place_id": "ChIJO2xuGIFaWBQR2AsHsJFI5h0"
+},
+{
+"id": "a0294da4-3645-45ea-98bc-c53cf7fbbeb9",
+"new": false,
+"name_en": "Grand Residencia (Cesar)",
+"name_ar": "جراند ريزيدنسيا",
+"path": "New Cairo > Southern Investors Area",
+"aliases": [
+"grand cesar",
+"Grand Residance"
+],
+"lat": 30.01113,
+"lng": 31.484412,
+"google_place_id": "ChIJMz18BcMiWBQR0nC3pLiIYB8"
+},
+{
+"id": "9788419c-81c8-4a2e-87df-6a4b3f9b76c2",
+"new": false,
+"name_en": "Green Square",
+"name_ar": "جرين سكوير",
+"path": "Mostakbal City",
+"aliases": [
+"Green Square - جرين سكوير"
+],
+"lat": 30.046615,
+"lng": 31.63359,
+"google_place_id": "ChIJJVUjEbj1VxQRQjvz5Aq8XCg"
+},
+{
+"id": "a1a74c7a-a8fe-4364-8d00-53af6e8aa157",
+"new": false,
+"name_en": "Hacienda Red",
+"name_ar": "هاسيندا ريد",
+"path": "North Coast > Sidi Abdel Rahman",
+"aliases": [
+"Hacienda"
+],
+"lat": 30.997392,
+"lng": 28.655617,
+"google_place_id": "ChIJc1na6KQHYBQR3KSAaolSRAo"
+},
+{
+"id": "a94232e0-ddab-46cf-a5bd-2f2f635e97e3",
+"new": false,
+"name_en": "Hacienda West",
+"name_ar": "هاسيندا ويست",
+"path": "North Coast > Ras El Hekma",
+"aliases": [
+"Hacienda West - هاسيندا ويست"
+],
+"lat": 31.08866,
+"lng": 27.953412,
+"google_place_id": "ChIJMV4q_nkzYBQR723KRMZQsIs"
+},
+{
+"id": "a5cdde58-3a15-4324-a2c6-80536fa71111",
+"new": false,
+"name_en": "Hacienda White",
+"name_ar": "هاسيندا وايت",
+"path": "North Coast > Sidi Abdel Rahman",
+"aliases": [
+"Hacienda White - هاسيندا وايت"
+],
+"lat": 30.99826,
+"lng": 28.66201,
+"google_place_id": "ChIJbe5mBmgHYBQRr7toMykioX0"
+},
+{
+"id": "11dc55c0-e72a-4707-a58f-9299d47e9753",
+"new": false,
+"name_en": "Haptown Compound",
+"name_ar": "كمبوند هاب تون",
+"path": "Mostakbal City",
+"aliases": [
+"Haptown",
+"هاب تون",
+"HAP Town"
+],
+"lat": 30.05117,
+"lng": 31.6584,
+"google_place_id": "ChIJv4OwY9H1VxQRnzXxa66vbUI"
+},
+{
+"id": "c28bc8c4-50fa-47a4-8dbf-dcdda6460401",
+"new": false,
+"name_en": "Haram City",
+"name_ar": "هرم سيتى",
+"path": "6th of October",
+"aliases": [
+"Haram City - هرم سيتى"
+],
+"lat": 29.928564,
+"lng": 30.918819,
+"google_place_id": "ChIJX15CK8JRWBQRYHuboc3C_yI"
+},
+{
+"id": "030872e7-92c2-4cdd-a453-860e70bf5093",
+"new": false,
+"name_en": "Hayati Residence Compound",
+"name_ar": "كمبوند حياتي رزيدنس",
+"path": "New Cairo > 1st Settlement",
+"aliases": [
+"حياتي رزيدنس",
+"Hayat Compound",
+"hayati residence",
+"Hayati Residence",
+"hayaty residence"
+],
+"lat": 30.04832,
+"lng": 31.486321,
+"google_place_id": "ChIJAQAAkIEiWBQRA16wpS9-h6U"
+},
+{
+"id": "55e3eeb4-4395-4afa-bf62-0990d8d98f67",
+"new": false,
+"name_en": "Highland Park New Cairo",
+"name_ar": "هاي لاند بارك القاهرة الجديدة",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"Highland Park Compound",
+"هاي لاند بارك",
+"high land park"
+],
+"old_name_en": "Highland Park Compound",
+"old_name_ar": "هاي لاند بارك",
+"lat": 29.989756,
+"lng": 31.508752,
+"google_place_id": "ChIJ6fZo2I0jWBQRS3isZP0fl1Q"
+},
+{
+"id": "37e2f1a3-065f-4cc0-a8ad-96a242840e08",
+"new": false,
+"name_en": "Hyde Park",
+"name_ar": "هايد بارك",
+"path": "New Cairo > Golden Square",
+"aliases": [
+"Hyde Park Centre Ville Apartments",
+"Hyde Park Damac Compound",
+"Hyde Park Garden Residences",
+"Hyde Park Greens",
+"Hyde Park HPR",
+"Hyde Park Park Corner",
+"Hyde park Parkway Residences",
+"Hyde Park The Residence Apartments",
+"Tawny Hyde Park Compound",
+"هايد بارك"
+],
+"lat": 29.984368,
+"lng": 31.541036,
+"google_place_id": "ChIJY3eh6KIhWBQRMuJB0SdKrLI"
+},
+{
+"id": "d5a2b23b-7f3b-4075-82b5-074ccac0af28",
+"new": false,
+"name_en": "Iconic Tower",
+"name_ar": "البرج الأيقوني",
+"path": "New Capital > Central Business District (CBD)",
+"aliases": [
+"Iconic Tower - البرج الأيقوني"
+],
+"lat": 30.013033,
+"lng": 31.693839,
+"google_place_id": "ChIJP2w-Mz31VxQRc6PoKyY3_ug"
+},
+{
+"id": "53782efe-0a80-44b7-a234-617a0b9eeec6",
+"new": false,
+"name_en": "IL Bosco City",
+"name_ar": "إل بوسكو سيتي",
+"path": "Mostakbal City",
+"aliases": [
+"كمبوند لاميرادا",
+"Il Bosco City"
+],
+"old_name_en": "IL Bosco City",
+"old_name_ar": "كمبوند لاميرادا",
+"lat": 30.06564,
+"lng": 31.66418,
+"google_place_id": "ChIJty_rCeH1VxQRV0h__32VmIw"
+},
+{
+"id": "3f0654c5-42a4-419c-b263-e7bc1131a154",
+"new": false,
+"name_en": "IL Bosco New Capital",
+"name_ar": "إل بوسكو العاصمة الإدارية",
+"path": "New Capital > R7 Sector",
+"aliases": [
+"Il Bosco New Capital"
+],
+"lat": 29.977865,
+"lng": 31.733682,
+"google_place_id": "ChIJVYch6a-LVxQRZWZhsCS8XwA"
+},
+{
+"id": "b151855e-4ed6-4dc5-9870-6e92771f2dea",
+"new": false,
+"name_en": "IL Monte Galala",
+"name_ar": "إل مونتي جلالة",
+"path": "Ain Sokhna > Galala",
+"aliases": [
+"IL Monte Galala - إل مونتي جلالة"
+],
+"lat": 29.502343,
+"lng": 32.410338,
+"google_place_id": "ChIJbRHe7KFVVhQRzv2-1TmbA4Q"
+},
+{
+"id": "d881b232-581d-45bd-9ca5-85c8973019b4",
+"new": false,
+"name_en": "Infinity Tower",
+"name_ar": "إنفينيتي تاور",
+"path": "New Capital > Central Business District (CBD)",
+"aliases": [
+"Infinity Tower - إنفينيتي تاور"
+],
+"lat": 30.061151,
+"lng": 31.482616,
+"google_place_id": "ChIJlx4AEmf1VxQRpSZAYRGe0kg"
+},
+{
+"id": "f190b4bb-4823-493f-97c3-16d59990c39a",
+"new": false,
+"name_en": "Jayd Compound",
+"name_ar": "كمبوند جايد",
+"path": "New Cairo > North of Rehab",
+"aliases": [
+"جايد",
+"jayd",
+"Jayd - جايد"
+],
+"lat": 30.063412,
+"lng": 31.521855,
+"google_place_id": "ChIJ2w0UNUUZWBQRxxtLo36oowQ"
+},
+{
+"id": "d39d1ea0-db29-4705-9f4f-98b49581e6d0",
+"new": false,
+"name_en": "June",
+"name_ar": "جون",
+"path": "North Coast > Ras El Hekma",
+"aliases": [
+"June - جون"
+],
+"lat": 31.076838,
+"lng": 28.089148,
+"google_place_id": "ChIJYZvxYFQxYBQRt1IPeRA-Xks"
+},
+{
+"id": "fcb5eabf-cf8f-47b9-9547-682ffebf1dff",
+"new": false,
+"name_en": "JW Marriott Residences",
+"name_ar": "ماريوت ريزيدنس",
+"path": "New Cairo > Mirage City",
+"aliases": [
+"hotai jw maryot"
+],
+"lat": 30.068,
+"lng": 31.421,
+"google_place_id": "ChIJR00uXwAjWBQRRsGrL5utK4k"
+},
+{
+"id": "d688cd80-8590-4cbd-a96c-d5764af0bca9",
+"new": false,
+"name_en": "Kai Sokhna",
+"name_ar": "كاي السخنة",
+"path": "Ain Sokhna > Zaafarana Road",
+"aliases": [
+"Kai Sokhna - كاي السخنة"
+],
+"lat": 29.208853,
+"lng": 32.624973,
+"google_place_id": "ChIJy2yfBH_uVhQRzFvDLKwae0Y"
+},
+{
+"id": "cd7d0f7c-50ec-4496-a8e4-773f4d6e8747",
+"new": false,
+"name_en": "Karma City",
+"name_ar": "كارما سيتى",
+"path": "6th of October",
+"aliases": [
+"Karma City - كارما سيتى"
+],
+"lat": 29.992369,
+"lng": 30.909587,
+"google_place_id": "ChIJC2nB3DJWWBQR09NQ-WDqNas"
+},
+{
+"id": "94a9d8bc-ee97-497c-b82f-0a3c2e84216a",
+"new": false,
+"name_en": "Karmell",
+"name_ar": "كارميل",
+"path": "Sheikh Zayed > New Zayed",
+"aliases": [
+"Sodic VYE & Karmell"
+],
+"lat": 30.067073,
+"lng": 30.788775,
+"google_place_id": "ChIJMel01dv3WBQRdCEaGywu4G4"
+},
+{
+"id": "788f9e31-0528-4331-b8a5-e95b6771432c",
+"new": false,
+"name_en": "Katameya Dunes",
+"name_ar": "قطامية ديونز",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"katamya dunes",
+"kattamya dunes"
+],
+"lat": 30.004072,
+"lng": 31.514627,
+"google_place_id": "ChIJ4XqmhO0jWBQREi3lOfBqvwQ"
+},
+{
+"id": "2b819812-95c8-42cb-ae39-f8097b2e1491",
+"new": false,
+"name_en": "Katameya Gardens Compound",
+"name_ar": "قطامية جاردنز",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"katameya gardens",
+"katamya garden's",
+"kattamaya gardens",
+"Kattameya Gardens"
+],
+"lat": 29.994241,
+"lng": 31.509165,
+"google_place_id": "ChIJ26F_XtAjWBQRICt3fqnOiSQ"
+},
+{
+"id": "99fe7030-c744-46f5-8c59-30d1b4267605",
+"new": false,
+"name_en": "Katameya Heights Golf & Tennis",
+"name_ar": "قطامية هايتس",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"katameya heights",
+"Katameya Heights Golf",
+"kattamaya heights",
+"kattameya heights",
+"Kattameya Heights",
+"kattamya heights"
+],
+"lat": 29.992943,
+"lng": 31.407723,
+"google_place_id": "ChIJu4WyloY8WBQR0V43ZqGR99I"
+},
+{
+"id": "2547c389-9bc0-4057-8179-16d43cbcfda8",
+"new": false,
+"name_en": "Katameya Hills",
+"name_ar": "قطامية هيلز",
+"path": "New Cairo > North 90th",
+"aliases": [
+"kattamaya hilla",
+"kattamaya hills",
+"kattamya hills"
+],
+"lat": 30.030062,
+"lng": 31.450961,
+"google_place_id": "ChIJv_6CmM0iWBQRuyuC_huuzVI"
+},
+{
+"id": "94ed214a-cdb8-40ee-84d2-a1fdd1bde5d6",
+"new": false,
+"name_en": "Katameya Plaza Compound",
+"name_ar": "كمبوند قطامية بلازا",
+"path": "New Cairo > Northern Investors Area",
+"aliases": [
+"Katameya Plaza",
+"قطامية بلازا",
+"kattameya plaza",
+"Kattameya Plaza",
+"kattamya plaza"
+],
+"lat": 30.035856,
+"lng": 31.491767,
+"google_place_id": "ChIJG-SlnWIiWBQRMkNW3cJYuQI"
+},
+{
+"id": "62f1213f-1a14-46fb-b745-d19793a83f8c",
+"new": false,
+"name_en": "Katameya Residence Compound",
+"name_ar": "قطامية ريزيدنس",
+"path": "New Cairo > 1st Settlement",
+"aliases": [
+"katameya residence",
+"kattamaya residence",
+"Kattameya Residence",
+"kattamya residence"
+],
+"lat": 30.064741,
+"lng": 31.429145,
+"google_place_id": "ChIJtXCOal49WBQRkRX1LbPMCUw"
+},
+{
+"id": "b73f1c61-e48a-4a89-8220-b9444db18182",
+"new": false,
+"name_en": "Kattameya Creeks",
+"name_ar": "قطامية كرييكس",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"Kattameya Creeks - قطامية كرييكس"
+],
+"lat": 29.990502,
+"lng": 31.447392,
+"google_place_id": "ChIJLxZ-lJkjWBQRp3PB6KqDmqM"
+},
+{
+"id": "4795545e-d26a-41d5-8a60-700f4dfdebb9",
+"new": false,
+"name_en": "Keeva",
+"name_ar": "كيفا",
+"path": "6th of October > Dahshour Link",
+"aliases": [
+"Keeva - كيفا"
+],
+"lat": 29.993597,
+"lng": 30.996094,
+"google_place_id": "ChIJHfXVzWFRWBQR_bbjjyINt68"
+},
+{
+"id": "4911be68-cfa4-4ba6-86a2-7a6af03f1166",
+"new": false,
+"name_en": "Koronfol Heights",
+"name_ar": "قرنفل هايتس",
+"path": "New Cairo > Al Qoronfol",
+"aliases": [
+"coumpound elornfel heights",
+"Coumpound Elornfel Heights",
+"oronfel hights"
+],
+"lat": 30.053568,
+"lng": 31.522727,
+"google_place_id": "ChIJlc0ZZgAZWBQRAw0QbpQsDj4"
+},
+{
+"id": "ed3422e7-07ed-4837-bcb4-d1e82107ca3b",
+"new": false,
+"name_en": "L'avenir Compound",
+"name_ar": "كمبوند لافنير",
+"path": "Mostakbal City > Central Mostakbal",
+"aliases": [
+"L'avenir",
+"لافنير",
+"lavenir"
+],
+"lat": 30.053578,
+"lng": 31.621058,
+"google_place_id": "ChIJXZHa7tIfWBQRSZ_Z5YRm414"
+},
+{
+"id": "250c5be4-d7db-425e-b772-d93621ae30f4",
+"new": false,
+"name_en": "La Mirada Compound",
+"name_ar": "كمبوند لاميرادا",
+"path": "New Cairo > Southern Investors Area",
+"aliases": [
+"La Mirada",
+"لاميرادا",
+"lamerada",
+"lamirada"
+],
+"lat": 30.001147,
+"lng": 31.506956,
+"google_place_id": "ChIJrZmVl7MjWBQRmezc5aw_tzQ"
+},
+{
+"id": "b177e285-ee8f-453c-86d3-34352989b6ed",
+"new": false,
+"name_en": "La Nouva Vista Compound",
+"name_ar": "كمبوند لانوفا فيستا",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"لانوفا فيستا",
+"la nouva vista"
+],
+"lat": 30.046011,
+"lng": 31.482207,
+"google_place_id": "ChIJbYp4Vr8jWBQRZfdpudIXtVc"
+},
+{
+"id": "62d4f0b1-27ac-4b75-962b-6bf230ad1e99",
+"new": false,
+"name_en": "La Rose",
+"name_ar": "لا روز",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"La Rose - لا روز"
+],
+"lat": 30.013076,
+"lng": 31.4981,
+"google_place_id": "ChIJbyW2I1EiWBQRDvsU6uTq-0Y"
+},
+{
+"id": "3ce0e71a-5c19-4eaa-aefe-81cbf07576ce",
+"new": false,
+"name_en": "La Terra",
+"name_ar": "لا تيرا",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"La Terra - لا تيرا"
+],
+"lat": 30.009309,
+"lng": 31.502309,
+"google_place_id": "ChIJj7wTBFIiWBQRoOpY2ScpcGQ"
+},
+{
+"id": "d92bd3bd-54e9-40ef-b066-fffbc980f975",
+"new": false,
+"name_en": "La Vista City",
+"name_ar": "لافيستا سيتي",
+"path": "New Capital > R4 Sector",
+"aliases": [
+"La Vista"
+],
+"lat": 30.005883,
+"lng": 31.584334,
+"google_place_id": "ChIJpRq8VmohWBQRN9htptP4aWY"
+},
+{
+"id": "3779ec2c-6f0a-4ae6-b763-79fc817e5615",
+"new": false,
+"name_en": "Lafayette Village",
+"name_ar": "لافاييت",
+"path": "New Capital > Downtown (New Capital)",
+"aliases": [
+"Lafayette Village - لافاييت"
+],
+"lat": 30.006332,
+"lng": 31.730294,
+"google_place_id": "ChIJ0S_xWprzVxQRXPrnWwaprIo"
+},
+{
+"id": "5b1f2ff3-fbc7-4830-bb0c-7a351e666b5a",
+"new": false,
+"name_en": "Lake Front",
+"name_ar": "لايك فرونت",
+"path": "6th of October",
+"aliases": [
+"Lake Front - لايك فرونت"
+],
+"lat": 30.037893,
+"lng": 31.041036,
+"google_place_id": "ChIJb1SaE9dRWBQRAsq71kvgERY"
+},
+{
+"id": "944fcff4-86ff-4e9f-9d9f-ca98ab471c2c",
+"new": false,
+"name_en": "Lake View",
+"name_ar": "ليك فيو",
+"path": "New Cairo > Golden Square",
+"aliases": [
+"Lake View Residence Compound",
+"lake view villas"
+],
+"lat": 30.025454,
+"lng": 31.539938,
+"google_place_id": "ChIJWfh-Rh0iWBQRhcjTCgzizQs"
+},
+{
+"id": "0646cfed-c6cd-49d1-87bb-3e4d453051af",
+"new": false,
+"name_en": "Lake View Residence / Dusit",
+"name_ar": "ليك فيو ريزيدنس / دوسيت",
+"path": "New Cairo > Golden Square",
+"aliases": [
+"lake view dusit",
+"Lake View Residence- لايك فيو ريزيدنس"
+],
+"lat": 30.025552,
+"lng": 31.455281,
+"google_place_id": "ChIJWfh-Rh0iWBQRhcjTCgzizQs"
+},
+{
+"id": "23baa6c1-2d27-4b80-a720-a6b9e736fc66",
+"new": false,
+"name_en": "Layan Residence",
+"name_ar": "ليان صبور",
+"path": "New Cairo > Golden Square",
+"aliases": [
+"layan"
+],
+"lat": 30.018843,
+"lng": 31.434895,
+"google_place_id": "ChIJ3V9EJ_0hWBQRCesNTGbUXw8"
+},
+{
+"id": "39219728-43c2-4fec-b0a3-7101bc090fcb",
+"new": false,
+"name_en": "Leila Compound",
+"name_ar": "كمبوند ليلة",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"ليلة",
+"laila",
+"leila"
+],
+"lat": 30.030076,
+"lng": 31.477433,
+"google_place_id": "ChIJJfeT--wiWBQRxZpJXL5Zl7k"
+},
+{
+"id": "7c4a9bce-f6d8-46d2-9c7e-3cce301d8657",
+"new": false,
+"name_en": "Les Rois",
+"name_ar": "لي روا",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"pearl les rois",
+"pearl de rois",
+"Pearl Des Rois",
+"كمبوند ومول بيرل دي روا",
+"بيرل دي روا",
+"ومول بيرل دي روا"
+],
+"lat": 30.019003,
+"lng": 31.501679,
+"google_place_id": "ChIJM0woSpUjWBQR8FuQKut4oNg",
+"info_en": "Les Rois (لي روا) is an upscale gated villa compound in the Fifth Settlement (التجمع الخامس) of New Cairo, developed by Housing & Development Properties (HDP / التعمير والإسكان للاستثمار العقاري), adjacent to its integrated apartment and commercial hub Pearl Des Rois (كمبوند ومول بيرل دي روا, ~7 acres / 30,000 sqm).",
+"info_ar": "كمبوند لي روا هو مجتمع سكني راقٍ مخصص للفيلات في التجمع الخامس بالقاهرة الجديدة، من تطوير شركة التعمير والإسكان للاستثمار العقاري (HDP)، ويضم بجواره مشروع ومول بيرل دي روا السكني والتجاري والإداري على مساحة نحو 7 أفدنة.",
+"info_source": "user_provided_text + web_search_verified"
+},
+{
+"id": "ea38670b-415b-4a37-a1a8-45ffd7effc14",
+"new": false,
+"name_en": "Little Venice",
+"name_ar": "ليتل فينيس",
+"path": "Ain Sokhna > Little Venice Area",
+"aliases": [
+"Little Venice - ليتل فينيس"
+],
+"lat": 29.720832,
+"lng": 32.382547,
+"google_place_id": "ChIJUWkaPXNLVhQRRZvOYRD-WmM"
+},
+{
+"id": "e6cd9f24-b663-4770-b0d9-41e432a98d3c",
+"new": false,
+"name_en": "Lugar",
+"name_ar": "لوجار",
+"path": "Sheikh Zayed > New Zayed",
+"aliases": [
+"Lugar - لوجار"
+],
+"lat": 30.446567,
+"lng": 30.321592,
+"google_place_id": "ChIJAyMdzF1ZWBQRrDkOJPojlEs"
+},
+{
+"id": "fa44ce19-5371-4355-ae42-82d975583196",
+"new": false,
+"name_en": "Madinaty",
+"name_ar": "مدينتي",
+"path": "Madinaty",
+"aliases": [
+"Madinaty Golf Heights",
+"madinty",
+"The Spine - Madinaty"
+],
+"lat": 30.095602,
+"lng": 31.63493,
+"google_place_id": "ChIJcx6q8Av1VxQRVuc7ZE4Oq4M"
+},
+{
+"id": "f8b2a20e-b447-4add-b2b9-355ee0fa23ab",
+"new": false,
+"name_en": "Majada",
+"name_ar": "ماجادا",
+"path": "Ain Sokhna > Galala",
+"aliases": [
+"Majada - ماجادا"
+],
+"lat": 29.469418,
+"lng": 32.458637,
+"google_place_id": "ChIJN2ysaJX5VhQRzTAS_AmHkLo"
+},
+{
+"id": "69b16d9f-9f12-4013-a1b9-15a779b93cc4",
+"new": false,
+"name_en": "Mall of Arabia",
+"name_ar": "مول العرب",
+"path": "6th of October > Central Axis",
+"aliases": [
+"Arabia Compound"
+],
+"lat": 30.008495,
+"lng": 30.981986,
+"google_place_id": "ChIJeZAyaVFXWBQRD4a_Vq4vVvg"
+},
+{
+"id": "164c1e59-fa31-4b94-89c4-1947937d7249",
+"new": false,
+"name_en": "Marassi",
+"name_ar": "مراسي",
+"path": "North Coast > Sidi Abdel Rahman",
+"aliases": [
+"Marassi - مراسي"
+],
+"lat": 30.97032,
+"lng": 28.75238,
+"google_place_id": "ChIJ7ex4S8D9XxQRH1VWI2t8Sw8"
+},
+{
+"id": "1327123e-bdf7-436a-b36a-a6a43544b980",
+"new": false,
+"name_en": "Marqville",
+"name_ar": "ماركفيل",
+"path": "Mostakbal City",
+"aliases": [
+"Marqville - ماركفيل"
+],
+"lat": 30.059018,
+"lng": 31.618766,
+"google_place_id": "ChIJrwPHO4EfWBQRd5ricB9lErs"
+},
+{
+"id": "4c393ba8-fd9c-430b-88e2-4142d4d7a9bf",
+"new": false,
+"name_en": "Marvel City Compound",
+"name_ar": "مارفيل سيتي",
+"path": "New Cairo > 1st Settlement",
+"aliases": [
+"Marvel City",
+"marvel"
+],
+"lat": 30.01352,
+"lng": 31.49964,
+"google_place_id": "ChIJE_0WEsEjWBQReWLEzuhpCco"
+},
+{
+"id": "6c3f16ac-fe74-402b-83ac-9f88137c6d2c",
+"new": false,
+"name_en": "Mena Residence",
+"name_ar": "مينا ريزيدنس",
+"path": "New Cairo > Southern Investors Area",
+"aliases": [
+"Mena Residence - مينا ريزيدنس"
+],
+"lat": 30.00794,
+"lng": 31.490764,
+"google_place_id": "ChIJw3HGYlUiWBQRI0T48CEh0VE"
+},
+{
+"id": "e82b3dbc-0e80-493a-96ce-26441af67dd7",
+"new": false,
+"name_en": "Midtown Compound",
+"name_ar": "ميدتاون",
+"path": "New Cairo > Facing AUC",
+"aliases": [
+"midtown"
+],
+"lat": 30.013345,
+"lng": 31.501394,
+"google_place_id": "ChIJuTvuFUT1VxQRYPp4Nr7eOtg"
+},
+{
+"id": "213f9183-c07c-4ccf-a8bf-da4a99a68d83",
+"new": false,
+"name_en": "Ministry of Finance Compound",
+"name_ar": "كمبوند وزارة المالية",
+"path": "New Cairo > 1st Settlement",
+"aliases": [
+"Ministry of Finance",
+"وزارة المالية",
+"compound wazrit el malyaah",
+"Compound Wazaret El Maleya",
+"كمبوند وزارة المالية",
+"Wazaret El Maleya"
+],
+"google_place_id": "ChIJnWCetaPzVxQRE1-TQ4aetDY",
+"info_en": "Ministry of Finance Compound / Compound Wazaret El Maleya (كمبوند وزارة المالية) is a residential community located in the First Settlement (التجمع الأول) of New Cairo, situated behind Mirage City and near the Mostafa Kamel Axis.",
+"info_ar": "كمبوند وزارة المالية هو مجتمع سكني يقع في التجمع الأول بالقاهرة الجديدة، خلف ميراج سيتي وبالقرب من محور مصطفى كامل.",
+"info_source": "user_provided_text"
+},
+{
+"id": "5f4ea280-bd0e-4031-b302-4217c2cd10c5",
+"new": false,
+"name_en": "Mirage Residence",
+"name_ar": "ميراج ريزيدنس",
+"path": "New Cairo > Mirage City",
+"aliases": [
+"Mirage Compound",
+"mirrage residence"
+],
+"lat": 30.086018,
+"lng": 31.940571,
+"google_place_id": "ChIJre74GRkYWBQRX3vvKcD4qtw"
+},
+{
+"id": "0331693c-8d32-4fb2-81ea-7d41cdae5bab",
+"new": false,
+"name_en": "Mivida",
+"name_ar": "ميفيدا",
+"path": "New Cairo > South 90th",
+"aliases": [
+"Mivida  - Emaar",
+"Mivida Blue Views",
+"Mivida Emaar Compound"
+],
+"lat": 30.0075,
+"lng": 31.539855,
+"google_place_id": "ChIJJWCSQiciWBQRaJCPPieoGI8"
+},
+{
+"id": "838acf0f-c2c7-4226-991b-88cbc8949a43",
+"new": false,
+"name_en": "Moon Valley 1",
+"name_ar": "مون فالى",
+"path": "New Cairo > 1st Settlement",
+"aliases": [
+"Moon Valley 1 - مون فالى"
+],
+"lat": 30.023285,
+"lng": 31.487748,
+"google_place_id": "ChIJiW_aovYiWBQRjkxVclKdHDM"
+},
+{
+"id": "40f3400b-54c9-4e52-9e3a-d1a7e605a607",
+"new": false,
+"name_en": "Moon Valley 2",
+"name_ar": "مون فالى 2",
+"path": "New Cairo > 1st Settlement",
+"aliases": [
+"Moon Valley 2 - مون فالى 2"
+],
+"lat": 30.038401,
+"lng": 31.510236,
+"google_place_id": "ChIJj7eSg3MiWBQRNZvJCa5QVqw"
+},
+{
+"id": "b67c300e-a310-4707-9d92-84f47fff2b48",
+"new": false,
+"name_en": "Mountain View 1 Compound",
+"name_ar": "ماونتن فيو 1",
+"path": "New Cairo > North Investors Extension",
+"aliases": [
+"mauntain view 1",
+"mountain view 1",
+"Mountain View 1",
+"mountain view1",
+"mountian view 1",
+"moutnain view 1"
+],
+"lat": 30.050417,
+"lng": 31.507737,
+"google_place_id": "ChIJk1BiaJwYWBQRYxjJe4TEUDY"
+},
+{
+"id": "4dc11353-c437-4ec9-80ca-d3a7659d9a7e",
+"new": false,
+"name_en": "Mountain View 2 Compound",
+"name_ar": "ماونتن فيو 2",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"mountain view 2",
+"Mountain View 2",
+"moutnain view 2"
+],
+"lat": 30.032475,
+"lng": 31.530778,
+"google_place_id": "ChIJD_RldFMjWBQReH3Psq-AjF4"
+},
+{
+"id": "bc46ce2d-3fb2-498a-ba3d-492182f1dc42",
+"new": false,
+"name_en": "Mountain View Chillout Park",
+"name_ar": "مونتن فيو شلأوت بارك",
+"path": "6th of October > Northern Expansions",
+"aliases": [
+"Mountain View Chillout Park - مونتن فيو شلأوت بارك"
+],
+"lat": 29.99139,
+"lng": 30.88846,
+"google_place_id": "ChIJeaKlRin5WBQRA9VRnfx53Bg"
+},
+{
+"id": "beac6cfe-2c91-4c95-b786-89b6a82e2a9b",
+"new": false,
+"name_en": "Mountain View Executive Katameya",
+"name_ar": "ماونتن فيو إكزيكتيف قطامية",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"mountain view erk",
+"mountain view exectuive",
+"mountain view executive",
+"Mountain View Executive Residence"
+],
+"lat": 29.990105,
+"lng": 31.510392,
+"google_place_id": "ChIJra4kt7kjWBQRGsBItIXzf60"
+},
+{
+"id": "7e271968-6e6d-40b0-81f0-8c43ba0edcdd",
+"new": false,
+"name_en": "Mountain View Hyde Park Compound",
+"name_ar": "ماونتن فيو هايد بارك",
+"path": "New Cairo > Golden Square",
+"aliases": [
+"Mountain View Hyde Park",
+"mvhp"
+],
+"lat": 29.990207,
+"lng": 31.55748,
+"google_place_id": "ChIJN3k2kWMhWBQREGqjHCm7KAQ"
+},
+{
+"id": "a213aa32-c368-4995-a1e8-c12fef483a63",
+"new": false,
+"name_en": "Mountain View iCity New Cairo",
+"name_ar": "ماونتن فيو أي سيتي القاهرة الجديدة",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"Mountain View iCity",
+"ماونتن فيو أي سيتي"
+],
+"old_name_en": "Mountain View iCity",
+"old_name_ar": "ماونتن فيو أي سيتي",
+"lat": 30.067786,
+"lng": 31.592925,
+"google_place_id": "ChIJS10vtYIfWBQRFShqeQ5XvbI"
+},
+{
+"id": "185f0f4e-9a62-4b12-bcb6-17bbc0689d01",
+"new": false,
+"name_en": "Mountain View iCity October",
+"name_ar": "ماونتن فيو أي سيتي أكتوبر",
+"path": "6th of October > Northern Expansions",
+"aliases": [
+"Mountain View iCity October",
+"ماونتن فيو أي سيتي أكتوبر"
+],
+"lat": 29.99804,
+"lng": 30.926994,
+"google_place_id": "ChIJmVyDvrxXWBQRdDSvYwcqMaU"
+},
+{
+"id": "292a0fec-418f-4bf7-a1d4-0536113a8a47",
+"new": false,
+"name_en": "Mountain View Ras El Hekma",
+"name_ar": "ماونتن فيو رأس الحكمة",
+"path": "North Coast > Ras El Hekma",
+"aliases": [
+"Mountain View Ras El Hekma - ماونتن فيو رأس الحكمة"
+],
+"lat": 31.082171,
+"lng": 28.02836,
+"google_place_id": "ChIJV8-O6eIxYBQR7kfp7iiG9MA"
+},
+{
+"id": "922daddc-3a77-4666-b7cf-9bd8156b4acd",
+"new": false,
+"name_en": "Naia West",
+"name_ar": "نايا ويست",
+"path": "Sheikh Zayed > New Zayed",
+"aliases": [
+"Naia West - نايا ويست"
+],
+"lat": 30.082255,
+"lng": 30.890217,
+"google_place_id": "ChIJv7wsHQD3WBQRwsZSP7aDGyI"
+},
+{
+"id": "d980cd07-afad-4776-a75c-203379b079b8",
+"new": false,
+"name_en": "Neopolis",
+"name_ar": "نيوبوليس",
+"path": "Mostakbal City",
+"aliases": [
+"Neopolis - نيوبوليس"
+],
+"lat": 30.069754,
+"lng": 31.630788,
+"google_place_id": "ChIJWSo5GY31VxQRENJ2jtteD_c"
+},
+{
+"id": "23a5136b-b898-4b25-9840-2718d6f95970",
+"new": false,
+"name_en": "New Giza",
+"name_ar": "نيو جيزة",
+"path": "6th of October > Cairo-Alexandria Desert Road",
+"aliases": [
+"New Giza - نيو جيزة"
+],
+"lat": 30.016719,
+"lng": 31.066172,
+"google_place_id": "ChIJM_NADOP1WBQRzTUYbzu5_t8"
+},
+{
+"id": "942a79fe-d60b-4428-b6c4-5e744fd9129f",
+"new": false,
+"name_en": "Nile Business City",
+"name_ar": "نايل بيزنس سيتي",
+"path": "New Capital > Central Business District (CBD)",
+"aliases": [
+"Nile Business City - نايل بيزنس سيتي"
+],
+"lat": 30.066212,
+"lng": 31.335906,
+"google_place_id": "ChIJjzyQR3HzVxQRC3xrWb0n1fk"
+},
+{
+"id": "e172dbf4-1132-491f-94c2-6310c87582fd",
+"new": false,
+"name_en": "Nyoum Mostakbal",
+"name_ar": "نيوم مستقبل",
+"path": "Mostakbal City",
+"aliases": [
+"Nyoum Mostakbal - نيوم مستقبل"
+],
+"lat": 30.067692,
+"lng": 31.685307,
+"google_place_id": "ChIJv9yDljz1VxQRVS8J8HZg_5c"
+},
+{
+"id": "f7663e33-a923-4ccb-ba06-ca068c43bab2",
+"new": false,
+"name_en": "O West",
+"name_ar": "أو ويست",
+"path": "6th of October > Wahat Road",
+"aliases": [
+"O West - أو ويست"
+],
+"lat": 29.9678,
+"lng": 31.0185,
+"google_place_id": "ChIJX15CK8JRWBQRYHuboc3C_yI"
+},
+{
+"id": "3da9aa8e-fa33-4a70-8014-f6426a9db2a1",
+"new": false,
+"name_en": "Oaks Egypt",
+"name_ar": "أوكس",
+"path": "New Capital > Downtown (New Capital)",
+"aliases": [
+"Oaks Egypt - أوكس"
+],
+"google_place_id": "ChIJj2LJFWUjWBQRbjRS0kMJD-4"
+},
+{
+"id": "768805a8-786f-456b-a213-25c83d3b8c59",
+"new": false,
+"name_en": "October Plaza Compound",
+"name_ar": "كمبوند اكتوبر بلازا",
+"path": "6th of October > Northern Expansions",
+"aliases": [
+"October Plaza",
+"اكتوبر بلازا"
+],
+"lat": 29.99783,
+"lng": 30.92356,
+"google_place_id": "ChIJtZ12pLZXWBQRcl-vKZN03bY"
+},
+{
+"id": "b57241cc-d506-4219-acc4-644c8f36ce8f",
+"new": false,
+"name_en": "Oia",
+"name_ar": "أويا",
+"path": "New Capital > R7 Sector",
+"aliases": [
+"Oia - أويا"
+],
+"lat": 29.9945,
+"lng": 31.7248,
+"google_place_id": "ChIJ1QnchryLVxQRGvnASKeap6o"
+},
+{
+"id": "fef9ce5d-d5fe-4435-9ff3-d828322069a0",
+"new": false,
+"name_en": "One Kattameya",
+"name_ar": "وان قطامية",
+"path": "New Cairo > Ring Road (Katameya)",
+"aliases": [
+"one katamya"
+],
+"lat": 29.98061,
+"lng": 31.35616,
+"google_place_id": "ChIJ9zI9rCk7WBQR4WSWbBFC-sk"
+},
+{
+"id": "38e84662-b0b8-449a-9129-00464f95c1ea",
+"new": false,
+"name_en": "One Piece",
+"name_ar": "وان بيس",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"One Piece - وان بيس"
+],
+"lat": 30.03582,
+"lng": 31.51278,
+"google_place_id": "ChIJ0wCAGHMiWBQRZ5AMAa0gdoQ"
+},
+{
+"id": "f063c014-09c9-44f0-a440-5f2ce3d345d9",
+"new": false,
+"name_en": "Palm Hills Compound",
+"name_ar": "كمبوند بالم هيلز",
+"path": "New Cairo > Northern Investors Area",
+"aliases": [
+"بالم هيلز",
+"Bamboo Palm Hills",
+"CASA Palm Hills Compound",
+"palm hills",
+"Palm Hills",
+"palm hills capital garden",
+"Palm Hills Golf"
+],
+"lat": 30.01673,
+"lng": 31.25977,
+"google_place_id": "ChIJ67FaoGA9WBQR4FCvMoUeGns"
+},
+{
+"id": "7c5cfb5a-7ff1-484a-bbe0-52a374663ee5",
+"new": false,
+"name_en": "Palm Hills Katameya 2 (PK2)",
+"name_ar": "بالم هيلز قطامية 2",
+"path": "New Cairo > Northern Investors Area",
+"aliases": [
+"Palm Hills Katameya Compound",
+"pk2"
+],
+"lat": 30.04465,
+"lng": 31.54183,
+"google_place_id": "ChIJjRgaEQIfWBQRqAsS3e2lRuM"
+},
+{
+"id": "e1975384-c863-4b3b-9abc-c0dbef2e6e7c",
+"new": false,
+"name_en": "Palm Hills Kattameya",
+"name_ar": "بالم هيلز قطامية",
+"path": "New Cairo > Golden Square",
+"aliases": [
+"Palm Hills Kattameya - بالم هيلز قطامية"
+],
+"lat": 30.027345,
+"lng": 31.537946,
+"google_place_id": "ChIJvd4gOSAhWBQRfsvIyPckKxk"
+},
+{
+"id": "fe86621e-f85e-4aac-b7c4-6c23869e09f7",
+"new": false,
+"name_en": "Palm Hills Kattameya Extension",
+"name_ar": "بالم هيلز قطامية اكستنشن",
+"path": "New Cairo > Golden Square",
+"aliases": [
+"Palm Hills Kattameya Extension - بالم هيلز قطامية اكستنشن"
+],
+"lat": 30.04465,
+"lng": 31.54183,
+"google_place_id": "ChIJcZftHk4fWBQRzoQJIM43STA"
+},
+{
+"id": "727ab76e-a614-4bd1-a0d4-21916a1867c0",
+"new": false,
+"name_en": "Palm Hills New Cairo Compound",
+"name_ar": "بالم هيلز القاهرة الجديدة",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"palm hills new cairo",
+"Palm Hills New Cairo"
+],
+"lat": 30.0536,
+"lng": 31.593959,
+"google_place_id": "ChIJlWmib908WBQRFLyi2sR6-2I"
+},
+{
+"id": "d5c8f282-aaf0-4342-973d-d5e402e40024",
+"new": false,
+"name_en": "Palm Hills October",
+"name_ar": "بالم هيلز أكتوبر",
+"path": "Sheikh Zayed > 13th District (Sheikh Zayed)",
+"aliases": [
+"Palm Hills October - بالم هيلز أكتوبر"
+],
+"lat": 30.004836,
+"lng": 31.036377,
+"google_place_id": "ChIJsayFaDRbWBQR4l57jvD95ps"
+},
+{
+"id": "38f1df77-738c-4450-869e-5bd0110c622f",
+"new": false,
+"name_en": "Paradise Compound",
+"name_ar": "كمبوند باراديس",
+"path": "New Cairo > Southern Investors Area",
+"aliases": [
+"Paradise",
+"باراديس",
+"baradays",
+"Paradise Compound (Engineers' Syndicate) - New Cairo",
+"كمبوند بارادايس نقابة المهندسين - القاهرة الجديدة",
+"بارادايس",
+"Paradise (Engineers' Syndicate) - New Cairo",
+"بارادايس نقابة المهندسين - القاهرة الجديدة",
+"كمبوند بارادايس نقابة المهندسين"
+],
+"lat": 30.02863,
+"lng": 31.39251,
+"google_place_id": "ChIJUy9rszEjWBQR6NvJ9jH0Q3Q",
+"info_en": "Paradise Compound (Engineers' Syndicate) (كمبوند بارادايس نقابة المهندسين) is a large residential apartment community in New Cairo near the Fifth Settlement and Third Settlement border (Investors Extension / Third Obour area, near AUC, Gamal Abdel Nasser Axis, and South 90th Street), developed by the Egyptian Engineers' Syndicate (نقابة المهندسين).",
+"info_ar": "كمبوند بارادايس نقابة المهندسين هو مجتمع سكني للعمارات في القاهرة الجديدة بالقرب من امتداد المستثمرين والجامعة الأمريكية ومحور جمال عبد الناصر وشارع التسعين الجنوبي، من تطوير نقابة المهندسين المصرية.",
+"info_source": "user_provided_text"
+},
+{
+"id": "ffd0453d-ce84-4a53-ae56-cd4d51de77af",
+"new": false,
+"name_en": "Paris East Mall",
+"name_ar": "باريس إيست",
+"path": "New Capital > MU23",
+"aliases": [
+"Paris East Mall - باريس إيست"
+],
+"lat": 30.03187,
+"lng": 31.68163,
+"google_place_id": "ChIJKxCaGlj1VxQRy1u3vONzVYA"
+},
+{
+"id": "3e71d8bf-77fe-4b15-8453-d48134cfcff8",
+"new": false,
+"name_en": "Park View Compound",
+"name_ar": "كمبوند بارك فيو",
+"path": "New Cairo > North Investors Extension",
+"aliases": [
+"بارك فيو",
+"park view",
+"Park View"
+],
+"lat": 30.046691,
+"lng": 31.489107,
+"google_place_id": "ChIJ6S2eXDEjWBQRalg2GnyMgEI"
+},
+{
+"id": "85b4281b-5e7f-4162-a529-e778feb77a3c",
+"new": false,
+"name_en": "Porto Cairo Villas",
+"name_ar": "بورتو كايرو فيلات",
+"path": "New Cairo > Al Narges",
+"aliases": [
+"Porto Cairo Villas - بورتو كايرو فيلات"
+],
+"lat": 30.06439,
+"lng": 31.423611,
+"google_place_id": "ChIJz5c_Avg9WBQRPvJZZa0vomk"
+},
+{
+"id": "a86093f6-7dcb-44ed-b174-20dc7c80d262",
+"new": false,
+"name_en": "Porto New Cairo",
+"name_ar": "بورتو نيو كايرو",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"Porto New Cairo - بورتو نيو كايرو"
+],
+"lat": 30.027034,
+"lng": 31.498609,
+"google_place_id": "ChIJz5c_Avg9WBQRPvJZZa0vomk"
+},
+{
+"id": "0956a698-fd17-4de8-ac99-5ec426157e3d",
+"new": false,
+"name_en": "Porto October",
+"name_ar": "بورتو أكتوبر",
+"path": "6th of October",
+"aliases": [
+"Porto October - بورتو أكتوبر"
+],
+"lat": 29.961107,
+"lng": 30.929599,
+"google_place_id": "ChIJ22605csXWBQReRl6q-XQP4k"
+},
+{
+"id": "c1444e16-f5d0-40a3-9e99-a94420d7770e",
+"new": false,
+"name_en": "Promenade New Cairo Compound",
+"name_ar": "كمبوند بروميناد",
+"path": "New Cairo > South 90th",
+"aliases": [
+"Promenade New Cairo",
+"بروميناد",
+"Mena Compound",
+"promande",
+"promenade",
+"بروميناد القاهرة الجديدة"
+],
+"lat": 29.98306,
+"lng": 31.53,
+"google_place_id": "ChIJs23UMdojWBQRtwuUaLb4Yyc"
+},
+{
+"id": "ff352c95-b8b8-4c85-9920-9784fe72969e",
+"new": false,
+"name_en": "Pyramids Mega Mall",
+"name_ar": "بيراميدز ميجا مول",
+"path": "New Capital > Downtown (New Capital)",
+"aliases": [
+"Pyramids Mega Mall - بيراميدز ميجا مول"
+],
+"lat": 30.011648,
+"lng": 31.609401,
+"google_place_id": "ChIJDYH3teEhWBQRGNsGiK-vDs0"
+},
+{
+"id": "675e0d7a-72da-476d-b3cf-c61490a4f114",
+"new": false,
+"name_en": "Rare",
+"name_ar": "رير صبور",
+"path": "Mostakbal City",
+"aliases": [
+"Rare - رير صبور"
+],
+"lat": 30.052568,
+"lng": 31.653724,
+"google_place_id": "ChIJr4rSwY71VxQRZ4oyNC0b6-w"
+},
+{
+"id": "2f3f67a7-b346-4cf9-a180-4778eee69c27",
+"new": false,
+"name_en": "Regents Park",
+"name_ar": "ريجنتس بارك",
+"path": "New Cairo > Behind AUC",
+"aliases": [
+"regent",
+"regents park residences"
+],
+"lat": 30.00198,
+"lng": 31.508774,
+"google_place_id": "ChIJa-1qtBUjWBQR1scHs55O2ss"
+},
+{
+"id": "1b4edbc0-916f-484c-baed-a465e32d359f",
+"new": false,
+"name_en": "Retaj City",
+"name_ar": "ريتاج سيتي",
+"path": "New Cairo > Sadat Axis",
+"aliases": [
+"retag city",
+"retage",
+"Taj City",
+"Retage New Cairo",
+"ريتاج القاهرة الجديدة"
+],
+"lat": 30.05341,
+"lng": 31.469223,
+"google_place_id": "ChIJ5RDpSvU_WBQRecdZ1lSyNk4"
+},
+{
+"id": "bf2f0350-906c-4a94-bae2-213be83f8c9b",
+"new": false,
+"name_en": "Rihana Villas",
+"name_ar": "ريحانا فيلات",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"Rihana Villas - ريحانا فيلات"
+],
+"lat": 30.056242,
+"lng": 31.456988,
+"google_place_id": "ChIJ94s8FZ4YWBQRc4NpmmhD_aM"
+},
+{
+"id": "ebcfd042-0d93-4971-ba23-eacefa690863",
+"new": false,
+"name_en": "River Walk Compound",
+"name_ar": "كومبوند ريفر واك",
+"path": "New Cairo > 1st Settlement",
+"aliases": [
+"ريفر واك",
+"revar wook",
+"river walk"
+],
+"lat": 30.037923,
+"lng": 31.47555,
+"google_place_id": "ChIJtR65fJEiWBQRrmxqcuVOP8s"
+},
+{
+"id": "637b6f8d-5cb8-41ea-97c8-d9f908010d88",
+"new": false,
+"name_en": "Rivers",
+"name_ar": "ريفرز",
+"path": "Sheikh Zayed > New Zayed",
+"aliases": [
+"Rivers - ريفرز"
+],
+"lat": 30.035962,
+"lng": 30.947733
+},
+{
+"id": "ed96b56b-80c8-49f2-86ab-e7fad5b799f2",
+"new": false,
+"name_en": "Riviera City",
+"name_ar": "ريفييرا سيتى",
+"path": "Sheikh Zayed",
+"aliases": [
+"Riviera City - ريفييرا سيتى"
+],
+"lat": 30.051703,
+"lng": 31.036377,
+"google_place_id": "ChIJ7XonXD1bWBQRbShDfM1kYr4",
+"info_en": "Riviera City (ريفييرا سيتي) is a residential community in Sheikh Zayed developed by Torec Developments (التعمير للتطوير العقاري).",
+"info_ar": "كمبوند ريفييرا سيتي هو مشروع سكني في مدينة الشيخ زايد من تطوير شركة توريك للتطوير العقاري (Torec Developments).",
+"info_source": "web_search_verified"
+},
+{
+"id": "a2f48c2f-21b2-4c8f-9e92-a011a4615c7e",
+"new": false,
+"name_en": "Riviera Heights",
+"name_ar": "ريفيرا هايتس",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"Riviera Heights - ريفيرا هايتس"
+],
+"lat": 30.001934,
+"lng": 31.498357,
+"google_place_id": "ChIJlU_4aawjWBQRvQoWdNGmB8A"
+},
+{
+"id": "a9709259-bd08-49cc-a70d-c86a4b6fc95d",
+"new": false,
+"name_en": "Rosail City",
+"name_ar": "روزيل سيتى",
+"path": "Mostakbal City",
+"aliases": [
+"Rosail City - روزيل سيتى"
+],
+"lat": 30.070187,
+"lng": 31.642312,
+"google_place_id": "ChIJHaqb3K31VxQRMRgr7H-jZ8w"
+},
+{
+"id": "6c08afe2-a91a-409f-88cf-806333a14f78",
+"new": false,
+"name_en": "Royal City",
+"name_ar": "رويال سيتى",
+"path": "Sheikh Zayed",
+"aliases": [
+"Royal City - رويال سيتى"
+],
+"lat": 30.034254,
+"lng": 31.023768,
+"google_place_id": "ChIJiyP2-mdbWBQRjjZmVEc-kYw"
+},
+{
+"id": "b36d57bd-3111-4092-849e-364eb19d5663",
+"new": false,
+"name_en": "Royal Meadows",
+"name_ar": "رويال ميدوز",
+"path": "Sheikh Zayed",
+"aliases": [
+"Royal Meadows - رويال ميدوز"
+],
+"lat": 30.076993,
+"lng": 30.964765,
+"google_place_id": "ChIJAQAAwBRZWBQRWRJX-0NdV_w"
+},
+{
+"id": "9e151ceb-71bb-469d-a700-624535038e44",
+"new": false,
+"name_en": "Saada",
+"name_ar": "سعادة",
+"path": "New Cairo > Cairo-Suez Road",
+"aliases": [
+"Dar Al Saada Association Compound"
+],
+"lat": 30.091063,
+"lng": 31.485527,
+"google_place_id": "ChIJ578JGrEZWBQRZUEuPkk80_w"
+},
+{
+"id": "d9d8fd72-a912-42e1-b502-7f17e752a77c",
+"new": false,
+"name_en": "Salt",
+"name_ar": "سولت",
+"path": "North Coast > Ras El Hekma",
+"aliases": [
+"Salt - سولت"
+],
+"lat": 31.081177,
+"lng": 28.166758,
+"google_place_id": "ChIJCdXMeAAlYBQRRzl8hMre26g"
+},
+{
+"id": "b6f18d77-0819-4435-9314-10bfcd051c92",
+"new": false,
+"name_en": "Sarai",
+"name_ar": "سراي",
+"path": "Mostakbal City > Cairo-Suez Road",
+"aliases": [
+"سراى بجوار مدينتى"
+],
+"lat": 30.0825,
+"lng": 31.6421,
+"google_place_id": "ChIJaY5vYxD3VxQRvEywfEZxA_4"
+},
+{
+"id": "2fc6f2e8-8e5d-400b-9796-7d79f9d6642c",
+"new": false,
+"name_en": "Sarayat El Maadi",
+"name_ar": "سرايات المعادي",
+"path": "Maadi > Sarayat El Maadi",
+"aliases": [
+"El Maadi Compound"
+],
+"lat": 29.962562,
+"lng": 31.316989,
+"google_place_id": "ChIJm_WjB004WBQR4hW5baeSJD0"
+},
+{
+"id": "521bc668-cc53-4185-bbc9-fa46a8d3f592",
+"new": false,
+"name_en": "Scenario",
+"name_ar": "سيناريو",
+"path": "New Capital > R7 Sector",
+"aliases": [
+"Scenario - سيناريو"
+],
+"lat": 29.966291,
+"lng": 31.712796,
+"google_place_id": "ChIJMaDz-kyLVxQRqCBdKyz_Gzo"
+},
+{
+"id": "48aa0434-8019-446d-8170-29fac5355b4b",
+"new": false,
+"name_en": "Seashore (Hyde Park)",
+"name_ar": "سي شور",
+"path": "North Coast > Ras El Hekma",
+"aliases": [
+"Seashore (Hyde Park) - سي شور"
+],
+"lat": 31.07741,
+"lng": 27.95771,
+"google_place_id": "ChIJB6niaQAzYBQRxi6Zsd-aYOg"
+},
+{
+"id": "daa99d1c-5fc0-4ff0-8d8e-1cea3b68619f",
+"new": false,
+"name_en": "Seasons Residence",
+"name_ar": "سيزونز ريزيدنس",
+"path": "New Cairo > North Investors Extension",
+"aliases": [
+"Seasons Residence - سيزونز ريزيدنس"
+],
+"lat": 30.050098,
+"lng": 31.499171,
+"google_place_id": "ChIJu3Bvlo0ZWBQRVT7ANOb9miM"
+},
+{
+"id": "9ef4e640-5e71-43f8-a9f0-a1cc6ab9d8a7",
+"new": false,
+"name_en": "Sephora Heights Compound",
+"name_ar": "سيفورا هايتس",
+"path": "New Cairo > Southern Investors Area",
+"aliases": [
+"Sephora Heights",
+"sephora highlights"
+],
+"lat": 29.99229,
+"lng": 31.5049,
+"google_place_id": "ChIJ4X6WTNo9WBQR5ANG4rK7FEU"
+},
+{
+"id": "05a531a4-2398-4608-86c8-3ef3d29bdb12",
+"new": false,
+"name_en": "Silversands",
+"name_ar": "سيلفر ساندس",
+"path": "North Coast > Sidi Heneish",
+"aliases": [
+"Silversands - سيلفر ساندس"
+],
+"lat": 31.189528,
+"lng": 27.593664,
+"google_place_id": "ChIJx9UQmJTDYRQRCifJmzv2hQQ"
+},
+{
+"id": "c0627935-30b5-46ce-9164-ae4470a8ac28",
+"new": false,
+"name_en": "Smart Life Compound",
+"name_ar": "كمبوند سمارت لايف",
+"path": "New Cairo > Southern Investors Area",
+"aliases": [
+"سمارت لايف",
+"smart life"
+],
+"lat": 30.011573,
+"lng": 31.488002,
+"google_place_id": "ChIJ-eRy5P4iWBQR8cTBxZ6RinM"
+},
+{
+"id": "90b06264-a6f9-4778-971c-9d03bccf0d43",
+"new": false,
+"name_en": "Sodic East",
+"name_ar": "سوديك إيست",
+"path": "New Heliopolis",
+"aliases": [
+"Sodic East - سوديك إيست"
+],
+"lat": 30.547522,
+"lng": 32.245952,
+"google_place_id": "ChIJu9KtD9f3VxQRBJUAmyHLG1Y"
+},
+{
+"id": "73fe8593-7fdf-4d1c-9fa4-28e8be96a347",
+"new": false,
+"name_en": "Solana",
+"name_ar": "سولانا",
+"path": "Sheikh Zayed > New Zayed",
+"aliases": [
+"Solana East"
+],
+"lat": 30.067073,
+"lng": 30.788775,
+"google_place_id": "ChIJH_ffSX4hWBQRfxxQL0lQRsg"
+},
+{
+"id": "6907595a-22ce-44ec-80a5-f694e31de6ff",
+"new": false,
+"name_en": "SouthMed",
+"name_ar": "ساوث ميد",
+"path": "North Coast > Al Dabaa",
+"aliases": [
+"SouthMed - ساوث ميد"
+],
+"lat": 31.06555,
+"lng": 28.397518,
+"google_place_id": "ChIJn_BFVgAbYBQR-L3vZgO3sSA"
+},
+{
+"id": "557cfb77-ce3e-4b44-adf6-4d94839b095f",
+"new": false,
+"name_en": "Stei8ht",
+"name_ar": "ستيت",
+"path": "New Cairo > 1st Settlement",
+"aliases": [
+"Stei8ht Compund"
+],
+"lat": 30.079561,
+"lng": 31.488221,
+"google_place_id": "ChIJaXZXQwAZWBQRRZRghJjZmbw"
+},
+{
+"id": "4335e5bc-b501-4e32-9540-eb63cf5a4553",
+"new": false,
+"name_en": "Stone Park",
+"name_ar": "ستون بارك",
+"path": "New Cairo > Ring Road (Katameya)",
+"aliases": [
+"Stone Park - ستون بارك"
+],
+"lat": 29.987077,
+"lng": 31.386329,
+"google_place_id": "ChIJJVezwY07WBQRdrRncYtgHQ8"
+},
+{
+"id": "21c1dd12-8c92-4c5d-b58b-84198568d5fa",
+"new": false,
+"name_en": "Stone Residence",
+"name_ar": "ستون ريزيدنس",
+"path": "New Cairo > Ring Road (Katameya)",
+"aliases": [
+"Stone Residence - ستون ريزيدنس"
+],
+"lat": 29.976701,
+"lng": 31.387865,
+"google_place_id": "ChIJoyp5Zk07WBQRHHfprONxC-A"
+},
+{
+"id": "fbcd3aaf-c227-4854-be7c-2f47a5c37080",
+"new": false,
+"name_en": "Sueno",
+"name_ar": "سوينو",
+"path": "New Capital > R7 Sector",
+"aliases": [
+"Sueno - سوينو"
+],
+"lat": 29.960077,
+"lng": 31.721709,
+"google_place_id": "ChIJcaW5pVKNVxQRQVvqvOuPHuc"
+},
+{
+"id": "f904bf89-ec87-4a33-94a2-fd0fcc40c655",
+"new": false,
+"name_en": "Sun Capital",
+"name_ar": "صن كابيتال",
+"path": "6th of October > Fayoum Road",
+"aliases": [
+"Sun Capital - صن كابيتال"
+],
+"lat": 29.930811,
+"lng": 31.08765,
+"google_place_id": "ChIJr6v5X8dPWBQRHunMK6MuvPM"
+},
+{
+"id": "cef7e446-19ed-4ab9-9a0b-7ebfb397a074",
+"new": false,
+"name_en": "Sunrise Compound",
+"name_ar": "كمبوند صن رايز",
+"path": "New Cairo > Sadat Axis",
+"aliases": [
+"صن رايز",
+"sunrise",
+"Sunrise"
+],
+"lat": 30.015937,
+"lng": 31.480187,
+"google_place_id": "ChIJh8tTx_wiWBQR5oVceRma9WI"
+},
+{
+"id": "19971d30-6b64-447d-9b75-979ffc7d3788",
+"new": false,
+"name_en": "Swan Lake Residences",
+"name_ar": "سوان ليك",
+"path": "New Cairo > 1st Settlement",
+"aliases": [
+"swan lake",
+"Swan Lake Compound",
+"Swan Lake Residence"
+],
+"lat": 30.07596,
+"lng": 31.46377,
+"google_place_id": "ChIJGQb6kEw_WBQRK3a92MhqdGY"
+},
+{
+"id": "8532f590-0911-4363-9c2c-a72b86b21b6e",
+"new": false,
+"name_en": "Taj Sultan Compound",
+"name_ar": "كمبوند تاج سلطان",
+"path": "New Cairo > Cairo-Suez Road",
+"aliases": [
+"تاج سلطان",
+"tag sultan",
+"taj slutan",
+"taj sultan",
+"Taj Sultan"
+],
+"lat": 30.062799,
+"lng": 31.409524,
+"google_place_id": "ChIJaSfGu3o9WBQRmKUV0IEVMAg"
+},
+{
+"id": "96c2fdac-2805-498e-b673-5ffd225bb18c",
+"new": false,
+"name_en": "Taj Tower",
+"name_ar": "تاج تاور",
+"path": "New Capital > Central Business District (CBD)",
+"aliases": [
+"Taj Tower - تاج تاور"
+],
+"lat": 30.016193,
+"lng": 31.694691,
+"google_place_id": "ChIJc9iVIdv1VxQRYvDXQjAJfV8"
+},
+{
+"id": "5aeba289-ee0f-4421-8fbd-115cdfcd13f8",
+"new": false,
+"name_en": "Tara Compound",
+"name_ar": "كمبوند تارا",
+"path": "Sheikh Zayed",
+"aliases": [
+"تارا",
+"Tara"
+],
+"lat": 30.04187,
+"lng": 31.01533,
+"google_place_id": "ChIJ80KfiEhaWBQRTewRcx24zHI"
+},
+{
+"id": "cf04484e-70aa-4ec5-b52e-e341c0aa951d",
+"new": false,
+"name_en": "Telal East Compound",
+"name_ar": "تلال إيست",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"Telal East",
+"Telal"
+],
+"lat": 30.0784,
+"lng": 31.59434,
+"google_place_id": "ChIJt7CGnYwfWBQR2TZm_hWR4EA"
+},
+{
+"id": "a46a9094-ba88-4612-afd0-9dbfc0a43808",
+"new": false,
+"name_en": "Telal Sokhna",
+"name_ar": "تلال السخنة",
+"path": "Ain Sokhna > Zaafarana Road",
+"aliases": [
+"Telal Sokhna - تلال السخنة"
+],
+"lat": 29.672266,
+"lng": 32.336636,
+"google_place_id": "ChIJCeoCnX_3VhQRsh4OoWDlpOk"
+},
+{
+"id": "bfdb6f81-c499-47f5-bc6c-f9ae1e33ed0b",
+"new": false,
+"name_en": "The Address Compound Sheikh Zayed",
+"name_ar": "كمبوند ذا أدرس الشيخ زايد",
+"path": "Sheikh Zayed",
+"aliases": [
+"The Address Compound",
+"كمبوند ذا أدرس",
+"The Address Sheikh Zayed",
+"ذا أدرس الشيخ زايد",
+"address east",
+"The",
+"the address",
+"the address east",
+"The Address East"
+],
+"old_name_en": "The Address Compound",
+"old_name_ar": "كمبوند ذا أدرس",
+"lat": 30.04392,
+"lng": 30.98124,
+"google_place_id": "ChIJTQZR7mtaWBQRMoIuC7D0i-o"
+},
+{
+"id": "46b020d8-c649-4ee6-8fd3-026a5bee88a5",
+"new": false,
+"name_en": "The Capitalway",
+"name_ar": "ذا كابيتال واي",
+"path": "New Capital",
+"aliases": [
+"The Capitalway - ذا كابيتال واي"
+],
+"lat": 29.968571,
+"lng": 31.740891,
+"google_place_id": "ChIJzX7Qwd6NVxQRPwdKFn5bb8Q"
+},
+{
+"id": "4f425f4a-a3e5-4e2c-8c89-b3e1461cf277",
+"new": false,
+"name_en": "The City of Odyssia",
+"name_ar": "ذا سيتي أوف أوديسيا",
+"path": "Mostakbal City > Central Mostakbal",
+"aliases": [
+"City of Odyssia Compound",
+"Sia Compound"
+],
+"lat": 30.049924,
+"lng": 31.638621,
+"google_place_id": "ChIJfaGxedX1VxQR2ku19gF3Mig"
+},
+{
+"id": "02e77eef-21d4-4ff4-a5ae-8478fb664dad",
+"new": false,
+"name_en": "The Estates",
+"name_ar": "ذا إستيتس",
+"path": "Sheikh Zayed > New Zayed",
+"aliases": [
+"The Estates - ذا إستيتس"
+],
+"lat": 30.082447,
+"lng": 30.876878,
+"google_place_id": "ChIJw1eYDp73WBQRkD7yI3SFhL8"
+},
+{
+"id": "14ab08f4-e48d-4e16-adf6-1128187089d0",
+"new": false,
+"name_en": "The Icon Residence",
+"name_ar": "ذا أيكون ريزيدنس",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"the icon",
+"The Icon Residence 1"
+],
+"lat": 29.967378,
+"lng": 31.51582,
+"google_place_id": "ChIJQS_4EXkjWBQRT0_P9nuSf0w"
+},
+{
+"id": "7af2a459-d7f3-4423-868a-9d45364a3f46",
+"new": false,
+"name_en": "The Marq",
+"name_ar": "ذا مارك",
+"path": "New Cairo > Golden Square",
+"aliases": [
+"The Marq - ذا مارك"
+],
+"lat": 30.008687,
+"lng": 31.507018,
+"google_place_id": "ChIJT2xRS4kjWBQRSUfrpck1CFw"
+},
+{
+"id": "03047670-6843-4827-8f44-362a2170b881",
+"new": false,
+"name_en": "The Ridge",
+"name_ar": "ذا ريدج",
+"path": "Mostakbal City",
+"aliases": [
+"The Ridge - ذا ريدج"
+],
+"lat": 30.048376,
+"lng": 31.650939,
+"google_place_id": "ChIJfaGxedX1VxQR2ku19gF3Mig"
+},
+{
+"id": "44a879dd-8882-4ffe-bb5f-2cd2b5fcc39d",
+"new": false,
+"name_en": "The Square",
+"name_ar": "ذا سكوير",
+"path": "New Cairo > Golden Square",
+"aliases": [
+"The Square - ذا سكوير"
+],
+"lat": 29.995273,
+"lng": 31.552008,
+"google_place_id": "ChIJJVUjEbj1VxQRQjvz5Aq8XCg"
+},
+{
+"id": "5de2354a-00db-46be-b1de-4435ed63fde5",
+"new": false,
+"name_en": "The Villa",
+"name_ar": "ذا فيلا",
+"path": "New Cairo > Northern Investors Area",
+"aliases": [
+"The Villa - ذا فيلا"
+],
+"lat": 30.060145,
+"lng": 31.427544,
+"google_place_id": "ChIJW7dB6u0jWBQRhomApgct678"
+},
+{
+"id": "49c431eb-dcb0-48a9-9f79-00880ab2493b",
+"new": false,
+"name_en": "The Village",
+"name_ar": "ذا فيلدج",
+"path": "New Cairo > Facing AUC",
+"aliases": [
+"The Village - ذا فيلدج"
+],
+"lat": 30.0232,
+"lng": 31.4945,
+"google_place_id": "ChIJEyWE3lgiWBQRkRij5nZ5Pbw"
+},
+{
+"id": "2a650584-3dac-4407-ad32-46bfa3fd27a9",
+"new": false,
+"name_en": "The Village Gate",
+"name_ar": "فيلدج جيت",
+"path": "New Cairo > Behind AUC",
+"aliases": [
+"vgk",
+"Village Garden Kattameya (VGK)",
+"village gate",
+"Village Gate"
+],
+"lat": 30.011069,
+"lng": 31.496769,
+"google_place_id": "ChIJEyWE3lgiWBQRkRij5nZ5Pbw"
+},
+{
+"id": "ec145eba-5ae2-4883-a82b-21c31d1be356",
+"new": false,
+"name_en": "The Waterway",
+"name_ar": "ذا ووتر واي",
+"path": "New Cairo > Northern Investors Area",
+"aliases": [
+"water way",
+"waterway"
+],
+"lat": 30.041138,
+"lng": 31.47547,
+"google_place_id": "ChIJOQSXpXsZYBQRLDv-iKZXWUk"
+},
+{
+"id": "233064e3-a5d5-4234-8824-aca1086de27e",
+"new": false,
+"name_en": "The Wonder MarQ",
+"name_ar": "ذا وندر مارك",
+"path": "Mostakbal City",
+"aliases": [
+"The Wonder MarQ - ذا وندر مارك"
+],
+"lat": 30.045428,
+"lng": 31.638625,
+"google_place_id": "ChIJ_52xAu71VxQRfsQ1Vi3M0CE"
+},
+{
+"id": "6c9bb3cf-5395-438c-a18c-16539c24aede",
+"new": false,
+"name_en": "Tiba",
+"name_ar": "طيبا",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"Tiba - طيبا"
+],
+"lat": 30.0115,
+"lng": 31.491914,
+"google_place_id": "ChIJj3bQ8VUiWBQRYHcwo8UXSE0",
+"info_en": "Tiba Compound (كمبوند طيبا) is a ready-to-move residential villa compound in the Fifth Settlement of New Cairo, developed by Tiba For Urban Development.",
+"info_ar": "كمبوند طيبا هو مجتمع سكني جاهز للسكن مخصص للفيلات في التجمع الخامس بالقاهرة الجديدة، من تطوير شركة طيبة للتطوير العمراني.",
+"info_source": "web_search_verified"
+},
+{
+"id": "b7fb613e-7502-4eef-85eb-5478e7b74bbb",
+"new": false,
+"name_en": "Tiba Gardens",
+"name_ar": "طيبا جاردنز",
+"path": "6th of October > Northern Expansions",
+"aliases": [
+"Tiba Gardens - طيبا جاردنز"
+],
+"lat": 29.985623,
+"lng": 30.932412,
+"google_place_id": "ChIJh8rKTgBBWBQRAIqDhnYT7pU",
+"info_en": "Tiba Gardens (طيبا جاردنز) is a residential compound in the Northern Expansions of 6th of October along Gamal Abdel Nasser Axis near Mall of Arabia and Shooting Club, developed by El Watania Group.",
+"info_ar": "كمبوند طيبا جاردنز هو مشروع سكني في التوسعات الشمالية بمدينة 6 أكتوبر على محور جمال عبد الناصر بالقرب من مول العرب ونادي الصيد، من تطوير المجموعة الوطنية.",
+"info_source": "web_search_verified"
+},
+{
+"id": "76642b41-e2de-4472-a2ad-77491361e050",
+"new": false,
+"name_en": "Top View",
+"name_ar": "توب فيو",
+"path": "New Cairo > Southern Investors Area",
+"aliases": [
+"Top View - توب فيو"
+],
+"lat": 30.0085,
+"lng": 31.439,
+"google_place_id": "ChIJOU9FeHE9WBQRaggjeMG_DNM"
+},
+{
+"id": "c14a96ab-fedc-4954-acb3-4d99681b59d0",
+"new": false,
+"name_en": "Trio Gardens",
+"name_ar": "تريو جاردنز",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"Trio Gardens - تريو جاردنز"
+],
+"lat": 30.058063,
+"lng": 31.603174,
+"google_place_id": "ChIJedt7c908WBQRJabdi-tNl3w"
+},
+{
+"id": "39da1c78-3d1b-4c5a-ba5f-3140bc3ac404",
+"new": false,
+"name_en": "Uptown Cairo",
+"name_ar": "أبتاون كايرو",
+"path": "Mokattam > Uptown Cairo",
+"aliases": [
+"uptown"
+],
+"lat": 30.0086,
+"lng": 31.3267,
+"google_place_id": "ChIJHT5cJjc_WBQRloWaEl9shr4"
+},
+{
+"id": "db2e9f1a-f058-4694-8a64-5db3e0b953f1",
+"new": false,
+"name_en": "Uptown Cairo - Alto",
+"name_ar": "أبتاون كايرو - ألتو",
+"path": "Mokattam > Uptown Cairo",
+"aliases": [
+"uptown alto"
+],
+"lat": 30.0086,
+"lng": 31.3267,
+"google_place_id": "ChIJHT5cJjc_WBQRloWaEl9shr4"
+},
+{
+"id": "59483501-a33f-42b7-9ac7-515803fce8c8",
+"new": false,
+"name_en": "Uptown Cairo - Alto 3",
+"name_ar": "أبتاون كايرو - ألتو 3",
+"path": "Mokattam > Uptown Cairo",
+"aliases": [
+"alto 3 uptown cairo 203-3",
+"Alto 3 Uptown Cairo 203-3"
+],
+"lat": 30.024268,
+"lng": 31.299828,
+"google_place_id": "ChIJHT5cJjc_WBQRloWaEl9shr4"
+},
+{
+"id": "58996d07-7a2b-405c-b632-e72d72b29f9a",
+"new": false,
+"name_en": "Uptown Cairo - Eleva",
+"name_ar": "أبتاون كايرو - إليفا",
+"path": "Mokattam > Uptown Cairo",
+"aliases": [
+"uptown cairo elev"
+],
+"lat": 30.019738,
+"lng": 31.312764,
+"google_place_id": "ChIJKQ3MwdY-WBQRNqCTv_gWnqU"
+},
+{
+"id": "5ae04b09-dd45-4120-aa28-0de83d54c00c",
+"new": false,
+"name_en": "Uptown Cairo - Eleva 95",
+"name_ar": "أبتاون كايرو - إليفا 95",
+"path": "Mokattam > Uptown Cairo",
+"aliases": [
+"uptown eleva 95"
+],
+"lat": 30.0086,
+"lng": 31.3267,
+"google_place_id": "ChIJKQ3MwdY-WBQRNqCTv_gWnqU"
+},
+{
+"id": "1498c862-b1e8-4d4c-aba1-6dbf033d973c",
+"new": false,
+"name_en": "Uptown Cairo - Levana",
+"name_ar": "أبتاون كايرو - ليفانا",
+"path": "Mokattam > Uptown Cairo",
+"aliases": [
+"up town levana"
+],
+"lat": 30.0086,
+"lng": 31.3267,
+"google_place_id": "ChIJA-u7LhU_WBQR7QdpElqY7_w"
+},
+{
+"id": "7c25c4ea-73b4-48c7-8c92-725e3c8a7a4a",
+"new": false,
+"name_en": "Uptown Cairo - Sierras 4",
+"name_ar": "أبتاون كايرو - سييرا 4",
+"path": "Mokattam > Uptown Cairo",
+"aliases": [
+"up town sierras 4"
+],
+"lat": 30.017916,
+"lng": 31.292725,
+"google_place_id": "ChIJJ60arDQ_WBQR0KWbE999hQc"
+},
+{
+"id": "930bdff7-f13b-4842-a879-bf1ae7b534d5",
+"new": false,
+"name_en": "Village Avenue Compound",
+"name_ar": "كمبوند فيلدج افينيو",
+"path": "New Cairo > Beside AUC",
+"aliases": [
+"فيلدج افينيو",
+"village avenue",
+"Village Avenue"
+],
+"lat": 30.049267,
+"lng": 31.475907,
+"google_place_id": "ChIJEyWE3lgiWBQRkRij5nZ5Pbw"
+},
+{
+"id": "fe78131f-c3a4-401d-bafc-ca231187cb8f",
+"new": false,
+"name_en": "Villette",
+"name_ar": "فيليت",
+"path": "New Cairo > Golden Square",
+"aliases": [
+"Villette Sodic Compound",
+"Villette V Residences",
+"villette_sky_condos"
+],
+"lat": 30.025653,
+"lng": 31.54808,
+"google_place_id": "ChIJo8AYY24hWBQRBACwhzUOiiA"
+},
+{
+"id": "4ae00e6e-025a-453a-a2db-88967b0e4972",
+"new": false,
+"name_en": "Vinci",
+"name_ar": "فينشي",
+"path": "New Capital > R7 Sector",
+"aliases": [
+"Vinci - فينشي"
+],
+"lat": 29.95025,
+"lng": 31.705759,
+"google_place_id": "ChIJeTh6M5GLVxQRHvdbYcmgxU8"
+},
+{
+"id": "2854aa4e-65e0-4d2d-9c8c-81202c5f3406",
+"new": false,
+"name_en": "VYE",
+"name_ar": "فاي",
+"path": "Sheikh Zayed > New Zayed",
+"aliases": [
+"VYE - فاي"
+],
+"lat": 30.067073,
+"lng": 30.788775,
+"google_place_id": "ChIJ921XBSj3WBQRtegkhxL7qDs"
+},
+{
+"id": "a050453a-898d-4d03-a896-27c5f276310d",
+"new": false,
+"name_en": "Walk of Cairo (WOC)",
+"name_ar": "ووك أوف كايرو",
+"path": "Sheikh Zayed",
+"aliases": [
+"Walk of Cairo (WOC) - ووك أوف كايرو"
+],
+"lat": 30.080061,
+"lng": 30.955376,
+"google_place_id": "ChIJbfp8JmZZWBQRhW1Zp5wZOBI"
+},
+{
+"id": "3da74a4e-51a5-4117-9a25-93eff9dd2786",
+"new": false,
+"name_en": "Westown",
+"name_ar": "وست تاون",
+"path": "Sheikh Zayed",
+"aliases": [
+"Westown - وست تاون"
+],
+"lat": 30.066188,
+"lng": 30.939202,
+"google_place_id": "ChIJKbKZewBZWBQRubLgzVksOZ4"
+},
+{
+"id": "bd0b0b43-46fc-48a1-bbfc-cb0125373743",
+"new": false,
+"name_en": "Yellow Residence",
+"name_ar": "يلو ريزيدنس",
+"path": "New Cairo > Cairo-Suez Road",
+"aliases": [
+"Yellow Residence - يلو ريزيدنس"
+],
+"lat": 30.082775,
+"lng": 31.506286,
+"google_place_id": "ChIJY4D1NP8ZWBQRG6SQB5gE1lU"
+},
+{
+"id": "5d4063c3-a129-4789-b420-b00524002364",
+"new": false,
+"name_en": "Zayed 2000",
+"name_ar": "زايد 2000",
+"path": "Sheikh Zayed",
+"aliases": [
+"Zayed 2000 - زايد 2000"
+],
+"lat": 30.021427,
+"lng": 30.997669,
+"google_place_id": "ChIJTQZR7mtaWBQRMoIuC7D0i-o"
+},
+{
+"id": "a534b276-fcd1-447c-9e4c-18e3608155af",
+"new": false,
+"name_en": "Zed East",
+"name_ar": "زد ايست",
+"path": "New Cairo > South 90th",
+"aliases": [
+"Zed East - زد ايست"
+],
+"lat": 29.997849,
+"lng": 31.504826,
+"google_place_id": "ChIJH_ffSX4hWBQRfxxQL0lQRsg"
+},
+{
+"id": "b88652cd-4b85-4b28-871f-968ae5e6df1b",
+"new": false,
+"name_en": "Zed Strip",
+"name_ar": "زد ستريب",
+"path": "Sheikh Zayed > Nozha Axis",
+"aliases": [
+"Zed Strip - زد ستريب"
+],
+"lat": 30.048,
+"lng": 31.006587,
+"google_place_id": "ChIJH_ffSX4hWBQRfxxQL0lQRsg"
+},
+{
+"id": "44d27f50-1109-4fb5-b83d-f818b3f4da90",
+"new": false,
+"name_en": "Zizinia",
+"name_ar": "زيزينيا",
+"path": "New Cairo > Northern Investors Area",
+"aliases": [
+"zezenya",
+"zezinya",
+"Zizinia El Mostakbal",
+"Zizinia El Mostakbal Compound",
+"Zizinia Flowers Compound",
+"Zizinia Gardens Compound",
+"Zizinia Rose Compound"
+],
+"lat": 30.00743,
+"lng": 31.49305,
+"google_place_id": "ChIJd14741QiWBQRNxelb06PXiQ"
+},
+{
+"id": "5a815c4d-43f2-557b-85f6-d1336a5d8ae0",
+"new": true,
+"name_en": "The Address East New Cairo",
+"name_ar": "كمبوند ذا أدرس إيست القاهرة الجديدة",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"ذا أدرس إيست القاهرة الجديدة"
+],
+"lat": 30.071215,
+"lng": 31.57738,
+"developer": "Dorra Group",
+"district": "Second New Cairo, Cairo Governorate 4767001",
+"google_place_id": "ChIJVVZ1tBkfWBQRT2NwM6nprzM",
+"info_en": "The Address East New Cairo (كمبوند ذا أدرس إيست القاهرة الجديدة) is a residential gated community in the Fifth Settlement / Suez Road corridor of New Cairo, developed by Dorra Group.",
+"info_ar": "كمبوند ذا أدرس إيست القاهرة الجديدة هو مجتمع سكني متكامل في التجمع الخامس بالقاهرة الجديدة، من تطوير مجموعة درة (Dorra Group).",
+"info_source": "web_search_verified"
+},
+{
+"id": "87976d01-2c60-500a-aa5d-19af2d7dd9e4",
+"new": true,
+"name_en": "Al Nakheel Shorouk",
+"name_ar": "النخيل الشروق",
+"path": "Shorouk > Al Nakhil Area",
+"aliases": [
+"Al Nakheel Shorouk - النخيل الشروق"
+],
+"developer": "Al Omniyat Investment & Real Estate Development",
+"district": null,
+"google_place_id": "ChIJg9QIRKcjWBQR7pwiVNAJWk4"
+},
+{
+"id": "61182072-6ec1-579a-9a6c-e3e48bbca0c4",
+"new": true,
+"name_en": "Al Nakheel October",
+"name_ar": "النخيل أكتوبر",
+"path": "6th of October",
+"aliases": [
+"Al Nakheel October - النخيل أكتوبر"
+],
+"developer": null,
+"district": null,
+"google_place_id": "ChIJY5XEP9L1WBQRW02iy6a3nZM"
+},
+{
+"id": "e22bb887-237d-5785-9c1d-a63e4ffe6356",
+"new": true,
+"name_en": "Golf View New Cairo",
+"name_ar": "جولف فيو القاهرة الجديدة",
+"path": "New Cairo",
+"aliases": [
+"Golf View New Cairo - جولف فيو القاهرة الجديدة"
+],
+"lat": 29.993972,
+"lng": 31.517707,
+"developer": null,
+"district": "Building, 65 Al Andalus 1, New Cairo 3, Cairo Governorate 4717631",
+"google_place_id": "ChIJ_0I9figjWBQRVCj7xTPAy10"
+},
+{
+"id": "308375a7-edc1-5aae-a085-eb3a089c4ed2",
+"new": true,
+"name_en": "Golf View Mokattam",
+"name_ar": "جولف فيو المقطم",
+"path": "Mokattam",
+"aliases": [
+"Golf View Mokattam - جولف فيو المقطم"
+],
+"lat": 30.013949,
+"lng": 31.278378,
+"developer": null,
+"district": "180 alahram st, Al Abageyah, El Mokattam, Cairo Governorate 11571",
+"google_place_id": "ChIJpXScm2o5WBQRjAEErtxCIM4"
+},
+{
+"id": "7bfbed7b-6611-512e-8e3f-be52c399f7f2",
+"new": true,
+"name_en": "Highland Park October",
+"name_ar": "هاي لاند بارك أكتوبر",
+"path": "6th of October",
+"aliases": [
+"Highland Park October - هاي لاند بارك أكتوبر"
+],
+"lat": 29.95394,
+"lng": 30.953959,
+"developer": "Better Home",
+"district": "El Wahat Rd, First 6th of October, Giza Governorate 3233501",
+"info_en": "Highland Park October (هاي لاند بارك أكتوبر) is a residential gated compound in 6th of October developed by Better Home Group.",
+"info_ar": "كمبوند هاي لاند بارك أكتوبر هو مجتمع سكني مغلق في مدينة السادس من أكتوبر من تطوير مجموعة بيتر هوم (Better Home).",
+"info_source": "web_search_verified"
+},
+{
+"id": "b2f5aaee-70c8-56e5-b3cd-b8a8f805810c",
+"new": true,
+"name_en": "Azha North Coast",
+"name_ar": "أزهى الساحل الشمالي",
+"path": "North Coast > Ras El Hekma",
+"aliases": [
+"Azha North Coast - أزهى الساحل الشمالي"
+],
+"lat": 31.094455,
+"lng": 27.921436,
+"developer": "Madaar",
+"district": "AZHA North, Ras El Hikma, Al Dabaa, Marsa Matrouh Governorate 5005004",
+"google_place_id": "ChIJp7NNL2zNYRQRG-Jdii4_17Y",
+"info_en": "Azha North Coast (أزهى الساحل الشمالي) is a coastal resort community in Ras El Hekma (KM 214), North Coast, developed by Madaar Developments.",
+"info_ar": "قرية أزهى الساحل الشمالي هي منتجع سياحي في منطقة رأس الحكمة (الكيلو 214) بالساحل الشمالي، من تطوير شركة مدار للتطوير العقاري.",
+"info_source": "web_search_verified"
+},
+{
+"id": "53834fad-5937-5051-920c-51ffe59a2cdc",
+"new": true,
+"name_en": "Paradise Katameya Compound - Fifth Settlement",
+"name_ar": "كمبوند بارادايس القطامية - التجمع الخامس",
+"path": "New Cairo > 5th Settlement",
+"aliases": [
+"Paradise Katameya - Fifth Settlement"
+],
+"lat": 30.036845,
+"lng": 31.500854,
+"developer": "Egypto Group",
+"district": "2FMX+QPR باراديس، باراديس، Al Tahrir Axis, باراديس،, Second New Cairo, Cairo Governorate 4741110",
+"google_place_id": "ChIJK8TiJWUiWBQRD6vgu8bDp9I",
+"info_en": "Paradise Katameya Compound (كمبوند بارادايس القطامية) is a low-density gated villa community along Al Tahrir Axis in the Fifth Settlement (التجمع الخامس) of New Cairo, featuring twin houses and standalone villas.",
+"info_ar": "كمبوند بارادايس القطامية هو مجتمع سكني مغلق منخفض الكثافة مخصص للفيلات والتوين هاوس على محور التحرير في التجمع الخامس بالقاهرة الجديدة.",
+"info_source": "user_provided_text"
+},
+{
+"id": "07b02bb6-8091-5bf0-89b1-6e64d83ebcdc",
+"new": true,
+"name_en": "Paradise Compound - October Gardens",
+"name_ar": "كمبوند بارادايس - حدائق أكتوبر",
+"path": "6th of October > October Gardens (Hadayek October)",
+"aliases": [
+"Paradise - October Gardens"
+],
+"lat": 29.912925,
+"lng": 31.057786,
+"developer": "El Batal Group",
+"district": "طريق حى المنتزه 6 اكتوبر، First 6th of October, October Gardens, Giza Governorate 3273431",
+"google_place_id": "ChIJEXGA3R9SWBQRkByK_Qcuhb8",
+"info_en": "Paradise Compound - October Gardens (كمبوند بارادايس - حدائق أكتوبر) is an established residential gated community in October Gardens (Hadayek October), 6th of October, developed by El Batal Group (مجموعة البطل).",
+"info_ar": "كمبوند بارادايس حدائق أكتوبر هو مجتمع سكني متكامل في حدائق أكتوبر بمدينة السادس من أكتوبر، من تطوير مجموعة البطل.",
+"info_source": "user_provided_text"
+},
+{
+"id": "81bb469c-afbc-592d-a2c9-7fa4951c504b",
+"new": true,
+"name_en": "Promenade Maadi",
+"name_ar": "بروميناد المعادي",
+"path": "Maadi > Zahraa El Maadi",
+"aliases": [
+"Promenade Maadi - بروميناد المعادي"
+],
+"lat": 29.955816,
+"lng": 31.317225,
+"developer": "Wadi Degla Developments",
+"district": "X848+8VH, El-Zahraa, Tura, Cairo Governorate 4064032",
+"google_place_id": "ChIJf1AbUmM5WBQRss_L_xp9KrE",
+"info_en": "Promenade Maadi (بروميناد المعادي) is a residential gated compound in Zahraa El Maadi (in front of Wadi Degla Club), developed by Wadi Degla Developments.",
+"info_ar": "كمبوند بروميناد المعادي هو مجتمع سكني متكامل في زهراء المعادي أمام نادي وادي دجلة، من تطوير شركة وادي دجلة للتطوير العقاري.",
+"info_source": "web_search_verified"
+},
+{
+"id": "429ade85-2b6c-5766-9a1e-0b22d79dd4e9",
+"new": true,
+"name_en": "Promenade October",
+"name_ar": "بروميناد أكتوبر",
+"path": "6th of October",
+"aliases": [
+"Promenade October - بروميناد أكتوبر"
+],
+"lat": 30.02901,
+"lng": 31.048204,
+"developer": "Wadi Degla Developments",
+"district": "22JW+GQM, New Giza Rd, First 6th of October, Giza Governorate 3293340",
+"google_place_id": "ChIJF0_doO9aWBQRWARv7Xt9fsg",
+"info_en": "Promenade October (بروميناد أكتوبر) is a residential compound in 6th of October near Mehwar Road and Al Khamayel Club, developed by Wadi Degla Developments.",
+"info_ar": "كمبوند بروميناد أكتوبر هو مجتمع سكني في مدينة السادس من أكتوبر بالقرب من محور 26 يوليو ونادي الخمايل، من تطوير شركة وادي دجلة للتطوير العقاري.",
+"info_source": "web_search_verified"
+},
+{
+"id": "e0baf534-667a-5938-8deb-b4544b18ead8",
+"new": true,
+"name_en": "Retage October",
+"name_ar": "ريتاج أكتوبر",
+"path": "6th of October",
+"aliases": [
+"Retage October - ريتاج أكتوبر"
+],
+"lat": 29.968127,
+"lng": 30.937345,
+"developer": null,
+"district": "مجمع نعمة - بجوار التوحيد و النور، XW9P+7W5, Al Mehwar Al Markazi, First 6th of October, Giza Governorate 3232012",
+"google_place_id": "ChIJaQF_3wtXWBQRoDHch6xD0kQ"
+}
+],
+"deletes": [
+"6cca8626-3ffa-47b2-9fc0-a48792920c35",
+"a9a2403a-5c6e-45d0-b769-0846ee80b635",
+"ddb7edf9-ddf6-4aab-892d-60e546eb4244",
+"ee4b9373-78ce-4fc5-b9bd-675c3d2002a0",
+"08183349-ca5a-41c3-b1f6-8d637a5b7005",
+"92523389-ef17-4e54-82e8-d8fa387903b7",
+"938ff0d5-caa2-4bba-b074-e613a54c5d61"
+]
+}

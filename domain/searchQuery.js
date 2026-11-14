@@ -607,7 +607,7 @@ function fallbackParse(text) {
     if (v) f.price_max = v;
     hay = c.hay;
   }
-  c = consume(hay, new RegExp(`(?<!not|no|مش) (?:فوق|اكتر من|اكثر من|above|over|more than|min) ${MONEY} `));
+  c = consume(hay, new RegExp(`(?<!not|no|مش) (?:فوق|اكتر من|اكثر من|اكبر من|above|over|more than|min) (?!(?:[6-9]\\d|\\d{3,4}) m )${MONEY} `));
   if (c.m) {
     const v = money(c.m[1], c.m[2]);
     if (v) f.price_min = v;
@@ -638,9 +638,16 @@ function fallbackParse(text) {
     hay = c.hay;
   } else {
     // "m" / "م" alone is metres only from 30 up; "20m" / "20 م" is twenty million (a unit is never 20 m2).
-    c = consume(hay, / (\d{2,4}) (متر|m2|sqm|meter|meters) /);
-    if (!c.m) c = consume(hay, / (\d{3,4}|[3-9]\d) (م|m) /);
+    // "bigger than 120 m" / "smaller than 150 m" (اكبر من / اصغر من) are the area's own words, not place words.
+    c = consume(hay, /(?<!مش )(?:اصغر|اقل) من (\d{2,4}) (?:متر|m2|sqm|meter|meters) /);
     if (c.m) {
+      f.area_max = Number(c.m[1]);
+      hay = c.hay;
+    } else {
+      c = consume(hay, / (?:(?:اكبر|اكتر|اكثر|اوسع|فوق|above|over|more than|bigger than|larger than|at least) (?:من )?)?(\d{2,4}) (متر|m2|sqm|meter|meters) /);
+      if (!c.m) c = consume(hay, / (?:(?:اكبر|اكتر|اكثر|اوسع|فوق|above|over|more than|bigger than|larger than|at least) (?:من )?)?(\d{3,4}|[3-9]\d) (م|m) /);
+    }
+    if (c.m && f.area_max == null) {
       f.area_min = Number(c.m[1]);
       hay = c.hay;
     }
