@@ -131,7 +131,7 @@ async function createDeal(pool, actor, input, { idemKey = null, unitVersion = nu
         if (dup.rows[0]) return { ok: true, deal: dup.rows[0], duplicate: true };
       }
       const lead = await Leads.getLead(client, actor, d.leadId);
-      const seq = await client.query("UPDATE agencies SET deal_ref_seq = deal_ref_seq + 1 WHERE id = $1 RETURNING deal_ref_seq", [actor.agency_id]);
+      const seq = await client.query("UPDATE agencies SET deal_ref_seq = GREATEST(deal_ref_seq, COALESCE((SELECT max(ref) FROM deals WHERE agency_id = $1), 0)) + 1 WHERE id = $1 RETURNING deal_ref_seq", [actor.agency_id]);
       const { rows } = await client.query(
         `INSERT INTO deals (agency_id, ref, lead_id, listing_id, unit_code, closing_broker_id, created_by_broker_id, deal_type, price, commission_mode,
                             commission_pct, commission_total, external_share, external_name, status, client_name, client_phone, notes, idem_key,

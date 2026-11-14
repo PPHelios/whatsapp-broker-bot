@@ -35,7 +35,12 @@ async function findByPhone(db, agencyId, phone) {
 
 /** The agency's next owner code (O-0042): a counter on the agency row, so two saves at once never get the same number. */
 async function nextCode(db, agencyId) {
-  const { rows } = await db.query("UPDATE agencies SET owner_code_next = owner_code_next + 1 WHERE id = $1 RETURNING owner_code_next - 1 AS n", [agencyId]);
+  // The counter never hands out a number at or below the highest existing owner code, so imports or resets cannot clash.
+  const { rows } = await db.query(
+    `UPDATE agencies SET owner_code_next = GREATEST(owner_code_next, COALESCE((SELECT max(substring(code from 3)::int) FROM unit_owners WHERE agency_id = $1 AND code ~ '^O-[0-9]{1,9}$'), 0) + 1) + 1
+      WHERE id = $1 RETURNING owner_code_next - 1 AS n`,
+    [agencyId]
+  );
   return `O-${String(rows[0]?.n || 1).padStart(4, "0")}`;
 }
 
